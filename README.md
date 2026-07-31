@@ -60,3 +60,11 @@ saved_states/upscaling_tool_*/
 ## Dependencies
 
 No external Python dependencies are required. The app uses the Python standard library.
+
+## Code Layout
+
+`upscaling_pipeline_tool/app.py` holds the HTTP server and HTML skeleton
+only. CSS and client-side JS were split out into
+`upscaling_pipeline_tool/static/style.css` and
+`upscaling_pipeline_tool/static/app.js`, served at `/style.css` and
+`/app.js` respectively.
