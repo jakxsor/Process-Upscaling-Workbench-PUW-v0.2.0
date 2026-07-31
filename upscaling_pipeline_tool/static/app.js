@@ -301,7 +301,6 @@
       heuristicDecisions: {},
       valueCoiLinks: [],
       showDataReadiness: false,
-      pendingBlockRange: null,
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -493,45 +492,6 @@
       renderAll();
     }
 
-    function openBlockWizard(start, end) {
-      const lo = Math.min(start, end);
-      const hi = Math.max(start, end);
-      const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
-      if (!text) return;
-      state.pendingBlockRange = { start: lo, end: hi };
-      $("wizardTextPreview").textContent = text;
-      const inferred = inferBehavior(text);
-      $("wizardPurpose").innerHTML = Object.keys(behaviorPresets)
-        .map(name => `<option value="${escapeAttr(name)}" ${name === inferred ? "selected" : ""}>${escapeHtml(name)}${name === inferred ? " (suggested)" : ""}</option>`)
-        .join("");
-      $("wizardInputPhase").innerHTML = phaseOptionHtml("unknown");
-      $("wizardOutputPhase").innerHTML = phaseOptionHtml("unknown");
-      ["wizardInputName", "wizardOutputName", "wizardTemperature", "wizardTime", "wizardAgitation", "wizardEndpoint"].forEach(id => { $(id).value = ""; });
-      $("blockWizardModal").hidden = false;
-    }
-
-    function closeBlockWizard() {
-      state.pendingBlockRange = null;
-      $("blockWizardModal").hidden = true;
-    }
-
-    function confirmBlockWizard(useAnswers) {
-      const range = state.pendingBlockRange;
-      if (!range) return;
-      const options = useAnswers ? {
-        behavior: $("wizardPurpose").value,
-        inputName: $("wizardInputName").value.trim(),
-        inputPhase: $("wizardInputPhase").value,
-        outputName: $("wizardOutputName").value.trim(),
-        outputPhase: $("wizardOutputPhase").value,
-        temperature: $("wizardTemperature").value.trim(),
-        time: $("wizardTime").value.trim(),
-        agitation: $("wizardAgitation").value.trim(),
-        endpoint: $("wizardEndpoint").value.trim()
-      } : {};
-      closeBlockWizard();
-      createBlock(range.start, range.end, options);
-    }
 
     function phenomenaForBehaviorAndText(behavior, text) {
       const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
@@ -1194,7 +1154,7 @@
         $("selectionInfo").textContent = "Select text in the loaded text view first, then create a block.";
         return;
       }
-      openBlockWizard(offsets.start, offsets.end);
+      createBlock(offsets.start, offsets.end);
     }
 
     function sourceInputSelection() {
@@ -1421,12 +1381,52 @@
       revealFocusedEndpoint();
     }
 
+    function flowOrderIndex(id) {
+      const resolved = resolvedEndpointId(id);
+      const order = groupIdsInTextOrder();
+      const idx = order.indexOf(resolved);
+      return idx === -1 ? order.length : idx;
+    }
+
+    function isBackwardLink(link) {
+      return flowOrderIndex(link.from) > flowOrderIndex(link.to);
+    }
+
+    function recycleLaneRoute(link, laneIndex) {
+      const from = endpointRect(link.from);
+      const to = endpointRect(link.to);
+      if (!from || !to) return null;
+      const laneY = Math.max(...allNodeRects().map(rect => rect.y + rect.h)) + 52 + laneIndex * 32;
+      const startX = from.x + from.w * 0.35;
+      const endX = to.x + to.w * 0.65;
+      const points = [
+        { x: startX, y: from.y + from.h },
+        { x: startX, y: laneY },
+        { x: endX, y: laneY },
+        { x: endX, y: to.y + to.h }
+      ];
+      return { points, laneY, labelX: (startX + endX) / 2 };
+    }
+
     function renderLinksSvg(board) {
       const nodeMasks = allNodeRects().map(rect => {
         const masked = shrinkRect(rect, 7);
         return `<rect x="${round(masked.x)}" y="${round(masked.y)}" width="${round(masked.w)}" height="${round(masked.h)}" rx="7" fill="black"></rect>`;
       }).join("");
+      let recycleLane = 0;
       const links = state.links.map(link => {
+        if (isBackwardLink(link)) {
+          const route = recycleLaneRoute(link, recycleLane++);
+          if (!route) return "";
+          const path = orthogonalPath(route.points);
+          const start = route.points[0];
+          return `
+            <path d="${path}" stroke="#f2faf5" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+            <path d="${path}" stroke="#286d3f" stroke-width="3" stroke-dasharray="9 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHeadRecycle)"></path>
+            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="4.2" fill="#f2faf5" stroke="#286d3f" stroke-width="2"></circle>
+            <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
+          `;
+        }
         const route = connectionRoute(link.from, link.to);
         if (!route) return "";
         const path = orthogonalPath(route.points);
@@ -1442,6 +1442,9 @@
           <defs>
             <marker id="arrowHead" markerWidth="13" markerHeight="13" refX="10.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,9 L12,4.5 z" fill="#c76500"></path>
+            </marker>
+            <marker id="arrowHeadRecycle" markerWidth="13" markerHeight="13" refX="10.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,9 L12,4.5 z" fill="#286d3f"></path>
             </marker>
             <mask id="nodeTextMask" maskUnits="userSpaceOnUse">
               <rect x="0" y="0" width="${board.width}" height="${board.height}" fill="white"></rect>
@@ -4727,19 +4730,20 @@
         field.addEventListener("input", updateStreamField);
         field.addEventListener("change", updateStreamField);
       });
-      root.querySelectorAll("[data-edit-conditions]").forEach(button => {
-        button.addEventListener("click", () => {
+      root.querySelectorAll("[data-open-condition-family]").forEach(section => {
+        section.addEventListener("click", () => {
           const current = selectedBlock();
           if (!current) return;
-          current.conditionsEditing = true;
+          current.openConditionFamily = section.dataset.openConditionFamily;
           renderStepFlowInspector();
         });
       });
-      root.querySelectorAll("[data-save-conditions]").forEach(button => {
-        button.addEventListener("click", () => {
+      root.querySelectorAll("[data-save-condition-family]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
           const current = selectedBlock();
           if (!current) return;
-          current.conditionsEditing = false;
+          current.openConditionFamily = null;
           renderAll();
         });
       });
@@ -4748,21 +4752,6 @@
       });
       root.querySelectorAll("[data-condition-unit]").forEach(field => {
         field.addEventListener("change", updateConditionUnit);
-      });
-      root.querySelectorAll("[data-condition-label]").forEach(label => {
-        label.addEventListener("contextmenu", event => {
-          event.preventDefault();
-          const current = selectedBlock();
-          if (!current) return;
-          current.conditionsEditing = true;
-          renderStepFlowInspector();
-        });
-        label.addEventListener("dblclick", () => {
-          const current = selectedBlock();
-          if (!current) return;
-          current.conditionsEditing = true;
-          renderStepFlowInspector();
-        });
       });
     }
 
@@ -4859,32 +4848,46 @@
           </section>
         `;
       }
-      if (block.conditionsEditing) {
-        return `
-          <section class="condition-panel">
-            <div class="condition-head">
-              <strong>Phenomenon Conditions</strong>
-              <span class="muted small">${prompts.length} fields, ${contextLabel}</span>
-            </div>
-            <div class="condition-body">
-              ${promptGroups.map(group => conditionPromptFamilyHtml(block, group)).join("")}
-              <div class="condition-actions">
-                <button class="primary" data-save-conditions="true">Save Conditions</button>
-              </div>
-            </div>
-          </section>
-        `;
-      }
+      const valuesByFamily = new Map(valueGroups.map(group => [group.id, group]));
+      const openFamily = block.openConditionFamily || null;
       return `
         <section class="condition-panel">
           <div class="condition-head">
             <strong>Phenomenon Conditions</strong>
-            <button data-edit-conditions="true">${values.length ? "Edit Conditions" : "Add Conditions"}</button>
+            <span class="muted small">${values.length}/${prompts.length} filled, ${escapeHtml(contextLabel)} — open one section at a time</span>
           </div>
           <div class="condition-body">
-            ${values.length
-              ? valueGroups.map(group => conditionValueFamilyHtml(group)).join("")
-              : `<div class="mfa-empty">No saved conditions yet. The available fields are generated from ${escapeHtml(contextLabel)} phenomena.</div>`}
+            ${promptGroups.map(group => {
+              const saved = valuesByFamily.get(group.id);
+              const savedCount = saved ? saved.items.length : 0;
+              const isOpen = openFamily === group.id;
+              if (isOpen) {
+                return `
+                  <div class="condition-family open">
+                    <div class="condition-family-head">
+                      <span>${escapeHtml(group.title)}</span>
+                      <button class="primary" data-save-condition-family="${escapeAttr(group.id)}">Save & Close</button>
+                    </div>
+                    <div class="condition-grid">
+                      ${group.items.map(prompt => conditionEditCardHtml(block, prompt)).join("")}
+                    </div>
+                  </div>
+                `;
+              }
+              return `
+                <div class="condition-family collapsed" data-open-condition-family="${escapeAttr(group.id)}" title="Click to open and edit this section">
+                  <div class="condition-family-head">
+                    <span>${escapeHtml(group.title)}</span>
+                    <span class="pill ${savedCount ? "green" : ""}">${savedCount ? `${savedCount} saved` : "empty"}</span>
+                  </div>
+                  ${savedCount ? `
+                    <div class="condition-chip-row">
+                      ${saved.items.map(item => `<span class="condition-chip"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}</span>`).join("")}
+                    </div>
+                  ` : ""}
+                </div>
+              `;
+            }).join("")}
           </div>
         </section>
       `;
@@ -5155,26 +5158,78 @@
 
     function streamRowHtml(stream, placeholder) {
       if (!stream.editing) return streamLabelHtml(stream);
+      const sid = escapeAttr(stream.id);
+      const hasAdvanced = Boolean(stream.recoveryPercent || stream.purgePercent || stream.loopId || stream.destinationGroup || stream.makeupRequired || stream.accumulationRisk);
       return `
-        <div class="mfa-row" data-stream-id="${escapeAttr(stream.id)}">
-          <input class="stream-name" data-stream-field="name" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" title="Material or stream name">
-          <input class="stream-qty" data-stream-field="quantity" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.quantity)}" placeholder="amount" inputmode="decimal" title="Quantity for the chosen basis">
-          <select class="stream-unit" data-stream-field="unit" data-stream-id="${escapeAttr(stream.id)}" title="Quantity unit">${optionHtml(streamUnits, stream.unit)}</select>
-          <select class="stream-phase" data-stream-field="phase" data-stream-id="${escapeAttr(stream.id)}" title="Lutze phase category for this stream">${phaseOptionHtml(stream.phase)}</select>
-          <select class="stream-status" data-stream-field="status" data-stream-id="${escapeAttr(stream.id)}" title="Data quality">${optionHtml(streamDataStatuses, stream.status)}</select>
-          <select class="stream-timing" data-stream-field="timing" data-stream-id="${escapeAttr(stream.id)}" title="Timing or role inside the grouped operation">${optionHtml(streamTimingOptions, stream.timing)}</select>
-          <select class="mfa-note" data-stream-field="scalingMode" data-stream-id="${escapeAttr(stream.id)}" title="How this stream scales from lab basis to target scale">${optionHtml(streamScalingModes, stream.scalingMode)}</select>
-          <button class="delete-stream" data-remove-stream="${escapeAttr(stream.id)}" title="Remove stream">x</button>
-          <select class="mfa-note" data-stream-field="fate" data-stream-id="${escapeAttr(stream.id)}" title="Industrial fate, recycle, purge, or loss">${optionHtml(streamFateOptions, stream.fate)}</select>
-          <input class="stream-qty" data-stream-field="recoveryPercent" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="rec. %" inputmode="decimal" title="Recovery percent">
-          <input class="stream-qty" data-stream-field="purgePercent" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.purgePercent)}" placeholder="purge %" inputmode="decimal" title="Purge percent">
-          <input class="mfa-note" data-stream-field="loopId" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.loopId)}" placeholder="loop id, e.g. R1" title="Recycle loop identifier">
-          <input class="mfa-note" data-stream-field="destinationGroup" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.destinationGroup)}" placeholder="destination group, treatment, recovery..." title="Destination group or unit">
-          <input class="mfa-note" data-stream-field="makeupRequired" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.makeupRequired)}" placeholder="make-up amount or basis..." title="Make-up required for recovered/recycled stream">
-          <input class="mfa-note" data-stream-field="accumulationRisk" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.accumulationRisk)}" placeholder="accumulation risk / impurity note..." title="Accumulation risk or impurity concern">
-          <input class="mfa-note" data-stream-field="note" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.note)}" placeholder="note, basis, assumption, source..." title="Assumption, source, or balance note">
-          <div class="mfa-edit-actions">
-            <button class="primary" data-save-stream="${escapeAttr(stream.id)}">Save</button>
+        <div class="mfa-row" data-stream-id="${sid}">
+          <label class="stream-field span-2">
+            <span class="stream-field-label">Material / stream</span>
+            <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}">
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Amount</span>
+            <input data-stream-field="quantity" data-stream-id="${sid}" value="${escapeAttr(stream.quantity)}" placeholder="amount" inputmode="decimal">
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Unit</span>
+            <select data-stream-field="unit" data-stream-id="${sid}">${optionHtml(streamUnits, stream.unit)}</select>
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Phase</span>
+            <select data-stream-field="phase" data-stream-id="${sid}">${phaseOptionHtml(stream.phase)}</select>
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Data status</span>
+            <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Timing</span>
+            <select data-stream-field="timing" data-stream-id="${sid}">${optionHtml(streamTimingOptions, stream.timing)}</select>
+          </label>
+          <label class="stream-field">
+            <span class="stream-field-label">Scaling</span>
+            <select data-stream-field="scalingMode" data-stream-id="${sid}">${optionHtml(streamScalingModes, stream.scalingMode)}</select>
+          </label>
+          <details class="stream-advanced span-2" ${hasAdvanced ? "open" : ""}>
+            <summary>Fate, recycle & notes${hasAdvanced ? " •" : ""}</summary>
+            <div class="stream-advanced-grid">
+              <label class="stream-field">
+                <span class="stream-field-label">Fate</span>
+                <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions, stream.fate)}</select>
+              </label>
+              <label class="stream-field">
+                <span class="stream-field-label">Recovery %</span>
+                <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="90" inputmode="decimal">
+              </label>
+              <label class="stream-field">
+                <span class="stream-field-label">Purge %</span>
+                <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="5" inputmode="decimal">
+              </label>
+              <label class="stream-field">
+                <span class="stream-field-label">Loop id</span>
+                <input data-stream-field="loopId" data-stream-id="${sid}" value="${escapeAttr(stream.loopId)}" placeholder="e.g. CYHX">
+              </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">Destination</span>
+                <input data-stream-field="destinationGroup" data-stream-id="${sid}" value="${escapeAttr(stream.destinationGroup)}" placeholder="destination group, treatment, recovery...">
+              </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">Make-up</span>
+                <input data-stream-field="makeupRequired" data-stream-id="${sid}" value="${escapeAttr(stream.makeupRequired)}" placeholder="make-up amount or basis...">
+              </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">Accumulation risk</span>
+                <input data-stream-field="accumulationRisk" data-stream-id="${sid}" value="${escapeAttr(stream.accumulationRisk)}" placeholder="impurity build-up concern...">
+              </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">Note</span>
+                <input data-stream-field="note" data-stream-id="${sid}" value="${escapeAttr(stream.note)}" placeholder="assumption, source, balance note...">
+              </label>
+            </div>
+          </details>
+          <div class="mfa-edit-actions span-2">
+            <button class="delete-stream" data-remove-stream="${sid}" title="Remove stream">Delete</button>
+            <button class="primary" data-save-stream="${sid}">Save</button>
           </div>
         </div>
       `;
@@ -6268,12 +6323,6 @@
     });
     $("loadText").addEventListener("click", loadTextView);
     $("loadTextSide").addEventListener("click", loadTextView);
-    $("closeBlockWizard").addEventListener("click", closeBlockWizard);
-    $("wizardQuickCreate").addEventListener("click", () => confirmBlockWizard(false));
-    $("wizardConfirm").addEventListener("click", () => confirmBlockWizard(true));
-    $("blockWizardModal").addEventListener("click", event => {
-      if (event.target === $("blockWizardModal")) closeBlockWizard();
-    });
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();

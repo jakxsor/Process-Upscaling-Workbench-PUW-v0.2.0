@@ -277,68 +277,6 @@ APP_HTML = r"""<!doctype html>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
 
-  <div id="blockWizardModal" class="modal-backdrop" hidden>
-    <section class="modal-panel block-wizard-panel" role="dialog" aria-modal="true" aria-labelledby="blockWizardTitle">
-      <div class="modal-head">
-        <div>
-          <div class="label">Step 1. Block Building</div>
-          <h2 id="blockWizardTitle">Define The New Block</h2>
-        </div>
-        <button id="closeBlockWizard" class="mini-button">Cancel</button>
-      </div>
-      <div class="modal-body">
-        <div id="wizardTextPreview" class="wizard-text-preview"></div>
-        <div class="wizard-grid">
-          <section class="modal-section">
-            <div>
-              <div class="label">1. Which is the block purpose?</div>
-              <div class="muted small">Reaction / quench / phase formation / isolation / purification / drying</div>
-            </div>
-            <select id="wizardPurpose"></select>
-          </section>
-          <section class="modal-section">
-            <div>
-              <div class="label">2. Which are the streams? And their phase?</div>
-              <div class="muted small">Main addition/removal; more streams can be added later in the inspector.</div>
-            </div>
-            <div class="wizard-stream-row">
-              <input id="wizardInputName" type="text" placeholder="main input, e.g. benzophenone">
-              <select id="wizardInputPhase"></select>
-            </div>
-            <div class="wizard-stream-row">
-              <input id="wizardOutputName" type="text" placeholder="main outlet, e.g. reaction mixture">
-              <select id="wizardOutputPhase"></select>
-            </div>
-          </section>
-          <section class="modal-section">
-            <div>
-              <div class="label">3. Which conditions are imposed?</div>
-              <div class="muted small">Only what is stated or clearly implied.</div>
-            </div>
-            <div class="wizard-condition-row">
-              <input id="wizardTemperature" type="text" placeholder="temperature, e.g. 85">
-              <span class="muted small">C</span>
-              <input id="wizardTime" type="text" placeholder="time, e.g. 4">
-              <span class="muted small">h</span>
-            </div>
-            <input id="wizardAgitation" type="text" placeholder="agitation / atmosphere, e.g. stirred under N2">
-          </section>
-          <section class="modal-section">
-            <div>
-              <div class="label">4. Endpoint</div>
-              <div class="muted small">Observable completion cue: time-at-T, crystals, layer split, pH...</div>
-            </div>
-            <input id="wizardEndpoint" type="text" placeholder="e.g. two layers form">
-          </section>
-        </div>
-        <div class="row between">
-          <button id="wizardQuickCreate">Quick Create (skip questions)</button>
-          <button id="wizardConfirm" class="primary">Create Block</button>
-        </div>
-      </div>
-    </section>
-  </div>
-
   <div id="aiRefineModal" class="modal-backdrop" hidden>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="aiRefineTitle">
       <div class="modal-head">
