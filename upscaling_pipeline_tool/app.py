@@ -97,9 +97,9 @@ APP_HTML = r"""<!doctype html>
         <button id="toggleInspector" class="eye-button" title="Show/hide inspector">◐</button>
         <div class="panel-tabs" role="tablist" aria-label="Project panel views">
           <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Inspector</button>
-          <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristic Rules</button>
-          <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up & Gantt</button>
-          <button class="panel-tab" data-inspector-tab="values" role="tab">Values & COI</button>
+          <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristics</button>
+          <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up</button>
+          <button class="panel-tab" data-inspector-tab="values" role="tab">Values</button>
         </div>
       </div>
       <div class="panel-body stack">

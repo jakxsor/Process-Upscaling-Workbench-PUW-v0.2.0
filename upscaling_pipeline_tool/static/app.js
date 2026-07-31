@@ -1421,9 +1421,9 @@
           const path = orthogonalPath(route.points);
           const start = route.points[0];
           return `
-            <path d="${path}" stroke="#f2faf5" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
-            <path d="${path}" stroke="#286d3f" stroke-width="3" stroke-dasharray="9 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHeadRecycle)"></path>
-            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="4.2" fill="#f2faf5" stroke="#286d3f" stroke-width="2"></circle>
+            <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+            <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)"></path>
+            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
             <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
           `;
         }
@@ -1432,19 +1432,16 @@
         const path = orthogonalPath(route.points);
         const start = route.points[0];
         return `
-          <path d="${path}" stroke="#fff7ed" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
-          <path d="${path}" stroke="#c76500" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
-          <circle cx="${round(start.x)}" cy="${round(start.y)}" r="4.2" fill="#fff7ed" stroke="#c76500" stroke-width="2"></circle>
+          <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
+          <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
+          <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
         `;
       }).join("");
       return `
         <svg class="link-layer" style="width:${board.width}px; height:${board.height}px" viewBox="0 0 ${board.width} ${board.height}">
           <defs>
-            <marker id="arrowHead" markerWidth="13" markerHeight="13" refX="10.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,9 L12,4.5 z" fill="#c76500"></path>
-            </marker>
-            <marker id="arrowHeadRecycle" markerWidth="13" markerHeight="13" refX="10.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,9 L12,4.5 z" fill="#286d3f"></path>
+            <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="7.5" refY="3.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,7 L9,3.5 z" fill="#286d3f"></path>
             </marker>
             <mask id="nodeTextMask" maskUnits="userSpaceOnUse">
               <rect x="0" y="0" width="${board.width}" height="${board.height}" fill="white"></rect>
@@ -1727,11 +1724,34 @@
       };
     }
 
-    function orthogonalPath(points) {
+    function orthogonalPath(points, cornerRadius = 12) {
       if (!points.length) return "";
-      return points
-        .map((point, index) => `${index ? "L" : "M"} ${round(point.x)} ${round(point.y)}`)
-        .join(" ");
+      if (points.length < 3 || !cornerRadius) {
+        return points
+          .map((point, index) => `${index ? "L" : "M"} ${round(point.x)} ${round(point.y)}`)
+          .join(" ");
+      }
+      let path = `M ${round(points[0].x)} ${round(points[0].y)}`;
+      for (let i = 1; i < points.length - 1; i += 1) {
+        const prev = points[i - 1];
+        const corner = points[i];
+        const next = points[i + 1];
+        const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+        const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+        const r = Math.min(cornerRadius, inLen / 2, outLen / 2);
+        if (r < 1) {
+          path += ` L ${round(corner.x)} ${round(corner.y)}`;
+          continue;
+        }
+        const inX = corner.x - ((corner.x - prev.x) / inLen) * r;
+        const inY = corner.y - ((corner.y - prev.y) / inLen) * r;
+        const outX = corner.x + ((next.x - corner.x) / outLen) * r;
+        const outY = corner.y + ((next.y - corner.y) / outLen) * r;
+        path += ` L ${round(inX)} ${round(inY)} Q ${round(corner.x)} ${round(corner.y)} ${round(outX)} ${round(outY)}`;
+      }
+      const last = points[points.length - 1];
+      path += ` L ${round(last.x)} ${round(last.y)}`;
+      return path;
     }
 
     function round(value) {
