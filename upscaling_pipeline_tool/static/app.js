@@ -1,4 +1,4 @@
-    const sampleText = `Charge 100 kg of reagent A, 80 kg of reagent B, 250 kg of solvent S, and 5 kg of catalyst C to a stirred batch reactor. Heat the liquid reaction mixture from 25 C to 85 C and hold under nitrogen. React A and B for 16 h at 85 C with vigorous mixing to form product P. Cool the reactor contents from 85 C to 30 C before work-up. Add 150 kg of water and mix for 0.5 h, then allow the organic and aqueous phases to settle for 1 h. Separate the organic phase containing product P from 180 kg aqueous waste. Remove 220 kg of solvent S under vacuum and recover it for recycle. Collect 120 kg of product P as final output and send 15 kg residue to waste.`;
+    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.`;
 
     const phenomenaOptions = [
       "M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LL)", "2phM(VS)", "2phM(LS)",
@@ -298,6 +298,10 @@
       },
       ruleChecks: [],
       aiRefine: null,
+      heuristicDecisions: {},
+      valueCoiLinks: [],
+      showDataReadiness: false,
+      pendingBlockRange: null,
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -428,7 +432,7 @@
       };
     }
 
-    function createBlock(start, end) {
+    function createBlock(start, end, options = {}) {
       if (start === end) return;
       const lo = Math.min(start, end);
       const hi = Math.max(start, end);
@@ -438,8 +442,7 @@
       }
       const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
       if (!text) return;
-      const behavior = inferBehavior(text);
-      const preset = behaviorPresets[behavior];
+      const behavior = options.behavior && behaviorPresets[options.behavior] ? options.behavior : inferBehavior(text);
       const phenomena = phenomenaForBehaviorAndText(behavior, text);
       const inferredConditions = inferInitialConditions(text, phenomena);
       const block = {
@@ -458,11 +461,76 @@
         endpoint: "",
         status: "needs validation"
       };
+      ensureBlockFlowFields(block);
+      if (options.inputName) {
+        block.streams.push(createStream("input", { id: nextStreamId(block), name: options.inputName, phase: options.inputPhase || "unknown" }));
+      }
+      if (options.outputName) {
+        block.streams.push(createStream("output", { id: nextStreamId(block), name: options.outputName, phase: options.outputPhase || "unknown" }));
+      }
+      ensureBlockConditionFields(block);
+      if (options.temperature) {
+        block.conditions.target_temperature = options.temperature;
+        block.conditionUnits.target_temperature = block.conditionUnits.target_temperature || "C";
+      }
+      if (options.time) {
+        block.conditions.holding_time = options.time;
+        block.conditionUnits.holding_time = block.conditionUnits.holding_time || "h";
+      }
+      if (options.agitation) {
+        block.conditions.agitation_note = options.agitation;
+      }
+      if (options.endpoint) {
+        block.endpoint = options.endpoint;
+        if (phenomena.some(code => code.startsWith("ES("))) block.conditions.thermal_endpoint = block.conditions.thermal_endpoint || options.endpoint;
+        else if (phenomena.some(code => code.startsWith("R("))) block.conditions.reaction_endpoint = block.conditions.reaction_endpoint || options.endpoint;
+        else if (phenomena.some(code => code.startsWith("PT("))) block.conditions.transfer_endpoint = block.conditions.transfer_endpoint || options.endpoint;
+      }
       state.blocks.push(block);
       state.selectedBlockId = block.id;
       state.selectedIds = [block.id];
       state.focusEndpoint = block.id;
       renderAll();
+    }
+
+    function openBlockWizard(start, end) {
+      const lo = Math.min(start, end);
+      const hi = Math.max(start, end);
+      const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
+      if (!text) return;
+      state.pendingBlockRange = { start: lo, end: hi };
+      $("wizardTextPreview").textContent = text;
+      const inferred = inferBehavior(text);
+      $("wizardPurpose").innerHTML = Object.keys(behaviorPresets)
+        .map(name => `<option value="${escapeAttr(name)}" ${name === inferred ? "selected" : ""}>${escapeHtml(name)}${name === inferred ? " (suggested)" : ""}</option>`)
+        .join("");
+      $("wizardInputPhase").innerHTML = phaseOptionHtml("unknown");
+      $("wizardOutputPhase").innerHTML = phaseOptionHtml("unknown");
+      ["wizardInputName", "wizardOutputName", "wizardTemperature", "wizardTime", "wizardAgitation", "wizardEndpoint"].forEach(id => { $(id).value = ""; });
+      $("blockWizardModal").hidden = false;
+    }
+
+    function closeBlockWizard() {
+      state.pendingBlockRange = null;
+      $("blockWizardModal").hidden = true;
+    }
+
+    function confirmBlockWizard(useAnswers) {
+      const range = state.pendingBlockRange;
+      if (!range) return;
+      const options = useAnswers ? {
+        behavior: $("wizardPurpose").value,
+        inputName: $("wizardInputName").value.trim(),
+        inputPhase: $("wizardInputPhase").value,
+        outputName: $("wizardOutputName").value.trim(),
+        outputPhase: $("wizardOutputPhase").value,
+        temperature: $("wizardTemperature").value.trim(),
+        time: $("wizardTime").value.trim(),
+        agitation: $("wizardAgitation").value.trim(),
+        endpoint: $("wizardEndpoint").value.trim()
+      } : {};
+      closeBlockWizard();
+      createBlock(range.start, range.end, options);
     }
 
     function phenomenaForBehaviorAndText(behavior, text) {
@@ -665,136 +733,157 @@
       state.blocks = [
         makeBlock(
           "B1",
-          "Charge 100 kg of reagent A, 80 kg of reagent B, 250 kg of solvent S, and 5 kg of catalyst C to a stirred batch reactor.",
+          "Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap.",
           "G1",
           "charge and mix",
           ["M(L)", "2phM(LS)"],
           [
-            { role: "input", name: "reagent A", quantity: "100", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "reagent B", quantity: "80", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "solvent S", quantity: "250", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "catalyst C", quantity: "5", unit: "kg", phase: "S", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "charged reaction mixture", quantity: "435", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+            { role: "input", name: "benzophenone", quantity: "1.82", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "2-ethylhexyl cyanoacetate", quantity: "1.97", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "ammonium acetate catalyst", quantity: "0.15", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
+            { role: "output", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
-          { mixing_mode: "stirred batch reactor", mixing_time: "0.5", addition_mode: "batch charge", addition_time: "0.5" },
-          { mixing_time: "h", addition_time: "h" }
+          { mixing_mode: "stirred jacketed reactor", addition_mode: "batch charge", addition_time: "0.5" },
+          { addition_time: "h" }
         ),
         makeBlock(
           "B2",
-          "Heat the liquid reaction mixture from 25 C to 85 C and hold under nitrogen.",
+          "Heat the stirred mixture to reflux at 85 C.",
           "G1",
           "heat/cool",
           ["ES(H)", "M(L)"],
           [],
-          { initial_temperature: "25", target_temperature: "85", holding_temperature: "85", thermal_mode: "jacket or external loop heating", thermal_endpoint: "reach 85 C under nitrogen" },
-          { initial_temperature: "C", target_temperature: "C", holding_temperature: "C" }
+          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", thermal_endpoint: "stable reflux at 85 C" },
+          { initial_temperature: "C", target_temperature: "C" }
         ),
         makeBlock(
           "B3",
-          "React A and B for 16 h at 85 C with vigorous mixing to form product P.",
+          "Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap.",
           "G2",
-          "reaction",
-          ["R(L)", "M(L)", "ES(H)"],
+          "reaction with in-situ removal",
+          ["R(L)", "M(L)", "ES(H)", "PT(VL)", "PS(VL)", "PS(LL)"],
           [
-            { role: "input", name: "charged reaction mixture", quantity: "435", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "reaction mixture with product P", quantity: "420", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "reaction byproduct vapor", quantity: "15", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "per batch" }
+            { role: "input", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "crude octocrylene mixture", quantity: "7.21", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "water of condensation", quantity: "0.18", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "azeotropic removal via Dean-Stark decanter; cyclohexane returns to reactor" },
+            { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", note: "route to vent condenser + activated carbon polishing (VOC compliance, heuristic addition)" }
           ],
-          { reaction_time: "16", holding_temperature: "85", mixing_mode: "vigorous stirred liquid reaction", mixing_time: "16", conversion_yield: "90", reaction_endpoint: "A/B conversion to product P" },
-          { reaction_time: "h", holding_temperature: "C", mixing_time: "h", conversion_yield: "%" }
+          { reaction_time: "21", holding_temperature: "85", mixing_mode: "refluxing stirred liquid", conversion_yield: "90", reaction_endpoint: "no further water separates in the trap" },
+          { reaction_time: "h", holding_temperature: "C", conversion_yield: "%" }
         ),
         makeBlock(
           "B4",
-          "Cool the reactor contents from 85 C to 30 C before work-up.",
+          "Cool the crude reaction mixture to 40 C.",
           "G3",
           "heat/cool",
           ["ES(C)"],
           [],
-          { initial_temperature: "85", target_temperature: "30", thermal_ramp: "controlled cooling before work-up", thermal_endpoint: "30 C" },
+          { initial_temperature: "85", target_temperature: "40", thermal_ramp: "controlled cooling before work-up", thermal_endpoint: "40 C" },
           { initial_temperature: "C", target_temperature: "C" }
         ),
         makeBlock(
           "B5",
-          "Add 150 kg of water and mix for 0.5 h, then allow the organic and aqueous phases to settle for 1 h.",
+          "Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact.",
           "G4",
           "liquid-liquid wash",
-          ["2phM(LL)", "PC(LL)", "PS(LL)", "M(L)"],
+          ["2phM(LL)", "PC(LL)", "M(L)"],
           [
-            { role: "input", name: "water", quantity: "150", unit: "kg", phase: "L", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "washed two-phase mixture", quantity: "570", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+            { role: "input", name: "wash water", quantity: "2.0", unit: "kg", phase: "L", status: "reported", timing: "later addition", fate: "fresh input", scalingMode: "per batch" },
+            { role: "output", name: "washed two-phase mixture", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
-          { mixing_mode: "liquid-liquid contact", mixing_time: "0.5", phase_ratio: "organic:aqueous approx. 420:150", settling_time: "1", interface_risk: "check emulsion at scale" },
+          { mixing_mode: "two-stage counter-current mixer-settler", mixing_time: "0.5", settling_time: "0.5", phase_ratio: "organic:aqueous approx. 7.2:2.0" },
           { mixing_time: "h", settling_time: "h" }
         ),
         makeBlock(
           "B6",
-          "Separate the organic phase containing product P from 180 kg aqueous waste.",
+          "Separate and discard the aqueous layer.",
           "G4",
           "liquid-liquid wash",
           ["PS(LL)", "PT(LL)"],
           [
-            { role: "output", name: "organic phase with product P", quantity: "390", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "aqueous waste", quantity: "180", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" }
+            { role: "output", name: "washed organic phase", quantity: "7.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "aqueous waste", quantity: "2.16", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "neutralization tank + off-site WWT interface (compliance unit, heuristic addition)" }
           ],
-          { settling_time: "1", separation_efficiency: "95", transfer_endpoint: "clear organic/aqueous split" },
-          { settling_time: "h", separation_efficiency: "%" }
+          { separation_efficiency: "95", settling_time: "0.5", transfer_endpoint: "clear organic/aqueous split" },
+          { separation_efficiency: "%", settling_time: "h" }
         ),
         makeBlock(
           "B7",
-          "Remove 220 kg of solvent S under vacuum and recover it for recycle.",
+          "Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent.",
           "G5",
-          "solvent evaporation",
-          ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"],
+          "solid-liquid drying",
+          ["PC(LS)", "PT(LS)"],
           [
-            { role: "output", name: "solvent S", quantity: "220", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "90", scalingMode: "recycle loop", loopId: "SOLV-S" },
-            { role: "waste", name: "solvent S loss", quantity: "22", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "loss", scalingMode: "fixed loss %" }
+            { role: "input", name: "molecular sieves 4A", quantity: "0.10", unit: "kg", phase: "S", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch", note: "regenerable fixed-bed column at industrial scale" },
+            { role: "output", name: "dry organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "spent sieves with adsorbed water", quantity: "0.15", unit: "kg", phase: "S", status: "estimated", timing: "waste purge", fate: "solid waste", scalingMode: "per batch", note: "regenerated on-site at scale; lab-scale disposal" }
           ],
-          { target_pressure: "80", pressure_control: "vacuum solvent removal", vapor_handling: "condenser before vacuum system", phase_change_time: "4", phase_change_fraction: "88" },
-          { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
+          { transfer_endpoint: "water content below 0.1 percent", contact_time: "1" },
+          { contact_time: "h" }
         ),
         makeBlock(
           "B8",
-          "Collect 120 kg of product P as final output and send 15 kg residue to waste.",
-          "G5",
-          "distillation purification",
-          ["PS(VL)", "PT(VL)", "ES(H)"],
+          "Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse.",
+          "G6",
+          "solvent evaporation",
+          ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"],
           [
-            { role: "output", name: "product P", quantity: "120", unit: "kg", phase: "L", status: "assumed", timing: "final output", fate: "product", scalingMode: "per kg product" },
-            { role: "waste", name: "heavy residue", quantity: "15", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" }
+            { role: "output", name: "recovered cyclohexane", quantity: "3.15", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "90", scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "returns to feed preparation; industrial recovery via dedicated distillation column" },
+            { role: "output", name: "crude octocrylene", quantity: "3.50", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "cyclohexane loss", quantity: "0.35", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "loss", scalingMode: "fixed loss %", note: "make-up fresh cyclohexane required" }
           ],
-          { target_pressure: "50", pressure_control: "vacuum finishing", separation_efficiency: "92", phase_change_time: "1" },
+          { target_pressure: "150", pressure_control: "vacuum thin-film evaporation", vapor_handling: "condenser before vacuum system, vent to abatement", phase_change_time: "2", phase_change_fraction: "90" },
+          { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
+        ),
+        makeBlock(
+          "B9",
+          "Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.",
+          "G7",
+          "distillation purification",
+          ["PT(VL)", "PS(VL)", "ES(H)"],
+          [
+            { role: "output", name: "purified octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "reported", timing: "final output", fate: "product", scalingMode: "per kg product" },
+            { role: "waste", name: "heavy residue", quantity: "0.35", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "heavies to incineration / off-site disposal" }
+          ],
+          { target_pressure: "1.5", separation_efficiency: "95", phase_change_time: "1.5", transfer_endpoint: "at least 98 percent purity" },
           { target_pressure: "mbar", separation_efficiency: "%", phase_change_time: "h" }
         )
       ];
       state.groups = {
-        G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge plus heat-up" }, properties: { heat_capacity: { value: "2.1", unit: "kJ/kg/K", status: "assumed", note: "generic liquid mixture Cp" }, density: { value: "930", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
-        G2: { id: "G2", task: "main liquid reaction", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "16", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "intentional bottleneck for testing" }, properties: { heat_capacity: { value: "2.2", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "25", unit: "mPa s", status: "assumed", note: "mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
-        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty can become equipment-limited" }, properties: { heat_capacity: { value: "2.2", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
-        G4: { id: "G4", task: "liquid-liquid wash and split", selectedUnit: "Decanter", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "settling/emulsion check" }, properties: { density_difference: { value: "120", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
-        G5: { id: "G5", task: "solvent recovery and final product", selectedUnit: "Evaporation", schedule: { durationH: "5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "secondary bottleneck after reaction" }, properties: { boiling_point: { value: "82", unit: "C", status: "assumed", note: "placeholder solvent S" }, heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 2860, y: 90 }
+        G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge from feed tanks (paper U1) plus heat to reflux; receives recovered cyclohexane loop CYHX" }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
+        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "21", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "5 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); kinetic bottleneck, cannot be relieved by parallelization" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
+        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
+        G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
+        G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection" }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
+        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); recovered cyclohexane to solvent-recovery column (paper U8), loop CYHX to G1" }, properties: { boiling_point: { value: "81", unit: "C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
+        G7: { id: "G7", task: "final purification", selectedUnit: "Distillation", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at 1.5 mbar chosen by heat-sensitivity heuristic (paper U6); secondary bottleneck, can be parallelized; vents to abatement (paper U7)" }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3980, y: 90 }
       };
       state.links = [
         { from: "G1", to: "G2" },
         { from: "G2", to: "G3" },
         { from: "G3", to: "G4" },
-        { from: "G4", to: "G5" }
+        { from: "G4", to: "G5" },
+        { from: "G5", to: "G6" },
+        { from: "G6", to: "G7" },
+        { from: "G6", to: "G1" }
       ];
       state.scaleBasis = {
-        targetProduct: "product P",
-        targetAmount: "120000",
+        targetProduct: "octocrylene",
+        targetAmount: "750000",
         targetUnit: "kg/year",
-        referenceBlockId: "B8",
-        basisAmount: "120",
+        referenceBlockId: "B9",
+        basisAmount: "3.0",
         basisUnit: "kg",
         mode: "batch",
         operatingDays: "250",
-        hoursPerDay: "16",
+        hoursPerDay: "24",
         batchesPerDay: "1",
-        batchDuration: "",
+        batchDuration: "28",
         oeePercent: "80",
         parallelUnits: "1",
         yieldPercent: "90",
-        recoveryPercent: "92",
+        recoveryPercent: "95",
         designMarginPercent: "10",
         confidence: "rough"
       };
@@ -811,7 +900,7 @@
       state.zoom = 0.62;
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = "G2";
-      state.activeInspectorTab = "heuristics";
+      state.activeInspectorTab = "inspect";
       renderAll();
       requestAnimationFrame(() => {
         centerSelection();
@@ -1105,7 +1194,7 @@
         $("selectionInfo").textContent = "Select text in the loaded text view first, then create a block.";
         return;
       }
-      createBlock(offsets.start, offsets.end);
+      openBlockWizard(offsets.start, offsets.end);
     }
 
     function sourceInputSelection() {
@@ -2616,7 +2705,11 @@
       const triggered = heuristicRuleLibrary
         .map(rule => heuristicRuleCard(rule, ctx))
         .filter(Boolean)
-        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.id.localeCompare(b.id));
+        .map(card => ({ ...card, prioritizedCois: prioritizedCoisForRule(card) }))
+        .sort((a, b) =>
+          (b.prioritizedCois.length ? 1 : 0) - (a.prioritizedCois.length ? 1 : 0)
+          || severityRank(a.severity) - severityRank(b.severity)
+          || a.id.localeCompare(b.id));
       return {
         totalRules: heuristicRuleLibrary.length,
         triggered,
@@ -3192,6 +3285,27 @@
       root.querySelectorAll("[data-open-refine-modal]").forEach(button => {
         button.addEventListener("click", openAiRefineModal);
       });
+      root.querySelectorAll("[data-heuristic-decision]").forEach(button => {
+        button.addEventListener("click", () => {
+          const ruleId = button.dataset.heuristicRule;
+          const decision = button.dataset.heuristicDecision;
+          const existing = state.heuristicDecisions[ruleId] || {};
+          state.heuristicDecisions[ruleId] = {
+            ...existing,
+            decision: existing.decision === decision ? "" : decision,
+            decidedAt: new Date().toISOString()
+          };
+          renderHeuristicsPanel();
+          renderWorkflowStepper();
+        });
+      });
+      root.querySelectorAll("[data-heuristic-note]").forEach(input => {
+        input.addEventListener("change", () => {
+          const ruleId = input.dataset.heuristicNote;
+          const existing = state.heuristicDecisions[ruleId] || {};
+          state.heuristicDecisions[ruleId] = { ...existing, note: input.value.trim() };
+        });
+      });
     }
 
     function refreshReviewPanels() {
@@ -3329,12 +3443,27 @@
     }
 
     function heuristicCardHtml(item) {
+      const decision = state.heuristicDecisions?.[item.id] || {};
+      const chosen = decision.decision || "";
+      const decisionButton = (value, label) => `
+        <button class="mini-button heuristic-decision-button ${chosen === value ? "chosen" : ""}" data-heuristic-decision="${escapeAttr(value)}" data-heuristic-rule="${escapeAttr(item.id)}">${label}</button>
+      `;
+      const prioritized = item.prioritizedCois || prioritizedCoisForRule(item);
       return `
-        <div class="rule-card ${escapeAttr(item.severity)}">
+        <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""} ${prioritized.length ? "coi-prioritized" : ""}">
+          ${prioritized.length ? `<span class="coi-priority-pill" title="Prioritized by the project values linked in the Values &amp; COI tab">★ ${escapeHtml(prioritized.join(", "))}</span>` : ""}
           <span class="severity-pill">${escapeHtml(item.severity)}</span>
           <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
           <span>${escapeHtml(item.recommendation)}</span>
           <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
+          <div class="heuristic-decision-row">
+            ${decisionButton("accepted", "Accept")}
+            ${decisionButton("rejected", "Reject")}
+            ${decisionButton("overridden", "Override")}
+            <input type="text" class="heuristic-decision-note" data-heuristic-note="${escapeAttr(item.id)}"
+              placeholder="why / what was done instead" value="${escapeAttr(decision.note || "")}">
+          </div>
+          ${chosen ? `<span class="muted small">Decision: ${escapeHtml(chosen)}${decision.note ? ` — ${escapeHtml(decision.note)}` : ""}</span>` : `<span class="muted small heuristic-undecided">Undecided — record accept/reject/override for traceability.</span>`}
         </div>
       `;
     }
@@ -5384,6 +5513,7 @@
         && right <= viewRight - padding
         && bottom <= viewBottom - padding;
       if (visible) return;
+      if (typeof flow.scrollTo !== "function") return;
       flow.scrollTo({
         left: Math.max(0, left - flow.clientWidth * 0.32),
         top: Math.max(0, top - flow.clientHeight * 0.32),
@@ -5527,7 +5657,7 @@
     }
 
     function setInspectorTab(tab) {
-      state.activeInspectorTab = ["inspect", "heuristics", "scale"].includes(tab) ? tab : "inspect";
+      state.activeInspectorTab = ["inspect", "heuristics", "scale", "values"].includes(tab) ? tab : "inspect";
       renderInspectorTabs();
     }
 
@@ -5540,9 +5670,9 @@
     }
 
     function renderInspectorTabs() {
-      const active = ["inspect", "heuristics", "scale"].includes(state.activeInspectorTab) ? state.activeInspectorTab : "inspect";
+      const active = ["inspect", "heuristics", "scale", "values"].includes(state.activeInspectorTab) ? state.activeInspectorTab : "inspect";
       $("appMain").classList.toggle("scale-focused", active === "scale");
-      $("appMain").classList.toggle("heuristic-focused", active === "heuristics");
+      $("appMain").classList.toggle("heuristic-focused", active === "heuristics" || active === "values");
       document.querySelectorAll("[data-inspector-tab]").forEach(button => {
         const selected = button.dataset.inspectorTab === active;
         button.classList.toggle("active", selected);
@@ -5551,6 +5681,407 @@
       $("inspectPanelTab").hidden = active !== "inspect";
       $("heuristicsPanelTab").hidden = active !== "heuristics";
       $("scalePanelTab").hidden = active !== "scale";
+      $("valuesPanelTab").hidden = active !== "values";
+    }
+
+    const workflowSteps = [
+      { id: 1, name: "Blocks", paperName: "Block building", tab: "inspect" },
+      { id: 2, name: "Phenomena", paperName: "Phenomena definition", tab: "inspect" },
+      { id: 3, name: "Unit Ops", paperName: "Unit operation deduction", tab: "inspect" },
+      { id: 4, name: "Network", paperName: "Network establishment", tab: "inspect" },
+      { id: 5, name: "Heuristics", paperName: "Heuristic rules application", tab: "heuristics" },
+      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale" },
+      { id: 7, name: "Values", paperName: "Value deduction", tab: "values" }
+    ];
+
+    function blockExpectsStreams(block) {
+      const phenomena = block.phenomena || [];
+      if (!phenomena.length) return true;
+      return !phenomena.every(code => code.startsWith("ES(") || code.startsWith("M(") || code.startsWith("2phM"));
+    }
+
+    function workflowStepStatuses() {
+      const blocks = blocksInOrder();
+      const groupIds = groupIdsInTextOrder();
+      const groups = groupIds.map(groupId => groupModel(groupId));
+
+      const statuses = {};
+      const set = (id, status, hint) => { statuses[id] = { status, hint }; };
+
+      if (!blocks.length) {
+        set(1, "todo", "Select protocol text and create the first block.");
+      } else {
+        const missingStreams = blocks.filter(block => {
+          if (!blockExpectsStreams(block)) return false;
+          const counts = streamCounts(block);
+          return !counts.input && !counts.output;
+        });
+        if (missingStreams.length) {
+          set(1, "partial", `${missingStreams.length} block${missingStreams.length === 1 ? "" : "s"} missing input or output streams.`);
+        } else {
+          set(1, "done", `${blocks.length} blocks with streams defined.`);
+        }
+      }
+
+      if (!blocks.length) {
+        set(2, "todo", "Create blocks first, then assign phenomena.");
+      } else {
+        const missingPhen = blocks.filter(block => !(block.phenomena || []).length);
+        if (missingPhen.length === blocks.length) {
+          set(2, "todo", "Assign at least 1-2 phenomena per block (paper Table 3).");
+        } else if (missingPhen.length) {
+          set(2, "partial", `${missingPhen.length} block${missingPhen.length === 1 ? "" : "s"} without phenomena.`);
+        } else {
+          set(2, "done", "Every block has phenomena assigned.");
+        }
+      }
+
+      if (!groups.length) {
+        set(3, "todo", "Combine blocks into task groups, then pick unit operations.");
+      } else {
+        const missingUnit = groups.filter(group => !group.selectedUnit || !group.task || group.task === "unassigned");
+        if (missingUnit.length === groups.length) {
+          set(3, "todo", "Assign a task and select a unit operation for each group.");
+        } else if (missingUnit.length) {
+          set(3, "partial", `${missingUnit.length} group${missingUnit.length === 1 ? "" : "s"} without task or selected unit.`);
+        } else {
+          set(3, "done", `${groups.length} groups with selected unit operations.`);
+        }
+      }
+
+      const ungrouped = blocks.filter(block => !block.groupId);
+      if (!groups.length) {
+        set(4, "todo", "Group blocks and connect them with arrows to close the network.");
+      } else {
+        const linkedIds = new Set();
+        state.links.forEach(link => { linkedIds.add(link.from); linkedIds.add(link.to); });
+        const unconnected = groupIds.filter(groupId => groups.length > 1 && !linkedIds.has(groupId));
+        const missingFate = blocks.some(block => (block.streams || []).some(stream => stream.role !== "input" && !stream.fate));
+        if (ungrouped.length || unconnected.length) {
+          const parts = [];
+          if (ungrouped.length) parts.push(`${ungrouped.length} draft block${ungrouped.length === 1 ? "" : "s"} not in a group`);
+          if (unconnected.length) parts.push(`${unconnected.length} group${unconnected.length === 1 ? "" : "s"} without arrows`);
+          set(4, "partial", parts.join("; ") + ".");
+        } else if (missingFate) {
+          set(4, "partial", "Some output/waste streams have no fate (product, waste, recycle).");
+        } else {
+          set(4, "done", "Network closed: all blocks grouped, connected, with stream fates.");
+        }
+      }
+
+      const heuristics = heuristicReviewModel();
+      const decisions = state.heuristicDecisions || {};
+      const decided = heuristics.triggered.filter(item => decisions[item.id]?.decision).length;
+      if (!heuristics.triggered.length) {
+        set(5, blocks.length ? "todo" : "todo", "No heuristic rules triggered yet. Add phenomena, phases, and conditions.");
+      } else if (decided < heuristics.triggered.length) {
+        set(5, decided ? "partial" : "todo", `${decided}/${heuristics.triggered.length} triggered rules decided (accept/reject/override).`);
+      } else {
+        set(5, "done", `All ${heuristics.triggered.length} triggered rules decided.`);
+      }
+
+      const basis = state.scaleBasis || {};
+      const missingDuration = groups.filter(group => !parseStreamQuantity(group.schedule?.durationH));
+      if (!groups.length || !basis.targetAmount) {
+        set(6, "todo", "Define the scale-up basis (target amount, schedule) and task durations.");
+      } else if (missingDuration.length) {
+        set(6, "partial", `${missingDuration.length} group${missingDuration.length === 1 ? "" : "s"} without duration for the Gantt.`);
+      } else {
+        set(6, "done", "Scale basis and task durations defined. Review bottleneck in Scale-Up tab.");
+      }
+
+      const links = state.valueCoiLinks || [];
+      if (!links.length) {
+        set(7, "todo", "Link project values to COIs to rank heuristic suggestions.");
+      } else {
+        set(7, "done", `${links.length} value-to-COI link${links.length === 1 ? "" : "s"} defined.`);
+      }
+
+      return statuses;
+    }
+
+    function renderWorkflowStepper() {
+      const root = $("workflowStepper");
+      if (!root) return;
+      const statuses = workflowStepStatuses();
+      root.innerHTML = workflowSteps.map(step => {
+        const info = statuses[step.id] || { status: "todo", hint: "" };
+        return `
+          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}. ${step.paperName} — ${info.hint}`)}">
+            <span class="workflow-step-marker">${info.status === "done" ? "✓" : step.id}</span>
+            <span class="workflow-step-name">${escapeHtml(step.name)}</span>
+          </button>
+        `;
+      }).join(`<span class="workflow-step-arrow">→</span>`);
+      const firstOpen = workflowSteps.find(step => (statuses[step.id] || {}).status !== "done");
+      const hintTarget = firstOpen || workflowSteps[workflowSteps.length - 1];
+      const hintInfo = statuses[hintTarget.id] || { hint: "" };
+      root.insertAdjacentHTML("beforeend", `
+        <span class="workflow-stepper-hint">
+          <strong>Step ${hintTarget.id}. ${escapeHtml(hintTarget.paperName)}:</strong> ${escapeHtml(hintInfo.hint || "")}
+        </span>
+      `);
+    }
+
+    const coiCatalog = [
+      { id: "energy_demand", label: "Energy demand", heuristicTags: ["heating", "cooling", "heat_exchange", "utility", "boiling", "condensation", "high_temperature", "endotherm", "drying"] },
+      { id: "material_efficiency", label: "Material efficiency", heuristicTags: ["selectivity", "reversible", "valuable", "reaction"] },
+      { id: "solvent_recovery", label: "Solvent recovery", heuristicTags: ["recycle", "purge", "valuable", "vl", "boiling"] },
+      { id: "waste_generation", label: "Waste generation", heuristicTags: ["purge", "washing", "accumulation", "wastewater"] },
+      { id: "voc_emissions", label: "VOC emissions", heuristicTags: ["vent", "vapor", "vacuum"] },
+      { id: "safety_thermal_risk", label: "Safety and thermal risk", heuristicTags: ["hazard", "exotherm", "heat_sensitive", "pressure"] },
+      { id: "product_quality", label: "Product quality / thermal sensitivity", heuristicTags: ["heat_sensitive", "crystallization", "selectivity"] },
+      { id: "data_quality", label: "Data quality / uncertainty", heuristicTags: ["condition"] },
+      { id: "industrial_plausibility", label: "Industrial plausibility / compliance", heuristicTags: ["vent", "wastewater", "utility", "compliance"] },
+      { id: "scheduling_feasibility", label: "Scheduling feasibility", heuristicTags: ["drying", "filtration", "solid_liquid"] }
+    ];
+
+    const valueCatalog = [
+      { id: "min_env_burden", label: "Minimize environmental burden", suggestedCois: ["energy_demand", "waste_generation", "solvent_recovery"] },
+      { id: "preserve_quality", label: "Preserve product quality", suggestedCois: ["product_quality", "safety_thermal_risk"] },
+      { id: "max_traceability", label: "Maximize traceability", suggestedCois: ["data_quality"] },
+      { id: "reduce_uncertainty", label: "Reduce LCA inventory uncertainty", suggestedCois: ["data_quality", "material_efficiency"] },
+      { id: "industrial_plausibility", label: "Ensure industrial plausibility", suggestedCois: ["industrial_plausibility", "voc_emissions", "scheduling_feasibility"] },
+      { id: "reduce_solvent_losses", label: "Reduce solvent losses", suggestedCois: ["solvent_recovery", "voc_emissions"] },
+      { id: "min_hazardous_waste", label: "Minimize hazardous waste", suggestedCois: ["waste_generation", "safety_thermal_risk"] },
+      { id: "conservative_choices", label: "Prioritize conservative engineering choices", suggestedCois: ["industrial_plausibility", "safety_thermal_risk"] }
+    ];
+
+    function activeCoiIds() {
+      const ids = new Set();
+      (state.valueCoiLinks || []).forEach(link => (link.cois || []).forEach(id => ids.add(id)));
+      return ids;
+    }
+
+    function prioritizedCoisForRule(item) {
+      const active = activeCoiIds();
+      if (!active.size) return [];
+      const ruleTags = new Set([...(item.triggeredBy || []), ...(heuristicRuleLibrary.find(rule => rule.id === item.id)?.tags || [])]);
+      return coiCatalog
+        .filter(coi => active.has(coi.id) && coi.heuristicTags.some(tag => ruleTags.has(tag)))
+        .map(coi => coi.label);
+    }
+
+    function valuesForCoi(coiId) {
+      return (state.valueCoiLinks || [])
+        .filter(link => (link.cois || []).includes(coiId))
+        .map(link => valueCatalog.find(v => v.id === link.value)?.label || link.value);
+    }
+
+    function renderValuesPanel(force) {
+      const root = $("valuesPanel");
+      if (!root) return;
+      const links = state.valueCoiLinks || [];
+      const signature = JSON.stringify(links);
+      if (!force && root.dataset.signature === signature && root.innerHTML) return;
+      root.dataset.signature = signature;
+      const usedValues = new Set(links.map(link => link.value));
+      const availableValues = valueCatalog.filter(v => !usedValues.has(v.id));
+      root.innerHTML = `
+        <div class="stack">
+          <div>
+            <div class="label">Linked Values</div>
+            ${links.length ? links.map((link, index) => {
+              const value = valueCatalog.find(v => v.id === link.value);
+              const coiLabels = (link.cois || []).map(id => coiCatalog.find(c => c.id === id)?.label || id);
+              return `
+                <div class="value-link-row">
+                  <div>
+                    <strong>${escapeHtml(value?.label || link.value)}</strong>
+                    <div class="muted small">COIs: ${escapeHtml(coiLabels.join(", ") || "none")}</div>
+                    ${link.note ? `<div class="muted small">Note: ${escapeHtml(link.note)}</div>` : ""}
+                  </div>
+                  <button class="mini-button" data-remove-value-link="${index}">Remove</button>
+                </div>
+              `;
+            }).join("") : `<div class="mfa-empty">No values linked yet. Project priorities are what turn heuristic screening into ranked guidance (paper Step 7).</div>`}
+          </div>
+          ${availableValues.length ? `
+            <div class="stack value-add-form">
+              <div class="label">Add Value</div>
+              <select id="valueSelect">
+                ${availableValues.map(v => `<option value="${escapeAttr(v.id)}">${escapeHtml(v.label)}</option>`).join("")}
+              </select>
+              <div class="label">Connected COIs</div>
+              <div id="valueCoiChecks" class="coi-check-grid">
+                ${coiCatalog.map(coi => `
+                  <label><input type="checkbox" value="${escapeAttr(coi.id)}"> ${escapeHtml(coi.label)}</label>
+                `).join("")}
+              </div>
+              <input id="valueLinkNote" type="text" placeholder="optional note: why this value matters here">
+              <button id="addValueLink" class="primary">Link Value To COIs</button>
+              <div class="muted small">Prioritized COIs highlight and re-rank the triggered heuristic rules in the Heuristic Rules tab, and are exported with the project.</div>
+            </div>
+          ` : `<div class="muted small">All catalog values are linked. Remove one to change its COIs.</div>`}
+        </div>
+      `;
+      const select = root.querySelector("#valueSelect");
+      if (select) {
+        const syncSuggested = () => {
+          const value = valueCatalog.find(v => v.id === select.value);
+          root.querySelectorAll("#valueCoiChecks input").forEach(input => {
+            input.checked = Boolean(value?.suggestedCois?.includes(input.value));
+          });
+        };
+        select.addEventListener("change", syncSuggested);
+        syncSuggested();
+      }
+      root.querySelector("#addValueLink")?.addEventListener("click", () => {
+        const value = root.querySelector("#valueSelect")?.value;
+        if (!value) return;
+        const cois = [...root.querySelectorAll("#valueCoiChecks input:checked")].map(input => input.value);
+        const note = root.querySelector("#valueLinkNote")?.value.trim() || "";
+        state.valueCoiLinks.push({ value, cois, note });
+        renderValuesPanel();
+        renderHeuristicsPanel();
+        renderWorkflowStepper();
+      });
+      root.querySelectorAll("[data-remove-value-link]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.valueCoiLinks.splice(Number(button.dataset.removeValueLink), 1);
+          renderValuesPanel();
+          renderHeuristicsPanel();
+          renderWorkflowStepper();
+        });
+      });
+    }
+
+    function dataReadinessModel() {
+      const blocks = blocksInOrder();
+      const groupIds = groupIdsInTextOrder();
+      const groups = groupIds.map(groupId => groupModel(groupId));
+      const allStreams = blocks.flatMap(block => block.streams || []);
+      const hasCondition = (block, ids) => ids.some(id => String(block.conditions?.[id] || "").trim());
+      const blocksWith = predicate => blocks.filter(predicate);
+      const phen = block => block.phenomena || [];
+
+      const reactionBlocks = blocksWith(block => phen(block).some(code => code.startsWith("R(")));
+      const thermalBlocks = blocksWith(block => phen(block).some(code => code === "ES(H)" || code === "ES(C)"));
+      const mixingBlocks = blocksWith(block => phen(block).some(code => code.startsWith("M(") || code.startsWith("2phM")));
+      const pressureBlocks = blocksWith(block => phen(block).some(code => code === "ES(P)" || code === "ES(E)"));
+
+      const item = (name, level, ok, note) => ({ name, level, ok, note });
+
+      const synthesis = [
+        item("Reaction type and objective", "critical",
+          !blocks.length ? false : reactionBlocks.length > 0 || groups.some(group => /react|synth|precip/i.test(group.task || "")),
+          reactionBlocks.length ? `${reactionBlocks.length} block(s) carry reaction phenomena.` : "No block carries a reaction phenomenon yet."),
+        item("Stoichiometry", "important", null,
+          "Not machine-checkable: confirm a balanced or semi-balanced reaction is recorded in block notes."),
+        item("Yield / conversion", "important",
+          blocks.length ? reactionBlocks.every(block => hasCondition(block, ["conversion_yield"])) && reactionBlocks.length > 0 : false,
+          "Record conversion/yield on each reaction block (conversion_yield condition)."),
+        item("Input materials (identity + quantity)", "critical",
+          blocks.length ? allStreams.some(s => s.role === "input") && allStreams.filter(s => s.role === "input").every(s => String(s.quantity || "").trim() && String(s.unit || "").trim()) : false,
+          "Declare fresh inputs with quantity and unit; intermediates flow implicitly between linked blocks."),
+        item("Output materials (products, by-products, wastes)", "critical",
+          blocks.length ? blocks.filter(blockExpectsStreams).every(block => (block.streams || []).some(s => s.role === "output")) : false,
+          "Every material-handling block needs at least one output stream."),
+        item("Solvents / auxiliaries (identity and role)", "important", null,
+          "Not machine-checkable: confirm solvents and auxiliaries appear as named input streams."),
+        item("Phase of each stream", "critical",
+          allStreams.length ? allStreams.every(s => String(s.phase || "").trim() && s.phase !== "unknown") : false,
+          "Assign solid/liquid/vapor phase to every stream."),
+        item("Phase changes observed", "important",
+          blocks.length ? blocks.some(block => phen(block).some(code => code.startsWith("PT(") || code.startsWith("PCh") || code.startsWith("PS("))) : false,
+          "No phase-transition/change/separation phenomena assigned yet — check evaporation, crystallization, splits."),
+        item("Temperature", "important",
+          thermalBlocks.length ? thermalBlocks.every(block => hasCondition(block, ["target_temperature", "holding_temperature", "initial_temperature"])) : blocks.length > 0,
+          "Blocks with heating/cooling need a temperature value or range."),
+        item("Pressure (if relevant)", "optional",
+          pressureBlocks.length ? pressureBlocks.every(block => hasCondition(block, ["target_pressure", "initial_pressure"])) : true,
+          "Blocks with pressurization/expansion should record a qualitative pressure."),
+        item("Time (per step)", "important",
+          groups.length ? groups.every(group => parseStreamQuantity(group.schedule?.durationH)) : false,
+          "Give each task group an order-of-magnitude duration."),
+        item("Agitation / mixing", "important",
+          mixingBlocks.length ? mixingBlocks.every(block => hasCondition(block, ["mixing_time", "mixing_intensity", "mixing_mode", "agitation_speed", "agitation_note"])) : blocks.length > 0,
+          "Blocks with mixing phenomena need a qualitative mixing descriptor.")
+      ];
+
+      const linkedIds = new Set();
+      state.links.forEach(link => { linkedIds.add(link.from); linkedIds.add(link.to); });
+      const processes = [
+        item("Sequence of steps (ordered blocks)", "critical",
+          blocks.length > 0 && blocks.every(block => block.groupId),
+          "Create blocks for the whole protocol and assign each to a task group."),
+        item("Step purpose (reaction / separation / purification)", "critical",
+          blocks.length ? blocks.every(block => String(block.behavior || "").trim()) : false,
+          "Give every block a behavior preset that states its purpose."),
+        item("Endpoints (observable cues)", "important",
+          blocks.length ? blocks.every(block => hasCondition(block, ["thermal_endpoint", "reaction_endpoint", "transfer_endpoint"]) || !phen(block).some(code => code.startsWith("R(") || code.startsWith("PT("))) : false,
+          "Reaction/transfer blocks should record an observable completion cue."),
+        item("Dominant phenomena per step (>= 1-2 per block)", "critical",
+          blocks.length ? blocks.every(block => phen(block).length >= 1) : false,
+          "Assign at least one phenomenon per block (paper Table 3)."),
+        item("Multiphase indication", "important",
+          blocks.length ? blocks.some(block => phen(block).some(code => code.includes("2ph") || code.startsWith("PC(") || code.startsWith("PS("))) || allStreams.every(s => (s.phase || "L") === (allStreams[0]?.phase || "L")) : false,
+          "If two phases coexist anywhere, mark two-phase mixing/contact/separation phenomena."),
+        item("Task definition per group", "critical",
+          groups.length ? groups.every(group => group.task && group.task !== "unassigned") : false,
+          "Name the task of every group (reaction, washing, purification...)."),
+        item("Candidate unit operations (>= 1 per task)", "critical",
+          groups.length ? groups.every(group => group.selectedUnit || matchesForGroup(group).length) : false,
+          "Each group needs at least one candidate unit operation from the knowledge base."),
+        item("Stream connectivity (input/output links)", "critical",
+          groups.length > 1 ? groupIds.every(groupId => linkedIds.has(groupId)) : groups.length === 1,
+          "Connect all groups with arrows so the flowsheet is a closed network."),
+        item("Recycling / wastes identified", "important",
+          allStreams.some(s => s.role === "waste") || allStreams.some(s => /recycle/i.test(s.fate || "")),
+          "Identify at least waste streams and candidate recycle loops qualitatively.")
+      ];
+
+      const scheduling = [
+        item("Scale-sensitive operations identified", "important",
+          groups.length ? groups.every(group => String(group.schedule?.scaleSensitivity || "").trim()) : false,
+          "Classify each task (heating/cooling, drying, filtration are typically scale-sensitive)."),
+        item("Task duration estimates", "important",
+          groups.length ? groups.every(group => parseStreamQuantity(group.schedule?.durationH)) : false,
+          "Rough per-task durations enable the Gantt and bottleneck analysis."),
+        item("Parallelization potential", "optional",
+          groups.length ? groups.every(group => String(group.schedule?.canOverlap || "").trim()) : false,
+          "Mark which tasks can overlap or run on parallel units.")
+      ];
+
+      const categories = [
+        { name: "Synthesis steps", items: synthesis },
+        { name: "Processes and tasks", items: processes },
+        { name: "Scheduling and optimization", items: scheduling }
+      ];
+      const flat = categories.flatMap(category => category.items);
+      const missingCritical = flat.filter(entry => entry.level === "critical" && entry.ok === false).length;
+      const missingImportant = flat.filter(entry => entry.level === "important" && entry.ok === false).length;
+      const confirmCount = flat.filter(entry => entry.ok === null).length;
+      return { categories, missingCritical, missingImportant, confirmCount };
+    }
+
+    function renderDataReadiness() {
+      const summary = $("dataReadinessSummary");
+      const panel = $("dataReadinessPanel");
+      if (!summary || !panel) return;
+      const model = dataReadinessModel();
+      const parts = [];
+      if (model.missingCritical) parts.push(`${model.missingCritical} critical missing`);
+      if (model.missingImportant) parts.push(`${model.missingImportant} important missing`);
+      if (model.confirmCount) parts.push(`${model.confirmCount} to confirm manually`);
+      summary.textContent = parts.length ? parts.join(", ") + "." : "All checkable items covered.";
+      summary.className = model.missingCritical ? "small readiness-summary critical" : model.missingImportant ? "small readiness-summary important" : "small readiness-summary ok";
+      panel.hidden = !state.showDataReadiness;
+      $("toggleReadiness").textContent = state.showDataReadiness ? "Hide" : "Details";
+      if (!state.showDataReadiness) return;
+      panel.innerHTML = model.categories.map(category => `
+        <div class="readiness-category">
+          <div class="label">${escapeHtml(category.name)}</div>
+          ${category.items.map(entry => `
+            <div class="readiness-row ${entry.level} ${entry.ok === true ? "ok" : entry.ok === false ? "missing" : "confirm"}">
+              <span class="readiness-mark">${entry.ok === true ? "✓" : entry.ok === false ? "✕" : "?"}</span>
+              <span class="readiness-name">${escapeHtml(entry.name)}</span>
+              <span class="readiness-level">${entry.level}</span>
+              <span class="readiness-note">${escapeHtml(entry.note)}</span>
+            </div>
+          `).join("")}
+        </div>
+      `).join("");
     }
 
     function renderExport() {
@@ -5618,6 +6149,9 @@
         energyBridge,
         ruleChecks: state.ruleChecks,
         aiRefine: state.aiRefine,
+        dataReadiness: dataReadinessModel(),
+        heuristicDecisions: state.heuristicDecisions,
+        valueCoiLinks: state.valueCoiLinks,
         blocks,
         materialFlow,
         groups,
@@ -5708,6 +6242,9 @@
       renderInspector();
       renderContextMenuOptions();
       renderInspectorTabs();
+      renderWorkflowStepper();
+      renderValuesPanel();
+      renderDataReadiness();
     }
 
     function escapeHtml(value) {
@@ -5731,6 +6268,28 @@
     });
     $("loadText").addEventListener("click", loadTextView);
     $("loadTextSide").addEventListener("click", loadTextView);
+    $("closeBlockWizard").addEventListener("click", closeBlockWizard);
+    $("wizardQuickCreate").addEventListener("click", () => confirmBlockWizard(false));
+    $("wizardConfirm").addEventListener("click", () => confirmBlockWizard(true));
+    $("blockWizardModal").addEventListener("click", event => {
+      if (event.target === $("blockWizardModal")) closeBlockWizard();
+    });
+    $("toggleReadiness").addEventListener("click", () => {
+      state.showDataReadiness = !state.showDataReadiness;
+      renderDataReadiness();
+    });
+    $("workflowStepper").addEventListener("click", event => {
+      const button = event.target.closest("[data-workflow-step]");
+      if (!button) return;
+      const step = workflowSteps.find(item => item.id === Number(button.dataset.workflowStep));
+      if (!step) return;
+      if ($("appMain").classList.contains("inspector-collapsed")) {
+        $("appMain").classList.remove("inspector-collapsed");
+        $("toggleInspector").textContent = "◐";
+      }
+      setInspectorTab(step.tab);
+      renderWorkflowStepper();
+    });
     $("createBlock").addEventListener("click", createBlockFromSelection);
     $("createBlockSide").addEventListener("click", createBlockFromSelection);
     $("openScaleTop").addEventListener("click", openScalePanel);

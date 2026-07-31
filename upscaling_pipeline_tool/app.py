@@ -28,10 +28,10 @@ APP_HTML = r"""<!doctype html>
   <header>
     <div>
       <h1>Upscaling Block Annotator</h1>
-      <div class="subtitle">Create blocks from selected source text, assign behavior presets, then combine separate blocks into task groups.</div>
+      <div class="subtitle">Lab protocol to industrial flowsheet in 7 traceable steps: blocks, phenomena, unit operations, network, heuristics, schedule, values.</div>
     </div>
     <div class="row">
-      <button id="loadSample">Load Sample</button>
+      <button id="loadSample">Load Octocrylene Case</button>
       <button id="loadText" class="primary">Load Text View</button>
       <button id="createBlock">Create Block From Selection</button>
       <button id="openScaleTop">Scale-Up</button>
@@ -39,11 +39,13 @@ APP_HTML = r"""<!doctype html>
     </div>
   </header>
 
+  <nav id="workflowStepper" class="workflow-stepper" aria-label="Upscaling workflow steps"></nav>
+
   <main id="appMain">
     <section class="panel">
       <div class="panel-head">
-        <h2>1. Source Text</h2>
-        <span class="muted small">select text to create blocks</span>
+        <h2>Source Protocol</h2>
+        <span class="muted small">Step 1 — select text to create blocks</span>
       </div>
       <div class="panel-body stack">
         <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
@@ -59,8 +61,8 @@ APP_HTML = r"""<!doctype html>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>2. Block And Task Graph</h2>
-        <span class="muted small">draft blocks first, task groups after combine/assign</span>
+        <h2>Blocks, Tasks & Network</h2>
+        <span class="muted small">Steps 1-4 — draft blocks, task groups, then arrows to close the network</span>
       </div>
       <div class="panel-body">
         <div class="graph-controls">
@@ -90,17 +92,29 @@ APP_HTML = r"""<!doctype html>
     <section class="panel" id="inspectorPanel">
       <div class="panel-head">
         <div class="project-panel-title">
-          <h2>3. Project Panel</h2>
+          <h2>Project Panel</h2>
         </div>
         <button id="toggleInspector" class="eye-button" title="Show/hide inspector">◐</button>
         <div class="panel-tabs" role="tablist" aria-label="Project panel views">
           <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Inspector</button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristic Rules</button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up & Gantt</button>
+          <button class="panel-tab" data-inspector-tab="values" role="tab">Values & COI</button>
         </div>
       </div>
       <div class="panel-body stack">
         <div id="inspectPanelTab" class="tab-view stack">
+          <div class="card stack">
+            <div class="row between">
+              <div>
+                <div class="label">Data Readiness</div>
+                <div id="dataReadinessSummary" class="muted small">No project data yet.</div>
+              </div>
+              <button id="toggleReadiness" class="mini-button">Details</button>
+            </div>
+            <div id="dataReadinessPanel" hidden></div>
+          </div>
+
           <div class="card">
             <div class="label">Selected Block</div>
             <div id="selectedBlockInfo" class="muted">No block selected.</div>
@@ -218,6 +232,22 @@ APP_HTML = r"""<!doctype html>
             </section>
           </div>
         </div>
+
+        <div id="valuesPanelTab" class="tab-view scale-tab" hidden>
+          <section class="card stack scale-sticky-card">
+            <div class="scale-run-row">
+              <div>
+                <div class="label">Step 7. Value Deduction</div>
+                <div class="muted small">Link project values to Criteria of Interest (COIs) so design priorities drive rule ranking and warnings.</div>
+              </div>
+            </div>
+          </section>
+          <div class="scale-scroll-body stack">
+            <section class="card stack">
+              <div id="valuesPanel"></div>
+            </section>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -246,6 +276,68 @@ APP_HTML = r"""<!doctype html>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
+
+  <div id="blockWizardModal" class="modal-backdrop" hidden>
+    <section class="modal-panel block-wizard-panel" role="dialog" aria-modal="true" aria-labelledby="blockWizardTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Step 1. Block Building</div>
+          <h2 id="blockWizardTitle">Define The New Block</h2>
+        </div>
+        <button id="closeBlockWizard" class="mini-button">Cancel</button>
+      </div>
+      <div class="modal-body">
+        <div id="wizardTextPreview" class="wizard-text-preview"></div>
+        <div class="wizard-grid">
+          <section class="modal-section">
+            <div>
+              <div class="label">1. Which is the block purpose?</div>
+              <div class="muted small">Reaction / quench / phase formation / isolation / purification / drying</div>
+            </div>
+            <select id="wizardPurpose"></select>
+          </section>
+          <section class="modal-section">
+            <div>
+              <div class="label">2. Which are the streams? And their phase?</div>
+              <div class="muted small">Main addition/removal; more streams can be added later in the inspector.</div>
+            </div>
+            <div class="wizard-stream-row">
+              <input id="wizardInputName" type="text" placeholder="main input, e.g. benzophenone">
+              <select id="wizardInputPhase"></select>
+            </div>
+            <div class="wizard-stream-row">
+              <input id="wizardOutputName" type="text" placeholder="main outlet, e.g. reaction mixture">
+              <select id="wizardOutputPhase"></select>
+            </div>
+          </section>
+          <section class="modal-section">
+            <div>
+              <div class="label">3. Which conditions are imposed?</div>
+              <div class="muted small">Only what is stated or clearly implied.</div>
+            </div>
+            <div class="wizard-condition-row">
+              <input id="wizardTemperature" type="text" placeholder="temperature, e.g. 85">
+              <span class="muted small">C</span>
+              <input id="wizardTime" type="text" placeholder="time, e.g. 4">
+              <span class="muted small">h</span>
+            </div>
+            <input id="wizardAgitation" type="text" placeholder="agitation / atmosphere, e.g. stirred under N2">
+          </section>
+          <section class="modal-section">
+            <div>
+              <div class="label">4. Endpoint</div>
+              <div class="muted small">Observable completion cue: time-at-T, crystals, layer split, pH...</div>
+            </div>
+            <input id="wizardEndpoint" type="text" placeholder="e.g. two layers form">
+          </section>
+        </div>
+        <div class="row between">
+          <button id="wizardQuickCreate">Quick Create (skip questions)</button>
+          <button id="wizardConfirm" class="primary">Create Block</button>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <div id="aiRefineModal" class="modal-backdrop" hidden>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="aiRefineTitle">

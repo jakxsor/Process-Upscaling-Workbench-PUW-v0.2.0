@@ -1,6 +1,16 @@
 # Upscaling Pipeline Tool
 
-Dedicated local tool for building an upscaling workflow from source text:
+Dedicated local tool for building an upscaling workflow from source text,
+following the 7-step phenomena-based methodology of the companion paper
+(block building, phenomena definition, unit-operation deduction, network
+establishment, heuristic rules, preliminary scheduling, value deduction):
+
+- workflow stepper across the top showing per-step completion and what is missing next;
+- Data Readiness panel mirroring the paper's Table 6 heat-map (critical / important / optional data items);
+- guided block-creation form asking the paper's Figure 2 questions (purpose, streams and phases, conditions, endpoint);
+- accept / reject / override recording with notes on every triggered heuristic rule, exported for traceability;
+- Values & COI tab (paper Step 7): link project values to Criteria of Interest, which highlight and re-rank triggered heuristic rules;
+- octocrylene benchmark case (paper Section 3) as the built-in sample: 9 blocks, 7 task groups, cyclohexane recycle loop, 3 kg/batch lab basis scaled to 750 t/year;
 
 - select source text and create blocks;
 - add block-level MFA inputs, outputs, and waste/emission streams with quantity, unit, phase, data status, and notes;
