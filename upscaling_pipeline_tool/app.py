@@ -1,0 +1,6714 @@
+#!/usr/bin/env python3
+"""Local Python web app for annotating protocol blocks and grouping phenomena."""
+
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import argparse
+
+
+APP_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upscaling Block Annotator</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --ink: #172027;
+      --muted: #657480;
+      --line: #d9e1e6;
+      --accent: #0f766e;
+      --accent-soft: #dcf3ef;
+      --blue: #2d6098;
+      --blue-soft: #e4eff9;
+      --green: #286d3f;
+      --green-soft: #e2f2e7;
+      --orange: #965d00;
+      --orange-soft: #fff0d4;
+      --red: #a23b3b;
+      --red-soft: #f8dfdf;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    header {
+      min-height: 62px;
+      padding: 10px 12px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    h1, h2, h3 { margin: 0; letter-spacing: 0; line-height: 1.2; }
+    h1 { font-size: 18px; }
+    h2 { font-size: 13px; }
+    h3 { font-size: 13px; }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      min-height: 32px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.primary {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .mini-button {
+      min-height: 24px;
+      padding: 0 7px;
+      font-size: 11px;
+      color: var(--blue);
+      border-color: #cfe0ee;
+      background: #f7fbff;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    textarea, input[type="text"], select {
+      width: 100%;
+      min-height: 32px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 12px;
+    }
+
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(218px, 240px) minmax(0, 1fr) minmax(260px, 300px);
+      gap: 10px;
+      padding: 10px;
+      min-height: calc(100vh - 70px);
+      width: 100%;
+      max-width: 100%;
+    }
+
+    main.scale-focused {
+      grid-template-columns: minmax(190px, 210px) minmax(360px, 1fr) minmax(650px, 780px);
+    }
+
+    main.heuristic-focused {
+      grid-template-columns: minmax(200px, 220px) minmax(420px, 1fr) minmax(500px, 590px);
+    }
+
+    main.inspector-collapsed {
+      grid-template-columns: minmax(218px, 240px) minmax(0, 1fr) 42px;
+    }
+
+    main.inspector-collapsed #inspectorPanel .panel-body {
+      display: none;
+    }
+
+    main.inspector-collapsed #inspectorPanel .panel-head {
+      min-height: calc(100vh - 100px);
+      justify-content: center;
+      align-items: flex-start;
+      padding: 10px 4px;
+    }
+
+    main.inspector-collapsed #inspectorPanel h2 {
+      display: none;
+    }
+
+    main.inspector-collapsed #inspectorPanel .panel-tabs {
+      display: none;
+    }
+
+    .panel {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    main > .panel:first-child,
+    #inspectorPanel {
+      font-size: 12px;
+    }
+
+    main > .panel:first-child .panel-body,
+    #inspectorPanel .panel-body {
+      padding: 9px;
+    }
+
+    main > .panel:first-child button,
+    #inspectorPanel button {
+      min-height: 29px;
+      padding: 0 7px;
+      font-size: 12px;
+    }
+
+    .panel-head {
+      min-height: 38px;
+      padding: 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfc;
+    }
+
+    #inspectorPanel .panel-head {
+      min-height: 72px;
+      padding: 7px 8px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      align-items: center;
+      gap: 6px 8px;
+    }
+
+    .project-panel-title {
+      min-width: 0;
+    }
+
+    .project-panel-title h2 {
+      white-space: nowrap;
+    }
+
+    .panel-body {
+      padding: 10px;
+    }
+
+    .stack { display: grid; gap: 9px; min-width: 0; }
+    .row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+    .between { justify-content: space-between; }
+
+    .label {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .muted { color: var(--muted); font-size: 12px; }
+    .small { font-size: 11px; }
+
+    .card {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      min-width: 0;
+    }
+
+    .text-surface {
+      min-height: 230px;
+      max-height: 30vh;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      user-select: text;
+      font-size: 12px;
+    }
+
+    .annotated-block {
+      position: relative;
+      display: inline-block;
+      padding: 11px 5px 3px;
+      margin: 9px 3px 2px;
+      border-radius: 5px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(15, 118, 110, 0.35);
+      cursor: pointer;
+      vertical-align: baseline;
+    }
+
+    .annotated-block-label {
+      position: absolute;
+      top: -9px;
+      left: 6px;
+      display: flex;
+      align-items: center;
+      min-height: 15px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.2;
+      box-shadow: 0 1px 3px rgba(16, 24, 40, 0.16);
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 2;
+    }
+
+    .annotated-block.selected {
+      background: var(--orange-soft);
+      border-color: var(--orange);
+      box-shadow: 0 0 0 2px rgba(150, 93, 0, 0.15);
+    }
+
+    .annotated-block.primary-selected {
+      background: var(--blue-soft);
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(45, 96, 152, 0.16);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 23px;
+      padding: 0 7px;
+      margin: 2px;
+      border-radius: 999px;
+      background: #eef2f4;
+      color: #26343d;
+      font-size: 11px;
+    }
+
+    button.pill { border: 0; }
+    .pill.accent { background: var(--accent-soft); color: #0b5f59; }
+    .pill.blue { background: var(--blue-soft); color: var(--blue); }
+    .pill.green { background: var(--green-soft); color: var(--green); }
+    .pill.warn { background: var(--orange-soft); color: var(--orange); }
+    .pill.danger { background: var(--red-soft); color: var(--red); }
+
+    .tip {
+      position: relative;
+    }
+
+    .tip[data-tip]:hover {
+      z-index: 140;
+    }
+
+    .hover-tip {
+      position: fixed;
+      z-index: 300;
+      width: min(390px, 78vw);
+      max-height: min(420px, 62vh);
+      overflow: hidden;
+      padding: 9px 10px;
+      border: 1px solid #c9d6de;
+      border-radius: 7px;
+      color: #26343d;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(25, 35, 45, 0.18);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.35;
+      white-space: pre-line;
+      pointer-events: none;
+      text-transform: none;
+    }
+
+    .hover-tip[hidden] { display: none; }
+
+    .group-flow {
+      min-height: 520px;
+      max-height: calc(100vh - 235px);
+      overflow: auto;
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f7f9fa;
+      cursor: default;
+      overscroll-behavior: contain;
+      margin-bottom: 8px;
+    }
+
+    .group-box {
+      position: absolute;
+      width: 430px;
+      padding: 12px;
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 5px 18px rgba(25, 35, 45, 0.06);
+      user-select: none;
+      z-index: 20;
+    }
+
+    .group-box.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft), 0 5px 18px rgba(25, 35, 45, 0.06);
+    }
+
+    .group-box:hover {
+      z-index: 120;
+    }
+
+    .group-box.draft {
+      border-style: dashed;
+      background: #fbfcfc;
+    }
+
+    .group-box.connecting {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-soft), 0 5px 18px rgba(25, 35, 45, 0.06);
+    }
+
+    .board-space {
+      position: relative;
+      min-width: 100%;
+      min-height: 100%;
+    }
+
+    .board-canvas {
+      position: relative;
+      transform-origin: 0 0;
+      width: 2400px;
+      height: 1400px;
+      background-color: #fbfcfd;
+      background-image:
+        linear-gradient(90deg, rgba(23, 32, 39, 0.10) 1px, transparent 1px),
+        linear-gradient(rgba(23, 32, 39, 0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 118, 110, 0.14) 1px, transparent 1px),
+        linear-gradient(rgba(15, 118, 110, 0.14) 1px, transparent 1px);
+      background-size: 28px 28px, 28px 28px, 140px 140px, 140px 140px;
+      background-position: 0 0;
+    }
+
+    .board-canvas .group-box {
+      transform-origin: 0 0;
+    }
+
+    .board-canvas .group-box {
+      transform: translateZ(0);
+      transform-origin: 0 0;
+    }
+
+    .link-layer {
+      position: absolute;
+      inset: 0;
+      width: 3600px;
+      height: 2200px;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 80;
+    }
+
+    .link-label {
+      font-size: 12px;
+      fill: var(--orange);
+      font-weight: 700;
+    }
+
+    .group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .block-strip {
+      display: flex;
+      gap: 22px;
+      overflow-x: auto;
+      padding: 4px 3px 7px;
+    }
+
+    .block-card {
+      position: relative;
+      min-width: 172px;
+      max-width: 230px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfc;
+      cursor: pointer;
+    }
+
+    .block-card.selected {
+      border-color: var(--blue);
+      background: var(--blue-soft);
+      box-shadow: 0 0 0 2px rgba(45, 96, 152, 0.12);
+    }
+
+    .block-card.multi {
+      border-color: var(--orange);
+      background: var(--orange-soft);
+    }
+
+    .block-card.connecting {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px var(--orange-soft);
+    }
+
+    .block-text {
+      margin: 7px 0;
+      color: #2a3943;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .group-summary {
+      padding-top: 8px;
+      margin-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .alt-grid {
+      display: grid;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .alt-button {
+      min-height: 32px;
+      text-align: left;
+      background: #fff;
+    }
+
+    .alt-button.selected {
+      color: var(--blue);
+      border-color: var(--blue);
+      background: var(--blue-soft);
+      font-weight: 700;
+    }
+
+    .phen-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+    }
+
+    .phen-option {
+      min-height: 28px;
+      padding: 0 6px;
+      text-align: left;
+      font-size: 11px;
+    }
+
+    .phen-option.active {
+      color: #0b5f59;
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 700;
+    }
+
+    .context-menu {
+      position: fixed;
+      z-index: 50;
+      width: 275px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 14px 34px rgba(25, 35, 45, 0.18);
+    }
+
+    .context-menu[hidden] { display: none; }
+    .context-menu button { width: 100%; margin-top: 6px; text-align: left; }
+
+    .graph-controls {
+      margin-bottom: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfc;
+    }
+
+    .panel-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f2f5f6;
+    }
+
+    #inspectorPanel .panel-head .panel-tabs {
+      grid-column: 1 / -1;
+      width: 100%;
+      margin-bottom: 0;
+      min-width: 0;
+      padding: 3px;
+    }
+
+    .panel-tab {
+      min-height: 30px;
+      border-color: transparent;
+      background: transparent;
+      font-weight: 700;
+      flex: 1;
+      min-width: 86px;
+      white-space: nowrap;
+      overflow: visible;
+      font-size: 11px;
+    }
+
+    .panel-tab.active {
+      border-color: var(--line);
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(23, 32, 39, 0.08);
+    }
+
+    .panel-tab[data-inspector-tab="scale"].active {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .panel-tab[data-inspector-tab="heuristics"].active {
+      color: #fff;
+      border-color: var(--orange);
+      background: var(--orange);
+    }
+
+    .tab-view[hidden] {
+      display: none;
+    }
+
+    .scale-tab {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      height: calc(100vh - 142px);
+      min-height: 0;
+      font-size: 10px;
+    }
+
+    .scale-tab[hidden] {
+      display: none;
+    }
+
+    .scale-tab .card {
+      padding: 6px;
+    }
+
+    .scale-tab input,
+    .scale-tab select {
+      min-height: 26px;
+      padding: 4px 5px;
+      font-size: 10.5px;
+    }
+
+    main.scale-focused #inspectorPanel,
+    main.heuristic-focused #inspectorPanel {
+      height: calc(100vh - 90px);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    main.scale-focused #inspectorPanel .panel-body,
+    main.heuristic-focused #inspectorPanel .panel-body {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .scale-sticky-card {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      border-color: #b9d8d3;
+      box-shadow: 0 8px 18px rgba(23, 32, 39, 0.08);
+    }
+
+    .scale-scroll-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .scale-run-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: end;
+    }
+
+    .scale-quick-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) 86px 92px;
+      gap: 6px;
+      align-items: end;
+    }
+
+    .step-flow-inspector {
+      margin-top: 8px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .step-flow-inspector.empty {
+      color: var(--muted);
+      font-size: 12px;
+      background: #fbfcfc;
+    }
+
+    .step-flow-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .mfa-summary-strip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .mfa-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+      gap: 8px;
+    }
+
+    .mfa-section {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfc;
+      overflow: hidden;
+    }
+
+    .mfa-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 31px;
+      padding: 5px 7px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .mfa-section-head strong {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #2e4555;
+    }
+
+    .mfa-section-head button {
+      min-height: 24px;
+      padding: 0 6px;
+      font-size: 11px;
+    }
+
+    .mfa-rows {
+      display: grid;
+      gap: 6px;
+      padding: 7px;
+      max-height: 188px;
+      overflow: auto;
+    }
+
+    .mfa-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 74px 28px;
+      gap: 5px;
+      align-items: center;
+      min-width: 0;
+      padding: 6px;
+      border: 1px solid #e3e9ee;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .mfa-row input,
+    .mfa-row select {
+      min-height: 27px;
+      padding: 4px 5px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .mfa-row .stream-name {
+      grid-column: 1 / -1;
+    }
+
+    .mfa-row .stream-qty {
+      grid-column: 1;
+    }
+
+    .mfa-row .stream-unit {
+      grid-column: 2;
+    }
+
+    .mfa-row .stream-phase {
+      grid-column: 1;
+    }
+
+    .mfa-row .stream-status {
+      grid-column: 2;
+    }
+
+    .mfa-row .stream-timing {
+      grid-column: 1 / 3;
+    }
+
+    .mfa-row .delete-stream {
+      grid-column: 3;
+      grid-row: 2 / span 2;
+      align-self: stretch;
+      min-width: 26px;
+      min-height: 59px;
+      padding: 0;
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: #efc6c6;
+    }
+
+    .mfa-edit-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .mfa-edit-actions button {
+      min-height: 25px;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+
+    .mfa-label-card {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: #fff;
+      cursor: context-menu;
+      box-shadow: 0 1px 0 rgba(23, 32, 39, 0.03);
+    }
+
+    .mfa-label-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    .mfa-label-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .mfa-label-top strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .mfa-label-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .mfa-label-note {
+      color: #536676;
+      font-size: 11px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .group-mfa {
+      display: grid;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .group-mfa-role {
+      display: grid;
+      gap: 5px;
+    }
+
+    .group-mfa-role > strong {
+      color: #536676;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    .group-mfa-item {
+      padding: 6px 7px;
+      border: 1px solid #e1e8ed;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .group-mfa-item-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .group-mfa-lines {
+      display: grid;
+      gap: 2px;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .mfa-empty {
+      padding: 12px 8px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .mfa-note {
+      grid-column: 1 / -1;
+    }
+
+    .condition-panel {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfc;
+      overflow: hidden;
+    }
+
+    .condition-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 34px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .condition-head strong {
+      font-size: 12px;
+    }
+
+    .condition-body {
+      padding: 8px;
+    }
+
+    .condition-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 7px;
+    }
+
+    .condition-family {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 8px;
+      padding: 7px;
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: #fbfcfc;
+    }
+
+    .condition-family-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #2e4555;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .condition-edit-card,
+    .condition-label-card {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .condition-edit-card .label {
+      margin: 0;
+    }
+
+    .condition-input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(54px, auto);
+      gap: 5px;
+      align-items: center;
+    }
+
+    .condition-input-row input,
+    .condition-input-row select {
+      min-width: 0;
+      min-height: 29px;
+      padding: 5px 6px;
+      font-size: 12px;
+    }
+
+    .unit-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 29px;
+      padding: 0 8px;
+      border: 1px solid #d8e2e7;
+      border-radius: 6px;
+      color: #2e4555;
+      background: #eef4f6;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .condition-label-card {
+      cursor: context-menu;
+    }
+
+    .condition-label-card:hover {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px var(--blue-soft);
+    }
+
+    .condition-label-card strong {
+      font-size: 11px;
+      color: #536676;
+      text-transform: uppercase;
+    }
+
+    .condition-label-card span {
+      min-width: 0;
+      color: #26343d;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .condition-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 7px;
+    }
+
+    .scale-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .scale-grid label {
+      min-width: 0;
+    }
+
+    .scale-wide {
+      grid-column: 1 / -1;
+    }
+
+    .scale-section {
+      display: grid;
+      gap: 4px;
+      padding: 5px;
+      border: 1px solid #e1e8ed;
+      border-radius: 8px;
+      background: #fbfcfc;
+    }
+
+    .scale-section + .scale-section {
+      margin-top: 5px;
+    }
+
+    .scale-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #2e4555;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .scale-results,
+    .rule-results {
+      display: grid;
+      gap: 5px;
+      margin-top: 5px;
+    }
+
+    .scale-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .scale-metric {
+      display: grid;
+      gap: 4px;
+      padding: 5px;
+      border: 1px solid #e1e8ed;
+      border-radius: 7px;
+      background: #fbfcfc;
+    }
+
+    .scale-mini-metric {
+      min-width: 0;
+      padding: 4px;
+      border: 1px solid #e1e8ed;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .scale-mini-metric strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    .scale-metric strong {
+      font-size: 12px;
+    }
+
+    .scaled-flow-row,
+    .rule-card {
+      display: grid;
+      gap: 3px;
+      padding: 6px;
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: #fff;
+      font-size: 10.5px;
+    }
+
+    .scaled-flow-row strong,
+    .rule-card strong {
+      font-size: 11px;
+    }
+
+    .event-label-group {
+      display: grid;
+      gap: 5px;
+      padding: 6px;
+      border: 1px solid #d8e5e9;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .event-label-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .event-label-head strong {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #2e4555;
+    }
+
+    .event-chip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 5px;
+    }
+
+    .event-edit-button {
+      min-height: 22px;
+      padding: 0 6px;
+      font-size: 10px;
+    }
+
+    .gantt-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 7px;
+    }
+
+    .gantt-row {
+      display: grid;
+      grid-template-columns: minmax(126px, 0.75fr) minmax(210px, 1.6fr);
+      gap: 6px;
+      align-items: start;
+      padding: 6px;
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .gantt-row.bottleneck {
+      border-color: var(--orange);
+      background: var(--orange-soft);
+    }
+
+    .gantt-task-meta {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      font-size: 10.5px;
+    }
+
+    .gantt-bar-track {
+      height: 16px;
+      border: 1px solid #d8e2e7;
+      border-radius: 4px;
+      background: linear-gradient(90deg, rgba(45,96,152,0.08) 0 1px, transparent 1px 20%);
+      overflow: hidden;
+    }
+
+    .gantt-bar {
+      height: 100%;
+      min-width: 4px;
+      border-radius: 3px;
+      background: var(--blue);
+    }
+
+    .gantt-row.bottleneck .gantt-bar {
+      background: var(--orange);
+    }
+
+    .gantt-controls {
+      display: grid;
+      grid-template-columns: 64px 52px minmax(90px, 1fr) 64px;
+      gap: 5px;
+      margin-top: 4px;
+    }
+
+    .gantt-controls input,
+    .gantt-controls select {
+      min-height: 27px;
+      padding: 4px 5px;
+      font-size: 10.5px;
+    }
+
+    .rule-card.high {
+      border-color: #efc6c6;
+      background: var(--red-soft);
+    }
+
+    .rule-card.medium {
+      border-color: #f0d5a1;
+      background: var(--orange-soft);
+    }
+
+    .rule-card.low {
+      border-color: #c9dced;
+      background: var(--blue-soft);
+    }
+
+    .severity-pill {
+      width: fit-content;
+      min-height: 20px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.75);
+    }
+
+    @media (max-width: 980px) {
+      main.scale-focused,
+      main.heuristic-focused { grid-template-columns: 1fr; }
+      .mfa-grid { grid-template-columns: 1fr; }
+      .scale-grid { grid-template-columns: 1fr; }
+      .scale-metric-grid { grid-template-columns: 1fr; }
+      .scale-quick-grid { grid-template-columns: 1fr; }
+    }
+
+    .eye-button {
+      min-width: 34px;
+      padding: 0;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .zoom-readout {
+      min-width: 54px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .link-board {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .link-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 6px;
+      margin: 2px;
+      border-radius: 6px;
+      background: var(--orange-soft);
+      color: var(--orange);
+      font-size: 11px;
+      font-weight: 700;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    .connection-status {
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .empty {
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      text-align: center;
+      background: rgba(255,255,255,0.75);
+    }
+
+    pre {
+      max-height: 38vh;
+      overflow: auto;
+      margin: 0;
+      padding: 12px;
+      border-radius: 8px;
+      background: #101820;
+      color: #e8f1f2;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 1240px) {
+      main { grid-template-columns: 1fr; }
+      .group-flow { max-height: none; min-height: 480px; }
+      .text-surface { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Upscaling Block Annotator</h1>
+      <div class="subtitle">Create blocks from selected source text, assign behavior presets, then combine separate blocks into task groups.</div>
+    </div>
+    <div class="row">
+      <button id="loadSample">Load Sample</button>
+      <button id="loadText" class="primary">Load Text View</button>
+      <button id="createBlock">Create Block From Selection</button>
+      <button id="openScaleTop">Scale-Up</button>
+      <button id="exportJson">Export JSON</button>
+    </div>
+  </header>
+
+  <main id="appMain">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>1. Source Text</h2>
+        <span class="muted small">select text to create blocks</span>
+      </div>
+      <div class="panel-body stack">
+        <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
+        <div class="row">
+          <button id="loadTextSide" class="primary">Load Text View</button>
+          <button id="createBlockSide">Create Block From Selection</button>
+          <button id="clearProject">Clear Blocks</button>
+        </div>
+        <div id="selectionInfo" class="muted">No active text selection.</div>
+        <div id="annotatedText" class="text-surface"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>2. Block And Task Graph</h2>
+        <span class="muted small">draft blocks first, task groups after combine/assign</span>
+      </div>
+      <div class="panel-body">
+        <div class="graph-controls">
+          <div class="row between">
+            <div>
+              <div class="label">Board Controls</div>
+              <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
+            </div>
+            <div class="row">
+              <button id="boardOrigin">Origin</button>
+              <button id="boardCenter">Center Selection</button>
+              <button id="zoomOut">-</button>
+              <span id="zoomReadout" class="zoom-readout">100%</span>
+              <button id="zoomIn">+</button>
+              <button id="zoomReset">Board</button>
+              <button id="zoomFit">Fit</button>
+            </div>
+          </div>
+          <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
+          <div id="linkSummary" style="margin-top:7px"></div>
+        </div>
+        <div id="groupFlow" class="group-flow"></div>
+        <div id="stepFlowInspector" class="step-flow-inspector empty">Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
+      </div>
+    </section>
+
+    <section class="panel" id="inspectorPanel">
+      <div class="panel-head">
+        <div class="project-panel-title">
+          <h2>3. Project Panel</h2>
+        </div>
+        <button id="toggleInspector" class="eye-button" title="Show/hide inspector">◐</button>
+        <div class="panel-tabs" role="tablist" aria-label="Project panel views">
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Inspector</button>
+          <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristic Rules</button>
+          <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up & Gantt</button>
+        </div>
+      </div>
+      <div class="panel-body stack">
+        <div id="inspectPanelTab" class="tab-view stack">
+          <div class="card">
+            <div class="label">Selected Block</div>
+            <div id="selectedBlockInfo" class="muted">No block selected.</div>
+          </div>
+
+          <div class="card stack">
+            <label>
+              <div class="label">Behavior Preset</div>
+              <select id="behaviorSelect"></select>
+            </label>
+            <label>
+              <div class="label">Block Text</div>
+              <textarea id="blockText" style="min-height:78px"></textarea>
+            </label>
+            <div>
+              <div class="label">Phenomena On This Block</div>
+              <div id="phenomenaGrid" class="phen-grid"></div>
+            </div>
+          </div>
+
+          <div class="card stack">
+            <div>
+              <div class="label">Selected Group</div>
+              <div id="selectedGroupInfo" class="muted">No group selected.</div>
+            </div>
+            <label>
+              <div class="label">Task Assigned To Group</div>
+              <input id="groupTask" type="text" placeholder="reaction, washing, purification...">
+            </label>
+            <div>
+              <div class="label">Group Alternatives</div>
+              <div id="groupAlternatives" class="alt-grid"></div>
+            </div>
+            <div>
+              <div class="label">Properties Refinement</div>
+              <div id="groupProperties" class="alt-grid"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="label">Export</div>
+            <pre id="jsonOut">{}</pre>
+          </div>
+        </div>
+
+        <div id="heuristicsPanelTab" class="tab-view scale-tab" hidden>
+          <section class="card stack scale-sticky-card">
+            <div class="scale-run-row">
+              <div>
+                <div class="label">Heuristic Rules</div>
+                <div class="muted small">Pre-scale screening before numerical scale-up.</div>
+              </div>
+              <button id="refineProjectAi" class="primary">Refine Rules</button>
+              <span class="muted small">local checker, no external AI connected</span>
+            </div>
+          </section>
+
+          <div class="scale-scroll-body stack">
+            <section class="card stack">
+              <div>
+                <div class="label">Triggered Rules</div>
+                <div class="muted small">Only rules involved in the current synthesis are shown here.</div>
+              </div>
+              <div id="heuristicsPanel"></div>
+            </section>
+
+            <section class="card stack">
+              <div>
+                <div class="label">Review Results</div>
+                <div class="muted small">Conflicts and missing information detected before scale-up.</div>
+              </div>
+              <div id="heuristicRuleCheckPanel" class="rule-results"></div>
+            </section>
+          </div>
+        </div>
+
+        <div id="scalePanelTab" class="tab-view scale-tab" hidden>
+          <section class="card stack scale-sticky-card">
+            <div class="scale-run-row">
+              <div>
+                <div class="label">Scale-Up & Gantt Control</div>
+                <div class="muted small">Numerical scale-up and bottleneck review after heuristic screening.</div>
+              </div>
+              <button id="refineProject" class="primary">Run Check</button>
+            </div>
+            <div id="scaleQuickPanel"></div>
+          </section>
+
+          <div class="scale-scroll-body stack">
+            <section class="card stack">
+              <div>
+                <div class="label">Scale-Up & Gantt Details</div>
+                <div class="muted small">Schedule, correction factors, scaled MFA, recycle/fate, and energy bridge.</div>
+              </div>
+              <div id="scaleBasisPanel"></div>
+            </section>
+
+            <section class="card stack">
+              <div>
+                <div class="label">Review Results</div>
+                <div class="muted small">Rule-based checks for missing or inconsistent scale-up data.</div>
+              </div>
+              <div id="ruleCheckPanel" class="rule-results"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="blockMenu" class="context-menu" hidden>
+    <div class="label">Block Actions</div>
+    <button id="ctxStartBlockConnection" class="primary">Start Arrow From This Block</button>
+    <button id="ctxRemoveBlockLinks">Remove Arrows For This Block</button>
+    <button id="ctxCombine" class="primary">Combine Selected</button>
+    <button id="ctxNewGroup">Create New Group For Block</button>
+    <div class="label" style="margin-top:8px">Assign To Group</div>
+    <select id="ctxGroupSelect"></select>
+    <button id="ctxAssignGroup">Assign To Selected Group</button>
+  </div>
+
+  <div id="groupMenu" class="context-menu" hidden>
+    <div class="label">Group Actions</div>
+    <button id="ctxStartConnection" class="primary">Start Arrow From This Group</button>
+    <button id="ctxRemoveLinks">Remove Arrows For This Group</button>
+  </div>
+
+  <div id="streamMenu" class="context-menu" hidden>
+    <div class="label">Stream Actions</div>
+    <button id="ctxEditStream" class="primary">Edit</button>
+    <button id="ctxDeleteStream">Delete</button>
+  </div>
+
+  <div id="hoverTip" class="hover-tip" hidden></div>
+
+  <script>
+    const sampleText = `Charge 100 kg of reagent A, 80 kg of reagent B, 250 kg of solvent S, and 5 kg of catalyst C to a stirred batch reactor. Heat the liquid reaction mixture from 25 C to 85 C and hold under nitrogen. React A and B for 16 h at 85 C with vigorous mixing to form product P. Cool the reactor contents from 85 C to 30 C before work-up. Add 150 kg of water and mix for 0.5 h, then allow the organic and aqueous phases to settle for 1 h. Separate the organic phase containing product P from 180 kg aqueous waste. Remove 220 kg of solvent S under vacuum and recover it for recycle. Collect 120 kg of product P as final output and send 15 kg residue to waste.`;
+
+    const phenomenaOptions = [
+      "M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LL)", "2phM(VS)", "2phM(LS)",
+      "PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)",
+      "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "PT(MVL)", "PT(MLL)", "PT(MVV)",
+      "PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)",
+      "PS(VL)", "PS(LL)", "PS(VS)", "PS(LS)", "PS(VV)",
+      "R(L)", "R(V)", "R(S)",
+      "ES(H)", "ES(C)", "ES(P)", "ES(E)", "ES(D)",
+      "SD"
+    ];
+
+    const phenomenonGlossary = {
+      "M(L)": "Mixing in liquid phase. Use this when the block requires homogenization, stirring, dilution, or controlled liquid addition.",
+      "M(V)": "Mixing or flow-pattern control within a vapor phase.",
+      "M(S)": "Solid handling or solid-phase mixing.",
+      "2phM(VL)": "Two-phase mixing, vapor-liquid. Relevant for sparging, boiling contact, stripping, or reflux contact.",
+      "2phM(LS)": "Two-phase mixing, liquid-solid. Relevant when solids, catalysts, salts, drying agents, or suspended particles contact a liquid.",
+      "2phM(LL)": "Two-phase mixing, liquid-liquid. Relevant for washing, extraction, emulsion risk, or mass transfer between immiscible liquids.",
+      "2phM(VS)": "Two-phase mixing, vapor-solid. Relevant for gas-solid contacting or solid exposure to vapor.",
+      "R(L)": "Reaction in liquid phase. Use this when chemical transformation occurs primarily in the liquid bulk.",
+      "R(V)": "Reaction in vapor phase. Use this when transformation occurs mainly through gaseous or vapor-phase species.",
+      "R(S)": "Reaction involving a solid phase or solid-state transformation.",
+      "ES(H)": "Energy supply, heating. Covers heat-up, reflux duty, evaporation duty, or maintaining a hot operating window.",
+      "ES(C)": "Energy supply, cooling. Covers cool-down, quenching, condensation duty, or removal of heat for control.",
+      "ES(P)": "Energy supply for pressurization or compression.",
+      "ES(E)": "Energy release or expansion work.",
+      "ES(D)": "Direct or special energy input such as microwave or ultrasound.",
+      "PT(VL)": "Phase transition, vapor-liquid. Relevant for boiling, evaporation, condensation, reflux, or solvent removal.",
+      "PT(LL)": "Phase transfer, liquid-liquid. Relevant when a solute moves between two liquid phases during washing or extraction.",
+      "PT(VS)": "Phase transition, vapor-solid. Relevant for sublimation, desublimation, or vapor-solid uptake.",
+      "PT(LS)": "Phase transition, liquid-solid. Relevant for crystallization, precipitation, dissolution, or solid formation from liquid.",
+      "PT(MVL)": "Membrane-mediated vapor-liquid transfer.",
+      "PT(MLL)": "Membrane-mediated liquid-liquid transfer.",
+      "PT(MVV)": "Membrane-mediated vapor-vapor transfer.",
+      "PCh(V->L)": "Whole-stream phase change from vapor to liquid, such as full condensation.",
+      "PCh(L->V)": "Whole-stream phase change from liquid to vapor, such as evaporation.",
+      "PCh(L->S)": "Whole-stream phase change from liquid to solid, such as freezing or solidification.",
+      "PCh(S->L)": "Whole-stream phase change from solid to liquid, such as melting.",
+      "PC(VL)": "Phase contact, vapor-liquid. Relevant for vapor-liquid contacting, condensation, stripping, scrubbing, or reflux.",
+      "PC(LL)": "Phase contact, liquid-liquid. Relevant when two liquid phases must contact effectively before separation.",
+      "PC(VS)": "Phase contact, vapor-solid. Relevant for gas-solid contact, adsorption, or drying contact.",
+      "PC(LS)": "Phase contact, liquid-solid. Relevant for adsorption, drying salts, catalyst contact, or solid treatment of a liquid stream.",
+      "PS(LL)": "Phase separation, liquid-liquid. Relevant for settling, decanting, interface control, or organic/aqueous split.",
+      "PS(LS)": "Phase separation, liquid-solid. Relevant for filtration, cake removal, drying-agent removal, or slurry clarification.",
+      "PS(VL)": "Phase separation, vapor-liquid. Relevant for condensers, decanters, vents, evaporation outlets, or vapor/liquid disengagement.",
+      "PS(VS)": "Phase separation, vapor-solid. Relevant for dust removal, desublimation solids, or gas-solid disengagement.",
+      "PS(VV)": "Phase separation, vapor-vapor. Relevant for vapor permeation or vapor stream split after membrane transfer.",
+      "SD": "Stream dividing. Splitting a stream into two or more branches without changing temperature, pressure, or composition."
+    };
+
+    const behaviorPresets = {
+      "unassigned": { task: "unassigned", phenomena: [] },
+      "charge and mix": { task: "reaction preparation", phenomena: ["M(L)", "2phM(LS)"] },
+      "heat/cool": { task: "thermal conditioning", phenomena: ["ES(H)", "ES(C)"] },
+      "reaction": { task: "reaction", phenomena: ["M(L)", "R(L)", "ES(H)"] },
+      "reaction with in-situ removal": { task: "reaction", phenomena: ["M(L)", "R(L)", "ES(H)", "PT(VL)", "PS(VL)"] },
+      "liquid-liquid wash": { task: "washing", phenomena: ["2phM(LL)", "PT(LL)", "PS(LL)"] },
+      "solid-liquid drying": { task: "drying", phenomena: ["PC(LS)", "PS(LS)"] },
+      "filtration": { task: "solid-liquid separation", phenomena: ["PS(LS)"] },
+      "solvent evaporation": { task: "solvent removal", phenomena: ["ES(H)", "PT(VL)", "PS(VL)"] },
+      "distillation purification": { task: "purification", phenomena: ["ES(H)", "PT(VL)", "PS(VL)"] },
+      "vent abatement": { task: "vent abatement", phenomena: ["PC(VL)", "PS(VL)"] },
+      "wastewater interface": { task: "wastewater treatment", phenomena: ["PS(LL)"] }
+    };
+
+    const unitCatalog = [
+      { task: "reaction preparation", name: "Feed tank and dosing skid", feedPhases: ["L", "S", "LS"], phenomena: ["M(L)", "M(S)", "2phM(LS)"], outlet: "prepared feed", rationale: "Use for charging, pre-mixing, and controlled dosing before a reaction or downstream operation." },
+      { task: "reaction preparation", name: "Inline/static mixer", feedPhases: ["L", "LL", "VL", "LS"], phenomena: ["M(L)", "2phM(LL)", "2phM(VL)", "2phM(LS)"], outlet: "mixed feed", rationale: "Use when the main task is homogenization or contact before another unit, not chemical conversion." },
+      { task: "thermal conditioning", name: "Jacketed vessel heat/cool step", feedPhases: ["L", "S", "LS", "VL"], phenomena: ["ES(H)", "ES(C)"], outlet: "thermally conditioned stream", rationale: "Use when the operation is only heating, cooling, or holding temperature without reaction or separation duty." },
+      { task: "thermal conditioning", name: "External loop heat exchanger", feedPhases: ["L", "VL"], phenomena: ["M(L)", "ES(H)", "ES(C)"], outlet: "temperature-controlled recirculating stream", rationale: "Use when scale-up may need higher heat-transfer area than a simple jacket provides." },
+      { task: "thermal conditioning", name: "Condenser / cooler", feedPhases: ["V", "VL"], phenomena: ["ES(C)", "PCh(V->L)", "PT(VL)", "PS(VL)"], outlet: "cooled liquid or vapor-liquid outlet", rationale: "Use when cooling includes vapor condensation or reflux handling." },
+      { task: "thermal conditioning", name: "Reboiler / heater", feedPhases: ["L", "VL"], phenomena: ["ES(H)", "PCh(L->V)", "PT(VL)"], outlet: "heated liquid or vapor-liquid outlet", rationale: "Use when heating includes vapor generation, reflux, or boil-up duty." },
+      { task: "reaction", name: "Batch / semi-batch reactor", feedPhases: ["S", "V", "L", "VL", "LS", "VS"], phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(VS)", "R(L)", "R(V)", "R(S)", "ES(H)", "ES(C)"], outlet: "reaction outlet", rationale: "Industrial reactor class for batch or semi-batch transformation with optional multiphase mixing and heat removal/addition." },
+      { task: "reaction", name: "Continuous stirred-tank reactor (CSTR)", feedPhases: ["L"], phenomena: ["M(L)", "R(L)", "ES(H)", "ES(C)"], outlet: "liquid outlet", rationale: "Continuous liquid-phase reaction option when residence time and mixing are compatible." },
+      { task: "reaction", name: "Tubular reactor (PFR)", feedPhases: ["V"], phenomena: ["M(V)", "R(V)", "ES(H)", "ES(C)"], outlet: "vapor outlet", rationale: "Vapor-phase reactor class." },
+      { task: "reaction", name: "Packed-bed reactor", feedPhases: ["S", "V", "VS"], phenomena: ["M(V)", "M(S)", "2phM(VS)", "R(V)", "R(S)", "ES(H)", "ES(C)"], outlet: "reacted outlet", rationale: "Industrial reactor class for solid/vapor contacting or packed catalyst systems." },
+      { task: "separation", name: "Partial condensation / vaporization", feedPhases: ["V", "L", "VL"], phenomena: ["M(V)", "M(L)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V or L depending on direction", rationale: "Industrial separation class for partial V/L phase change and disengagement." },
+      { task: "separation", name: "Flash vaporization", feedPhases: ["L"], phenomena: ["M(L)", "PT(VL)", "PS(VL)"], outlet: "V + residual L", rationale: "Liquid feed vaporization option." },
+      { task: "separation", name: "Distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Vapor-liquid separation by staged contact, transition, and separation." },
+      { task: "separation", name: "Extractive distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Distillation variant with added separating agent." },
+      { task: "separation", name: "Azeotropic distillation", feedPhases: ["V", "L", "VL", "LL"], phenomena: ["M(L)", "M(V)", "PC(VL)", "PT(VL)", "PS(VL)", "PC(LL)", "PS(LL)", "ES(H)", "ES(C)"], outlet: "V + L, possible LL", rationale: "Distillation variant where a liquid-liquid split can appear." },
+      { task: "separation", name: "Absorption (gas absorption)", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "PT(VL)", "PS(VL)", "PC(VL)"], outlet: "enriched liquid outlet", rationale: "Gas absorption class." },
+      { task: "separation", name: "Reboiled absorption", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "V + L", rationale: "Absorption with reboiler duty." },
+      { task: "separation", name: "Stripping", feedPhases: ["L"], phenomena: ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)"], outlet: "vapor product", rationale: "Liquid feed stripping option." },
+      { task: "separation", name: "Steam distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)"], outlet: "V and/or L", rationale: "Steam distillation class." },
+      { task: "separation", name: "Liquid-liquid extraction", feedPhases: ["L", "LL"], phenomena: ["M(L)", "PC(LL)", "PT(LL)", "PS(LL)"], outlet: "two liquid phases", rationale: "Liquid-liquid extraction class." },
+      { task: "separation", name: "Decanter", feedPhases: ["L", "LL"], phenomena: ["M(L)", "PC(LL)", "PS(LL)"], outlet: "two liquid outlets", rationale: "Physical liquid-liquid disengagement class." },
+      { task: "separation", name: "Evaporation", feedPhases: ["L"], phenomena: ["M(L)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "vapor + residual L", rationale: "Evaporation class." },
+      { task: "separation", name: "Crystallization", feedPhases: ["L"], phenomena: ["M(L)", "PT(LS)", "PS(LS)", "ES(C)", "ES(H)"], outlet: "solid + mother liquor", rationale: "Liquid-to-solid separation class." },
+      { task: "separation", name: "Desublimation", feedPhases: ["V"], phenomena: ["M(V)", "PT(VS)", "PS(VS)", "ES(C)"], outlet: "solid", rationale: "Vapor-to-solid separation class." },
+      { task: "separation", name: "Drying", feedPhases: ["L", "S", "LS"], phenomena: ["M(L)", "M(S)", "PC(LS)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "vapor product", rationale: "Drying class for liquid/solid systems." },
+      { task: "separation", name: "Microwave drying", feedPhases: ["S", "L", "LS"], phenomena: ["M(S)", "M(L)", "PC(LS)", "PT(VL)", "PS(VL)", "ES(D)"], outlet: "vapor product", rationale: "Drying variant with direct/special energy input." },
+      { task: "separation", name: "Dividing wall column", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Intensified distillation class." },
+      { task: "reaction + separation", name: "Reactive distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Integrated reaction and vapor-liquid separation class." },
+      { task: "separation", name: "Membrane pervaporation", feedPhases: ["V", "L", "VL", "MVL"], phenomena: ["M(L)", "M(V)", "PT(MVL)", "PS(VL)"], outlet: "permeate/retentate liquid context", rationale: "Membrane-mediated vapor-liquid transfer class." },
+      { task: "separation", name: "Membrane vapor permeation", feedPhases: ["V", "MVV", "VV"], phenomena: ["M(V)", "PT(MVV)", "PS(VV)"], outlet: "vapor streams", rationale: "Membrane-mediated vapor-vapor separation class." },
+      { task: "reaction + separation", name: "Membrane (pervaporation) reactor", feedPhases: ["V", "L", "VL", "MVL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PT(MVL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Reaction class integrated with membrane pervaporation." },
+      { task: "reaction + separation", name: "Membrane-reactive distillation", feedPhases: ["V", "L", "VL", "LL", "MVL", "MLL", "MVV"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PC(VL)", "PT(VL)", "PS(VL)", "PT(MVL)", "PT(MVV)", "PT(MLL)", "PS(LL)", "PS(VV)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Intensified reaction-separation class combining reactive distillation and membrane transfer." }
+    ].map((unit, index) => ({ id: `UO${index + 1}`, source: "industrial-unit-operation-catalog", ...unit }));
+
+    const streamRoles = {
+      input: { title: "Inputs", addLabel: "+ Input", placeholder: "benzophenone", empty: "No feed stream yet." },
+      output: { title: "Outputs", addLabel: "+ Output", placeholder: "reaction mixture", empty: "No product/intermediate stream yet." },
+      waste: { title: "Waste / Emissions", addLabel: "+ Waste", placeholder: "brine waste", empty: "No waste or emission stream yet." }
+    };
+
+    const streamUnits = ["kg", "g", "t", "mol", "kmol", "L", "mL", "m3", "kg/kg product", "L/kg product", "%", "ppm"];
+    const streamScalingModes = [
+      "auto",
+      "per kg product",
+      "per batch",
+      "recycle loop",
+      "fixed loss %",
+      "manual"
+    ];
+
+    const heuristicRuleLibrary = [
+      { id: "H01", area: "reaction path", title: "Avoid hazardous route inventory", tags: ["hazard", "reaction"], severity: "medium", recommendation: "Prefer routes and operating policies that reduce toxic or hazardous storage and residence inventory." },
+      { id: "H02", area: "reaction distribution", title: "Use excess reactant selectively", tags: ["reaction", "selectivity"], severity: "low", recommendation: "Consider excess of a less critical reactant when it helps consume a valuable, toxic, or hazardous reactant." },
+      { id: "H03", area: "inerts", title: "Remove inerts when beneficial", tags: ["inert", "reaction", "separation"], severity: "low", recommendation: "Remove inerts before reaction when easy or catalyst-protective, unless they help absorb a large heat release." },
+      { id: "H04", area: "purge", title: "Provide exits for accumulating species", tags: ["purge", "recycle", "accumulation"], severity: "medium", recommendation: "Add purge or drag streams for trace inerts, impurities, or side-products that would otherwise build up." },
+      { id: "H05", area: "purge", title: "Do not purge valuable or hazardous species", tags: ["purge", "hazard", "valuable"], severity: "medium", recommendation: "Recover valuable species with separators and treat hazardous species rather than losing them in purge streams." },
+      { id: "H06", area: "reversible byproducts", title: "Recycle reversible byproducts", tags: ["reversible", "recycle", "reaction"], severity: "low", recommendation: "For reversible byproducts, prefer recycle to extinction over direct purge when chemically plausible." },
+      { id: "H07", area: "selectivity", title: "Tune operating window for selectivity", tags: ["reaction", "selectivity", "condition"], severity: "medium", recommendation: "Use temperature, pressure, and catalyst choices to favor the desired reaction path; request kinetics before locking the base case." },
+      { id: "H08", area: "reaction-separation", title: "Drive reversible reactions by removal", tags: ["reversible", "reaction", "separation", "vl", "ll"], severity: "medium", recommendation: "For reversible or equilibrium-limited reactions, consider integrated product removal such as decanting, distillation, membrane removal, or stripping." },
+      { id: "H09", area: "liquid separation", title: "Rank liquid-mixture separations", tags: ["liquid_separation", "ll", "vl"], severity: "low", recommendation: "For liquid mixtures, compare distillation, stripping, extraction, crystallization, adsorption, and related liquid-separation choices." },
+      { id: "H10", area: "vapor-liquid separation", title: "Try condensation before complex vapor separation", tags: ["vapor", "vl", "cooling"], severity: "low", recommendation: "For vapor mixtures, first assess whether cooling-water condensation can create a simpler liquid separation problem." },
+      { id: "H11", area: "vapor separation", title: "Rank vapor-mixture separations", tags: ["vapor", "gas_separation"], severity: "low", recommendation: "For vapor mixtures, compare partial condensation, absorption, adsorption, cryogenic separation, membranes, and related vapor-separation choices." },
+      { id: "H12", area: "crystallization", title: "Crystallize inorganic solutes from concentrated solutions", tags: ["crystallization", "solid_liquid"], severity: "low", recommendation: "When dissolved inorganic material dominates, check whether crystallization is the practical separation route." },
+      { id: "H13", area: "crystallization", title: "Control crystal size with supersaturation path", tags: ["crystallization", "solid_liquid", "condition"], severity: "low", recommendation: "When crystals are formed, record cooling/evaporation path, seed policy, and residence time because they control size and filtration behavior." },
+      { id: "H14", area: "melt crystallization", title: "Use melt crystallization for suitable organics", tags: ["crystallization", "organic", "solid_liquid"], severity: "low", recommendation: "For organic separations with favorable melting behavior, include melt crystallization as an alternative to distillation." },
+      { id: "H15", area: "solid-liquid separation", title: "Filter or settle solid-liquid systems", tags: ["solid_liquid", "filtration"], severity: "medium", recommendation: "For liquid-solid mixtures, check filtration, sedimentation, centrifugation, or clarification before assigning a generic separator." },
+      { id: "H16", area: "solid washing", title: "Account for cake washing", tags: ["solid_liquid", "washing"], severity: "low", recommendation: "When solids are retained, include cake washing or displacement if soluble impurities materially affect product or waste." },
+      { id: "H17", area: "drying", title: "Dry solids with moisture basis", tags: ["drying", "solid_liquid"], severity: "medium", recommendation: "For wet solids, require moisture loading, final moisture target, and drying mode before energy handoff." },
+      { id: "H18", area: "particle separation", title: "Use particle properties for solids decisions", tags: ["solid_particle", "solid_liquid"], severity: "low", recommendation: "For solids handling, request particle size, density, shape, and cake behavior before choosing equipment." },
+      { id: "H19", area: "adsorption", title: "Use adsorbents when selective uptake is dominant", tags: ["adsorption", "solid_liquid", "vapor"], severity: "low", recommendation: "When impurity removal is by selective uptake on a solid, model adsorbent capacity, regeneration, and breakthrough." },
+      { id: "H20", area: "membranes", title: "Use membranes only with compatible driving force", tags: ["membrane", "separation"], severity: "low", recommendation: "For membrane alternatives, require phase pair, selectivity, driving force, fouling risk, and retentate/permeate fate." },
+      { id: "H21", area: "exothermic reactor", title: "Manage highly exothermic reactions early", tags: ["exotherm", "reaction", "cooling"], severity: "high", recommendation: "For high heat release, consider excess reactant, inert diluent, cold shots, staged addition, or other distribution changes before finalizing the network." },
+      { id: "H22", area: "exothermic reactor", title: "Use conventional cooling for milder exotherms", tags: ["reaction", "cooling", "heat_exchange"], severity: "medium", recommendation: "For lower heat release, compare jacket, coils, external loop cooler, and intercooling." },
+      { id: "H23", area: "endothermic reactor", title: "Manage highly endothermic reactions early", tags: ["endotherm", "reaction", "heating"], severity: "medium", recommendation: "For high heat demand, consider excess reactant, inert heat carrier, hot shots, staged heating, or distribution changes." },
+      { id: "H24", area: "endothermic reactor", title: "Use conventional heating for milder endotherms", tags: ["reaction", "heating", "heat_exchange"], severity: "low", recommendation: "For lower heat demand, compare jacket, coils, external loop heater, and interheaters." },
+      { id: "H25", area: "heat exchange", title: "Prefer external heat exchange when not intrinsic", tags: ["heat_exchange", "heating", "cooling"], severity: "low", recommendation: "Unless heat exchange is intrinsic to a reactor or separator, handle process-stream heating/cooling in dedicated exchangers or utilities." },
+      { id: "H26", area: "heat exchange", title: "Check temperature approach", tags: ["heat_exchange"], severity: "low", recommendation: "Record the minimum approach temperature assumption before using heat recovery or utility duties." },
+      { id: "H27", area: "cooling utilities", title: "Use cooling water where feasible", tags: ["cooling", "condensation", "vl"], severity: "low", recommendation: "When cooling or condensation is required, test cooling-water feasibility before refrigeration or special utilities." },
+      { id: "H28", area: "boiling", title: "Boil close-boiling liquids in dedicated exchangers", tags: ["boiling", "vl", "heating"], severity: "low", recommendation: "For boiling pure or close-boiling streams, separate exchanger design and allowable flux from the main process task." },
+      { id: "H29", area: "furnace", title: "Use fired heating only when temperature demands it", tags: ["high_temperature", "heating"], severity: "medium", recommendation: "Escalate from exchangers/steam/oil to fired heating only when required temperature or duty makes it necessary." },
+      { id: "H30", area: "thermal utility", title: "Select utility level explicitly", tags: ["heating", "cooling", "utility"], severity: "low", recommendation: "Assign steam, hot oil, cooling water, chilled water, or refrigeration level rather than leaving thermal utility implicit." },
+      { id: "H31", area: "pressure drop", title: "Estimate exchanger pressure drops", tags: ["heat_exchange", "pressure"], severity: "low", recommendation: "Track pressure-drop assumptions for heat exchangers so pumping/compression duties can be estimated later." },
+      { id: "H32", area: "heat integration", title: "Check process-process heat recovery", tags: ["heat_exchange", "utility"], severity: "low", recommendation: "Where hot and cold streams coexist, flag a heat-recovery opportunity before final utility accounting." },
+      { id: "H33", area: "thermal safety", title: "Avoid excessive thermal exposure", tags: ["heat_sensitive", "heating", "vl"], severity: "medium", recommendation: "For heat-sensitive materials, prefer short residence, lower pressure, thin-film, wiped-film, or short-path alternatives where compatible." },
+      { id: "H34", area: "gas pressure", title: "Use fans for small gas pressure rise", tags: ["gas_pressure", "vapor"], severity: "low", recommendation: "For small gas pressure increases, consider a fan before blower or compressor." },
+      { id: "H35", area: "gas pressure", title: "Use blowers for moderate gas pressure rise", tags: ["gas_pressure", "vapor"], severity: "low", recommendation: "For moderate gas pressure increases, consider a blower and check gas temperature rise." },
+      { id: "H36", area: "gas compression", title: "Use staged compression for high ratios", tags: ["gas_pressure", "vapor"], severity: "medium", recommendation: "For high gas pressure ratios, consider staged compression with intercooling and knock-out handling." },
+      { id: "H37", area: "liquid pumping", title: "Choose pump class from head and flow", tags: ["liquid_pressure", "liquid"], severity: "low", recommendation: "For liquid pressure increase, use flow and head to choose centrifugal, rotary, or reciprocating pump classes." },
+      { id: "H38", area: "slurry pumping", title: "Check slurry/solids pumping separately", tags: ["solid_liquid", "liquid_pressure"], severity: "medium", recommendation: "For slurries or solids-bearing liquids, require solids loading and abrasion/cake risk before selecting pump equipment." },
+      { id: "H39", area: "pump operability", title: "Check NPSH and cavitation risk", tags: ["liquid_pressure", "vl"], severity: "low", recommendation: "For pumped liquids near boiling or under vacuum, flag NPSH, cavitation, and vapor-lock risk." },
+      { id: "H40", area: "pressure reduction", title: "Use valves for simple liquid pressure letdown", tags: ["pressure_reduction", "liquid"], severity: "low", recommendation: "For simple pressure decrease without useful work recovery, pressure-control valves may be sufficient." },
+      { id: "H41", area: "expansion", title: "Recover work when expansion is significant", tags: ["pressure_reduction", "vapor"], severity: "low", recommendation: "For large gas/vapor pressure drops, consider turbines or expanders when economics and operability justify recovery." },
+      { id: "H42", area: "flash/letdown", title: "Account for flashing during letdown", tags: ["pressure_reduction", "vl"], severity: "medium", recommendation: "When pressure reduction crosses VLE limits, include flash separation, vent, and cooling consequences." },
+      { id: "H43", area: "pump vs compression", title: "Pump liquid rather than compress vapor", tags: ["vapor", "liquid_pressure", "condensation"], severity: "medium", recommendation: "Where feasible without costly refrigeration, condense vapor, pump liquid, then revaporize rather than compress gas." },
+      { id: "H44", area: "vacuum", title: "Choose vacuum system by pressure level", tags: ["vacuum", "vl"], severity: "medium", recommendation: "For vacuum operations, record target pressure and compare steam ejectors, liquid-ring pumps, dry pumps, or staged systems." },
+      { id: "H45", area: "vacuum", title: "Condense before vacuum pumping", tags: ["vacuum", "condensation", "vl"], severity: "medium", recommendation: "Condense recoverable vapors upstream of vacuum equipment to reduce load and losses." },
+      { id: "H46", area: "vacuum", title: "Handle non-condensables explicitly", tags: ["vacuum", "vent", "vapor"], severity: "medium", recommendation: "For vacuum or inerted systems, include non-condensable load, vent treatment, and air/inert leakage assumptions." },
+      { id: "H47", area: "vacuum", title: "Avoid air ingress where hazardous", tags: ["vacuum", "hazard"], severity: "high", recommendation: "For flammable, oxidizable, or toxic systems under vacuum, check inerting, leak control, and abatement." },
+      { id: "H48", area: "solids conveying", title: "Select granular-solid conveying route", tags: ["solid_particle", "solids_handling"], severity: "low", recommendation: "For granular solids, compare pneumatic, mechanical, gravity, or screw conveying and include dust/containment needs." },
+      { id: "H49", area: "size reduction", title: "Use crushing/grinding only when needed", tags: ["solid_particle", "size_reduction"], severity: "low", recommendation: "If particle size must be reduced, specify target size and select crushing, milling, or grinding accordingly." },
+      { id: "H50", area: "size enlargement", title: "Use agglomeration when handling improves", tags: ["solid_particle", "size_enlargement"], severity: "low", recommendation: "If fine powders cause handling, dust, or filtration issues, consider granulation, pelletizing, or agglomeration." },
+      { id: "H51", area: "solid classification", title: "Separate solids by size when required", tags: ["solid_particle", "classification"], severity: "low", recommendation: "When particle-size distribution matters, include screening, classification, or elutriation." },
+      { id: "H52", area: "gas-solid separation", title: "Remove entrained solids from gas", tags: ["vapor_solid", "solid_particle"], severity: "medium", recommendation: "For gas-solid streams, include cyclones, filters, scrubbers, or electrostatic collection as appropriate." },
+      { id: "H53", area: "liquid-solid classification", title: "Use hydrocyclones or classifiers for liquid slurries", tags: ["solid_liquid", "classification"], severity: "low", recommendation: "For slurry classification or dewatering, compare hydrocyclones, centrifuges, screens, and filters." }
+    ].map(rule => ({ source: "Seider-Seader-Lewin heuristics, paraphrased for computable screening", ...rule }));
+    const lutzePhaseOptions = [
+      ["unknown", "phase missing"],
+      ["L", "L - liquid"],
+      ["V", "V - vapor"],
+      ["S", "S - solid"],
+      ["VL", "VL - vapor-liquid"],
+      ["LL", "LL - liquid-liquid"],
+      ["VS", "VS - vapor-solid"],
+      ["LS", "LS - liquid-solid"],
+      ["MVL", "MVL - membrane vapor-liquid"],
+      ["MLL", "MLL - membrane liquid-liquid"],
+      ["MVV", "MVV - membrane vapor-vapor"],
+      ["VV", "VV - vapor-vapor"]
+    ];
+    const streamPhases = lutzePhaseOptions.map(item => item[0]);
+    const streamDataStatuses = ["reported", "calculated", "estimated", "assumed", "missing"];
+    const streamFateOptions = [
+      "unknown",
+      "fresh input",
+      "recycled input",
+      "recovered solvent",
+      "purge",
+      "vent",
+      "wastewater",
+      "solid waste",
+      "loss",
+      "product",
+      "intermediate"
+    ];
+    const streamTimingOptions = [
+      "unspecified",
+      "initial charge",
+      "continuous feed",
+      "later addition",
+      "make-up",
+      "recycle",
+      "in-process intermediate",
+      "final output",
+      "waste purge",
+      "vent/emission"
+    ];
+    const scheduleScaleOptions = ["unknown", "kinetics-bound", "roughly constant", "increases with scale", "decreases with scale", "equipment dependent"];
+    const scheduleOverlapOptions = ["no", "yes"];
+
+    const conditionPromptCatalog = [
+      { id: "initial_temperature", label: "Initial temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "20", unit: "C", kind: "number" },
+      { id: "target_temperature", label: "Target / final temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "85-90", unit: "C", kind: "number" },
+      { id: "holding_time", label: "Holding time", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
+      { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "C", kind: "number" },
+      { id: "thermal_ramp", label: "Thermal ramp / control", phenomena: ["ES(H)", "ES(C)"], placeholder: "slow heat-up, controlled cooling, quench rate...", kind: "text" },
+      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger..." },
+      { id: "thermal_endpoint", label: "Thermal endpoint", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "reach reflux, cool to RT, solvent removed..." },
+      { id: "initial_pressure", label: "Initial pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "1", units: ["atm", "bar", "mbar"], defaultUnit: "atm", kind: "number" },
+      { id: "target_pressure", label: "Target / final pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "50", units: ["mbar", "bar", "atm"], defaultUnit: "mbar", kind: "number" },
+      { id: "pressure_control", label: "Pressure control", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "vacuum ramp, condenser pressure, vent control..." },
+      { id: "vapor_handling", label: "Vapor handling", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "condenser, Dean-Stark, vent, carbon polish..." },
+      { id: "mixing_mode", label: "Mixing mode", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "stirred tank, high shear, inline mixer..." },
+      { id: "mixing_time", label: "Mixing time", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "0.5", unit: "h", kind: "number" },
+      { id: "agitation_speed", label: "Agitation speed", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "300", unit: "rpm", kind: "number" },
+      { id: "mixing_intensity", label: "Mixing intensity / regime", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "gentle, vigorous, suspension, dispersion..." },
+      { id: "addition_mode", label: "Addition mode", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "batch charge, semi-batch dosing, controlled feed..." },
+      { id: "addition_time", label: "Addition / dosing time", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "1", unit: "h", kind: "number" },
+      { id: "contact_time", label: "Phase contact time", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "0.25", unit: "h", kind: "number" },
+      { id: "contact_device", label: "Contact device / geometry", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "impeller, packed bed, static mixer, spray..." },
+      { id: "agitation_note", label: "Agitation / mass-transfer note", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)", "PC(LL)", "PC(LS)", "PC(VL)", "PC(VS)"], placeholder: "avoid emulsion, suspend solids, improve contact..." },
+      { id: "reaction_time", label: "Reaction time", phenomena: ["R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
+      { id: "conversion_yield", label: "Conversion / yield", phenomena: ["R(L)", "R(V)"], placeholder: "95", unit: "%", kind: "number" },
+      { id: "reaction_endpoint", label: "Reaction endpoint", phenomena: ["R(L)", "R(V)"], placeholder: "water removed, GC conversion, color change..." },
+      { id: "phase_ratio", label: "Phase ratio", phenomena: ["PT(LL)", "PS(LL)", "2phM(LL)", "PC(LL)"], placeholder: "organic:aqueous ratio, wash volume..." },
+      { id: "transfer_endpoint", label: "Transfer / equilibrium endpoint", phenomena: ["PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "PT(MVL)", "PT(MLL)", "PT(MVV)"], placeholder: "equilibrium reached, water removed, crystals formed..." },
+      { id: "phase_change_time", label: "Phase-change time", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)", "PT(VL)", "PT(LS)", "PT(VS)"], placeholder: "1", unit: "h", kind: "number" },
+      { id: "phase_change_fraction", label: "Phase-change fraction", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)", "PT(VL)", "PT(LS)", "PT(VS)"], placeholder: "80", unit: "%", kind: "number" },
+      { id: "settling_time", label: "Settling / split time", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "0.5", unit: "h", kind: "number" },
+      { id: "separation_efficiency", label: "Separation efficiency", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "95", unit: "%", kind: "number" },
+      { id: "carryover_limit", label: "Carryover / entrainment limit", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "low, <1%, visually clear..." },
+      { id: "interface_risk", label: "Interface / emulsion risk", phenomena: ["PS(LL)", "2phM(LL)", "PC(LL)"], placeholder: "emulsion risk, interface control, rag layer..." },
+      { id: "solid_loading", label: "Solid loading", phenomena: ["PS(LS)", "PC(LS)", "2phM(LS)"], placeholder: "10", units: ["kg", "% wt", "kg/kg product"], defaultUnit: "kg", kind: "number" },
+      { id: "cake_or_particle_note", label: "Cake / particle note", phenomena: ["PS(LS)", "PC(LS)", "PT(LS)", "2phM(LS)"], placeholder: "cake compressibility, particle size, filter aid..." },
+      { id: "solid_endpoint", label: "Solid separation endpoint", phenomena: ["PS(LS)", "PC(LS)"], placeholder: "clear filtrate, dry cake, salt removed..." },
+      { id: "split_fraction", label: "Split fraction", phenomena: ["SD"], placeholder: "50", unit: "%", kind: "number" },
+      { id: "split_basis", label: "Split basis", phenomena: ["SD"], placeholder: "mass split, volume split, purge ratio..." },
+      { id: "waste_note", label: "Waste / handling note", phenomena: ["PS(LL)", "PS(LS)", "PS(VL)", "PC(LS)", "PC(VL)"], placeholder: "brine, wet solids, VOC, wastewater interface..." }
+    ];
+
+    const propertyPromptCatalog = [
+      { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
+      { id: "vapor_pressure", label: "Vapor pressure", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "mbar", placeholder: "at operating T", reason: "Clarifies vacuum operation, vent load, and volatile losses." },
+      { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
+      { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
+      { id: "density_difference", label: "Density difference", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)"], unit: "kg/m3", placeholder: "organic vs aqueous", reason: "Needed for decanting and interface-settling plausibility." },
+      { id: "partition_coefficient", label: "Partition coefficient", phenomena: ["PT(LL)", "PC(LL)"], unit: "", placeholder: "K or logP", reason: "Helps rank liquid-liquid extraction or washing intensity." },
+      { id: "emulsion_risk", label: "Emulsion risk", phenomena: ["PS(LL)", "2phM(LL)", "PC(LL)"], unit: "", placeholder: "low, medium, high", reason: "Flags scale-up risk in liquid-liquid mixing and decanting." },
+      { id: "solubility", label: "Solubility", phenomena: ["PT(LS)", "PS(LS)", "PCh(L->S)", "PCh(S->L)"], unit: "g/L", placeholder: "vs temperature if known", reason: "Supports crystallization, precipitation, and dissolution choices." },
+      { id: "particle_size", label: "Particle size", phenomena: ["PS(LS)", "PC(LS)", "2phM(LS)"], unit: "um", placeholder: "d50 or range", reason: "Relevant for filtration, drying, suspension, and cake behavior." },
+      { id: "cake_resistance", label: "Cake resistance / compressibility", phenomena: ["PS(LS)", "PC(LS)"], unit: "", placeholder: "low, medium, high", reason: "Flags solid-liquid separation scale-up difficulty." },
+      { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
+      { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "ES(H)", "ES(C)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed for mixing, residence volume, and heat-transfer handoff." },
+      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Relevant for mixing, pumping, mass transfer, and phase separation." },
+      { id: "hazard_note", label: "Hazard / compatibility note", phenomena: ["ES(H)", "PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)"], unit: "", placeholder: "flammable, toxic, corrosive, incompatible...", reason: "Supports purge, vent, solvent recovery, and safety review." }
+    ];
+
+    const state = {
+      text: "",
+      blocks: [],
+      groups: {},
+      links: [],
+      scaleBasis: {
+        targetProduct: "octocrylene",
+        targetAmount: "1000",
+        targetUnit: "kg/batch",
+        referenceBlockId: "",
+        basisAmount: "",
+        basisUnit: "kg",
+        mode: "batch",
+        operatingDays: "250",
+        hoursPerDay: "16",
+        batchesPerDay: "1",
+        batchDuration: "",
+        oeePercent: "80",
+        parallelUnits: "1",
+        yieldPercent: "100",
+        recoveryPercent: "100",
+        designMarginPercent: "0",
+        confidence: "rough"
+      },
+      ruleChecks: [],
+      aiRefine: null,
+      activeInspectorTab: "inspect",
+      selectedBlockId: null,
+      selectedGroupId: null,
+      selectedIds: [],
+      menuBlockId: null,
+      menuGroupId: null,
+      menuStreamId: null,
+      connectingFrom: null,
+      lastSelection: null,
+      zoom: 0.78,
+      draftPos: { x: 24, y: 24 },
+      focusEndpoint: null,
+      drag: null
+    };
+
+    const $ = id => document.getElementById(id);
+
+    function nodeWidth(blockCount) {
+      return Math.max(430, 92 + Math.max(1, blockCount) * 194);
+    }
+
+    function boardBounds() {
+      const draftBlocks = blocksInOrder().filter(block => !block.groupId);
+      const boxes = [];
+      if (draftBlocks.length) {
+        boxes.push({
+          x: state.draftPos.x,
+          y: state.draftPos.y,
+          w: nodeWidth(draftBlocks.length),
+          h: 300
+        });
+      }
+      groupIdsInTextOrder().forEach(id => {
+        const group = ensureGroup(id);
+        const blocks = blocksForGroup(id);
+        boxes.push({
+          x: group.x,
+          y: group.y,
+          w: nodeWidth(blocks.length),
+          h: 380
+        });
+      });
+      state.links.forEach(link => {
+        const a = endpointCenter(link.from);
+        const b = endpointCenter(link.to);
+        if (a) boxes.push({ x: a.x, y: a.y, w: 1, h: 1 });
+        if (b) boxes.push({ x: b.x, y: b.y, w: 1, h: 1 });
+      });
+      const flow = $("groupFlow");
+      const minWidth = flow ? Math.max(1900, flow.clientWidth / Math.max(0.1, state.zoom) + 700) : 2200;
+      const minHeight = flow ? Math.max(1150, flow.clientHeight / Math.max(0.1, state.zoom) + 420) : 1300;
+      if (!boxes.length) return { width: minWidth, height: minHeight };
+      const maxX = Math.max(...boxes.map(box => box.x + box.w));
+      const maxY = Math.max(...boxes.map(box => box.y + box.h));
+      return {
+        width: Math.max(minWidth, maxX + 520),
+        height: Math.max(minHeight, maxY + 360)
+      };
+    }
+
+    function nextBlockId() {
+      const nums = state.blocks.map(b => Number(b.id.replace("B", ""))).filter(Number.isFinite);
+      return `B${(nums.length ? Math.max(...nums) : 0) + 1}`;
+    }
+
+    function nextGroupId() {
+      const nums = Object.keys(state.groups).map(g => Number(g.replace("G", ""))).filter(Number.isFinite);
+      return `G${(nums.length ? Math.max(...nums) : 0) + 1}`;
+    }
+
+    function inferBehavior(text) {
+      const t = text.toLowerCase();
+      if (t.includes("dean-stark") || t.includes("water formed") || t.includes("equilibrium")) return "reaction with in-situ removal";
+      if (t.includes("wash") || t.includes("brine") || t.includes("organic phase") || t.includes("organic layer")) return "liquid-liquid wash";
+      if (t.includes("dry") || t.includes("mgso4") || t.includes("na2so4")) return "solid-liquid drying";
+      if (t.includes("filter")) return "filtration";
+      if (t.includes("remove cyclohexane") || t.includes("evaporat")) return "solvent evaporation";
+      if (t.includes("distill") || t.includes("purify")) return "distillation purification";
+      if (t.includes("heat") || t.includes("cool") || t.includes("reflux")) return "heat/cool";
+      if (t.includes("charge") || t.includes("add")) return "charge and mix";
+      if (t.includes("reaction") || t.includes("condensation")) return "reaction";
+      return "unassigned";
+    }
+
+    function ensureGroup(groupId, task = "unassigned") {
+      if (!state.groups[groupId]) {
+        const count = Object.keys(state.groups).length;
+        state.groups[groupId] = {
+          id: groupId,
+          task,
+          selectedUnit: "",
+          schedule: scheduleDefaults(),
+          properties: {},
+          propertiesEditing: false,
+          x: 520 + count * 480,
+          y: 90 + (count % 2) * 260
+        };
+      }
+      if (!state.groups[groupId].properties || typeof state.groups[groupId].properties !== "object" || Array.isArray(state.groups[groupId].properties)) {
+        state.groups[groupId].properties = {};
+      }
+      if (!state.groups[groupId].schedule || typeof state.groups[groupId].schedule !== "object" || Array.isArray(state.groups[groupId].schedule)) {
+        state.groups[groupId].schedule = scheduleDefaults();
+      } else {
+        state.groups[groupId].schedule = { ...scheduleDefaults(), ...state.groups[groupId].schedule };
+      }
+      state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
+      return state.groups[groupId];
+    }
+
+    function scheduleDefaults() {
+      return {
+        durationH: "",
+        parallelUnits: "1",
+        canOverlap: "no",
+        scaleSensitivity: "unknown",
+        dependency: "previous",
+        notes: ""
+      };
+    }
+
+    function createBlock(start, end) {
+      if (start === end) return;
+      const lo = Math.min(start, end);
+      const hi = Math.max(start, end);
+      if (state.blocks.some(block => rangesOverlap(lo, hi, block.start, block.end))) {
+        alert("Selection overlaps an existing block. Select unassigned text or use group actions.");
+        return;
+      }
+      const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const behavior = inferBehavior(text);
+      const preset = behaviorPresets[behavior];
+      const phenomena = phenomenaForBehaviorAndText(behavior, text);
+      const inferredConditions = inferInitialConditions(text, phenomena);
+      const block = {
+        id: nextBlockId(),
+        groupId: null,
+        start: lo,
+        end: hi,
+        text,
+        behavior,
+        phenomena,
+        streams: [],
+        conditions: inferredConditions.values,
+        conditionUnits: inferredConditions.units,
+        conditionsEditing: false,
+        phase: "",
+        endpoint: "",
+        status: "needs validation"
+      };
+      state.blocks.push(block);
+      state.selectedBlockId = block.id;
+      state.selectedIds = [block.id];
+      state.focusEndpoint = block.id;
+      renderAll();
+    }
+
+    function phenomenaForBehaviorAndText(behavior, text) {
+      const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
+      const t = String(text || "").toLowerCase();
+      if (behavior === "heat/cool") {
+        const hasCooling = /\\bcool|cooled|cooling|quench|room temperature/.test(t);
+        const hasHeating = /\\bheat|heated|heating|reflux|boil|boiling|warm|evaporat|distill/.test(t);
+        if (hasCooling && !hasHeating) return ["ES(C)"];
+        if (hasHeating && !hasCooling) return ["ES(H)"];
+      }
+      return [...preset.phenomena];
+    }
+
+    function inferInitialConditions(text, phenomena) {
+      const t = text.toLowerCase();
+      const conditions = {};
+      const units = {};
+      const hasThermal = phenomena.some(code => ["ES(H)", "ES(C)", "PT(VL)"].includes(code));
+      const hasPressure = phenomena.some(code => ["PT(VL)", "PS(VL)", "PC(VL)"].includes(code));
+      const temperatureMatch = text.match(/(\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*C|\d+(?:\.\d+)?\s*°?\s*C)/i);
+      if (hasThermal && temperatureMatch) {
+        conditions.target_temperature = temperatureMatch[1].replace(/°?\s*C/ig, "").replace(/\s+/g, " ").trim();
+        units.target_temperature = "C";
+      }
+      if (hasThermal && t.includes("room temperature")) conditions.thermal_endpoint = conditions.thermal_endpoint || "cool/reach room temperature";
+      if (hasThermal && t.includes("reflux")) {
+        conditions.thermal_endpoint = "reach reflux";
+      }
+      if (hasThermal && (t.includes("cool") || t.includes("cooled"))) {
+        conditions.thermal_ramp = "cooling step";
+      }
+      if (hasPressure && t.includes("vacuum")) conditions.pressure_control = "vacuum operation";
+      if (hasPressure && t.includes("dean-stark")) conditions.vapor_handling = "Dean-Stark water removal";
+      const hasMixing = phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("));
+      const hasSeparation = phenomena.some(code => code.startsWith("PS("));
+      const hasReaction = phenomena.some(code => code.startsWith("R("));
+      const duration = extractDurationHours(text);
+      if (duration && hasReaction) {
+        conditions.reaction_time = duration.value;
+        units.reaction_time = "h";
+      }
+      if (duration && hasMixing && /stir|mix|agitat/i.test(text)) {
+        conditions.mixing_time = duration.value;
+        units.mixing_time = "h";
+      }
+      if (duration && hasSeparation && /settle|separat|split|decant/i.test(text)) {
+        conditions.settling_time = duration.value;
+        units.settling_time = "h";
+      }
+      return { values: conditions, units };
+    }
+
+    function extractDurationHours(text) {
+      const match = String(text).match(/(\d+(?:[.,]\d+)?)\s*(?:(?:-|to|–)\s*(\d+(?:[.,]\d+)?))?\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes)\b/i);
+      if (!match) return null;
+      const lo = Number(match[1].replace(",", "."));
+      const hi = match[2] ? Number(match[2].replace(",", ".")) : lo;
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+      const unit = match[3].toLowerCase();
+      const raw = (lo + hi) / 2;
+      const hours = unit.startsWith("min") ? raw / 60 : raw;
+      return { value: formatNumber(hours), unit: "h" };
+    }
+
+    function rangesOverlap(a1, a2, b1, b2) {
+      return Math.max(a1, b1) < Math.min(a2, b2);
+    }
+
+    function selectedBlock() {
+      const block = state.blocks.find(item => item.id === state.selectedBlockId) || null;
+      if (block) {
+        ensureBlockFlowFields(block);
+        ensureBlockConditionFields(block);
+      }
+      return block;
+    }
+
+    function selectedGroup() {
+      if (state.selectedGroupId && blocksForGroup(state.selectedGroupId).length) return groupModel(state.selectedGroupId);
+      const block = selectedBlock();
+      return block?.groupId ? groupModel(block.groupId) : null;
+    }
+
+    function ensureBlockFlowFields(block) {
+      if (!Array.isArray(block.streams)) {
+        const legacy = [];
+        [["input", block.inputs], ["output", block.outputs], ["waste", block.wastes]].forEach(([role, values]) => {
+          if (!Array.isArray(values)) return;
+          values.forEach(value => {
+            const name = typeof value === "string" ? value : value?.name;
+            if (!name) return;
+            legacy.push(createStream(role, { name }));
+          });
+        });
+        block.streams = legacy;
+      }
+      block.streams = block.streams.map((stream, index) => {
+        const normalized = normalizeStream(stream);
+        if (!normalized.id) normalized.id = `${block.id}-S${index + 1}`;
+        return normalized;
+      });
+      block.inputs = streamNames(block, "input");
+      block.outputs = streamNames(block, "output");
+      block.wastes = streamNames(block, "waste");
+      return block;
+    }
+
+    function ensureBlockConditionFields(block) {
+      if (!block.conditions || typeof block.conditions !== "object" || Array.isArray(block.conditions)) {
+        block.conditions = {};
+      }
+      if (!block.conditionUnits || typeof block.conditionUnits !== "object" || Array.isArray(block.conditionUnits)) {
+        block.conditionUnits = {};
+      }
+      if (block.conditions.temperature_range && !block.conditions.target_temperature) {
+        block.conditions.target_temperature = block.conditions.temperature_range;
+      }
+      if (block.conditions.temperature_hold && !block.conditions.holding_temperature) {
+        block.conditions.holding_temperature = block.conditions.temperature_hold;
+      }
+      if (block.conditions.pressure && !block.conditions.target_pressure) {
+        block.conditions.target_pressure = block.conditions.pressure;
+      }
+      conditionPromptCatalog.forEach(prompt => {
+        const unit = defaultConditionUnit(prompt);
+        if (unit && block.conditions[prompt.id] && !block.conditionUnits[prompt.id]) {
+          block.conditionUnits[prompt.id] = unit;
+        }
+        if (unit && block.conditions[prompt.id]) {
+          block.conditions[prompt.id] = normalizeConditionValue(block.conditions[prompt.id], unit);
+        }
+      });
+      block.conditionsEditing = Boolean(block.conditionsEditing);
+      return block;
+    }
+
+    function normalizeConditionValue(value, unit) {
+      let text = String(value || "").trim();
+      if (!text) return "";
+      const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      text = text.replace(new RegExp(`\\s*${escapedUnit}\\s*$`, "i"), "").trim();
+      if (unit === "C") text = text.replace(/\s*°\s*$/i, "").trim();
+      return text;
+    }
+
+    function nextStreamId(block) {
+      const nums = (block.streams || [])
+        .map(stream => Number(String(stream.id || "").replace(/[^\d]/g, "")))
+        .filter(Number.isFinite);
+      return `${block.id}-S${(nums.length ? Math.max(...nums) : 0) + 1}`;
+    }
+
+    function createStream(role, values = {}) {
+      return normalizeStream({
+        id: values.id || "",
+        role,
+        name: values.name || "",
+        quantity: values.quantity || "",
+        unit: values.unit || "kg",
+        phase: values.phase || "unknown",
+        status: values.status || "missing",
+        timing: values.timing || defaultStreamTiming(role),
+        fate: values.fate || defaultStreamFate(role, values.timing || defaultStreamTiming(role)),
+        recoveryPercent: values.recoveryPercent || "",
+        purgePercent: values.purgePercent || "",
+        scalingMode: values.scalingMode || defaultStreamScalingMode(role, values.unit || "kg", values.fate || ""),
+        loopId: values.loopId || "",
+        destinationGroup: values.destinationGroup || "",
+        makeupRequired: values.makeupRequired || "",
+        accumulationRisk: values.accumulationRisk || "",
+        note: values.note || "",
+        editing: Boolean(values.editing)
+      });
+    }
+
+    function loadBaseExampleProject() {
+      const makeBlock = (id, phrase, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}) => {
+        const start = sampleText.indexOf(phrase);
+        return {
+          id,
+          groupId,
+          start: start >= 0 ? start : 0,
+          end: start >= 0 ? start + phrase.length : phrase.length,
+          text: phrase,
+          behavior,
+          phenomena,
+          streams: streams.map((stream, index) => createStream(stream.role, { id: `${id}-S${index + 1}`, ...stream })),
+          conditions,
+          conditionUnits,
+          conditionsEditing: false,
+          phase: "",
+          endpoint: "",
+          status: "example basis"
+        };
+      };
+
+      state.text = sampleText;
+      $("sourceInput").value = sampleText;
+      state.blocks = [
+        makeBlock(
+          "B1",
+          "Charge 100 kg of reagent A, 80 kg of reagent B, 250 kg of solvent S, and 5 kg of catalyst C to a stirred batch reactor.",
+          "G1",
+          "charge and mix",
+          ["M(L)", "2phM(LS)"],
+          [
+            { role: "input", name: "reagent A", quantity: "100", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "reagent B", quantity: "80", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "solvent S", quantity: "250", unit: "kg", phase: "L", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "catalyst C", quantity: "5", unit: "kg", phase: "S", status: "assumed", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "output", name: "charged reaction mixture", quantity: "435", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+          ],
+          { mixing_mode: "stirred batch reactor", mixing_time: "0.5", addition_mode: "batch charge", addition_time: "0.5" },
+          { mixing_time: "h", addition_time: "h" }
+        ),
+        makeBlock(
+          "B2",
+          "Heat the liquid reaction mixture from 25 C to 85 C and hold under nitrogen.",
+          "G1",
+          "heat/cool",
+          ["ES(H)", "M(L)"],
+          [],
+          { initial_temperature: "25", target_temperature: "85", holding_temperature: "85", thermal_mode: "jacket or external loop heating", thermal_endpoint: "reach 85 C under nitrogen" },
+          { initial_temperature: "C", target_temperature: "C", holding_temperature: "C" }
+        ),
+        makeBlock(
+          "B3",
+          "React A and B for 16 h at 85 C with vigorous mixing to form product P.",
+          "G2",
+          "reaction",
+          ["R(L)", "M(L)", "ES(H)"],
+          [
+            { role: "input", name: "charged reaction mixture", quantity: "435", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "reaction mixture with product P", quantity: "420", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "reaction byproduct vapor", quantity: "15", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "per batch" }
+          ],
+          { reaction_time: "16", holding_temperature: "85", mixing_mode: "vigorous stirred liquid reaction", mixing_time: "16", conversion_yield: "90", reaction_endpoint: "A/B conversion to product P" },
+          { reaction_time: "h", holding_temperature: "C", mixing_time: "h", conversion_yield: "%" }
+        ),
+        makeBlock(
+          "B4",
+          "Cool the reactor contents from 85 C to 30 C before work-up.",
+          "G3",
+          "heat/cool",
+          ["ES(C)"],
+          [],
+          { initial_temperature: "85", target_temperature: "30", thermal_ramp: "controlled cooling before work-up", thermal_endpoint: "30 C" },
+          { initial_temperature: "C", target_temperature: "C" }
+        ),
+        makeBlock(
+          "B5",
+          "Add 150 kg of water and mix for 0.5 h, then allow the organic and aqueous phases to settle for 1 h.",
+          "G4",
+          "liquid-liquid wash",
+          ["2phM(LL)", "PC(LL)", "PS(LL)", "M(L)"],
+          [
+            { role: "input", name: "water", quantity: "150", unit: "kg", phase: "L", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch" },
+            { role: "output", name: "washed two-phase mixture", quantity: "570", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+          ],
+          { mixing_mode: "liquid-liquid contact", mixing_time: "0.5", phase_ratio: "organic:aqueous approx. 420:150", settling_time: "1", interface_risk: "check emulsion at scale" },
+          { mixing_time: "h", settling_time: "h" }
+        ),
+        makeBlock(
+          "B6",
+          "Separate the organic phase containing product P from 180 kg aqueous waste.",
+          "G4",
+          "liquid-liquid wash",
+          ["PS(LL)", "PT(LL)"],
+          [
+            { role: "output", name: "organic phase with product P", quantity: "390", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "waste", name: "aqueous waste", quantity: "180", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" }
+          ],
+          { settling_time: "1", separation_efficiency: "95", transfer_endpoint: "clear organic/aqueous split" },
+          { settling_time: "h", separation_efficiency: "%" }
+        ),
+        makeBlock(
+          "B7",
+          "Remove 220 kg of solvent S under vacuum and recover it for recycle.",
+          "G5",
+          "solvent evaporation",
+          ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"],
+          [
+            { role: "output", name: "solvent S", quantity: "220", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "90", scalingMode: "recycle loop", loopId: "SOLV-S" },
+            { role: "waste", name: "solvent S loss", quantity: "22", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "loss", scalingMode: "fixed loss %" }
+          ],
+          { target_pressure: "80", pressure_control: "vacuum solvent removal", vapor_handling: "condenser before vacuum system", phase_change_time: "4", phase_change_fraction: "88" },
+          { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
+        ),
+        makeBlock(
+          "B8",
+          "Collect 120 kg of product P as final output and send 15 kg residue to waste.",
+          "G5",
+          "distillation purification",
+          ["PS(VL)", "PT(VL)", "ES(H)"],
+          [
+            { role: "output", name: "product P", quantity: "120", unit: "kg", phase: "L", status: "assumed", timing: "final output", fate: "product", scalingMode: "per kg product" },
+            { role: "waste", name: "heavy residue", quantity: "15", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" }
+          ],
+          { target_pressure: "50", pressure_control: "vacuum finishing", separation_efficiency: "92", phase_change_time: "1" },
+          { target_pressure: "mbar", separation_efficiency: "%", phase_change_time: "h" }
+        )
+      ];
+      state.groups = {
+        G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge plus heat-up" }, properties: { heat_capacity: { value: "2.1", unit: "kJ/kg/K", status: "assumed", note: "generic liquid mixture Cp" }, density: { value: "930", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
+        G2: { id: "G2", task: "main liquid reaction", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "16", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "intentional bottleneck for testing" }, properties: { heat_capacity: { value: "2.2", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "25", unit: "mPa s", status: "assumed", note: "mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
+        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty can become equipment-limited" }, properties: { heat_capacity: { value: "2.2", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
+        G4: { id: "G4", task: "liquid-liquid wash and split", selectedUnit: "Decanter", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "settling/emulsion check" }, properties: { density_difference: { value: "120", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
+        G5: { id: "G5", task: "solvent recovery and final product", selectedUnit: "Evaporation", schedule: { durationH: "5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "secondary bottleneck after reaction" }, properties: { boiling_point: { value: "82", unit: "C", status: "assumed", note: "placeholder solvent S" }, heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 2860, y: 90 }
+      };
+      state.links = [
+        { from: "G1", to: "G2" },
+        { from: "G2", to: "G3" },
+        { from: "G3", to: "G4" },
+        { from: "G4", to: "G5" }
+      ];
+      state.scaleBasis = {
+        targetProduct: "product P",
+        targetAmount: "120000",
+        targetUnit: "kg/year",
+        referenceBlockId: "B8",
+        basisAmount: "120",
+        basisUnit: "kg",
+        mode: "batch",
+        operatingDays: "250",
+        hoursPerDay: "16",
+        batchesPerDay: "1",
+        batchDuration: "",
+        oeePercent: "80",
+        parallelUnits: "1",
+        yieldPercent: "90",
+        recoveryPercent: "92",
+        designMarginPercent: "10",
+        confidence: "rough"
+      };
+      state.ruleChecks = [];
+      state.aiRefine = null;
+      state.selectedBlockId = null;
+      state.selectedGroupId = "G2";
+      state.selectedIds = ["B3"];
+      state.menuBlockId = null;
+      state.menuGroupId = null;
+      state.menuStreamId = null;
+      state.connectingFrom = null;
+      state.lastSelection = null;
+      state.zoom = 0.62;
+      state.draftPos = { x: 24, y: 24 };
+      state.focusEndpoint = "G2";
+      state.activeInspectorTab = "heuristics";
+      renderAll();
+      requestAnimationFrame(() => {
+        centerSelection();
+      });
+    }
+
+    function normalizeStream(stream) {
+      const role = streamRoles[stream?.role] ? stream.role : (streamRoles[stream?.type] ? stream.type : "input");
+      return {
+        id: String(stream?.id || ""),
+        role,
+        name: String(stream?.name || stream?.material || ""),
+        quantity: String(stream?.quantity || stream?.qty || ""),
+        unit: streamUnits.includes(stream?.unit) ? stream.unit : "kg",
+        phase: streamPhases.includes(stream?.phase) ? stream.phase : "unknown",
+        status: streamDataStatuses.includes(stream?.status) ? stream.status : "missing",
+        timing: streamTimingOptions.includes(stream?.timing) ? stream.timing : defaultStreamTiming(role),
+        fate: streamFateOptions.includes(stream?.fate) ? stream.fate : defaultStreamFate(role, streamTimingOptions.includes(stream?.timing) ? stream.timing : defaultStreamTiming(role)),
+        recoveryPercent: String(stream?.recoveryPercent || ""),
+        purgePercent: String(stream?.purgePercent || ""),
+        scalingMode: streamScalingModes.includes(stream?.scalingMode) ? stream.scalingMode : defaultStreamScalingMode(role, stream?.unit, stream?.fate),
+        loopId: String(stream?.loopId || ""),
+        destinationGroup: String(stream?.destinationGroup || ""),
+        makeupRequired: String(stream?.makeupRequired || ""),
+        accumulationRisk: String(stream?.accumulationRisk || ""),
+        note: String(stream?.note || ""),
+        editing: Boolean(stream?.editing)
+      };
+    }
+
+    function defaultStreamScalingMode(role, unit = "", fate = "") {
+      if (unit === "kg/kg product" || unit === "L/kg product") return "per kg product";
+      if (["recycled input", "recovered solvent"].includes(fate)) return "recycle loop";
+      if (fate === "loss" || fate === "purge") return "fixed loss %";
+      if (role === "output") return "per kg product";
+      return "auto";
+    }
+
+    function defaultStreamFate(role, timing = "") {
+      if (role === "input") return "fresh input";
+      if (role === "output") return timing === "final output" ? "product" : "intermediate";
+      if (role === "waste") return "wastewater";
+      return "unknown";
+    }
+
+    function defaultStreamTiming(role) {
+      if (role === "input") return "initial charge";
+      if (role === "output") return "in-process intermediate";
+      if (role === "waste") return "waste purge";
+      return "unspecified";
+    }
+
+    function streamNames(block, role) {
+      return (block.streams || [])
+        .filter(stream => stream.role === role && stream.name.trim())
+        .map(stream => stream.name.trim());
+    }
+
+    function streamCounts(block) {
+      ensureBlockFlowFields(block);
+      return Object.keys(streamRoles).reduce((counts, role) => {
+        counts[role] = block.streams.filter(stream => stream.role === role).length;
+        return counts;
+      }, {});
+    }
+
+    function phaseLabel(code) {
+      return lutzePhaseOptions.find(item => item[0] === code)?.[1] || code || "phase missing";
+    }
+
+    function phaseOptionHtml(selected) {
+      return lutzePhaseOptions
+        .map(([value, label]) => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`)
+        .join("");
+    }
+
+    function blockPhaseContext(block) {
+      ensureBlockFlowFields(block);
+      const raw = new Set();
+      const effectiveRaw = new Set();
+      const components = new Set();
+      const inputComponents = new Set();
+      const phaseCounts = { L: 0, V: 0, S: 0 };
+      const inputPhaseCounts = { L: 0, V: 0, S: 0 };
+      block.streams.forEach(stream => {
+        if (!stream.phase || stream.phase === "unknown") return;
+        raw.add(stream.phase);
+        effectiveRaw.add(stream.phase);
+        const parts = phaseComponents(stream.phase);
+        parts.forEach(part => {
+          components.add(part);
+          phaseCounts[part] = (phaseCounts[part] || 0) + 1;
+          if (stream.role === "input") {
+            inputComponents.add(part);
+            inputPhaseCounts[part] = (inputPhaseCounts[part] || 0) + 1;
+          }
+        });
+      });
+      deriveEffectivePhases(effectiveRaw, phaseCounts, inputPhaseCounts);
+      return { raw, effectiveRaw, components, inputComponents, phaseCounts, inputPhaseCounts, hasKnown: raw.size > 0 };
+    }
+
+    function deriveEffectivePhases(effectiveRaw, phaseCounts, inputPhaseCounts) {
+      const total = key => phaseCounts[key] || 0;
+      const feeds = key => inputPhaseCounts[key] || 0;
+      if (effectiveRaw.has("LL") || feeds("L") >= 2 || total("L") >= 2) effectiveRaw.add("LL");
+      if (effectiveRaw.has("VL") || (total("V") >= 1 && total("L") >= 1)) effectiveRaw.add("VL");
+      if (effectiveRaw.has("LS") || (total("L") >= 1 && total("S") >= 1)) effectiveRaw.add("LS");
+      if (effectiveRaw.has("VS") || (total("V") >= 1 && total("S") >= 1)) effectiveRaw.add("VS");
+      if (effectiveRaw.has("MVL")) effectiveRaw.add("VL");
+      if (effectiveRaw.has("MLL")) effectiveRaw.add("LL");
+      if (effectiveRaw.has("MVV") || effectiveRaw.has("VV") || feeds("V") >= 2 || total("V") >= 2) effectiveRaw.add("VV");
+    }
+
+    function phaseComponents(phase) {
+      const normalized = String(phase || "").replace(/^M/, "");
+      return ["V", "L", "S"].filter(part => normalized.includes(part));
+    }
+
+    function sanitizeBlockPhenomena(block) {
+      const context = blockPhaseContext(block);
+      if (!context.hasKnown) return;
+      block.phenomena = block.phenomena.filter(code => phenomenonCompatibleWithPhase(code, context));
+    }
+
+    function phenomenonCompatibleWithPhase(code, context) {
+      if (!context.hasKnown) return true;
+      if (code.startsWith("ES(") || code === "SD") return true;
+      const pch = code.match(/^PCh\(([VLS])->([VLS])\)$/);
+      if (pch) return context.components.has(pch[1]) || context.components.has(pch[2]);
+      const match = code.match(/\(([^)]+)\)$/);
+      if (!match) return true;
+      const phase = match[1].replace(/^M/, "");
+      const parts = phaseComponents(phase);
+      if (!parts.length) return true;
+      if (parts.length === 1) return context.components.has(parts[0]);
+      return phaseContextHas(context, phase);
+    }
+
+    function phaseContextHas(context, phase) {
+      const normalized = String(phase || "").replace(/^M/, "");
+      if (!normalized) return true;
+      if (context.effectiveRaw?.has(normalized)) return true;
+      const parts = phaseComponents(normalized);
+      if (!parts.length) return true;
+      if (parts.length === 1) return context.components.has(parts[0]);
+      return false;
+    }
+
+    function availablePhenomenaForBlock(block) {
+      if (!block) return phenomenaOptions;
+      const context = blockPhaseContext(block);
+      return phenomenaOptions.filter(code => phenomenonCompatibleWithPhase(code, context));
+    }
+
+    function blocksInOrder() {
+      return [...state.blocks].sort((a, b) => a.start - b.start || a.end - b.end);
+    }
+
+    function groupIdsInTextOrder() {
+      const seen = new Set();
+      const ids = [];
+      blocksInOrder().forEach(block => {
+        if (block.groupId && !seen.has(block.groupId)) {
+          seen.add(block.groupId);
+          ids.push(block.groupId);
+        }
+      });
+      return ids;
+    }
+
+    function blocksForGroup(groupId) {
+      return blocksInOrder().filter(block => block.groupId === groupId);
+    }
+
+    function groupModel(groupId) {
+      if (!groupId) return null;
+      const blocks = blocksForGroup(groupId);
+      const group = ensureGroup(groupId);
+      return {
+        ...group,
+        blocks,
+        phenomena: Array.from(new Set(blocks.flatMap(block => block.phenomena))),
+        text: blocks.map(block => block.text).join(" ")
+      };
+    }
+
+    function matchesForGroup(group) {
+      const phen = new Set(group.phenomena);
+      const context = groupPhaseContext(group);
+      return unitCatalog
+        .map(unit => {
+          const overlap = unit.phenomena.filter(item => phen.has(item));
+          const sameTask = unit.task === group.task;
+          const score = overlap.length + (sameTask ? 6 : 0);
+          return { ...unit, overlap, sameTask, score };
+        })
+        .filter(unit => unit.score > 0)
+        .filter(unit => unitTaskCompatibleWithGroup(unit, group))
+        .filter(unit => unit.phenomena.every(code => phenomenonCompatibleWithPhase(code, context)))
+        .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
+        .sort((a, b) => b.score - a.score || Number(b.sameTask) - Number(a.sameTask));
+    }
+
+    function unitTaskCompatibleWithGroup(unit, group) {
+      const phen = new Set(group.phenomena || []);
+      const hasReaction = [...phen].some(code => code.startsWith("R("));
+      const hasSeparation = [...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("));
+      const hasOnlyEnergy = phen.size > 0 && [...phen].every(code => code.startsWith("ES("));
+      const hasOnlyMixing = phen.size > 0 && [...phen].every(code => code.startsWith("M(") || code.startsWith("2phM("));
+      if (!hasReaction && unit.task.startsWith("reaction")) return false;
+      if (hasOnlyEnergy) return unit.task === "thermal conditioning";
+      if (group.task === "thermal conditioning") return unit.task === "thermal conditioning" || hasSeparation;
+      if (group.task === "reaction preparation" || hasOnlyMixing) return unit.task === "reaction preparation";
+      if (hasReaction) return unit.task.startsWith("reaction") || unit.task === "thermal conditioning";
+      if (hasSeparation) return unit.task === "separation" || unit.task === "thermal conditioning";
+      return unit.sameTask || unit.task === group.task;
+    }
+
+    function groupPhaseContext(group) {
+      const synthetic = {
+        streams: group.blocks.flatMap(block => {
+          ensureBlockFlowFields(block);
+          return block.streams;
+        })
+      };
+      return blockPhaseContext(synthetic);
+    }
+
+    function unitOperationFeedPhaseCompatible(unit, context) {
+      if (!context.hasKnown || !Array.isArray(unit.feedPhases) || !unit.feedPhases.length) return true;
+      return unit.feedPhases.some(phase => phaseContextHas(context, phase));
+    }
+
+    function alternativeReason(candidate) {
+      const fit = [];
+      if (candidate.sameTask) fit.push("it matches the assigned task");
+      if (candidate.overlap?.length) fit.push(`it covers ${candidate.overlap.join(", ")}`);
+      const basis = fit.length ? fit.join(" and ") : "it is a related heuristic option";
+      const feed = candidate.feedPhases?.length ? ` Typical feed phase: ${candidate.feedPhases.join(", ")}.` : "";
+      const outlet = candidate.outlet ? ` Key outlet phase: ${candidate.outlet}.` : "";
+      return `${candidate.rationale}${feed}${outlet} Use this when ${basis}.`;
+    }
+
+    function phenomenonTip(code) {
+      return phenomenonGlossary[code] || "Phenomenological descriptor used to compare blocks with possible unit-operation alternatives.";
+    }
+
+    function phenomenonPill(code) {
+      return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
+    }
+
+    function phenomenonOptionButton(code, active, disabled) {
+      return `<button class="phen-option tip ${active ? "active" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}</button>`;
+    }
+
+    function loadTextView() {
+      state.text = $("sourceInput").value;
+      state.blocks = [];
+      state.groups = {};
+      state.links = [];
+      state.selectedBlockId = null;
+      state.selectedGroupId = null;
+      state.selectedIds = [];
+      state.connectingFrom = null;
+      state.lastSelection = null;
+      state.aiRefine = null;
+      state.zoom = 0.78;
+      state.draftPos = { x: 24, y: 24 };
+      state.focusEndpoint = null;
+      renderAll();
+    }
+
+    function selectionOffsets() {
+      const container = $("annotatedText");
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0 || selection.toString().trim() === "") return null;
+      if (!container.contains(selection.anchorNode) || !container.contains(selection.focusNode)) return null;
+      const range = selection.getRangeAt(0);
+      const pre = range.cloneRange();
+      pre.selectNodeContents(container);
+      pre.setEnd(range.startContainer, range.startOffset);
+      const start = pre.toString().length;
+      const end = start + range.toString().length;
+      return { start, end };
+    }
+
+    function createBlockFromSelection() {
+      const offsets = selectionOffsets() || state.lastSelection || sourceInputSelection();
+      if (!offsets) {
+        $("selectionInfo").textContent = "Select text in the loaded text view first, then create a block.";
+        return;
+      }
+      createBlock(offsets.start, offsets.end);
+    }
+
+    function sourceInputSelection() {
+      const source = $("sourceInput");
+      if (document.activeElement !== source) return null;
+      if (source.selectionStart === source.selectionEnd) return null;
+      if (state.text !== source.value) {
+        state.text = source.value;
+        state.blocks = [];
+        state.groups = {};
+        state.links = [];
+        state.selectedBlockId = null;
+        state.selectedGroupId = null;
+        state.selectedIds = [];
+        state.aiRefine = null;
+      }
+      return {
+        start: Math.min(source.selectionStart, source.selectionEnd),
+        end: Math.max(source.selectionStart, source.selectionEnd)
+      };
+    }
+
+    function rememberSelection() {
+      const offsets = selectionOffsets() || sourceInputSelection();
+      state.lastSelection = offsets;
+      $("selectionInfo").textContent = offsets
+        ? `Selected characters ${offsets.start}-${offsets.end}.`
+        : "No active text selection.";
+    }
+
+    function renderAnnotatedText() {
+      const root = $("annotatedText");
+      if (!state.text) {
+        root.innerHTML = `<span class="muted">Load text to start annotating blocks.</span>`;
+        return;
+      }
+
+      const blocks = blocksInOrder();
+      let html = "";
+      let cursor = 0;
+      blocks.forEach(block => {
+        html += escapeHtml(state.text.slice(cursor, block.start));
+        const classes = [
+          "annotated-block",
+          state.selectedIds.includes(block.id) ? "selected" : "",
+          state.selectedBlockId === block.id ? "primary-selected" : ""
+        ].filter(Boolean).join(" ");
+        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(block.id)} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}</span>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        cursor = block.end;
+      });
+      html += escapeHtml(state.text.slice(cursor));
+      root.innerHTML = html;
+
+      root.querySelectorAll("[data-block-id]").forEach(span => {
+        span.addEventListener("click", event => {
+          if (state.connectingFrom && state.connectingFrom !== span.dataset.blockId) {
+            addConnection(state.connectingFrom, span.dataset.blockId);
+            return;
+          }
+          selectBlock(span.dataset.blockId, event.shiftKey);
+        });
+        span.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          if (!state.selectedIds.includes(span.dataset.blockId)) selectBlock(span.dataset.blockId, event.shiftKey);
+          showBlockMenu(event.clientX, event.clientY, span.dataset.blockId);
+        });
+      });
+    }
+
+    function selectBlock(blockId, additive) {
+      state.selectedBlockId = blockId;
+      const block = state.blocks.find(item => item.id === blockId);
+      state.selectedGroupId = block?.groupId || null;
+      if (additive) {
+        if (state.selectedIds.includes(blockId)) {
+          state.selectedIds = state.selectedIds.filter(id => id !== blockId);
+          if (!state.selectedIds.length) state.selectedIds = [blockId];
+        } else {
+          state.selectedIds.push(blockId);
+        }
+      } else {
+        state.selectedIds = [blockId];
+      }
+      renderAll();
+    }
+
+    function selectGroup(groupId) {
+      const blocks = blocksForGroup(groupId);
+      state.selectedGroupId = groupId;
+      state.selectedBlockId = null;
+      state.selectedIds = blocks.map(block => block.id);
+      state.focusEndpoint = groupId;
+      renderAll();
+    }
+
+    function renderGroupFlow() {
+      const root = $("groupFlow");
+      $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
+      if (!state.blocks.length) {
+        root.innerHTML = `<div class="empty">Create blocks from highlighted text. They will appear here as Draft Blocks first.</div>`;
+        return;
+      }
+      const groupIds = groupIdsInTextOrder();
+      const draftBlocks = blocksInOrder().filter(block => !block.groupId);
+      const board = boardBounds();
+      const draftHtml = draftBlocks.length ? `
+        <section class="group-box draft" style="left:${state.draftPos.x}px; top:${state.draftPos.y}px; width:${nodeWidth(draftBlocks.length)}px" data-draft-box="true">
+          <div class="group-head">
+            <div class="row">
+              <strong>Draft Blocks</strong>
+              <span class="pill warn">not task-assigned</span>
+            </div>
+            <span class="pill">${draftBlocks.length} block${draftBlocks.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="muted small" style="margin-bottom:8px">These are text blocks. Shift-click two or more, then right-click and Combine Selected to create a task group.</div>
+          <div class="block-strip">
+            ${draftBlocks.map(block => blockCardHtml(block)).join("")}
+          </div>
+        </section>
+      ` : "";
+      const groupHtml = groupIds.map(groupId => {
+        const group = groupModel(groupId);
+        const candidates = matchesForGroup(group).slice(0, 4);
+        const active = state.selectedGroupId === group.id || group.blocks.some(block => state.selectedIds.includes(block.id));
+        return `
+          <section class="group-box tip ${active ? "active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+            <div class="group-head">
+              <div class="row">
+                <strong>${escapeHtml(group.id)}</strong>
+                <span class="pill blue">${escapeHtml(group.task)}</span>
+              </div>
+              <div class="row">
+                <button class="mini-button" data-select-group="${escapeAttr(group.id)}" title="Select this group as one aggregated task">Aggregate</button>
+                <span class="pill">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"}</span>
+              </div>
+            </div>
+            <div class="block-strip">
+              ${group.blocks.map(block => blockCardHtml(block)).join("")}
+            </div>
+            <div class="group-summary">
+              <div class="label">Summed Phenomena</div>
+              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena assigned.</span>`}
+              ${groupMfaSummaryHtml(group)}
+              ${groupConditionSummaryHtml(group)}
+              <div style="margin-top:6px">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>
+              <div class="label" style="margin-top:8px">Alternatives</div>
+              <div class="alt-grid">
+                ${candidates.length ? candidates.map(candidate => `
+                  <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${group.id}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+                    ${escapeHtml(candidate.name)}
+                  </button>
+                `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`}
+              </div>
+            </div>
+          </section>
+        `;
+      }).join("");
+      root.innerHTML = `
+        <div class="board-space" style="width:${board.width * state.zoom}px; height:${board.height * state.zoom}px">
+          <div class="board-canvas" style="width:${board.width}px; height:${board.height}px; transform:scale(${state.zoom})">
+            ${renderLinksSvg(board)}
+            ${draftHtml}
+            ${groupHtml}
+          </div>
+        </div>
+      `;
+
+      root.querySelectorAll("[data-block-card]").forEach(card => {
+        card.addEventListener("click", event => {
+          if (state.connectingFrom && state.connectingFrom !== card.dataset.blockCard) {
+            addConnection(state.connectingFrom, card.dataset.blockCard);
+            return;
+          }
+          selectBlock(card.dataset.blockCard, event.shiftKey);
+        });
+        card.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!state.selectedIds.includes(card.dataset.blockCard)) selectBlock(card.dataset.blockCard, event.shiftKey);
+          showBlockMenu(event.clientX, event.clientY, card.dataset.blockCard);
+        });
+      });
+
+      root.querySelectorAll("[data-group-box]").forEach(box => {
+        box.addEventListener("click", event => {
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group]")) return;
+          if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
+            addConnection(state.connectingFrom, box.dataset.groupBox);
+            return;
+          }
+          selectGroup(box.dataset.groupBox);
+        });
+        box.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          showGroupMenu(event.clientX, event.clientY, box.dataset.groupBox);
+        });
+        box.addEventListener("mousedown", event => {
+          if (event.button !== 0 || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
+          startDrag(event, box.dataset.groupBox, "group");
+        });
+      });
+      root.querySelectorAll("[data-select-group]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
+          selectGroup(button.dataset.selectGroup);
+        });
+      });
+
+      const draftBox = root.querySelector("[data-draft-box]");
+      if (draftBox) {
+        draftBox.addEventListener("mousedown", event => {
+          if (event.button !== 0 || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
+          startDrag(event, "draft", "draft");
+        });
+      }
+
+      root.querySelectorAll("[data-unit]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.unitGroup).selectedUnit = button.dataset.unit;
+          renderAll();
+        });
+      });
+
+      revealFocusedEndpoint();
+    }
+
+    function renderLinksSvg(board) {
+      const nodeMasks = allNodeRects().map(rect => {
+        const masked = shrinkRect(rect, 7);
+        return `<rect x="${round(masked.x)}" y="${round(masked.y)}" width="${round(masked.w)}" height="${round(masked.h)}" rx="7" fill="black"></rect>`;
+      }).join("");
+      const links = state.links.map(link => {
+        const route = connectionRoute(link.from, link.to);
+        if (!route) return "";
+        const path = orthogonalPath(route.points);
+        const start = route.points[0];
+        return `
+          <path d="${path}" stroke="#fff7ed" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
+          <path d="${path}" stroke="#c76500" stroke-width="3.25" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
+          <circle cx="${round(start.x)}" cy="${round(start.y)}" r="4.2" fill="#fff7ed" stroke="#c76500" stroke-width="2"></circle>
+        `;
+      }).join("");
+      return `
+        <svg class="link-layer" style="width:${board.width}px; height:${board.height}px" viewBox="0 0 ${board.width} ${board.height}">
+          <defs>
+            <marker id="arrowHead" markerWidth="13" markerHeight="13" refX="10.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,9 L12,4.5 z" fill="#c76500"></path>
+            </marker>
+            <mask id="nodeTextMask" maskUnits="userSpaceOnUse">
+              <rect x="0" y="0" width="${board.width}" height="${board.height}" fill="white"></rect>
+              ${nodeMasks}
+            </mask>
+          </defs>
+          ${links}
+        </svg>
+      `;
+    }
+
+    function endpointCenter(id) {
+      const rect = endpointRect(id);
+      return rect ? { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 } : null;
+    }
+
+    function endpointRect(id) {
+      if (!id) return null;
+      if (id.startsWith("G")) {
+        return groupRect(id);
+      }
+      if (!id.startsWith("B")) return null;
+      const block = state.blocks.find(item => item.id === id);
+      if (!block) return null;
+      if (block.groupId) return groupRect(block.groupId);
+      return blockRect(block);
+    }
+
+    function groupRect(groupId) {
+      const group = groupModel(groupId);
+      if (!group) return null;
+      return {
+        x: group.x || 0,
+        y: group.y || 0,
+        w: nodeWidth(group.blocks.length),
+        h: 255
+      };
+    }
+
+    function blockRect(block) {
+      const siblings = block.groupId ? blocksForGroup(block.groupId) : blocksInOrder().filter(item => !item.groupId);
+      const index = Math.max(0, siblings.findIndex(item => item.id === block.id));
+      const base = block.groupId ? groupModel(block.groupId) : { ...state.draftPos };
+      return {
+        x: (base.x || 0) + 15 + index * 194,
+        y: (base.y || 0) + (block.groupId ? 58 : 102),
+        w: 172,
+        h: 142
+      };
+    }
+
+    function connectionRoute(fromId, toId) {
+      const from = endpointRect(fromId);
+      const to = endpointRect(toId);
+      if (!from || !to) return null;
+      const fromCenter = rectCenter(from);
+      const toCenter = rectCenter(to);
+      const dx = toCenter.x - fromCenter.x;
+      const dy = toCenter.y - fromCenter.y;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return null;
+      const startSide = connectionSide(from, to, dx, dy);
+      const endSide = oppositeSide(startSide);
+      const candidates = routeCandidates(from, to, startSide, endSide);
+      const obstacles = routeObstacles(fromId, toId);
+      const best = candidates
+        .map(candidate => ({ ...candidate, points: compactRoute(candidate.points), score: routeScore(candidate.points, obstacles) + candidate.penalty }))
+        .sort((a, b) => a.score - b.score)[0];
+      const points = best?.points || candidates[0].points;
+      return { points, startSide, endSide };
+    }
+
+    function routeCandidates(from, to, preferredStartSide, preferredEndSide) {
+      const fromCenter = rectCenter(from);
+      const toCenter = rectCenter(to);
+      const distance = Math.abs(toCenter.x - fromCenter.x) + Math.abs(toCenter.y - fromCenter.y);
+      const gap = Math.max(34, Math.min(72, distance * 0.1));
+      const bounds = routeBounds(from, to);
+      const candidates = [];
+      const startSides = orderedSides(preferredStartSide);
+      const endSides = orderedSides(preferredEndSide);
+      startSides.forEach(startSide => {
+        endSides.forEach(endSide => {
+          const start = sidePoint(from, startSide, toCenter);
+          const end = sidePoint(to, endSide, fromCenter);
+          const startOut = offsetPoint(start, startSide, gap);
+          const endOut = offsetPoint(end, endSide, gap);
+          const penalty = (startSide === preferredStartSide ? 0 : 80) + (endSide === preferredEndSide ? 0 : 60);
+          genericOrthogonalRoutes(start, startOut, endOut, end).forEach(points => {
+            candidates.push({ points, penalty });
+          });
+          if (startSide === "left" || startSide === "right") {
+            candidates.push({ points: [start, startOut, { x: startOut.x, y: bounds.top }, { x: endOut.x, y: bounds.top }, endOut, end], penalty: penalty + 25 });
+            candidates.push({ points: [start, startOut, { x: startOut.x, y: bounds.bottom }, { x: endOut.x, y: bounds.bottom }, endOut, end], penalty: penalty + 25 });
+          } else {
+            candidates.push({ points: [start, startOut, { x: bounds.left, y: startOut.y }, { x: bounds.left, y: endOut.y }, endOut, end], penalty: penalty + 25 });
+            candidates.push({ points: [start, startOut, { x: bounds.right, y: startOut.y }, { x: bounds.right, y: endOut.y }, endOut, end], penalty: penalty + 25 });
+          }
+        });
+      });
+      return candidates;
+    }
+
+    function orderedSides(preferred) {
+      return [preferred, ...["right", "bottom", "left", "top"].filter(side => side !== preferred)];
+    }
+
+    function genericOrthogonalRoutes(start, startOut, endOut, end) {
+      if (Math.abs(startOut.x - endOut.x) < 0.5 || Math.abs(startOut.y - endOut.y) < 0.5) {
+        return [[start, startOut, endOut, end]];
+      }
+      return [
+        [start, startOut, { x: endOut.x, y: startOut.y }, endOut, end],
+        [start, startOut, { x: startOut.x, y: endOut.y }, endOut, end]
+      ];
+    }
+
+    function routeBounds(from, to) {
+      const related = [from, to, ...allNodeRects().filter(rect => rectBetween(rect, from, to))];
+      const margin = 54;
+      return {
+        left: Math.max(18, Math.min(...related.map(rect => rect.x)) - margin),
+        right: Math.max(...related.map(rect => rect.x + rect.w)) + margin,
+        top: Math.max(18, Math.min(...related.map(rect => rect.y)) - margin),
+        bottom: Math.max(...related.map(rect => rect.y + rect.h)) + margin
+      };
+    }
+
+    function rectBetween(rect, a, b) {
+      const minX = Math.min(a.x, b.x) - 80;
+      const maxX = Math.max(a.x + a.w, b.x + b.w) + 80;
+      const minY = Math.min(a.y, b.y) - 80;
+      const maxY = Math.max(a.y + a.h, b.y + b.h) + 80;
+      return rect.x < maxX && rect.x + rect.w > minX && rect.y < maxY && rect.y + rect.h > minY;
+    }
+
+    function routeObstacles(fromId, toId) {
+      const fromResolved = resolvedEndpointId(fromId);
+      const toResolved = resolvedEndpointId(toId);
+      return allNodeRects()
+        .filter(rect => rect.id !== fromResolved && rect.id !== toResolved)
+        .map(rect => expandRect(rect, 22));
+    }
+
+    function allNodeRects() {
+      const rects = [];
+      blocksInOrder().filter(block => !block.groupId).forEach(block => {
+        rects.push({ ...blockRect(block), id: block.id });
+      });
+      groupIdsInTextOrder().forEach(groupId => {
+        const rect = groupRect(groupId);
+        if (rect) rects.push({ ...rect, id: groupId });
+      });
+      return rects;
+    }
+
+    function connectionSide(from, to, dx, dy) {
+      const gaps = {
+        right: to.x - (from.x + from.w),
+        left: from.x - (to.x + to.w),
+        bottom: to.y - (from.y + from.h),
+        top: from.y - (to.y + to.h)
+      };
+      const openHorizontal = Math.max(gaps.right, gaps.left);
+      const openVertical = Math.max(gaps.bottom, gaps.top);
+      if (openHorizontal >= 0 && openHorizontal >= openVertical) return gaps.right >= gaps.left ? "right" : "left";
+      if (openVertical >= 0) return gaps.bottom >= gaps.top ? "bottom" : "top";
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if (dx >= 0) {
+          return "right";
+        }
+        return "left";
+      }
+      return dy >= 0 ? "bottom" : "top";
+    }
+
+    function sidePoint(rect, side, toward) {
+      const pad = 18;
+      if (side === "right") return { x: rect.x + rect.w, y: clamp(toward.y, rect.y + pad, rect.y + rect.h - pad) };
+      if (side === "left") return { x: rect.x, y: clamp(toward.y, rect.y + pad, rect.y + rect.h - pad) };
+      if (side === "bottom") return { x: clamp(toward.x, rect.x + pad, rect.x + rect.w - pad), y: rect.y + rect.h };
+      return { x: clamp(toward.x, rect.x + pad, rect.x + rect.w - pad), y: rect.y };
+    }
+
+    function offsetPoint(point, side, amount) {
+      if (side === "right") return { x: point.x + amount, y: point.y };
+      if (side === "left") return { x: point.x - amount, y: point.y };
+      if (side === "bottom") return { x: point.x, y: point.y + amount };
+      return { x: point.x, y: point.y - amount };
+    }
+
+    function oppositeSide(side) {
+      return { right: "left", left: "right", bottom: "top", top: "bottom" }[side] || "left";
+    }
+
+    function horizontalRoute(start, startOut, endOut, end) {
+      const offsetsCross = (start.x <= end.x && startOut.x >= endOut.x) || (start.x >= end.x && startOut.x <= endOut.x);
+      if (offsetsCross && Math.abs(start.y - end.y) < 34) return [start, end];
+      const midX = (startOut.x + endOut.x) / 2;
+      if (Math.abs(startOut.y - endOut.y) < 12) return [start, startOut, endOut, end];
+      return [start, startOut, { x: midX, y: startOut.y }, { x: midX, y: endOut.y }, endOut, end];
+    }
+
+    function verticalRoute(start, startOut, endOut, end) {
+      const offsetsCross = (start.y <= end.y && startOut.y >= endOut.y) || (start.y >= end.y && startOut.y <= endOut.y);
+      if (offsetsCross && Math.abs(start.x - end.x) < 34) return [start, end];
+      const midY = (startOut.y + endOut.y) / 2;
+      if (Math.abs(startOut.x - endOut.x) < 12) return [start, startOut, endOut, end];
+      return [start, startOut, { x: startOut.x, y: midY }, { x: endOut.x, y: midY }, endOut, end];
+    }
+
+    function compactRoute(points) {
+      const deduped = points.filter((point, index) => {
+        if (!index) return true;
+        const prev = points[index - 1];
+        return Math.abs(point.x - prev.x) > 0.5 || Math.abs(point.y - prev.y) > 0.5;
+      });
+      return deduped.filter((point, index) => {
+        if (index === 0 || index === deduped.length - 1) return true;
+        const prev = deduped[index - 1];
+        const next = deduped[index + 1];
+        const sameX = Math.abs(prev.x - point.x) < 0.5 && Math.abs(point.x - next.x) < 0.5;
+        const sameY = Math.abs(prev.y - point.y) < 0.5 && Math.abs(point.y - next.y) < 0.5;
+        return !(sameX || sameY);
+      });
+    }
+
+    function routeScore(points, obstacles) {
+      const compacted = compactRoute(points);
+      let score = routeLength(compacted) + Math.max(0, compacted.length - 2) * 18;
+      for (let index = 0; index < compacted.length - 1; index += 1) {
+        const segment = { a: compacted[index], b: compacted[index + 1] };
+        obstacles.forEach(rect => {
+          if (segmentIntersectsRect(segment, rect)) score += 12000;
+        });
+      }
+      return score;
+    }
+
+    function routeLength(points) {
+      let total = 0;
+      for (let index = 0; index < points.length - 1; index += 1) {
+        total += Math.abs(points[index + 1].x - points[index].x) + Math.abs(points[index + 1].y - points[index].y);
+      }
+      return total;
+    }
+
+    function segmentIntersectsRect(segment, rect) {
+      const minX = Math.min(segment.a.x, segment.b.x);
+      const maxX = Math.max(segment.a.x, segment.b.x);
+      const minY = Math.min(segment.a.y, segment.b.y);
+      const maxY = Math.max(segment.a.y, segment.b.y);
+      if (Math.abs(segment.a.y - segment.b.y) < 0.5) {
+        const y = segment.a.y;
+        return y > rect.y && y < rect.y + rect.h && maxX > rect.x && minX < rect.x + rect.w;
+      }
+      if (Math.abs(segment.a.x - segment.b.x) < 0.5) {
+        const x = segment.a.x;
+        return x > rect.x && x < rect.x + rect.w && maxY > rect.y && minY < rect.y + rect.h;
+      }
+      return false;
+    }
+
+    function expandRect(rect, amount) {
+      return {
+        ...rect,
+        x: rect.x - amount,
+        y: rect.y - amount,
+        w: rect.w + amount * 2,
+        h: rect.h + amount * 2
+      };
+    }
+
+    function shrinkRect(rect, amount) {
+      return {
+        ...rect,
+        x: rect.x + amount,
+        y: rect.y + amount,
+        w: Math.max(0, rect.w - amount * 2),
+        h: Math.max(0, rect.h - amount * 2)
+      };
+    }
+
+    function orthogonalPath(points) {
+      if (!points.length) return "";
+      return points
+        .map((point, index) => `${index ? "L" : "M"} ${round(point.x)} ${round(point.y)}`)
+        .join(" ");
+    }
+
+    function round(value) {
+      return Math.round(value * 10) / 10;
+    }
+
+    function rectCenter(rect) {
+      return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function blockCardHtml(block) {
+      ensureBlockFlowFields(block);
+      ensureBlockConditionFields(block);
+      const counts = streamCounts(block);
+      const flowCounts = [
+        counts.input ? `I:${counts.input}` : "",
+        counts.output ? `O:${counts.output}` : "",
+        counts.waste ? `W:${counts.waste}` : ""
+      ].filter(Boolean).join(" ");
+      const conditionCount = conditionValuesForBlock(block).length;
+      return `
+        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
+          <div class="row between">
+            <strong>${block.id}</strong>
+            <span class="pill accent">${escapeHtml(block.behavior)}</span>
+          </div>
+          <div class="block-text">${escapeHtml(block.text)}</div>
+          <div>${block.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena</span>`}</div>
+          ${flowCounts ? `<div style="margin-top:6px"><span class="pill blue">${escapeHtml(flowCounts)}</span></div>` : ""}
+          ${conditionCount ? `<div style="margin-top:6px"><span class="pill green">C:${conditionCount}</span></div>` : ""}
+        </article>
+      `;
+    }
+
+    function blockContentsTip(block) {
+      ensureBlockFlowFields(block);
+      const lines = [
+        `${block.id} - ${block.behavior}`,
+        `Phenomena: ${block.phenomena.length ? block.phenomena.join(", ") : "none"}`
+      ];
+      const streamLines = streamTipLines(block.streams);
+      if (streamLines.length) {
+        lines.push("", ...streamLines);
+      } else {
+        lines.push("", "MFA streams: none yet");
+      }
+      const conditionLines = conditionTipLines(block);
+      if (conditionLines.length) lines.push("", "Conditions:", ...conditionLines);
+      return lines.join("\n");
+    }
+
+    function groupContentsTip(group) {
+      const lines = [
+        `${group.id} - ${group.task}`,
+        `Blocks: ${group.blocks.map(block => block.id).join(", ") || "none"}`,
+        `Phenomena: ${group.phenomena.length ? group.phenomena.join(", ") : "none"}`
+      ];
+      const streams = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams.map(stream => ({ ...stream, blockId: block.id }));
+      });
+      const streamLines = streamTipLines(streams);
+      if (streamLines.length) {
+        lines.push("", ...streamLines);
+      } else {
+        lines.push("", "MFA streams: none yet");
+      }
+      const conditionLines = groupConditionTipLines(group);
+      if (conditionLines.length) lines.push("", "Group conditions:", ...conditionLines);
+      return lines.join("\n");
+    }
+
+    function streamTipLines(streams) {
+      const roleOrder = ["input", "output", "waste"];
+      return roleOrder.flatMap(role => {
+        const items = streams.filter(stream => stream.role === role);
+        if (!items.length) return [];
+        const header = streamRoles[role].title;
+        return [
+          `${header}:`,
+          ...items.slice(0, 5).map(stream => `- ${streamTipText(stream)}`),
+          ...(items.length > 5 ? [`- +${items.length - 5} more`] : [])
+        ];
+      });
+    }
+
+    function streamTipText(stream) {
+      const name = stream.name.trim() || "untitled stream";
+      const quantity = stream.quantity.trim() ? `${stream.quantity.trim()} ${stream.unit}` : "quantity missing";
+      const phase = stream.phase && stream.phase !== "unknown" ? `, ${phaseLabel(stream.phase)}` : "";
+      const status = stream.status && stream.status !== "missing" ? `, ${stream.status}` : "";
+      const timing = stream.timing && stream.timing !== "unspecified" ? `, ${stream.timing}` : "";
+      const fate = stream.fate && stream.fate !== "unknown" ? `, ${stream.fate}` : "";
+      const block = stream.blockId ? ` [${stream.blockId}]` : "";
+      return `${name} - ${quantity}${phase}${timing}${fate}${status}${block}`;
+    }
+
+    function groupMfaSummaryHtml(group) {
+      const aggregates = aggregateGroupStreams(group);
+      if (!aggregates.length) return "";
+      return `
+        <div class="group-mfa">
+          <div class="label">Group MFA</div>
+          ${aggregates.map(roleGroup => `
+            <div class="group-mfa-role">
+              <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
+              ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item)).join("")}
+              ${roleGroup.items.length > 3 ? `<span class="muted small">+${roleGroup.items.length - 3} more material groups</span>` : ""}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function groupMfaItemHtml(item) {
+      const total = item.totalText ? item.totalText : "not summed";
+      return `
+        <div class="group-mfa-item">
+          <div class="group-mfa-item-head">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span class="pill ${item.totalText ? "blue" : "warn"}">${escapeHtml(total)}</span>
+          </div>
+          <div class="group-mfa-lines">
+            ${item.lines.slice(0, 4).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
+            ${item.lines.length > 4 ? `<span>+${item.lines.length - 4} more entries</span>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function groupConditionSummaryHtml(group) {
+      const aggregates = aggregateGroupConditions(group);
+      if (!aggregates.length) return "";
+      return `
+        <div class="group-mfa">
+          <div class="label">Group Conditions</div>
+          ${aggregates.slice(0, 4).map(item => groupConditionItemHtml(item)).join("")}
+          ${aggregates.length > 4 ? `<span class="muted small">+${aggregates.length - 4} more conditions</span>` : ""}
+        </div>
+      `;
+    }
+
+    function groupConditionItemHtml(item) {
+      return `
+        <div class="group-mfa-item">
+          <div class="group-mfa-item-head">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span class="pill ${item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(item.display)}</span>
+          </div>
+          <div class="group-mfa-lines">
+            ${item.lines.slice(0, 3).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
+            ${item.lines.length > 3 ? `<span>+${item.lines.length - 3} more entries</span>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function aggregateGroupConditions(group) {
+      const entries = group.blocks.flatMap(block => {
+        ensureBlockConditionFields(block);
+        return conditionValuesForBlock(block).map(item => ({
+          ...item,
+          blockId: block.id
+        }));
+      });
+      const byCondition = new Map();
+      entries.forEach(entry => {
+        const key = `${entry.id}||${entry.unit || ""}`;
+        if (!byCondition.has(key)) byCondition.set(key, []);
+        byCondition.get(key).push(entry);
+      });
+      return Array.from(byCondition.values()).map(items => aggregateConditionItems(items));
+    }
+
+    function aggregateConditionItems(items) {
+      const first = items[0];
+      const unit = first.unit || "";
+      const additive = additiveConditionIds().has(first.id);
+      const numericValues = items.map(item => parseStreamQuantity(item.value));
+      const canSum = additive && unit && numericValues.every(value => Number.isFinite(value));
+      const lines = items.map(item => `${item.blockId}: ${formatConditionValue(item)}`);
+      if (canSum) {
+        const total = numericValues.reduce((sum, value) => sum + value, 0);
+        return {
+          id: first.id,
+          label: first.label,
+          unit,
+          display: `${formatNumber(total)} ${unit}`,
+          value: formatNumber(total),
+          status: "summed_numeric_same_unit",
+          aggregationMode: "additive_duration_or_split_time",
+          lines,
+          entries: items.map(exportConditionEntry)
+        };
+      }
+      const uniqueDisplays = Array.from(new Set(items.map(formatConditionValue)));
+      const status = uniqueDisplays.length === 1 ? "common_value" : "sequence_or_conflict";
+      return {
+        id: first.id,
+        label: first.label,
+        unit,
+        display: uniqueDisplays.length === 1 ? uniqueDisplays[0] : `${uniqueDisplays.length} values`,
+        value: uniqueDisplays.length === 1 ? first.value : "",
+        status,
+        aggregationMode: status === "common_value" ? "same_condition_across_group" : "kept_separate_by_block",
+        lines,
+        entries: items.map(exportConditionEntry)
+      };
+    }
+
+    function additiveConditionIds() {
+      return new Set([
+        "holding_time",
+        "mixing_time",
+        "addition_time",
+        "contact_time",
+        "reaction_time",
+        "phase_change_time",
+        "settling_time"
+      ]);
+    }
+
+    function exportConditionEntry(item) {
+      return {
+        blockId: item.blockId,
+        id: item.id,
+        label: item.label,
+        value: item.value,
+        unit: item.unit,
+        display: formatConditionValue(item),
+        kind: item.kind || "text",
+        phenomena: item.phenomena
+      };
+    }
+
+    function groupConditionTipLines(group) {
+      return aggregateGroupConditions(group).flatMap(item => [
+        `- ${item.label}: ${item.display} (${item.status})`,
+        ...item.lines.slice(0, 3).map(line => `  ${line}`)
+      ]);
+    }
+
+    function aggregateGroupStreams(group) {
+      const streams = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams
+          .filter(stream => stream.name.trim())
+          .map(stream => ({ ...stream, blockId: block.id }));
+      });
+      return ["input", "output", "waste"].map(role => {
+        const byMaterial = new Map();
+        streams.filter(stream => stream.role === role).forEach(stream => {
+          const key = stream.name.trim().toLowerCase();
+          if (!byMaterial.has(key)) byMaterial.set(key, []);
+          byMaterial.get(key).push(stream);
+        });
+        const items = Array.from(byMaterial.values()).map(materialStreams => aggregateMaterialStreams(materialStreams));
+        return { role, items };
+      }).filter(group => group.items.length);
+    }
+
+    function aggregateMaterialStreams(streams) {
+      const name = streams[0].name.trim();
+      const lineGroups = new Map();
+      streams.forEach(stream => {
+        const timing = stream.timing || "unspecified";
+        const unit = stream.unit || "";
+        const key = `${timing}||${unit}`;
+        if (!lineGroups.has(key)) lineGroups.set(key, []);
+        lineGroups.get(key).push(stream);
+      });
+      const lines = [];
+      const totals = [];
+      lineGroups.forEach(group => {
+        const timing = group[0].timing || "unspecified";
+        const unit = group[0].unit || "";
+        const numeric = group.map(stream => parseStreamQuantity(stream.quantity));
+        const canSum = numeric.every(value => Number.isFinite(value)) && unit;
+        if (canSum) {
+          const total = numeric.reduce((sum, value) => sum + value, 0);
+          totals.push({ total, unit, timing });
+          lines.push(`${timing}: ${formatNumber(total)} ${unit} (${group.map(stream => stream.blockId).join(", ")})`);
+        } else {
+          group.forEach(stream => {
+            const quantity = stream.quantity ? `${stream.quantity} ${stream.unit}` : "quantity missing";
+            lines.push(`${timing}: ${quantity} (${stream.blockId})`);
+          });
+        }
+      });
+      const total = groupTotalInfo(totals);
+      return {
+        name,
+        lines,
+        totalText: total.text,
+        totalValue: total.value,
+        totalUnit: total.unit,
+        aggregationStatus: total.text ? "summed_numeric_same_unit" : "not_summed",
+        entries: streams.map(stream => ({
+          blockId: stream.blockId,
+          timing: stream.timing,
+          quantity: stream.quantity,
+          unit: stream.unit,
+          phase: stream.phase,
+          status: stream.status,
+          note: stream.note
+        }))
+      };
+    }
+
+    function groupTotalInfo(totals) {
+      if (!totals.length) return { text: "", value: null, unit: "" };
+      const units = new Set(totals.map(item => item.unit));
+      if (units.size !== 1) return { text: "", value: null, unit: "" };
+      const total = totals.reduce((sum, item) => sum + item.total, 0);
+      const unit = totals[0].unit;
+      return { text: `${formatNumber(total)} ${unit}`, value: formatNumber(total), unit };
+    }
+
+    function parseStreamQuantity(value) {
+      const text = String(value || "").trim().replace(",", ".");
+      if (!/^[-+]?\d+(?:\.\d+)?$/.test(text)) return NaN;
+      return Number(text);
+    }
+
+    function formatNumber(value) {
+      return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000);
+    }
+
+    function massToKg(value, unit) {
+      const number = parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return NaN;
+      if (unit === "kg") return number;
+      if (unit === "g") return number / 1000;
+      if (unit === "t") return number * 1000;
+      return NaN;
+    }
+
+    function kgToUnit(value, unit) {
+      if (!Number.isFinite(value)) return NaN;
+      if (unit === "kg") return value;
+      if (unit === "g") return value * 1000;
+      if (unit === "t") return value / 1000;
+      return NaN;
+    }
+
+    function percentFactor(value, fallback = 100) {
+      const parsed = parseStreamQuantity(value);
+      const safe = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+      return safe / 100;
+    }
+
+    function scaleBasisDefaults() {
+      return {
+        targetProduct: "",
+        targetAmount: "",
+        targetUnit: "kg/batch",
+        referenceBlockId: "",
+        basisAmount: "",
+        basisUnit: "kg",
+        mode: "batch",
+        operatingDays: "250",
+        hoursPerDay: "16",
+        batchesPerDay: "1",
+        batchDuration: "",
+        oeePercent: "80",
+        parallelUnits: "1",
+        yieldPercent: "100",
+        recoveryPercent: "100",
+        designMarginPercent: "0",
+        confidence: "rough"
+      };
+    }
+
+    function ensureScaleBasis() {
+      state.scaleBasis = { ...scaleBasisDefaults(), ...(state.scaleBasis || {}) };
+      if (!["kg/batch", "kg/day", "t/year"].includes(state.scaleBasis.targetUnit)) state.scaleBasis.targetUnit = "kg/batch";
+      if (!["kg", "g", "t"].includes(state.scaleBasis.basisUnit)) state.scaleBasis.basisUnit = "kg";
+      if (!["batch", "semi-batch", "continuous"].includes(state.scaleBasis.mode)) state.scaleBasis.mode = "batch";
+      if (!["rough", "estimated", "validated"].includes(state.scaleBasis.confidence)) state.scaleBasis.confidence = "rough";
+      return state.scaleBasis;
+    }
+
+    function targetKgPerBatch(basis) {
+      const target = parseStreamQuantity(basis.targetAmount);
+      if (!Number.isFinite(target) || target <= 0) return NaN;
+      const batchesPerDay = parseStreamQuantity(basis.batchesPerDay);
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      if (basis.targetUnit === "kg/batch") return target;
+      if (basis.targetUnit === "kg/day") {
+        if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0) return NaN;
+        return target / batchesPerDay;
+      }
+      if (basis.targetUnit === "t/year") {
+        const effectiveBatches = effectiveBatchesPerYear(basis);
+        if (Number.isFinite(effectiveBatches) && effectiveBatches > 0) return (target * 1000) / effectiveBatches;
+        if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0 || !Number.isFinite(operatingDays) || operatingDays <= 0) return NaN;
+        return (target * 1000) / (batchesPerDay * operatingDays);
+      }
+      return NaN;
+    }
+
+    function targetKgPerYear(basis) {
+      const target = parseStreamQuantity(basis.targetAmount);
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      const batchesPerDay = parseStreamQuantity(basis.batchesPerDay);
+      const perBatch = targetKgPerBatch(basis);
+      if (basis.targetUnit === "t/year" && Number.isFinite(target)) return target * 1000;
+      if (basis.targetUnit === "kg/day" && Number.isFinite(target) && Number.isFinite(operatingDays)) return target * operatingDays;
+      if (basis.targetUnit === "kg/batch" && Number.isFinite(perBatch)) {
+        const effectiveBatches = effectiveBatchesPerYear(basis);
+        if (Number.isFinite(effectiveBatches) && effectiveBatches > 0) return perBatch * effectiveBatches;
+        if (!Number.isFinite(operatingDays) || !Number.isFinite(batchesPerDay)) return NaN;
+        return perBatch * operatingDays * batchesPerDay;
+      }
+      return NaN;
+    }
+
+    function targetKgPerHour(basis) {
+      const perYear = targetKgPerYear(basis);
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      const hoursPerDay = parseStreamQuantity(basis.hoursPerDay);
+      if (!Number.isFinite(perYear) || !Number.isFinite(operatingDays) || !Number.isFinite(hoursPerDay) || operatingDays <= 0 || hoursPerDay <= 0) return NaN;
+      return perYear / (operatingDays * hoursPerDay);
+    }
+
+    function effectiveBatchesPerYear(basis) {
+      const duration = effectiveBatchDurationH(basis);
+      const oee = percentFactor(basis.oeePercent, 100);
+      const parallel = parseStreamQuantity(basis.parallelUnits);
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(oee) || oee <= 0 || !Number.isFinite(parallel) || parallel <= 0) return NaN;
+      return 8760 * oee * parallel / duration;
+    }
+
+    function effectiveBatchDurationH(basis) {
+      const manual = parseDurationHoursValue(basis.batchDuration);
+      if (Number.isFinite(manual) && manual > 0) return manual;
+      const gantt = taskScheduleModel({ useGlobalBasis: false });
+      return Number.isFinite(gantt.estimatedCycleTimeH) && gantt.estimatedCycleTimeH > 0 ? gantt.estimatedCycleTimeH : NaN;
+    }
+
+    function scheduleModel(basis) {
+      const effectiveBatches = effectiveBatchesPerYear(basis);
+      const targetBatch = targetKgPerBatch(basis);
+      const targetYear = targetKgPerYear(basis);
+      const duration = effectiveBatchDurationH(basis);
+      const oee = percentFactor(basis.oeePercent, 100);
+      const parallel = parseStreamQuantity(basis.parallelUnits);
+      return {
+        method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
+        effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
+        effectiveKgPerBatch: Number.isFinite(targetBatch) ? formatNumber(targetBatch) : "",
+        annualCapacityKg: Number.isFinite(targetYear) ? formatNumber(targetYear) : "",
+        batchDurationH: Number.isFinite(duration) ? formatNumber(duration) : "",
+        oeePercent: Number.isFinite(oee) ? formatNumber(oee * 100) : "",
+        parallelUnits: Number.isFinite(parallel) ? formatNumber(parallel) : ""
+      };
+    }
+
+    function parseDurationHoursValue(value) {
+      const text = String(value || "").trim().replace(",", ".");
+      if (!text) return NaN;
+      const range = text.match(/(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(\d+(?:\.\d+)?)/i);
+      if (range) {
+        const lo = Number(range[1]);
+        const hi = Number(range[2]);
+        return Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2 : NaN;
+      }
+      const number = text.match(/[-+]?\d+(?:\.\d+)?/);
+      return number ? Number(number[0]) : NaN;
+    }
+
+    function taskScheduleModel() {
+      const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
+      const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
+      const maxEffective = timed.length ? Math.max(...timed.map(task => task.effectiveTimeH)) : NaN;
+      const bottleneck = timed.find(task => Math.abs(task.effectiveTimeH - maxEffective) < 0.0001) || null;
+      let cursor = 0;
+      tasks.forEach(task => {
+        task.startH = Number.isFinite(task.effectiveTimeH) ? cursor : NaN;
+        task.widthPercent = Number.isFinite(task.effectiveTimeH) && Number.isFinite(maxEffective) && maxEffective > 0
+          ? Math.max(4, Math.min(100, task.effectiveTimeH / maxEffective * 100))
+          : 0;
+        task.isBottleneck = Boolean(bottleneck && task.groupId === bottleneck.groupId);
+        if (Number.isFinite(task.effectiveTimeH) && task.canOverlap !== "yes") cursor += task.effectiveTimeH;
+      });
+      const estimatedCycleTimeH = timed.length ? tasks.reduce((sum, task) => {
+        if (!Number.isFinite(task.effectiveTimeH) || task.canOverlap === "yes") return sum;
+        return sum + task.effectiveTimeH;
+      }, 0) : NaN;
+      const oee = percentFactor(ensureScaleBasis().oeePercent, 100);
+      const batchesPerYear = Number.isFinite(estimatedCycleTimeH) && estimatedCycleTimeH > 0 && Number.isFinite(oee)
+        ? 8760 * oee / estimatedCycleTimeH
+        : NaN;
+      return {
+        tasks,
+        bottleneck,
+        estimatedCycleTimeH,
+        batchesPerYear,
+        ready: timed.length > 0,
+        missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length
+      };
+    }
+
+    function taskScheduleEntry(group, index) {
+      const raw = ensureGroup(group.id);
+      const schedule = raw.schedule;
+      const inferred = inferGroupDurationInfo(group);
+      const manualDuration = parseDurationHoursValue(schedule.durationH);
+      const durationH = Number.isFinite(manualDuration) && manualDuration > 0 ? manualDuration : inferred.durationH;
+      const parallel = Math.max(1, parseDurationHoursValue(schedule.parallelUnits) || 1);
+      const sensitivity = schedule.scaleSensitivity && schedule.scaleSensitivity !== "unknown"
+        ? schedule.scaleSensitivity
+        : inferGroupScaleSensitivity(group);
+      return {
+        groupId: group.id,
+        task: group.task || `Task ${index + 1}`,
+        selectedUnit: group.selectedUnit || "",
+        blocks: group.blocks.map(block => block.id),
+        durationInput: schedule.durationH,
+        durationH,
+        durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
+        parallelUnits: parallel,
+        canOverlap: scheduleOverlapOptions.includes(schedule.canOverlap) ? schedule.canOverlap : "no",
+        scaleSensitivity: sensitivity,
+        dependency: schedule.dependency || "previous",
+        notes: schedule.notes || "",
+        effectiveTimeH: Number.isFinite(durationH) ? durationH / parallel : NaN,
+        phenomena: group.phenomena
+      };
+    }
+
+    function inferGroupDurationInfo(group) {
+      const conditionDurations = aggregateGroupConditions(group)
+        .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
+        .flatMap(item => item.entries || [])
+        .map(entry => parseDurationHoursValue(entry.value))
+        .filter(value => Number.isFinite(value) && value > 0);
+      if (conditionDurations.length) {
+        return { durationH: conditionDurations.reduce((sum, value) => sum + value, 0), source: "condition sum" };
+      }
+      const textDurations = extractDurationHoursAll(group.text);
+      if (textDurations.length) {
+        return { durationH: textDurations.reduce((sum, value) => sum + value, 0), source: "text duration" };
+      }
+      return { durationH: NaN, source: "missing" };
+    }
+
+    function extractDurationHoursAll(text) {
+      const values = [];
+      const regex = /(\d+(?:[.,]\d+)?)\s*(?:(?:-|to|–)\s*(\d+(?:[.,]\d+)?))?\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes)\b/gi;
+      let match;
+      while ((match = regex.exec(String(text || "")))) {
+        const lo = Number(match[1].replace(",", "."));
+        const hi = match[2] ? Number(match[2].replace(",", ".")) : lo;
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue;
+        const unit = match[3].toLowerCase();
+        const value = (lo + hi) / 2;
+        values.push(unit.startsWith("min") ? value / 60 : value);
+      }
+      return values;
+    }
+
+    function inferGroupScaleSensitivity(group) {
+      const phen = new Set(group.phenomena || []);
+      const task = String(group.task || "").toLowerCase();
+      if ([...phen].some(code => code.startsWith("R("))) return "kinetics-bound";
+      if (task.includes("dry") || [...phen].some(code => ["PS(LS)", "PC(LS)", "2phM(LS)"].includes(code))) return "increases with scale";
+      if ([...phen].some(code => ["ES(H)", "ES(C)"].includes(code))) return "increases with scale";
+      if ([...phen].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) return "equipment dependent";
+      if ([...phen].some(code => ["PS(LL)", "PC(LL)", "PT(LL)", "2phM(LL)"].includes(code))) return "roughly constant";
+      if ([...phen].some(code => code.startsWith("M(") || code.startsWith("2phM("))) return "roughly constant";
+      return "unknown";
+    }
+
+    function candidateBasisStreams() {
+      return blocksInOrder().flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams
+          .filter(stream => stream.role === "output" && ["kg", "g", "t"].includes(stream.unit) && Number.isFinite(parseStreamQuantity(stream.quantity)))
+          .map(stream => ({ block, stream }));
+      });
+    }
+
+    function inferReferenceStream(basis) {
+      const candidates = candidateBasisStreams();
+      if (!candidates.length) return null;
+      const product = String(basis.targetProduct || "").trim().toLowerCase();
+      const byBlock = basis.referenceBlockId
+        ? candidates.find(item => item.block.id === basis.referenceBlockId)
+        : null;
+      if (byBlock) return byBlock;
+      if (product) {
+        const byName = candidates.find(item => item.stream.name.toLowerCase().includes(product));
+        if (byName) return byName;
+      }
+      const finalOutput = candidates.find(item => item.stream.timing === "final output");
+      return finalOutput || candidates[candidates.length - 1];
+    }
+
+    function scaleModel() {
+      const basis = ensureScaleBasis();
+      const reference = inferReferenceStream(basis);
+      const manualBasisKg = massToKg(basis.basisAmount, basis.basisUnit);
+      const inferredBasisKg = reference ? massToKg(reference.stream.quantity, reference.stream.unit) : NaN;
+      const basisKg = Number.isFinite(manualBasisKg) && manualBasisKg > 0 ? manualBasisKg : inferredBasisKg;
+      const targetBatchKg = targetKgPerBatch(basis);
+      const productFactor = Number.isFinite(targetBatchKg) && Number.isFinite(basisKg) && basisKg > 0 ? targetBatchKg / basisKg : NaN;
+      const yieldFactor = percentFactor(basis.yieldPercent, 100);
+      const recoveryFactor = percentFactor(basis.recoveryPercent, 100);
+      const marginFactor = 1 + Math.max(0, parseStreamQuantity(basis.designMarginPercent) || 0) / 100;
+      const upstreamFactor = Number.isFinite(productFactor) ? productFactor * marginFactor / Math.max(0.0001, yieldFactor * recoveryFactor) : NaN;
+      const blocks = blocksInOrder().map(block => {
+        ensureBlockFlowFields(block);
+        return {
+          blockId: block.id,
+          groupId: block.groupId,
+          streams: block.streams.map(stream => scaledStream(stream, block, productFactor, upstreamFactor, targetBatchKg))
+        };
+      });
+      const rows = blocks.flatMap(block => block.streams);
+      return {
+        basis,
+        reference: reference ? {
+          blockId: reference.block.id,
+          streamId: reference.stream.id,
+          streamName: reference.stream.name,
+          quantity: reference.stream.quantity,
+          unit: reference.stream.unit
+        } : null,
+        target: {
+          kgPerBatch: Number.isFinite(targetBatchKg) ? formatNumber(targetBatchKg) : "",
+          kgPerHour: Number.isFinite(targetKgPerHour(basis)) ? formatNumber(targetKgPerHour(basis)) : "",
+          kgPerYear: Number.isFinite(targetKgPerYear(basis)) ? formatNumber(targetKgPerYear(basis)) : ""
+        },
+        schedule: scheduleModel(basis),
+        factors: {
+          productFactor: Number.isFinite(productFactor) ? formatNumber(productFactor) : "",
+          upstreamFactor: Number.isFinite(upstreamFactor) ? formatNumber(upstreamFactor) : "",
+          yieldFactor: formatNumber(yieldFactor),
+          recoveryFactor: formatNumber(recoveryFactor),
+          marginFactor: formatNumber(marginFactor)
+        },
+        blocks,
+        rows,
+        ready: Number.isFinite(productFactor)
+      };
+    }
+
+    function scaledStream(stream, block, productFactor, upstreamFactor, targetBatchKg) {
+      const base = parseStreamQuantity(stream.quantity);
+      const isFinalOutput = stream.role === "output" && stream.timing === "final output";
+      const resolved = resolveStreamScaling(stream, base, isFinalOutput, productFactor, upstreamFactor, targetBatchKg);
+      return {
+        blockId: block.id,
+        groupId: block.groupId,
+        streamId: stream.id,
+        role: stream.role,
+        name: stream.name,
+        phase: stream.phase,
+        timing: stream.timing,
+        fate: stream.fate,
+        recoveryPercent: stream.recoveryPercent,
+        purgePercent: stream.purgePercent,
+        scalingMode: stream.scalingMode,
+        loopId: stream.loopId,
+        status: stream.status,
+        baseQuantity: stream.quantity,
+        baseUnit: stream.unit,
+        appliedFactor: Number.isFinite(resolved.factor) ? formatNumber(resolved.factor) : "",
+        scaledQuantity: Number.isFinite(resolved.quantity) ? formatNumber(resolved.quantity) : "",
+        scaledUnit: resolved.unit || stream.unit,
+        scalingStatus: resolved.status
+      };
+    }
+
+    function resolveStreamScaling(stream, base, isFinalOutput, productFactor, upstreamFactor, targetBatchKg) {
+      const mode = stream.scalingMode || defaultStreamScalingMode(stream.role, stream.unit, stream.fate);
+      if (!Number.isFinite(base) || !stream.unit) return { quantity: NaN, unit: stream.unit, factor: NaN, status: "not_scaled" };
+      if (mode === "manual") {
+        return { quantity: base, unit: stream.unit, factor: 1, status: "manual_target_value" };
+      }
+      if (mode === "per batch") {
+        return { quantity: base, unit: stream.unit, factor: 1, status: "per_batch_value" };
+      }
+      if (mode === "per kg product" || stream.unit === "kg/kg product" || stream.unit === "L/kg product") {
+        if (!Number.isFinite(targetBatchKg)) return { quantity: NaN, unit: displayPerProductUnit(stream.unit), factor: NaN, status: "missing_product_batch_basis" };
+        return {
+          quantity: base * targetBatchKg,
+          unit: displayPerProductUnit(stream.unit),
+          factor: targetBatchKg,
+          status: "per_kg_product_factor"
+        };
+      }
+      const factor = isFinalOutput ? productFactor : upstreamFactor;
+      const canScale = Number.isFinite(factor);
+      return {
+        quantity: canScale ? base * factor : NaN,
+        unit: stream.unit,
+        factor,
+        status: canScale ? (isFinalOutput ? "product_target_factor" : mode === "recycle loop" ? "recycle_loop_gross_factor" : "upstream_yield_recovery_margin_factor") : "not_scaled"
+      };
+    }
+
+    function displayPerProductUnit(unit) {
+      if (unit === "kg/kg product") return "kg";
+      if (unit === "L/kg product") return "L";
+      return unit;
+    }
+
+    function scaledRowsByRole(model) {
+      return ["input", "output", "waste"].map(role => ({
+        role,
+        rows: model.rows.filter(row => row.role === role)
+      })).filter(group => group.rows.length);
+    }
+
+    function recycleSummary(scale = scaleModel()) {
+      const scaledByStreamId = new Map((scale.rows || []).map(row => [row.streamId, row]));
+      const streams = blocksInOrder().flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams
+          .filter(stream => stream.name.trim())
+          .map(stream => ({ ...stream, blockId: block.id, groupId: block.groupId }));
+      });
+      const byFate = new Map();
+      const loops = new Map();
+      const warnings = [];
+      streams.forEach(stream => {
+        const fate = stream.fate || "unknown";
+        if (!byFate.has(fate)) byFate.set(fate, []);
+        byFate.get(fate).push(stream);
+        if (stream.loopId.trim()) {
+          const key = stream.loopId.trim();
+          if (!loops.has(key)) loops.set(key, []);
+          loops.get(key).push(stream);
+        }
+        if (["recycled input", "recovered solvent"].includes(fate) && !stream.recoveryPercent.trim()) {
+          warnings.push({
+            severity: "medium",
+            blockId: stream.blockId,
+            streamId: stream.id,
+            streamName: stream.name,
+            issue: "Recovery percent missing for recycled/recovered stream."
+          });
+        }
+        if (fate === "purge" && !stream.purgePercent.trim()) {
+          warnings.push({
+            severity: "medium",
+            blockId: stream.blockId,
+            streamId: stream.id,
+            streamName: stream.name,
+            issue: "Purge percent missing for purge stream."
+          });
+        }
+        if (stream.accumulationRisk.trim() && !stream.purgePercent.trim() && !["purge", "wastewater", "solid waste", "vent", "loss"].includes(fate)) {
+          warnings.push({
+            severity: "low",
+            blockId: stream.blockId,
+            streamId: stream.id,
+            streamName: stream.name,
+            issue: "Accumulation risk noted without purge/loss destination."
+          });
+        }
+      });
+      const closures = streams
+        .map(stream => recycleClosureEntry(stream, scaledByStreamId.get(stream.id)))
+        .filter(Boolean);
+      return {
+        fates: Array.from(byFate.entries()).map(([fate, items]) => ({
+          fate,
+          count: items.length,
+          streams: items.map(stream => recycleStreamEntry(stream))
+        })),
+        loops: Array.from(loops.entries()).map(([loopId, items]) => ({
+          loopId,
+          streams: items.map(stream => recycleStreamEntry(stream))
+        })),
+        closures,
+        warnings
+      };
+    }
+
+    function recycleClosureEntry(stream, scaledRow) {
+      const recovery = parseStreamQuantity(stream.recoveryPercent);
+      const purge = parseStreamQuantity(stream.purgePercent);
+      const hasRecycleFate = ["recycled input", "recovered solvent"].includes(stream.fate);
+      if (!hasRecycleFate && !Number.isFinite(recovery) && !Number.isFinite(purge)) return null;
+      const gross = parseStreamQuantity(scaledRow?.scaledQuantity);
+      const unit = scaledRow?.scaledUnit || stream.unit;
+      if (!Number.isFinite(gross) || !unit || unit === "%") {
+        return {
+          blockId: stream.blockId,
+          groupId: stream.groupId,
+          streamId: stream.id,
+          name: stream.name,
+          loopId: stream.loopId,
+          unit,
+          status: "needs scaled quantity",
+          gross: "",
+          recovered: "",
+          loss: "",
+          makeup: "",
+          purge: "",
+          recoveryPercent: stream.recoveryPercent,
+          purgePercent: stream.purgePercent
+        };
+      }
+      const safeRecovery = Number.isFinite(recovery) ? Math.min(100, Math.max(0, recovery)) : NaN;
+      const safePurge = Number.isFinite(purge) ? Math.min(100, Math.max(0, purge)) : NaN;
+      const recovered = Number.isFinite(safeRecovery) ? gross * safeRecovery / 100 : NaN;
+      const loss = Number.isFinite(safeRecovery) ? gross - recovered : NaN;
+      const purgeAmount = Number.isFinite(safePurge) ? gross * safePurge / 100 : NaN;
+      return {
+        blockId: stream.blockId,
+        groupId: stream.groupId,
+        streamId: stream.id,
+        name: stream.name,
+        loopId: stream.loopId,
+        unit,
+        status: Number.isFinite(safeRecovery) || Number.isFinite(safePurge) ? "closed estimate" : "recovery/purge missing",
+        gross: formatNumber(gross),
+        recovered: Number.isFinite(recovered) ? formatNumber(recovered) : "",
+        loss: Number.isFinite(loss) ? formatNumber(loss) : "",
+        makeup: Number.isFinite(loss) ? formatNumber(loss) : "",
+        purge: Number.isFinite(purgeAmount) ? formatNumber(purgeAmount) : "",
+        recoveryPercent: stream.recoveryPercent,
+        purgePercent: stream.purgePercent
+      };
+    }
+
+    function recycleStreamEntry(stream) {
+      return {
+        blockId: stream.blockId,
+        groupId: stream.groupId,
+        streamId: stream.id,
+        role: stream.role,
+        name: stream.name,
+        quantity: stream.quantity,
+        unit: stream.unit,
+        phase: stream.phase,
+        fate: stream.fate,
+        recoveryPercent: stream.recoveryPercent,
+        purgePercent: stream.purgePercent,
+        loopId: stream.loopId,
+        destinationGroup: stream.destinationGroup,
+        makeupRequired: stream.makeupRequired,
+        accumulationRisk: stream.accumulationRisk,
+        status: stream.status
+      };
+    }
+
+    function energyBridgeModel(scale = scaleModel()) {
+      return groupIdsInTextOrder().flatMap(groupId => {
+        const group = groupModel(groupId);
+        const phenomena = new Set(group.phenomena);
+        const conditionMap = groupConditionMap(group);
+        const rows = scale.rows.filter(row => row.groupId === groupId);
+        const massBasis = groupMassBasis(rows);
+        const events = [];
+        if (phenomena.has("ES(H)")) events.push(energyEvent("heating", group, conditionMap, massBasis, rows, ["Cp", "heat loss factor"]));
+        if (phenomena.has("ES(C)")) events.push(energyEvent("cooling", group, conditionMap, massBasis, rows, ["Cp", "cooling utility approach"]));
+        if (phenomena.has("PCh(L->V)") || (phenomena.has("PT(VL)") && group.task.toLowerCase().includes("removal"))) {
+          events.push(energyEvent("evaporation", group, conditionMap, massBasis, rows, ["latent heat", "boiling point or vapor pressure"]));
+        }
+        if (phenomena.has("PCh(V->L)") || (phenomena.has("PT(VL)") && group.task.toLowerCase().includes("condens"))) {
+          events.push(energyEvent("condensation", group, conditionMap, massBasis, rows, ["latent heat", "condenser outlet temperature"]));
+        }
+        if (group.task.toLowerCase().includes("dry") || (phenomena.has("PC(LS)") && phenomena.has("ES(H)"))) {
+          events.push(energyEvent("drying", group, conditionMap, massBasis, rows, ["water/solvent loading", "latent heat", "drying endpoint"]));
+        }
+        if (conditionMap.target_pressure || conditionMap.pressure_control || conditionMap.vapor_handling) {
+          events.push(energyEvent("vacuum / pressure control", group, conditionMap, massBasis, rows, ["vacuum level profile", "non-condensable load"]));
+        }
+        if ([...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("))) {
+          events.push(energyEvent("mixing", group, conditionMap, massBasis, rows, ["viscosity", "density", "impeller geometry"]));
+        }
+        return events.filter(Boolean);
+      });
+    }
+
+    function scaleUpAssessmentModel(scale = scaleModel()) {
+      const energy = energyBridgeModel(scale);
+      const recycle = recycleSummary(scale);
+      const cards = [];
+      groupIdsInTextOrder().forEach(groupId => {
+        const group = groupModel(groupId);
+        const phenomena = new Set(group.phenomena);
+        const conditions = groupConditionMap(group);
+        const properties = new Set(exportGroupProperties(group).filter(item => item.value || item.note).map(item => item.id));
+        const rows = scale.rows.filter(row => row.groupId === groupId);
+        const mass = groupMassBasis(rows);
+        if (phenomena.has("ES(H)") || phenomena.has("ES(C)")) {
+          const missing = [];
+          if (!mass.value) missing.push("scaled mass");
+          if (!conditions.target_temperature && !conditions.holding_temperature) missing.push("target/holding temperature");
+          if (!properties.has("heat_capacity")) missing.push("Cp");
+          cards.push(scaleRiskCard(group, "Heat-transfer scale-up", missing.length ? "medium" : "low", missing, "Check heating/cooling area, utility approach, heat-up/cool-down time, and temperature control strategy."));
+        }
+        if ([...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("))) {
+          const missing = [];
+          if (!conditions.mixing_time) missing.push("mixing time");
+          if (!conditions.mixing_mode) missing.push("mixing mode/geometry");
+          if (!properties.has("viscosity")) missing.push("viscosity");
+          if (!properties.has("density")) missing.push("density");
+          cards.push(scaleRiskCard(group, "Mixing scale-up", missing.length ? "medium" : "low", missing, "Check whether lab agitation maps to industrial mixing time, power input, suspension, and mass transfer."));
+        }
+        if ([...phenomena].some(code => ["PS(LL)", "PT(LL)", "PC(LL)", "2phM(LL)"].includes(code))) {
+          const missing = [];
+          if (!conditions.settling_time) missing.push("settling time");
+          if (!conditions.separation_efficiency) missing.push("separation efficiency");
+          if (!properties.has("density_difference")) missing.push("density difference");
+          if (!properties.has("miscibility")) missing.push("miscibility");
+          if (!properties.has("emulsion_risk")) missing.push("emulsion risk");
+          cards.push(scaleRiskCard(group, "Liquid-liquid scale-up", missing.length ? "high" : "medium", missing, "Check phase disengagement, interface control, emulsion risk, wash/extraction volume, and decanter feasibility."));
+        }
+        if ([...phenomena].some(code => ["PS(LS)", "PT(LS)", "PC(LS)", "2phM(LS)"].includes(code))) {
+          const missing = [];
+          if (!conditions.solid_loading) missing.push("solid loading");
+          if (!properties.has("particle_size")) missing.push("particle size");
+          if (!properties.has("cake_resistance")) missing.push("cake resistance/compressibility");
+          cards.push(scaleRiskCard(group, "Solid-liquid scale-up", missing.length ? "medium" : "low", missing, "Check filtration/drying behavior, cake handling, salt loading, and solids transfer."));
+        }
+        if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
+          const missing = [];
+          if (!conditions.target_pressure && !conditions.pressure_control) missing.push("pressure/vacuum basis");
+          if (!properties.has("boiling_point")) missing.push("boiling point");
+          if (!properties.has("vapor_pressure")) missing.push("vapor pressure");
+          if (!properties.has("degradation_temperature")) missing.push("degradation temperature");
+          cards.push(scaleRiskCard(group, "Vapor-liquid / solvent-recovery scale-up", missing.length ? "medium" : "low", missing, "Check condenser/reboiler duty, vacuum feasibility, volatile losses, degradation, and solvent recovery route."));
+        }
+      });
+      recycle.warnings.forEach(warning => {
+        cards.push({
+          groupId: "",
+          task: "recycle/fate",
+          title: "Recycle / purge closure",
+          severity: warning.severity,
+          missing: [warning.issue],
+          recommendation: "Close solvent recovery, purge, make-up, and accumulation logic before relying on scaled inventories."
+        });
+      });
+      energy.filter(event => event.missing.length).forEach(event => {
+        cards.push({
+          groupId: event.groupId,
+          task: event.task,
+          title: `${event.eventType} energy handoff`,
+          severity: event.missing.includes("scaled mass basis") ? "high" : "medium",
+          missing: event.missing,
+          recommendation: "Complete the energy bridge fields before exporting to the energy calculation tool."
+        });
+      });
+      return cards;
+    }
+
+    function scaleRiskCard(group, title, severity, missing, recommendation) {
+      return {
+        groupId: group.id,
+        task: group.task,
+        title,
+        severity,
+        missing,
+        recommendation
+      };
+    }
+
+    function heuristicReviewModel(scale = scaleModel()) {
+      const ctx = heuristicContext(scale);
+      const triggered = heuristicRuleLibrary
+        .map(rule => heuristicRuleCard(rule, ctx))
+        .filter(Boolean)
+        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.id.localeCompare(b.id));
+      return {
+        totalRules: heuristicRuleLibrary.length,
+        triggered,
+        library: heuristicRuleLibrary.map(rule => ({
+          id: rule.id,
+          area: rule.area,
+          title: rule.title,
+          tags: rule.tags,
+          severity: rule.severity,
+          recommendation: rule.recommendation,
+          source: rule.source
+        }))
+      };
+    }
+
+    function heuristicContext(scale) {
+      const blocks = blocksInOrder().map(block => {
+        ensureBlockFlowFields(block);
+        ensureBlockConditionFields(block);
+        return block;
+      });
+      const groups = groupIdsInTextOrder().map(groupModel);
+      const textParts = [
+        state.text,
+        ...blocks.map(block => `${block.text} ${block.behavior} ${block.endpoint || ""}`),
+        ...blocks.flatMap(block => block.streams.map(stream => `${stream.name} ${stream.fate} ${stream.note} ${stream.accumulationRisk} ${stream.destinationGroup}`)),
+        ...groups.map(group => `${group.task} ${group.selectedUnit || ""}`)
+      ];
+      const allText = textParts.join(" ").toLowerCase();
+      const phenomena = new Set(groups.flatMap(group => group.phenomena || []));
+      blocks.forEach(block => (block.phenomena || []).forEach(code => phenomena.add(code)));
+      const phases = new Set(blocks.flatMap(block => block.streams.map(stream => stream.phase)).filter(Boolean));
+      const fates = new Set(blocks.flatMap(block => block.streams.map(stream => stream.fate)).filter(Boolean));
+      const groupConditions = groups.flatMap(group => aggregateGroupConditions(group));
+      const properties = new Set(groups.flatMap(group => exportGroupProperties(group).filter(item => item.value || item.note).map(item => item.id)));
+      const hasReaction = [...phenomena].some(code => code.startsWith("R("));
+      const hasMixing = [...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("));
+      const hasLL = [...phenomena].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"].includes(code)) || phases.has("LL");
+      const hasVL = [...phenomena].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "2phM(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)) || phases.has("VL");
+      const hasLS = [...phenomena].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)"].includes(code)) || phases.has("LS");
+      const hasVS = [...phenomena].some(code => ["PT(VS)", "PS(VS)", "PC(VS)", "2phM(VS)"].includes(code)) || phases.has("VS");
+      const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
+      const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
+      const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
+      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure" || item.id === "pressure_control");
+      const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
+      const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
+      const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText) || properties.has("hazard_note");
+      const hasHeatSensitive = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText) || properties.has("degradation_temperature");
+      const hasReversible = /reversible|equilibrium|dean-stark|water removal|azeotrope|drive.*right|in-situ removal/.test(allText);
+      const hasExotherm = /exotherm|heat release|cooling jacket|quench|cold shot/.test(allText);
+      const hasEndotherm = /endotherm/.test(allText);
+      const hasCrystallization = [...phenomena].some(code => ["PT(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code)) || /crystal|crystalliz|precipitat/.test(allText);
+      const hasDrying = /dry|drying|sieve|mgso4|na2so4|moisture|water <|karl/.test(allText);
+      const hasAdsorption = /adsorb|activated carbon|carbon bed|molecular sieve|sieve/.test(allText);
+      const hasMembrane = /membrane|pervaporation|permeat|retentate/.test(allText) || [...phenomena].some(code => code.includes("(M"));
+      const hasHighTemperature = /400\s*C|750\s*F|furnace|fired|hot oil|190|210/.test(allText);
+      const hasPressureChange = hasVacuum || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText) || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
+      const tags = new Set();
+      if (hasReaction) tags.add("reaction");
+      if (hasMixing) tags.add("mixing");
+      if (hasLL) tags.add("ll").add("liquid_separation");
+      if (hasVL) tags.add("vl").add("liquid_separation");
+      if (hasVapor) tags.add("vapor").add("gas_separation");
+      if (hasLiquid) tags.add("liquid");
+      if (hasSolid) tags.add("solid_particle").add("solids_handling");
+      if (hasLS) tags.add("solid_liquid").add("filtration");
+      if (hasVS) tags.add("vapor_solid");
+      if (hasVacuum) tags.add("vacuum");
+      if (hasRecycle) tags.add("recycle");
+      if (hasPurge) tags.add("purge");
+      if (hasHazard) tags.add("hazard").add("vent");
+      if (hasHeatSensitive) tags.add("heat_sensitive");
+      if (hasReversible) tags.add("reversible").add("separation");
+      if (hasExotherm) tags.add("exotherm").add("cooling");
+      if (hasEndotherm) tags.add("endotherm").add("heating");
+      if (hasCrystallization) tags.add("crystallization");
+      if (hasDrying) tags.add("drying");
+      if (hasAdsorption) tags.add("adsorption");
+      if (hasMembrane) tags.add("membrane");
+      if (hasHighTemperature) tags.add("high_temperature");
+      if (hasPressureChange) tags.add("pressure").add("pressure_reduction");
+      if (hasVapor && hasPressureChange) tags.add("gas_pressure");
+      if (hasLiquid && hasPressureChange) tags.add("liquid_pressure");
+      if (hasVL || /condens|reflux/.test(allText)) tags.add("condensation");
+      if (hasVL || /boil|evapor|reflux/.test(allText)) tags.add("boiling");
+      if ([...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) tags.add("heat_exchange").add("utility");
+      if (/selectiv|yield|conversion|side reaction|byproduct/.test(allText)) tags.add("selectivity");
+      if (/inert|nitrogen|n2|catalyst poison/.test(allText)) tags.add("inert");
+      if (/valuable|product|solvent|octocrylene|cyclohexane/.test(allText)) tags.add("valuable");
+      if (/wash|brine|water wash|cake wash/.test(allText)) tags.add("washing");
+      return { tags, blocks, groups, phenomena, phases, fates, text: allText, scale };
+    }
+
+    function heuristicRuleCard(rule, ctx) {
+      const matchedTags = rule.tags.filter(tag => ctx.tags.has(tag));
+      if (!matchedTags.length || !heuristicRuleIsRelevant(rule, matchedTags)) return null;
+      const evidence = heuristicEvidence(rule, matchedTags, ctx);
+      return {
+        id: rule.id,
+        area: rule.area,
+        title: rule.title,
+        severity: rule.severity,
+        confidence: heuristicRuleConfidence(rule, matchedTags),
+        triggeredBy: matchedTags,
+        evidence,
+        recommendation: rule.recommendation,
+        source: rule.source
+      };
+    }
+
+    function heuristicRuleIsRelevant(rule, matchedTags) {
+      const specificMatches = matchedTags.filter(tag => !genericHeuristicTags().has(tag));
+      if (matchedTags.length >= 2) return true;
+      if (specificMatches.length && rule.severity !== "low") return true;
+      if (specificMatches.length && strongHeuristicTags().has(specificMatches[0])) return true;
+      return false;
+    }
+
+    function heuristicRuleConfidence(rule, matchedTags) {
+      const specificMatches = matchedTags.filter(tag => !genericHeuristicTags().has(tag));
+      if (matchedTags.length >= 3 || specificMatches.length >= 2) return "strong";
+      if (matchedTags.length >= 2 || specificMatches.length) return "focused";
+      return "screening";
+    }
+
+    function genericHeuristicTags() {
+      return new Set([
+        "reaction",
+        "mixing",
+        "liquid",
+        "vapor",
+        "pressure",
+        "heat_exchange",
+        "utility",
+        "liquid_separation",
+        "gas_separation",
+        "separation",
+        "boiling",
+        "condensation",
+        "heating",
+        "cooling"
+      ]);
+    }
+
+    function strongHeuristicTags() {
+      return new Set([
+        "vacuum",
+        "recycle",
+        "purge",
+        "hazard",
+        "heat_sensitive",
+        "reversible",
+        "exotherm",
+        "endotherm",
+        "crystallization",
+        "drying",
+        "adsorption",
+        "membrane",
+        "high_temperature",
+        "solid_liquid",
+        "vapor_solid",
+        "solid_particle",
+        "solids_handling",
+        "filtration",
+        "washing",
+        "selectivity",
+        "inert",
+        "valuable"
+      ]);
+    }
+
+    function heuristicEvidence(rule, matchedTags, ctx) {
+      const groupHits = ctx.groups
+        .filter(group => (group.phenomena || []).some(code => heuristicPhenomenonTags(code).some(tag => matchedTags.includes(tag))))
+        .map(group => group.id)
+        .slice(0, 4);
+      const phaseHits = [...ctx.phases].filter(Boolean).slice(0, 4);
+      const parts = [];
+      if (groupHits.length) parts.push(`groups ${groupHits.join(", ")}`);
+      if (phaseHits.length) parts.push(`phases ${phaseHits.join(", ")}`);
+      parts.push(`tags ${matchedTags.slice(0, 4).join(", ")}`);
+      return parts.join("; ");
+    }
+
+    function heuristicPhenomenonTags(code) {
+      const tags = [];
+      if (code.startsWith("R(")) tags.push("reaction");
+      if (code.startsWith("M(") || code.startsWith("2phM(")) tags.push("mixing");
+      if (code.includes("LL")) tags.push("ll", "liquid_separation");
+      if (code.includes("VL") || code === "PCh(L->V)" || code === "PCh(V->L)") tags.push("vl", "vapor", "heat_exchange");
+      if (code.includes("LS")) tags.push("solid_liquid", "filtration");
+      if (code.includes("VS")) tags.push("vapor_solid", "solid_particle");
+      if (code === "ES(H)") tags.push("heating", "heat_exchange");
+      if (code === "ES(C)") tags.push("cooling", "heat_exchange");
+      if (code === "ES(P)") tags.push("pressure", "gas_pressure", "liquid_pressure");
+      return tags;
+    }
+
+    function groupConditionMap(group) {
+      return aggregateGroupConditions(group).reduce((acc, item) => {
+        acc[item.id] = item;
+        return acc;
+      }, {});
+    }
+
+    function groupMassBasis(rows) {
+      const kgRows = rows.filter(row => row.scaledUnit === "kg" && Number.isFinite(parseStreamQuantity(row.scaledQuantity)));
+      const preferred = kgRows.filter(row => row.role === "input");
+      const source = preferred.length ? preferred : kgRows;
+      if (!source.length) {
+        return { value: "", unit: "", basis: "missing scaled kg stream", streamIds: [] };
+      }
+      const total = source.reduce((sum, row) => sum + parseStreamQuantity(row.scaledQuantity), 0);
+      return {
+        value: formatNumber(total),
+        unit: "kg",
+        basis: preferred.length ? "sum of scaled input streams" : "sum of scaled streams",
+        streamIds: source.map(row => row.streamId)
+      };
+    }
+
+    function energyEvent(type, group, conditionMap, massBasis, rows, propertyMissing) {
+      const missing = [];
+      if (!massBasis.value) missing.push("scaled mass basis");
+      propertyMissing
+        .filter(item => !groupHasPropertyForNeed(group, item))
+        .forEach(item => missing.push(item));
+      const initialTemperature = conditionMap.initial_temperature?.display || "";
+      const targetTemperature = conditionMap.target_temperature?.display || conditionMap.holding_temperature?.display || "";
+      if ((type === "heating" || type === "cooling") && !targetTemperature) missing.push("target temperature");
+      const duration = conditionMap.holding_time?.display || conditionMap.reaction_time?.display || conditionMap.mixing_time?.display || conditionMap.phase_change_time?.display || conditionMap.settling_time?.display || "";
+      const pressure = conditionMap.target_pressure?.display || conditionMap.initial_pressure?.display || conditionMap.pressure_control?.display || "";
+      return {
+        groupId: group.id,
+        task: group.task,
+        eventType: type,
+        massBasis,
+        initialTemperature,
+        targetTemperature,
+        duration,
+        pressure,
+        streamSummary: energyStreamSummary(rows),
+        phaseContext: Array.from(groupPhaseContext(group).effectiveRaw || []),
+        phenomena: group.phenomena,
+        dataStatus: missing.length ? "needs data" : "energy-ready skeleton",
+        missing: Array.from(new Set(missing))
+      };
+    }
+
+    function energyStreamSummary(rows) {
+      const counts = rows.reduce((acc, row) => {
+        acc[row.role] = (acc[row.role] || 0) + 1;
+        return acc;
+      }, {});
+      const mainInputs = rows
+        .filter(row => row.role === "input")
+        .slice(0, 3)
+        .map(row => `${row.name || row.streamId}${row.scaledQuantity ? ` ${row.scaledQuantity} ${row.scaledUnit}` : ""}`);
+      return {
+        counts,
+        inputPreview: mainInputs,
+        streamIds: rows.map(row => row.streamId)
+      };
+    }
+
+    function groupHasPropertyForNeed(group, need) {
+      const values = new Set(exportGroupProperties(group).filter(item => item.value || item.note).map(item => item.id));
+      const text = String(need).toLowerCase();
+      if (text.includes("cp")) return values.has("heat_capacity");
+      if (text.includes("viscosity")) return values.has("viscosity");
+      if (text.includes("density")) return values.has("density") || values.has("density_difference");
+      if (text.includes("boiling point")) return values.has("boiling_point");
+      if (text.includes("vapor pressure")) return values.has("vapor_pressure");
+      if (text.includes("thermal limit") || text.includes("degradation")) return values.has("degradation_temperature");
+      return false;
+    }
+
+    function conditionTipLines(block, blockId = "") {
+      ensureBlockConditionFields(block);
+      const values = conditionValuesForBlock(block);
+      return values.slice(0, 6).map(item => {
+        const prefix = blockId ? `[${blockId}] ` : "";
+        return `- ${prefix}${item.label}: ${formatConditionValue(item)}`;
+      });
+    }
+
+    function renderScaleBasisPanel() {
+      const quickRoot = $("scaleQuickPanel");
+      const root = $("scaleBasisPanel");
+      const basis = ensureScaleBasis();
+      const model = scaleModel();
+      const referenceOptions = [
+        `<option value="">auto from product/output</option>`,
+        ...blocksInOrder().map(block => `<option value="${escapeAttr(block.id)}" ${basis.referenceBlockId === block.id ? "selected" : ""}>${escapeHtml(block.id)} - ${escapeHtml(block.behavior)}</option>`)
+      ].join("");
+      quickRoot.innerHTML = `
+        <div class="scale-quick-grid">
+          <label>
+            <div class="label">Target product</div>
+            <input data-scale-field="targetProduct" value="${escapeAttr(basis.targetProduct)}" placeholder="octocrylene">
+          </label>
+          <label>
+            <div class="label">Amount</div>
+            <input data-scale-field="targetAmount" value="${escapeAttr(basis.targetAmount)}" inputmode="decimal" placeholder="1000">
+          </label>
+          <label>
+            <div class="label">Basis</div>
+            <select data-scale-field="targetUnit">${optionHtml(["kg/batch", "kg/day", "t/year"], basis.targetUnit)}</select>
+          </label>
+        </div>
+      `;
+      root.innerHTML = `
+        <div class="scale-section">
+          <div class="scale-section-title">Reference basis</div>
+          <div class="scale-grid">
+            <label class="scale-wide">
+              <div class="label">Reference output block</div>
+              <select data-scale-field="referenceBlockId">${referenceOptions}</select>
+            </label>
+            <label>
+              <div class="label">Manual basis amount</div>
+              <input data-scale-field="basisAmount" value="${escapeAttr(basis.basisAmount)}" inputmode="decimal" placeholder="optional">
+            </label>
+            <label>
+              <div class="label">Basis unit</div>
+              <select data-scale-field="basisUnit">${optionHtml(["kg", "g", "t"], basis.basisUnit)}</select>
+            </label>
+          </div>
+        </div>
+
+        <div class="scale-section">
+          <div class="scale-section-title">Operating schedule</div>
+          <div class="scale-grid">
+            <label>
+              <div class="label">Mode</div>
+              <select data-scale-field="mode">${optionHtml(["batch", "semi-batch", "continuous"], basis.mode)}</select>
+            </label>
+            <label>
+              <div class="label">Batches/day</div>
+              <input data-scale-field="batchesPerDay" value="${escapeAttr(basis.batchesPerDay)}" inputmode="decimal" placeholder="1">
+            </label>
+            <label>
+              <div class="label">Days/year</div>
+              <input data-scale-field="operatingDays" value="${escapeAttr(basis.operatingDays)}" inputmode="decimal" placeholder="250">
+            </label>
+            <label>
+              <div class="label">Hours/day</div>
+              <input data-scale-field="hoursPerDay" value="${escapeAttr(basis.hoursPerDay)}" inputmode="decimal" placeholder="16">
+            </label>
+            <label class="scale-wide">
+              <div class="label">Batch duration, h</div>
+              <input data-scale-field="batchDuration" value="${escapeAttr(basis.batchDuration)}" inputmode="decimal" placeholder="optional">
+            </label>
+            <label>
+              <div class="label">OEE, %</div>
+              <input data-scale-field="oeePercent" value="${escapeAttr(basis.oeePercent)}" inputmode="decimal" placeholder="80">
+            </label>
+            <label>
+              <div class="label">Parallel units</div>
+              <input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1">
+            </label>
+          </div>
+        </div>
+
+        <div class="scale-section">
+          <div class="scale-section-title">Corrections</div>
+          <div class="scale-grid">
+            <label>
+              <div class="label">Yield, %</div>
+              <input data-scale-field="yieldPercent" value="${escapeAttr(basis.yieldPercent)}" inputmode="decimal" placeholder="100">
+            </label>
+            <label>
+              <div class="label">Recovery, %</div>
+              <input data-scale-field="recoveryPercent" value="${escapeAttr(basis.recoveryPercent)}" inputmode="decimal" placeholder="100">
+            </label>
+            <label>
+              <div class="label">Design margin, %</div>
+              <input data-scale-field="designMarginPercent" value="${escapeAttr(basis.designMarginPercent)}" inputmode="decimal" placeholder="0">
+            </label>
+            <label>
+              <div class="label">Confidence</div>
+              <select data-scale-field="confidence">${optionHtml(["rough", "estimated", "validated"], basis.confidence)}</select>
+            </label>
+          </div>
+        </div>
+        ${scaleResultsHtml(model)}
+      `;
+      [quickRoot, root].forEach(container => {
+        container.querySelectorAll("[data-scale-field]").forEach(field => {
+          field.addEventListener("input", updateScaleField);
+          field.addEventListener("change", rerenderScaleAfterEdit);
+        });
+      });
+      root.querySelectorAll("[data-scale-focus-group]").forEach(button => {
+        button.addEventListener("click", () => focusGroupForEditing(button.dataset.scaleFocusGroup));
+      });
+      root.querySelectorAll("[data-schedule-field]").forEach(field => {
+        field.addEventListener("input", updateGroupScheduleField);
+        field.addEventListener("change", rerenderScaleAfterEdit);
+      });
+      root.querySelectorAll("[data-load-schedule-example]").forEach(button => {
+        button.addEventListener("click", applyScheduleExample);
+      });
+    }
+
+    function focusGroupForEditing(groupId) {
+      const blocks = blocksForGroup(groupId);
+      if (!blocks.length) return;
+      state.selectedBlockId = null;
+      state.selectedGroupId = groupId;
+      state.selectedIds = blocks.map(block => block.id);
+      state.focusEndpoint = groupId;
+      setInspectorTab("inspect");
+      renderAll();
+    }
+    function scaleResultsHtml(model) {
+      const reference = model.reference
+        ? `${model.reference.blockId} / ${model.reference.streamName || model.reference.streamId}: ${model.reference.quantity} ${model.reference.unit}`
+        : "No numeric output stream found yet.";
+      const assessment = scaleUpAssessmentModel(model);
+      const recycle = recycleSummary(model);
+      const energy = energyBridgeModel(model);
+      const gantt = taskScheduleModel();
+      const metrics = [
+        ["Reference", reference],
+        ["Target kg/batch", model.target.kgPerBatch || "missing schedule/basis"],
+        ["Target kg/h", model.target.kgPerHour || "missing operating hours"],
+        ["Target kg/year", model.target.kgPerYear || "missing annual basis"],
+        ["Batches/year", model.schedule.effectiveBatchesPerYear || `${model.basis.batchesPerDay || "?"} x ${model.basis.operatingDays || "?"}`],
+        ["Schedule method", model.schedule.method],
+        ["Product factor", model.factors.productFactor || "not available"],
+        ["Upstream factor", model.factors.upstreamFactor || "not available"]
+      ];
+      const rowGroups = scaledRowsByRole(model);
+      return `
+        <div class="scale-results">
+          <div class="scale-metric">
+            <span class="label">Calculated basis</span>
+            <div class="scale-metric-grid">
+              ${metrics.map(([label, value]) => `
+                <div class="scale-mini-metric">
+                  <span class="label">${escapeHtml(label)}</span>
+                  <strong>${escapeHtml(value)}</strong>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+
+          <div class="scale-metric">
+            <div class="scale-section-title">
+              <span>Gantt / Bottleneck</span>
+              <button data-load-schedule-example="octocrylene" title="Fill current groups with Octocrylene-like test durations">Example</button>
+            </div>
+            ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
+          </div>
+
+          <div class="scale-metric">
+            <span class="label">Scaled MFA preview</span>
+            ${rowGroups.length ? rowGroups.map(group => `
+              <div class="scale-section">
+                <div class="scale-section-title">${escapeHtml(streamRoles[group.role].title)}</div>
+                ${group.rows.slice(0, 3).map(row => scaledFlowRowHtml(row)).join("")}
+                ${group.rows.length > 3 ? `<span class="muted small">+${group.rows.length - 3} more streams in export</span>` : ""}
+              </div>
+            `).join("") : `<div class="mfa-empty">Add stream quantities to preview scaled MFA.</div>`}
+          </div>
+
+          <div class="scale-metric">
+            <span class="label">Scale-up assessment</span>
+            ${assessment.length ? assessment.slice(0, 8).map(scaleAssessmentCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, and conditions to generate scale-up risk cards.</div>`}
+            ${assessment.length > 8 ? `<span class="muted small">+${assessment.length - 8} more assessment cards in export</span>` : ""}
+          </div>
+
+          <div class="scale-metric">
+            <span class="label">Recycle / fate summary</span>
+            ${recycle.fates.length ? recycle.fates.slice(0, 5).map(item => `<div class="scaled-flow-row"><strong>${escapeHtml(item.fate)}</strong><span>${item.count} stream${item.count === 1 ? "" : "s"}</span></div>`).join("") : `<div class="mfa-empty">No stream fate data yet.</div>`}
+            ${recycle.closures.length ? `
+              <div class="event-label-group">
+                <div class="event-label-head">
+                  <strong>Recycle closure</strong>
+                  <span class="pill">${recycle.closures.length}</span>
+                </div>
+                <div class="event-chip-grid">
+                  ${recycle.closures.slice(0, 4).map(recycleClosureHtml).join("")}
+                </div>
+                ${recycle.closures.length > 4 ? `<span class="muted small">+${recycle.closures.length - 4} more closure rows in export</span>` : ""}
+              </div>
+            ` : ""}
+            ${recycle.warnings.length ? `<span class="pill warn">${recycle.warnings.length} recycle warning${recycle.warnings.length === 1 ? "" : "s"}</span>` : ""}
+          </div>
+          <div class="scale-metric">
+            <span class="label">Energy bridge candidates</span>
+            ${energy.length ? energyBridgeGroupsHtml(energy) : `<div class="mfa-empty">Assign thermal, mixing, pressure, or phase-change phenomena to generate energy bridge events.</div>`}
+          </div>
+        </div>
+      `;
+    }
+
+    function energyBridgeGroupsHtml(events) {
+      const byType = new Map();
+      events.forEach(event => {
+        if (!byType.has(event.eventType)) byType.set(event.eventType, []);
+        byType.get(event.eventType).push(event);
+      });
+      return Array.from(byType.entries()).map(([type, items]) => `
+        <div class="event-label-group">
+          <div class="event-label-head">
+            <strong>${escapeHtml(type)}</strong>
+            <span class="pill">${items.length} group${items.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="event-chip-grid">
+            ${items.map(energyBridgeRowHtml).join("")}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function heuristicRulesPanelHtml(heuristics) {
+      const refine = state.aiRefine;
+      return `
+        <div class="scale-results">
+          <div class="scale-metric">
+            <span class="label">Heuristic Rules</span>
+            <div class="mfa-empty" style="margin-bottom:8px">
+              Pre-scale screening. Only rules triggered by the current synthesis are shown here; the full ${heuristics.totalRules}-rule library remains in the JSON export.
+            </div>
+            <div class="scaled-flow-row">
+              <strong>${heuristics.triggered.length} triggered / ${heuristics.totalRules} available</strong>
+              <span>Rules are matched from phenomena, phases, stream fates, conditions, properties, and source text.</span>
+            </div>
+            <div class="scaled-flow-row">
+              <strong>Application criterion</strong>
+              <span>A rule appears when the match is specific enough: usually at least two rule tags, or one strong specific tag such as vacuum, recycle, purge, exotherm, crystallization, membrane, hazard, or heat sensitivity.</span>
+              <span class="muted small">Generic single tags such as vapor, liquid, utility, pressure, or heat exchange are not enough by themselves. Context tags come from group phenomena, Lutze phases, stream fate, conditions, properties, selected unit alternatives, and keywords.</span>
+            </div>
+          </div>
+          <div class="scale-metric">
+            <span class="label">Refinement</span>
+            ${refine ? aiRefinePanelHtml(refine) : `<div class="mfa-empty">Refine has not been run yet. This uses the local rule checker; no external AI model is connected yet.</div>`}
+          </div>
+          <div class="scale-metric">
+            <span class="label">Triggered Rule Cards</span>
+            ${heuristics.triggered.length ? heuristics.triggered.slice(0, 12).map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
+            ${heuristics.triggered.length > 12 ? `<span class="muted small">+${heuristics.triggered.length - 12} more heuristic cards in export</span>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHeuristicsPanel() {
+      const root = $("heuristicsPanel");
+      if (!root) return;
+      root.innerHTML = heuristicRulesPanelHtml(heuristicReviewModel());
+    }
+
+    function refreshReviewPanels() {
+      renderRuleCheckPanel();
+      const clone = $("heuristicRuleCheckPanel");
+      if (!clone) return;
+      const issues = state.ruleChecks || [];
+      clone.innerHTML = issues.length
+        ? ruleCheckCardsHtml(issues)
+        : `<div class="mfa-empty">Run Refine Rules to generate pre-scale heuristic conflicts.</div>`;
+    }
+
+    function ruleCheckCardsHtml(issues) {
+      return issues.map(issue => `
+        <article class="rule-card ${escapeAttr(issue.severity)}">
+          <span class="severity-pill">${escapeHtml(issue.severity)}</span>
+          <strong>${escapeHtml(issue.title)}</strong>
+          <span>${escapeHtml(issue.reason)}</span>
+          <span class="muted small">Target: ${escapeHtml(issue.target)}. Suggested action: ${escapeHtml(issue.action)}</span>
+        </article>
+      `).join("");
+    }
+
+    function aiRefinePanelHtml(refine) {
+      return `
+        <div class="rule-card ${escapeAttr(refine.topSeverity)}" style="margin:8px 0">
+          <span class="severity-pill">${escapeHtml(refine.topSeverity)}</span>
+          <strong>${escapeHtml(refine.summary)}</strong>
+          <span>${escapeHtml(refine.mode)}</span>
+          ${refine.conflicts.length
+            ? refine.conflicts.slice(0, 5).map(item => `<span class="muted small">${escapeHtml(item.severity.toUpperCase())}: ${escapeHtml(item.title)} -> ${escapeHtml(item.action)}</span>`).join("")
+            : `<span class="muted small">No high-priority conflicts detected from the current rule set.</span>`}
+          ${refine.conflicts.length > 5 ? `<span class="muted small">+${refine.conflicts.length - 5} more conflicts in Review Results / export.</span>` : ""}
+        </div>
+      `;
+    }
+
+    function scaleAssessmentCardHtml(item) {
+      return `
+        <div class="rule-card ${escapeAttr(item.severity)}">
+          <span class="severity-pill">${escapeHtml(item.severity)}</span>
+          <strong>${escapeHtml(item.groupId ? `${item.groupId} - ${item.title}` : item.title)}</strong>
+          <span>${escapeHtml(item.recommendation)}</span>
+          ${item.missing.length ? `<span class="muted small">Missing/check: ${escapeHtml(item.missing.slice(0, 4).join(", "))}</span>` : `<span class="muted small">No immediate missing fields for this level.</span>`}
+        </div>
+      `;
+    }
+
+    function ganttPanelHtml(gantt) {
+      return `
+        <div class="mfa-empty" style="margin-bottom:8px">
+          Bottleneck = the task with the largest effective time. Effective time is task duration divided by parallel units. The cycle time sums tasks that cannot overlap.
+        </div>
+        <div class="gantt-summary">
+          <div class="scale-mini-metric">
+            <span class="label">Cycle time</span>
+            <strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>
+          </div>
+          <div class="scale-mini-metric">
+            <span class="label">Batches/year</span>
+            <strong>${Number.isFinite(gantt.batchesPerYear) ? formatNumber(gantt.batchesPerYear) : "missing"}</strong>
+          </div>
+          <div class="scale-mini-metric">
+            <span class="label">Bottleneck</span>
+            <strong>${gantt.bottleneck ? escapeHtml(gantt.bottleneck.groupId) : "missing"}</strong>
+          </div>
+        </div>
+        ${gantt.bottleneck ? bottleneckActionHtml(gantt.bottleneck) : ""}
+        <div class="scale-results">
+          ${gantt.tasks.map(ganttRowHtml).join("")}
+        </div>
+      `;
+    }
+
+    function bottleneckActionHtml(task) {
+      const effective = Number.isFinite(task.effectiveTimeH) ? `${formatNumber(task.effectiveTimeH)} h` : "missing";
+      const split = Number.isFinite(task.durationH) && task.durationH > 0
+        ? `${formatNumber(task.durationH)} h / ${formatNumber(task.parallelUnits)} unit${task.parallelUnits === 1 ? "" : "s"} = ${effective}`
+        : effective;
+      const nextParallel = Number.isFinite(task.parallelUnits) ? Math.max(2, Math.ceil(task.parallelUnits + 1)) : 2;
+      const nextEffective = Number.isFinite(task.durationH) && task.durationH > 0 ? formatNumber(task.durationH / nextParallel) : "";
+      const recommendation = task.scaleSensitivity === "kinetics-bound"
+        ? "Use parallel reactors or process intensification; larger equipment alone may not reduce this time."
+        : task.scaleSensitivity === "increases with scale" || task.scaleSensitivity === "equipment dependent"
+          ? "Check equipment capacity, then test more parallel units or split the grouped task."
+          : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
+      const testAction = nextEffective ? `Test parallel units = ${nextParallel}; effective time would become about ${nextEffective} h if the split is physically valid.` : "";
+      return `
+        <div class="rule-card medium" style="margin:8px 0">
+          <span class="severity-pill">bottleneck</span>
+          <strong>${escapeHtml(task.groupId)} controls the cycle time</strong>
+          <span>${escapeHtml(split)}</span>
+          <span class="muted small">${escapeHtml(recommendation)}</span>
+          ${testAction ? `<span class="muted small">${escapeHtml(testAction)}</span>` : ""}
+        </div>
+      `;
+    }
+
+    function ganttRowHtml(task) {
+      const duration = Number.isFinite(task.durationH) ? `${formatNumber(task.durationH)} h` : "missing duration";
+      const effective = Number.isFinite(task.effectiveTimeH) ? `${formatNumber(task.effectiveTimeH)} h effective` : "not scheduled";
+      return `
+        <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""}">
+          <div class="gantt-task-meta">
+            <strong>${escapeHtml(task.groupId)} - ${escapeHtml(task.task)}</strong>
+            <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
+            <span class="muted small">${escapeHtml(duration)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
+            ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
+          </div>
+          <div>
+            <div class="gantt-bar-track" title="${escapeAttr(effective)}">
+              <div class="gantt-bar" style="width:${task.widthPercent}%"></div>
+            </div>
+            <div class="gantt-controls">
+              <input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours">
+              <input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units">
+              <select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How duration behaves during scale-up">${optionHtml(scheduleScaleOptions, task.scaleSensitivity)}</select>
+              <select data-schedule-field="canOverlap" data-schedule-group="${escapeAttr(task.groupId)}" title="Can this task overlap the previous task?">${optionHtml(scheduleOverlapOptions, task.canOverlap)}</select>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function heuristicCardHtml(item) {
+      return `
+        <div class="rule-card ${escapeAttr(item.severity)}">
+          <span class="severity-pill">${escapeHtml(item.severity)}</span>
+          <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
+          <span>${escapeHtml(item.recommendation)}</span>
+          <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
+        </div>
+      `;
+    }
+
+    function energyBridgeRowHtml(item) {
+      const mass = item.massBasis.value ? `${item.massBasis.value} ${item.massBasis.unit}` : "mass missing";
+      const cpHint = item.missing.includes("Cp")
+        ? `<span class="muted small">Cp goes in Inspector > Properties Refinement > Heat capacity Cp.</span>`
+        : "";
+      return `
+        <div class="scaled-flow-row">
+          <strong>${escapeHtml(item.groupId)} - ${escapeHtml(item.eventType)}</strong>
+          <span>${escapeHtml(mass)}${item.targetTemperature ? `, target ${escapeHtml(item.targetTemperature)}` : ""}${item.duration ? `, ${escapeHtml(item.duration)}` : ""}</span>
+          ${item.streamSummary?.inputPreview?.length ? `<span class="muted small">Inputs: ${escapeHtml(item.streamSummary.inputPreview.join("; "))}</span>` : ""}
+          ${item.missing.length ? `<span class="muted small">Missing: ${escapeHtml(item.missing.slice(0, 3).join(", "))}</span>` : `<span class="muted small">Energy-ready skeleton</span>`}
+          ${cpHint}
+          <button class="event-edit-button" data-scale-focus-group="${escapeAttr(item.groupId)}">Edit data</button>
+        </div>
+      `;
+    }
+
+    function scaledFlowRowHtml(row) {
+      const scaled = row.scaledQuantity ? `${row.scaledQuantity} ${row.scaledUnit}` : "not scaled";
+      return `
+        <div class="scaled-flow-row">
+          <strong>${escapeHtml(row.name || "untitled stream")}</strong>
+          <span>${escapeHtml(row.blockId)} - ${escapeHtml(row.baseQuantity || "missing")} ${escapeHtml(row.baseUnit || "")} -> ${escapeHtml(scaled)}</span>
+          <span class="muted small">${escapeHtml(row.role)}, ${escapeHtml(row.timing)}, ${escapeHtml(phaseLabel(row.phase))}</span>
+        </div>
+      `;
+    }
+
+    function recycleClosureHtml(item) {
+      const title = item.name || item.streamId;
+      const gross = item.gross ? `${item.gross} ${item.unit}` : "gross missing";
+      const recovered = item.recovered ? `recovered ${item.recovered} ${item.unit}` : "";
+      const makeup = item.makeup ? `make-up/loss ${item.makeup} ${item.unit}` : "";
+      const purge = item.purge ? `purge ${item.purge} ${item.unit}` : "";
+      return `
+        <div class="scaled-flow-row">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${escapeHtml(gross)}</span>
+          <span class="muted small">${escapeHtml([recovered, makeup, purge].filter(Boolean).join("; ") || item.status)}</span>
+        </div>
+      `;
+    }
+
+    function updateScaleField(event) {
+      ensureScaleBasis();
+      invalidateAiRefine();
+      state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
+      renderExport();
+    }
+
+    function updateGroupScheduleField(event) {
+      const group = ensureGroup(event.target.dataset.scheduleGroup);
+      invalidateAiRefine();
+      group.schedule[event.target.dataset.scheduleField] = event.target.value;
+      renderExport();
+    }
+
+    function rerenderScaleAfterEdit(event) {
+      invalidateAiRefine();
+      if (event.target.dataset.scaleField) {
+        ensureScaleBasis();
+        state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
+      }
+      if (event.target.dataset.scheduleField) {
+        const group = ensureGroup(event.target.dataset.scheduleGroup);
+        group.schedule[event.target.dataset.scheduleField] = event.target.value;
+      }
+      renderScaleBasisPanel();
+      renderHeuristicsPanel();
+      refreshReviewPanels();
+      renderExport();
+    }
+
+    function invalidateAiRefine() {
+      state.aiRefine = null;
+    }
+
+    function applyScheduleExample() {
+      const groups = groupIdsInTextOrder().map(groupModel);
+      const fallback = [
+        { durationH: "0.5", scaleSensitivity: "roughly constant", notes: "charge/pre-mix" },
+        { durationH: "20", scaleSensitivity: "kinetics-bound", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
+        { durationH: "2.5", scaleSensitivity: "roughly constant", notes: "aqueous/brine wash" },
+        { durationH: "1", scaleSensitivity: "increases with scale", notes: "drying/contact step" },
+        { durationH: "4", scaleSensitivity: "equipment dependent", notes: "solvent removal or final distillation" }
+      ];
+      groups.forEach((group, index) => {
+        const text = `${group.task} ${group.text} ${group.selectedUnit || ""}`.toLowerCase();
+        let preset = fallback[Math.min(index, fallback.length - 1)];
+        if (/knoevenagel|reaction|reflux|dean/.test(text)) preset = fallback[1];
+        else if (/wash|brine|aqueous|settler/.test(text)) preset = fallback[2];
+        else if (/dry|sieve|mgso4|na2so4/.test(text)) preset = fallback[3];
+        else if (/distill|solvent|evapor|purif|vacuum/.test(text)) preset = fallback[4];
+        else if (/charge|feed|mix|prepar/.test(text)) preset = fallback[0];
+        const stateGroup = ensureGroup(group.id);
+        stateGroup.schedule = {
+          ...stateGroup.schedule,
+          durationH: preset.durationH,
+          parallelUnits: "1",
+          canOverlap: "no",
+          scaleSensitivity: preset.scaleSensitivity,
+          notes: preset.notes
+        };
+      });
+      ensureScaleBasis();
+      state.scaleBasis.targetAmount = "750";
+      state.scaleBasis.targetUnit = "t/year";
+      state.scaleBasis.oeePercent = "80";
+      state.scaleBasis.batchDuration = "";
+      renderScaleBasisPanel();
+      renderHeuristicsPanel();
+      refreshReviewPanels();
+      renderExport();
+    }
+
+    function runRuleChecks() {
+      state.ruleChecks = buildRuleChecks();
+      renderScaleBasisPanel();
+      renderHeuristicsPanel();
+      refreshReviewPanels();
+      renderExport();
+    }
+
+    function runAiRefine() {
+      const issues = buildRuleChecks();
+      const heuristics = heuristicReviewModel();
+      const conflicts = aiRefineConflicts(issues, heuristics);
+      state.ruleChecks = issues;
+      state.aiRefine = {
+        mode: "Local heuristic refinement. External AI is not connected yet; this uses the active rules, grouped MFA, conditions, phases, properties, and scale-up checks.",
+        summary: aiRefineSummary(conflicts, heuristics),
+        topSeverity: conflicts[0]?.severity || "low",
+        conflicts
+      };
+      renderScaleBasisPanel();
+      renderHeuristicsPanel();
+      refreshReviewPanels();
+      renderExport();
+    }
+
+    function aiRefineConflicts(issues, heuristics) {
+      const issueConflicts = issues
+        .filter(issue => ["high", "medium"].includes(issue.severity) || /conflict|missing|bottleneck|incompatible|scale-sensitive/i.test(`${issue.title} ${issue.reason}`))
+        .map(issue => ({
+          severity: issue.severity,
+          title: issue.target ? `${issue.target}: ${issue.title}` : issue.title,
+          reason: issue.reason,
+          action: issue.action
+        }));
+      const heuristicConflicts = heuristics.triggered
+        .filter(item => ["high", "medium"].includes(item.severity))
+        .map(item => ({
+          severity: item.severity,
+          title: `${item.id}: ${item.title}`,
+          reason: item.recommendation,
+          action: `Review ${item.area}; evidence: ${item.evidence}.`
+        }));
+      const byKey = new Map();
+      [...issueConflicts, ...heuristicConflicts].forEach(item => {
+        const key = `${item.severity}|${item.title}|${item.action}`;
+        if (!byKey.has(key)) byKey.set(key, item);
+      });
+      return Array.from(byKey.values()).sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+    }
+
+    function aiRefineSummary(conflicts, heuristics) {
+      const high = conflicts.filter(item => item.severity === "high").length;
+      const medium = conflicts.filter(item => item.severity === "medium").length;
+      if (high || medium) return `${high} high and ${medium} medium priority conflicts before scale-up`;
+      return `${heuristics.triggered.length} heuristic rules screened with no high-priority conflict`;
+    }
+
+    function renderRuleCheckPanel() {
+      const root = $("ruleCheckPanel");
+      const issues = state.ruleChecks || [];
+      if (!issues.length) {
+        root.innerHTML = `<div class="mfa-empty">Run Check to generate scale-up and heuristic review cards.</div>`;
+        return;
+      }
+      root.innerHTML = ruleCheckCardsHtml(issues);
+    }
+
+    function buildRuleChecks() {
+      const issues = [];
+      const model = scaleModel();
+      const recycle = recycleSummary(model);
+      const energyEvents = energyBridgeModel(model);
+      const scaleAssessment = scaleUpAssessmentModel(model);
+      const heuristicReview = heuristicReviewModel(model);
+      const gantt = taskScheduleModel();
+      if (!state.blocks.length) {
+        issues.push(ruleIssue("high", "No process blocks", "The framework needs explicit block-level tasks before scale-up can be reviewed.", "project", "Create blocks from the source text."));
+        return issues;
+      }
+      if (!model.ready) {
+        issues.push(ruleIssue("high", "Scale basis incomplete", "A production target needs a numeric reference output or manual basis amount.", "scale-up basis", "Select a reference output block or enter a manual basis amount."));
+      }
+      if (!model.basis.targetProduct.trim()) {
+        issues.push(ruleIssue("medium", "Target product missing", "Scale propagation is harder to audit without naming the product stream.", "scale-up basis", "Set the target product name."));
+      }
+      if (model.basis.mode !== "continuous" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
+        issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires batches per day to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day."));
+      }
+      if (model.basis.targetUnit === "t/year" && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
+        issues.push(ruleIssue("medium", "Duration/OEE schedule missing", "Annual production can be reconciled with case-study batch size only when batch duration, OEE, and parallel capacity are explicit.", "scale-up schedule", "Enter batch duration, OEE, and parallel units."));
+      }
+      if (state.blocks.length && groupIdsInTextOrder().length && gantt.missingDurationCount) {
+        issues.push(ruleIssue("medium", "Task durations missing", `${gantt.missingDurationCount} grouped task${gantt.missingDurationCount === 1 ? "" : "s"} lack duration data for bottleneck analysis.`, "Gantt schedule", "Add duration h in group conditions or directly in the Gantt rows."));
+      }
+      if (gantt.bottleneck && ["increases with scale", "equipment dependent"].includes(gantt.bottleneck.scaleSensitivity)) {
+        issues.push(ruleIssue("medium", "Scale-sensitive bottleneck", `${gantt.bottleneck.groupId} controls cycle time and is ${gantt.bottleneck.scaleSensitivity}.`, gantt.bottleneck.groupId, "Review equipment capacity, split into parallel units, or revise the selected unit operation."));
+      }
+      if (gantt.bottleneck && gantt.bottleneck.scaleSensitivity === "kinetics-bound") {
+        issues.push(ruleIssue("low", "Kinetics-bound bottleneck", `${gantt.bottleneck.groupId} controls cycle time but may not improve simply by larger equipment.`, gantt.bottleneck.groupId, "Consider parallel reactors or process intensification rather than assuming duration shrinks at scale."));
+      }
+      state.blocks.forEach(block => {
+        ensureBlockFlowFields(block);
+        ensureBlockConditionFields(block);
+        if (!block.streams.length) {
+          issues.push(ruleIssue("medium", "MFA streams missing", "This block cannot contribute to material balance or scale-up propagation.", block.id, "Add at least input/output/waste streams where material changes occur."));
+        }
+        block.streams.forEach(stream => {
+          if (!stream.name.trim()) issues.push(ruleIssue("low", "Unnamed stream", "Unnamed streams are difficult to aggregate across groups.", `${block.id}/${stream.id}`, "Name the stream."));
+          if (!stream.quantity.trim()) issues.push(ruleIssue("medium", "Quantity missing", "Scale-up propagation needs a reported, calculated, or assumed quantity.", `${block.id}/${stream.name || stream.id}`, "Enter quantity and unit."));
+          if (!stream.phase || stream.phase === "unknown") issues.push(ruleIssue("medium", "Phase missing", "Phase is needed to filter phenomena and industrial alternatives.", `${block.id}/${stream.name || stream.id}`, "Assign the stream phase category."));
+        });
+        const phenomena = new Set(block.phenomena || []);
+        const conditions = block.conditions || {};
+        if ([...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM(")) && !conditions.mixing_time) {
+          issues.push(ruleIssue("medium", "Mixing duration missing", "Mixing scale-up depends on contact time, regime, and geometry.", block.id, "Add mixing time and mixing mode."));
+        }
+        if ([...phenomena].some(code => code.startsWith("R(")) && !conditions.reaction_time) {
+          issues.push(ruleIssue("medium", "Reaction time missing", "Residence time or holding time is needed before choosing batch, semi-batch, or continuous operation.", block.id, "Add reaction time or holding time."));
+        }
+        if ([...phenomena].some(code => code.startsWith("R(")) && !conditions.conversion_yield) {
+          issues.push(ruleIssue("medium", "Yield/conversion missing", "Scale-up inputs and waste estimates depend on conversion or isolated yield.", block.id, "Add conversion/yield at block or scale basis level."));
+        }
+        if ((phenomena.has("ES(H)") || phenomena.has("ES(C)")) && !conditions.target_temperature && !conditions.holding_temperature) {
+          issues.push(ruleIssue("medium", "Thermal endpoint missing", "Energy handoff needs initial/final or holding temperature.", block.id, "Add target temperature, holding temperature, or thermal endpoint."));
+        }
+        if ([...phenomena].some(code => code.startsWith("PS(")) && !conditions.separation_efficiency && !conditions.settling_time) {
+          issues.push(ruleIssue("medium", "Separation performance missing", "Separation choices need split performance, settling time, carryover, or efficiency.", block.id, "Add separation efficiency, split fraction, or settling time."));
+        }
+        if ([...phenomena].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "PT(VL)", "PS(VL)", "PT(LS)", "PS(LS)"].includes(code))) {
+          issues.push(ruleIssue("low", "Property refinement may be needed", "Several industrial alternatives can match the same phenomena, so chemical properties should refine the choice only when ambiguous.", block.id, "Add property notes when choosing between separation alternatives."));
+        }
+      });
+      groupIdsInTextOrder().forEach(groupId => {
+        const group = groupModel(groupId);
+        const conditionAggregates = aggregateGroupConditions(group);
+        const propertyPrompts = propertyPromptsForGroup(group);
+        const propertyValues = propertyValuesForGroup(group);
+        if (propertyPrompts.length && matchesForGroup(group).length > 1 && !propertyValues.length) {
+          issues.push(ruleIssue("low", "Optional property refinement available", "This group has multiple plausible alternatives; property data can improve ranking without being mandatory.", group.id, "Add properties only if you need to discriminate between alternatives."));
+        }
+        conditionAggregates
+          .filter(item => item.status === "sequence_or_conflict")
+          .forEach(item => {
+            issues.push(ruleIssue("low", "Group condition kept separate", `${item.label} has multiple values across blocks and should be reviewed as sequence, range, or conflict before scale-up.`, group.id, "Review the grouped condition entries and decide whether they are sequential, alternative, or incompatible."));
+          });
+        if (!group.selectedUnit) {
+          issues.push(ruleIssue("low", "No unit alternative selected", "The group has phenomena but no chosen industrial implementation yet.", group.id, "Select one unit alternative after checking phases and conditions."));
+        }
+        if (group.phenomena.some(code => code.startsWith("R(")) && group.phenomena.some(code => code.startsWith("PS(") || code.startsWith("PT("))) {
+          issues.push(ruleIssue("low", "Integrated option candidate", "Reaction and separation phenomena appear in the same group, which can justify an intensified alternative if operating windows are compatible.", group.id, "Compare conventional reactor plus separator against an integrated reaction-separation option."));
+        }
+      });
+      if (!state.links.length && state.blocks.length > 1) {
+        issues.push(ruleIssue("low", "Process connectivity missing", "The checker cannot validate sequence, recycle, purge, or branch logic without arrows.", "board", "Draw arrows between blocks or groups."));
+      }
+      recycle.warnings.forEach(warning => {
+        issues.push(ruleIssue(warning.severity, "Recycle / fate data missing", warning.issue, `${warning.blockId}/${warning.streamName || warning.streamId}`, "Complete stream fate, recovery, purge, loop, or destination fields."));
+      });
+      energyEvents
+        .filter(event => event.missing.length)
+        .forEach(event => {
+          issues.push(ruleIssue("low", "Energy bridge needs data", `${event.eventType} event is missing ${event.missing.slice(0, 4).join(", ")}.`, event.groupId, "Add missing stream quantities, conditions, or property data before energy calculation."));
+        });
+      scaleAssessment
+        .filter(item => ["high", "medium"].includes(item.severity))
+        .forEach(item => {
+          issues.push(ruleIssue(item.severity, "Scale-up risk needs review", `${item.title}: ${item.recommendation}`, item.groupId || item.task, "Complete the missing/check fields before treating the scaled process as robust."));
+        });
+      heuristicReview.triggered
+        .filter(item => ["high", "medium"].includes(item.severity))
+        .slice(0, 10)
+        .forEach(item => {
+          issues.push(ruleIssue(item.severity, `${item.id} heuristic triggered`, `${item.title}: ${item.recommendation}`, item.area, `Review evidence: ${item.evidence}.`));
+        });
+      return issues.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+    }
+
+    function ruleIssue(severity, title, reason, target, action) {
+      return { severity, title, reason, target, action };
+    }
+
+    function severityRank(severity) {
+      return { high: 0, medium: 1, low: 2 }[severity] ?? 3;
+    }
+
+    function renderInspector() {
+      const block = selectedBlock();
+      const hasBlock = Boolean(block);
+      ["behaviorSelect", "blockText"].forEach(id => $(id).disabled = !hasBlock);
+      $("selectedBlockInfo").innerHTML = block
+        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span><div style="margin-top:6px">${escapeHtml(block.text)}</div>`
+        : "No block selected.";
+      $("behaviorSelect").value = block?.behavior || "unassigned";
+      $("blockText").value = block?.text || "";
+      renderPhenomenaGrid(block);
+
+      const group = selectedGroup();
+      $("groupTask").disabled = !group;
+      const groupConditions = group ? aggregateGroupConditions(group) : [];
+      const groupMfa = group ? aggregateGroupStreams(group) : [];
+      const conditionStatus = groupConditions.length
+        ? groupConditions.map(item => item.status).includes("sequence_or_conflict")
+          ? `<span class="pill warn">conditions kept separate</span>`
+          : `<span class="pill green">conditions aggregated</span>`
+        : `<span class="muted small">No group conditions yet.</span>`;
+      $("selectedGroupInfo").innerHTML = group
+        ? `<strong>${escapeHtml(group.id)}</strong><div style="margin-top:6px">Blocks: ${group.blocks.map(item => `<span class="pill">${item.id}</span>`).join("")}</div><div style="margin-top:6px">${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena.</span>`}</div><div style="margin-top:6px">${conditionStatus} ${groupConditions.length ? `<span class="pill">${groupConditions.length} condition${groupConditions.length === 1 ? "" : "s"}</span>` : ""} ${groupMfa.length ? `<span class="pill blue">${groupMfa.reduce((sum, role) => sum + role.items.length, 0)} MFA group${groupMfa.reduce((sum, role) => sum + role.items.length, 0) === 1 ? "" : "s"}</span>` : ""}</div>${group ? groupAggregateInspectorHtml(group) : ""}`
+        : "This block is not assigned to a task group yet.";
+      $("groupTask").value = group?.task || "";
+      renderGroupAlternatives(group);
+      renderGroupProperties(group);
+      renderHeuristicsPanel();
+      renderScaleBasisPanel();
+      refreshReviewPanels();
+      renderExport();
+    }
+
+    function groupAggregateInspectorHtml(group) {
+      const mfa = aggregateGroupStreams(group);
+      const conditions = aggregateGroupConditions(group);
+      const mfaHtml = mfa.length ? `
+        <div class="group-mfa" style="margin-top:8px">
+          <div class="label">Aggregated MFA</div>
+          ${mfa.map(roleGroup => `
+            <div class="group-mfa-role">
+              <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
+              ${roleGroup.items.map(groupMfaItemHtml).join("")}
+            </div>
+          `).join("")}
+        </div>
+      ` : "";
+      const conditionHtml = conditions.length ? `
+        <div class="group-mfa" style="margin-top:8px">
+          <div class="label">Aggregated Conditions</div>
+          ${conditions.map(groupConditionItemHtml).join("")}
+        </div>
+      ` : "";
+      return `${mfaHtml}${conditionHtml}`;
+    }
+
+    function renderGroupProperties(group) {
+      const root = $("groupProperties");
+      if (!group) {
+        root.innerHTML = `<span class="muted">No group selected.</span>`;
+        return;
+      }
+      const prompts = propertyPromptsForGroup(group);
+      const groupState = ensureGroup(group.id);
+      if (!prompts.length) {
+        root.innerHTML = `<span class="muted">No property refinement needed for the current phenomena.</span>`;
+        return;
+      }
+      if (groupState.propertiesEditing) {
+        root.innerHTML = `
+          ${prompts.map(prompt => propertyEditHtml(groupState, prompt)).join("")}
+          <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save Properties</button>
+        `;
+      } else {
+        const values = propertyValuesForGroup(group);
+        root.innerHTML = `
+          <button data-edit-properties="${escapeAttr(group.id)}">${values.length ? "Edit Properties" : "Add Properties"}</button>
+          ${values.length ? values.map(propertyLabelHtml).join("") : `<span class="muted small">Optional. Add only if alternatives are ambiguous or checks request it.</span>`}
+        `;
+      }
+      root.querySelectorAll("[data-edit-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.editProperties).propertiesEditing = true;
+          renderInspector();
+        });
+      });
+      root.querySelectorAll("[data-save-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.saveProperties).propertiesEditing = false;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-property-field]").forEach(field => {
+        field.addEventListener("input", updateGroupPropertyField);
+        field.addEventListener("change", updateGroupPropertyField);
+      });
+    }
+
+    function propertyPromptsForGroup(group) {
+      const phenomena = new Set(group.phenomena || []);
+      return propertyPromptCatalog.filter(prompt => prompt.phenomena.some(code => phenomena.has(code)));
+    }
+
+    function propertyValuesForGroup(group) {
+      const groupState = ensureGroup(group.id);
+      return propertyPromptsForGroup(group)
+        .map(prompt => {
+          const saved = normalizePropertyValue(groupState.properties[prompt.id], prompt);
+          return { ...prompt, ...saved };
+        })
+        .filter(item => item.value || item.note);
+    }
+
+    function normalizePropertyValue(value, prompt) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return { value: "", unit: prompt.unit || "", status: "missing", note: "" };
+      }
+      return {
+        value: String(value.value || ""),
+        unit: String(value.unit || prompt.unit || ""),
+        status: streamDataStatuses.includes(value.status) ? value.status : "missing",
+        note: String(value.note || "")
+      };
+    }
+
+    function propertyEditHtml(group, prompt) {
+      const value = normalizePropertyValue(group.properties[prompt.id], prompt);
+      return `
+        <article class="condition-edit-card tip" data-tip="${escapeAttr(prompt.reason)}">
+          <div class="label">${escapeHtml(prompt.label)}</div>
+          <div class="condition-input-row">
+            <input data-property-field="value" data-property-id="${escapeAttr(prompt.id)}" data-property-group="${escapeAttr(group.id)}" value="${escapeAttr(value.value)}" placeholder="${escapeAttr(prompt.placeholder)}">
+            <input data-property-field="unit" data-property-id="${escapeAttr(prompt.id)}" data-property-group="${escapeAttr(group.id)}" value="${escapeAttr(value.unit)}" placeholder="unit">
+          </div>
+          <select data-property-field="status" data-property-id="${escapeAttr(prompt.id)}" data-property-group="${escapeAttr(group.id)}">${optionHtml(streamDataStatuses, value.status)}</select>
+          <input data-property-field="note" data-property-id="${escapeAttr(prompt.id)}" data-property-group="${escapeAttr(group.id)}" value="${escapeAttr(value.note)}" placeholder="source, assumption, condition...">
+        </article>
+      `;
+    }
+
+    function propertyLabelHtml(item) {
+      const display = [item.value, item.unit].filter(Boolean).join(" ") || item.note;
+      return `
+        <article class="condition-label-card tip" data-tip="${escapeAttr(item.reason)}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(display)}</span>
+          <span class="pill ${item.status === "missing" ? "warn" : "blue"}">${escapeHtml(item.status)}</span>
+        </article>
+      `;
+    }
+
+    function updateGroupPropertyField(event) {
+      const group = ensureGroup(event.target.dataset.propertyGroup);
+      const prompt = propertyPromptCatalog.find(item => item.id === event.target.dataset.propertyId);
+      if (!prompt) return;
+      const current = normalizePropertyValue(group.properties[prompt.id], prompt);
+      invalidateAiRefine();
+      current[event.target.dataset.propertyField] = event.target.value;
+      group.properties[prompt.id] = current;
+      renderExport();
+    }
+
+    function renderPhenomenaGrid(block) {
+      if (block) sanitizeBlockPhenomena(block);
+      const options = availablePhenomenaForBlock(block);
+      const phaseContext = block ? blockPhaseContext(block) : null;
+      const phaseHint = block && !phaseContext.hasKnown
+        ? `<div class="muted small" style="margin-bottom:6px">Add stream phases to filter Lutze-compatible phenomena.</div>`
+        : "";
+      $("phenomenaGrid").innerHTML = phaseHint + options.map(phen => {
+        const active = block?.phenomena.includes(phen);
+        return phenomenonOptionButton(phen, active, !block);
+      }).join("");
+      document.querySelectorAll("[data-phen]").forEach(button => {
+        button.addEventListener("click", () => {
+          const block = selectedBlock();
+          if (!block) return;
+          const phen = button.dataset.phen;
+          if (!phenomenonCompatibleWithPhase(phen, blockPhaseContext(block))) return;
+          block.phenomena = block.phenomena.includes(phen)
+            ? block.phenomena.filter(item => item !== phen)
+            : [...block.phenomena, phen];
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+    }
+
+    function renderStepFlowInspector() {
+      const root = $("stepFlowInspector");
+      const block = selectedBlock();
+      if (!block) {
+        const group = selectedGroup();
+        if (group) {
+          renderGroupAggregateStepInspector(root, group);
+          return;
+        }
+        root.className = "step-flow-inspector empty";
+        root.innerHTML = "Select a block to edit quantified MFA, or click Aggregate on a group to inspect summed MFA and conditions.";
+        return;
+      }
+      ensureBlockFlowFields(block);
+      ensureBlockConditionFields(block);
+      const counts = streamCounts(block);
+      root.className = "step-flow-inspector";
+      root.innerHTML = `
+        <div class="step-flow-head">
+          <div>
+            <div class="label">Step MFA Inspector</div>
+            <strong>${escapeHtml(block.id)}</strong>
+            <span class="pill">${escapeHtml(block.behavior)}</span>
+          </div>
+          <div class="mfa-summary-strip">
+            <span class="pill blue">I:${counts.input}</span>
+            <span class="pill">O:${counts.output}</span>
+            <span class="pill warn">W:${counts.waste}</span>
+            <span>material balance basis: per selected block</span>
+          </div>
+        </div>
+        <div class="mfa-grid">
+          ${Object.keys(streamRoles).map(role => streamSectionHtml(block, role)).join("")}
+        </div>
+        ${conditionPanelHtml(block)}
+      `;
+      root.querySelectorAll("[data-add-stream]").forEach(button => {
+        button.addEventListener("click", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          ensureBlockFlowFields(current);
+          const stream = createStream(button.dataset.addStream, { editing: true });
+          stream.id = nextStreamId(current);
+          current.streams.push(stream);
+          syncLegacyStreamLists(current);
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-remove-stream]").forEach(button => {
+        button.addEventListener("click", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          current.streams = current.streams.filter(stream => stream.id !== button.dataset.removeStream);
+          syncLegacyStreamLists(current);
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-save-stream]").forEach(button => {
+        button.addEventListener("click", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          const stream = current.streams.find(item => item.id === button.dataset.saveStream);
+          if (!stream) return;
+          if (!stream.phase || stream.phase === "unknown") {
+            alert("Select the Lutze phase category before saving this stream.");
+            return;
+          }
+          stream.editing = false;
+          syncLegacyStreamLists(current);
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-stream-label]").forEach(label => {
+        label.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          showStreamMenu(event.clientX, event.clientY, label.dataset.streamLabel);
+        });
+        label.addEventListener("dblclick", () => {
+          editStream(label.dataset.streamLabel);
+        });
+      });
+      root.querySelectorAll("[data-stream-field]").forEach(field => {
+        field.addEventListener("input", updateStreamField);
+        field.addEventListener("change", updateStreamField);
+      });
+      root.querySelectorAll("[data-edit-conditions]").forEach(button => {
+        button.addEventListener("click", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          current.conditionsEditing = true;
+          renderStepFlowInspector();
+        });
+      });
+      root.querySelectorAll("[data-save-conditions]").forEach(button => {
+        button.addEventListener("click", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          current.conditionsEditing = false;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-condition-field]").forEach(field => {
+        field.addEventListener("input", updateConditionField);
+      });
+      root.querySelectorAll("[data-condition-unit]").forEach(field => {
+        field.addEventListener("change", updateConditionUnit);
+      });
+      root.querySelectorAll("[data-condition-label]").forEach(label => {
+        label.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          const current = selectedBlock();
+          if (!current) return;
+          current.conditionsEditing = true;
+          renderStepFlowInspector();
+        });
+        label.addEventListener("dblclick", () => {
+          const current = selectedBlock();
+          if (!current) return;
+          current.conditionsEditing = true;
+          renderStepFlowInspector();
+        });
+      });
+    }
+
+    function renderGroupAggregateStepInspector(root, group) {
+      const mfa = aggregateGroupStreams(group);
+      const conditions = aggregateGroupConditions(group);
+      const alternatives = matchesForGroup(group).slice(0, 4);
+      const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
+      root.className = "step-flow-inspector";
+      root.innerHTML = `
+        <div class="step-flow-head">
+          <div>
+            <div class="label">Group Aggregate Inspector</div>
+            <strong>${escapeHtml(group.id)}</strong>
+            <span class="pill blue">${escapeHtml(group.task)}</span>
+          </div>
+          <div class="mfa-summary-strip">
+            <span class="pill">${group.blocks.length} blocks</span>
+            <span class="pill green">${group.phenomena.length} phenomena</span>
+            <span class="pill blue">${mfaCount} MFA groups</span>
+            <span class="pill warn">${conditions.length} conditions</span>
+          </div>
+        </div>
+        <div class="condition-panel">
+          <div class="condition-head">
+            <strong>Summed Phenomena</strong>
+            <span class="muted small">union of all block phenomena in this task group</span>
+          </div>
+          <div class="condition-body">
+            <div>${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena assigned.</span>`}</div>
+          </div>
+        </div>
+        <div class="mfa-grid">
+          ${mfa.length ? mfa.map(roleGroup => `
+            <section class="mfa-section">
+              <div class="mfa-section-head">
+                <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
+                <span class="pill">${roleGroup.items.length}</span>
+              </div>
+              <div class="mfa-rows">
+                ${roleGroup.items.map(groupMfaItemHtml).join("")}
+              </div>
+            </section>
+          `).join("") : `<div class="mfa-empty">No quantified group streams yet.</div>`}
+        </div>
+        <div class="condition-panel">
+          <div class="condition-head">
+            <strong>Aggregated Conditions</strong>
+            <span class="muted small">summed when additive, kept separate when values conflict or represent a sequence</span>
+          </div>
+          <div class="condition-body">
+            ${conditions.length ? conditions.map(groupConditionItemHtml).join("") : `<div class="mfa-empty">No saved group conditions yet.</div>`}
+          </div>
+        </div>
+        <div class="condition-panel">
+          <div class="condition-head">
+            <strong>Task Alternatives</strong>
+            <span class="muted small">filtered by grouped phenomena and phases</span>
+          </div>
+          <div class="condition-body">
+            <div class="alt-grid">
+              ${alternatives.length ? alternatives.map(candidate => `
+                <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+                  ${escapeHtml(candidate.name)}
+                </button>
+              `).join("") : `<span class="muted">No alternatives for current group data.</span>`}
+            </div>
+          </div>
+        </div>
+      `;
+      root.querySelectorAll("[data-unit]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.unitGroup).selectedUnit = button.dataset.unit;
+          renderAll();
+        });
+      });
+    }
+
+    function conditionPanelHtml(block) {
+      const prompts = conditionPromptsForBlock(block);
+      const values = conditionValuesForBlock(block, prompts);
+      const promptGroups = conditionPromptGroups(prompts);
+      const valueGroups = conditionValueGroups(values);
+      const contextLabel = block.groupId
+        ? `group context: ${block.groupId}`
+        : "block context";
+      if (!prompts.length) {
+        return `
+          <section class="condition-panel">
+            <div class="condition-head">
+              <strong>Phenomenon Conditions</strong>
+              <span class="muted small">assign phenomena to generate condition prompts</span>
+            </div>
+          </section>
+        `;
+      }
+      if (block.conditionsEditing) {
+        return `
+          <section class="condition-panel">
+            <div class="condition-head">
+              <strong>Phenomenon Conditions</strong>
+              <span class="muted small">${prompts.length} fields, ${contextLabel}</span>
+            </div>
+            <div class="condition-body">
+              ${promptGroups.map(group => conditionPromptFamilyHtml(block, group)).join("")}
+              <div class="condition-actions">
+                <button class="primary" data-save-conditions="true">Save Conditions</button>
+              </div>
+            </div>
+          </section>
+        `;
+      }
+      return `
+        <section class="condition-panel">
+          <div class="condition-head">
+            <strong>Phenomenon Conditions</strong>
+            <button data-edit-conditions="true">${values.length ? "Edit Conditions" : "Add Conditions"}</button>
+          </div>
+          <div class="condition-body">
+            ${values.length
+              ? valueGroups.map(group => conditionValueFamilyHtml(group)).join("")
+              : `<div class="mfa-empty">No saved conditions yet. The available fields are generated from ${escapeHtml(contextLabel)} phenomena.</div>`}
+          </div>
+        </section>
+      `;
+    }
+
+    function conditionPromptsForBlock(block) {
+      ensureBlockConditionFields(block);
+      const phenomena = conditionContextPhenomena(block);
+      return conditionPromptCatalog
+        .filter(prompt => essentialConditionIds().has(prompt.id))
+        .filter(prompt => conditionPromptApplies(prompt, phenomena));
+    }
+
+    function essentialConditionIds() {
+      return new Set([
+        "initial_temperature",
+        "target_temperature",
+        "holding_time",
+        "holding_temperature",
+        "thermal_ramp",
+        "thermal_mode",
+        "thermal_endpoint",
+        "initial_pressure",
+        "target_pressure",
+        "pressure_control",
+        "vapor_handling",
+        "mixing_mode",
+        "mixing_time",
+        "agitation_speed",
+        "mixing_intensity",
+        "addition_mode",
+        "addition_time",
+        "contact_time",
+        "contact_device",
+        "reaction_time",
+        "conversion_yield",
+        "reaction_endpoint",
+        "phase_ratio",
+        "transfer_endpoint",
+        "phase_change_time",
+        "phase_change_fraction",
+        "settling_time",
+        "separation_efficiency",
+        "interface_risk",
+        "solid_loading",
+        "solid_endpoint",
+        "split_fraction",
+        "split_basis"
+      ]);
+    }
+
+    function conditionContextPhenomena(block) {
+      const codes = new Set(block.phenomena || []);
+      if (block.groupId) {
+        const group = groupModel(block.groupId);
+        (group.phenomena || []).forEach(code => codes.add(code));
+      }
+      return codes;
+    }
+
+    function conditionPromptApplies(prompt, phenomena) {
+      if (prompt.phenomena.some(code => phenomena.has(code))) return true;
+      const codes = [...phenomena];
+      const family = conditionFamilyForPrompt(prompt);
+      if (family.id === "mixing") return codes.some(isMixingPhenomenon);
+      if (family.id === "thermal") return codes.some(isThermalPhenomenon);
+      if (family.id === "pressure") return codes.some(isVaporPressurePhenomenon);
+      if (family.id === "reaction") return codes.some(code => code.startsWith("R("));
+      if (family.id === "contact") return codes.some(isContactOrTransferPhenomenon);
+      if (family.id === "ll-separation") return codes.some(isLiquidLiquidPhenomenon);
+      if (family.id === "solid-separation") return codes.some(isSolidLiquidPhenomenon);
+      if (family.id === "phase-separation") return codes.some(code => code.startsWith("PS(") || code.startsWith("PCh(") || code.startsWith("PT("));
+      if (family.id === "split") return phenomena.has("SD");
+      if (family.id === "waste") return codes.some(code => code.startsWith("PS(") || code.startsWith("PC("));
+      return false;
+    }
+
+    function isMixingPhenomenon(code) {
+      return code.startsWith("M(") || code.startsWith("2phM(");
+    }
+
+    function isThermalPhenomenon(code) {
+      return ["ES(H)", "ES(C)", "PCh(L->V)", "PCh(V->L)", "PCh(L->S)", "PCh(S->L)"].includes(code) || code === "PT(VL)";
+    }
+
+    function isVaporPressurePhenomenon(code) {
+      return ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)", "ES(P)", "ES(E)"].includes(code);
+    }
+
+    function isContactOrTransferPhenomenon(code) {
+      return code.startsWith("PC(") || code.startsWith("PT(") || code.startsWith("2phM(");
+    }
+
+    function isLiquidLiquidPhenomenon(code) {
+      return ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)", "PT(MLL)"].includes(code);
+    }
+
+    function isSolidLiquidPhenomenon(code) {
+      return ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code);
+    }
+
+    function conditionFamilyForPrompt(prompt) {
+      if (["mixing_mode", "mixing_time", "agitation_speed", "mixing_intensity", "addition_mode", "addition_time"].includes(prompt.id)) {
+        return { id: "mixing", title: "Mixing / Addition" };
+      }
+      if (["initial_temperature", "target_temperature", "holding_time", "holding_temperature", "thermal_ramp", "thermal_mode", "thermal_endpoint"].includes(prompt.id)) {
+        return { id: "thermal", title: "Thermal / Holding" };
+      }
+      if (["initial_pressure", "target_pressure", "pressure_control", "vapor_handling"].includes(prompt.id)) {
+        return { id: "pressure", title: "Pressure / Vapor Handling" };
+      }
+      if (["reaction_time", "conversion_yield", "reaction_endpoint"].includes(prompt.id)) {
+        return { id: "reaction", title: "Reaction" };
+      }
+      if (["contact_time", "contact_device", "agitation_note", "transfer_endpoint", "phase_change_time", "phase_change_fraction"].includes(prompt.id)) {
+        return { id: "contact", title: "Contact / Transfer" };
+      }
+      if (["phase_ratio", "interface_risk"].includes(prompt.id)) {
+        return { id: "ll-separation", title: "Liquid-Liquid" };
+      }
+      if (["solid_loading", "cake_or_particle_note", "solid_endpoint"].includes(prompt.id)) {
+        return { id: "solid-separation", title: "Solid-Liquid / Solids" };
+      }
+      if (["settling_time", "separation_efficiency", "carryover_limit"].includes(prompt.id)) {
+        return { id: "phase-separation", title: "Separation Performance" };
+      }
+      if (["split_fraction", "split_basis"].includes(prompt.id)) {
+        return { id: "split", title: "Stream Split" };
+      }
+      if (["waste_note"].includes(prompt.id)) {
+        return { id: "waste", title: "Waste / Handling" };
+      }
+      return { id: "other", title: "Other Conditions" };
+    }
+
+    function conditionPromptGroups(prompts) {
+      return groupConditionDisplayItems(prompts, conditionFamilyForPrompt);
+    }
+
+    function conditionValueGroups(values) {
+      return groupConditionDisplayItems(values, conditionFamilyForPrompt);
+    }
+
+    function groupConditionDisplayItems(items, familyFn) {
+      const order = ["mixing", "thermal", "pressure", "reaction", "contact", "ll-separation", "solid-separation", "phase-separation", "split", "waste", "other"];
+      const byFamily = new Map();
+      items.forEach(item => {
+        const family = familyFn(item);
+        if (!byFamily.has(family.id)) byFamily.set(family.id, { ...family, items: [] });
+        byFamily.get(family.id).items.push(item);
+      });
+      return Array.from(byFamily.values()).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    }
+
+    function conditionPromptFamilyHtml(block, group) {
+      return `
+        <div class="condition-family">
+          <div class="condition-family-head">
+            <span>${escapeHtml(group.title)}</span>
+            <span class="pill">${group.items.length}</span>
+          </div>
+          <div class="condition-grid">
+            ${group.items.map(prompt => conditionEditCardHtml(block, prompt)).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function conditionValueFamilyHtml(group) {
+      return `
+        <div class="condition-family">
+          <div class="condition-family-head">
+            <span>${escapeHtml(group.title)}</span>
+            <span class="pill">${group.items.length}</span>
+          </div>
+          <div class="condition-grid">
+            ${group.items.map(item => conditionLabelHtml(item)).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function conditionValuesForBlock(block, prompts = conditionPromptsForBlock(block)) {
+      ensureBlockConditionFields(block);
+      return prompts
+        .map(prompt => ({
+          ...prompt,
+          value: String(block.conditions[prompt.id] || "").trim(),
+          unit: block.conditionUnits[prompt.id] || defaultConditionUnit(prompt)
+        }))
+        .filter(item => item.value);
+    }
+
+    function conditionEditCardHtml(block, prompt) {
+      const value = block.conditions[prompt.id] || "";
+      const unit = block.conditionUnits[prompt.id] || defaultConditionUnit(prompt);
+      return `
+        <label class="condition-edit-card">
+          <div class="label">${escapeHtml(prompt.label)}</div>
+          <div class="condition-input-row">
+            <input data-condition-field="${escapeAttr(prompt.id)}" value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" ${prompt.kind === "number" ? "inputmode=\"decimal\"" : ""}>
+            ${conditionUnitControlHtml(prompt, unit)}
+          </div>
+        </label>
+      `;
+    }
+
+    function conditionUnitControlHtml(prompt, unit) {
+      if (Array.isArray(prompt.units)) {
+        return `<select data-condition-unit="${escapeAttr(prompt.id)}">${prompt.units.map(item => `<option value="${escapeAttr(item)}" ${item === unit ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select>`;
+      }
+      if (prompt.unit) {
+        return `<span class="unit-badge">${escapeHtml(prompt.unit)}</span>`;
+      }
+      return `<span class="unit-badge">note</span>`;
+    }
+
+    function defaultConditionUnit(prompt) {
+      return prompt.defaultUnit || prompt.unit || "";
+    }
+
+    function conditionLabelHtml(item) {
+      return `
+        <article class="condition-label-card" data-condition-label="${escapeAttr(item.id)}" title="Right-click to edit conditions">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(formatConditionValue(item))}</span>
+        </article>
+      `;
+    }
+
+    function updateConditionField(event) {
+      const current = selectedBlock();
+      if (!current) return;
+      ensureBlockConditionFields(current);
+      invalidateAiRefine();
+      current.conditions[event.target.dataset.conditionField] = event.target.value;
+      renderExport();
+    }
+
+    function updateConditionUnit(event) {
+      const current = selectedBlock();
+      if (!current) return;
+      ensureBlockConditionFields(current);
+      invalidateAiRefine();
+      current.conditionUnits[event.target.dataset.conditionUnit] = event.target.value;
+      renderExport();
+    }
+
+    function formatConditionValue(item) {
+      return item.unit ? `${item.value} ${item.unit}` : item.value;
+    }
+
+    function streamSectionHtml(block, role) {
+      const meta = streamRoles[role];
+      const streams = block.streams.filter(stream => stream.role === role);
+      return `
+        <section class="mfa-section">
+          <div class="mfa-section-head">
+            <strong>${escapeHtml(meta.title)}</strong>
+            <button data-add-stream="${role}" title="Add ${escapeAttr(meta.title)} stream">${escapeHtml(meta.addLabel)}</button>
+          </div>
+          <div class="mfa-rows">
+            ${streams.length ? streams.map(stream => streamRowHtml(stream, meta.placeholder)).join("") : `<div class="mfa-empty">${escapeHtml(meta.empty)}</div>`}
+          </div>
+        </section>
+      `;
+    }
+
+    function streamRowHtml(stream, placeholder) {
+      if (!stream.editing) return streamLabelHtml(stream);
+      return `
+        <div class="mfa-row" data-stream-id="${escapeAttr(stream.id)}">
+          <input class="stream-name" data-stream-field="name" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" title="Material or stream name">
+          <input class="stream-qty" data-stream-field="quantity" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.quantity)}" placeholder="amount" inputmode="decimal" title="Quantity for the chosen basis">
+          <select class="stream-unit" data-stream-field="unit" data-stream-id="${escapeAttr(stream.id)}" title="Quantity unit">${optionHtml(streamUnits, stream.unit)}</select>
+          <select class="stream-phase" data-stream-field="phase" data-stream-id="${escapeAttr(stream.id)}" title="Lutze phase category for this stream">${phaseOptionHtml(stream.phase)}</select>
+          <select class="stream-status" data-stream-field="status" data-stream-id="${escapeAttr(stream.id)}" title="Data quality">${optionHtml(streamDataStatuses, stream.status)}</select>
+          <select class="stream-timing" data-stream-field="timing" data-stream-id="${escapeAttr(stream.id)}" title="Timing or role inside the grouped operation">${optionHtml(streamTimingOptions, stream.timing)}</select>
+          <select class="mfa-note" data-stream-field="scalingMode" data-stream-id="${escapeAttr(stream.id)}" title="How this stream scales from lab basis to target scale">${optionHtml(streamScalingModes, stream.scalingMode)}</select>
+          <button class="delete-stream" data-remove-stream="${escapeAttr(stream.id)}" title="Remove stream">x</button>
+          <select class="mfa-note" data-stream-field="fate" data-stream-id="${escapeAttr(stream.id)}" title="Industrial fate, recycle, purge, or loss">${optionHtml(streamFateOptions, stream.fate)}</select>
+          <input class="stream-qty" data-stream-field="recoveryPercent" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="rec. %" inputmode="decimal" title="Recovery percent">
+          <input class="stream-qty" data-stream-field="purgePercent" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.purgePercent)}" placeholder="purge %" inputmode="decimal" title="Purge percent">
+          <input class="mfa-note" data-stream-field="loopId" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.loopId)}" placeholder="loop id, e.g. R1" title="Recycle loop identifier">
+          <input class="mfa-note" data-stream-field="destinationGroup" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.destinationGroup)}" placeholder="destination group, treatment, recovery..." title="Destination group or unit">
+          <input class="mfa-note" data-stream-field="makeupRequired" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.makeupRequired)}" placeholder="make-up amount or basis..." title="Make-up required for recovered/recycled stream">
+          <input class="mfa-note" data-stream-field="accumulationRisk" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.accumulationRisk)}" placeholder="accumulation risk / impurity note..." title="Accumulation risk or impurity concern">
+          <input class="mfa-note" data-stream-field="note" data-stream-id="${escapeAttr(stream.id)}" value="${escapeAttr(stream.note)}" placeholder="note, basis, assumption, source..." title="Assumption, source, or balance note">
+          <div class="mfa-edit-actions">
+            <button class="primary" data-save-stream="${escapeAttr(stream.id)}">Save</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function streamLabelHtml(stream) {
+      const title = stream.name.trim() || "Untitled stream";
+      const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
+      return `
+        <article class="mfa-label-card" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
+          <div class="mfa-label-top">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="pill ${stream.status === "missing" ? "warn" : "blue"}">${escapeHtml(stream.status)}</span>
+          </div>
+          <div class="mfa-label-meta">
+            <span>${escapeHtml(amount)}</span>
+            <span class="pill">${escapeHtml(stream.scalingMode)}</span>
+            <span class="pill">${escapeHtml(stream.timing)}</span>
+            <span class="pill">${escapeHtml(phaseLabel(stream.phase))}</span>
+            <span class="pill ${stream.fate === "unknown" ? "warn" : "green"}">${escapeHtml(stream.fate)}</span>
+          </div>
+          ${stream.recoveryPercent || stream.purgePercent || stream.loopId ? `<div class="mfa-label-meta">${stream.recoveryPercent ? `<span>recovery ${escapeHtml(stream.recoveryPercent)}%</span>` : ""}${stream.purgePercent ? `<span>purge ${escapeHtml(stream.purgePercent)}%</span>` : ""}${stream.loopId ? `<span>loop ${escapeHtml(stream.loopId)}</span>` : ""}</div>` : ""}
+          ${stream.note.trim() ? `<div class="mfa-label-note">${escapeHtml(stream.note)}</div>` : ""}
+        </article>
+      `;
+    }
+
+    function optionHtml(values, selected) {
+      return values.map(value => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+    }
+
+    function updateStreamField(event) {
+      const current = selectedBlock();
+      if (!current) return;
+      ensureBlockFlowFields(current);
+      const stream = current.streams.find(item => item.id === event.target.dataset.streamId);
+      if (!stream) return;
+      invalidateAiRefine();
+      stream[event.target.dataset.streamField] = event.target.value;
+      if (event.target.dataset.streamField === "unit" && ["kg/kg product", "L/kg product"].includes(stream.unit) && stream.scalingMode === "auto") {
+        stream.scalingMode = "per kg product";
+      }
+      if (event.target.dataset.streamField === "fate" && ["recycled input", "recovered solvent"].includes(stream.fate) && stream.scalingMode === "auto") {
+        stream.scalingMode = "recycle loop";
+      }
+      if (event.target.dataset.streamField === "phase") sanitizeBlockPhenomena(current);
+      syncLegacyStreamLists(current);
+      renderExport();
+      renderGroupFlow();
+    }
+
+    function syncLegacyStreamLists(block) {
+      block.inputs = streamNames(block, "input");
+      block.outputs = streamNames(block, "output");
+      block.wastes = streamNames(block, "waste");
+    }
+
+    function renderGroupAlternatives(group) {
+      if (!group) {
+        $("groupAlternatives").innerHTML = `<span class="muted">No group selected.</span>`;
+        return;
+      }
+      const candidates = matchesForGroup(group).slice(0, 6);
+      $("groupAlternatives").innerHTML = candidates.length ? candidates.map(candidate => `
+        <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+          ${escapeHtml(candidate.name)}
+          <span class="pill ${candidate.sameTask ? "blue" : "warn"}">${candidate.sameTask ? "same task" : "related"}</span>
+        </button>
+      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`;
+      document.querySelectorAll("[data-inspector-unit]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
+          renderAll();
+        });
+      });
+    }
+
+    function applyBehavior(behavior) {
+      const block = selectedBlock();
+      if (!block) return;
+      const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
+      block.behavior = behavior;
+      block.phenomena = phenomenaForBehaviorAndText(behavior, block.text);
+      if (block.groupId) ensureGroup(block.groupId).task = preset.task;
+      renderAll();
+    }
+
+    function combineSelected() {
+      const ids = state.selectedIds.filter(id => state.blocks.some(block => block.id === id));
+      if (ids.length < 2) return;
+      const groupId = nextGroupId();
+      ensureGroup(groupId, "unassigned");
+      ids.forEach(id => {
+        const block = state.blocks.find(item => item.id === id);
+        block.groupId = groupId;
+      });
+      const group = groupModel(groupId);
+      state.groups[groupId].task = inferGroupTask(group);
+      state.selectedBlockId = null;
+      state.selectedGroupId = groupId;
+      state.selectedIds = ids;
+      state.focusEndpoint = groupId;
+      renderAll();
+    }
+
+    function inferGroupTask(group) {
+      const counts = {};
+      group.blocks.forEach(block => {
+        const presetTask = behaviorPresets[block.behavior]?.task || "unassigned";
+        counts[presetTask] = (counts[presetTask] || 0) + 1;
+      });
+      return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "unassigned";
+    }
+
+    function splitSelectedToNewGroup() {
+      const block = selectedBlock();
+      if (!block) return;
+      const groupId = nextGroupId();
+      const task = behaviorPresets[block.behavior]?.task || "unassigned";
+      ensureGroup(groupId, task);
+      block.groupId = groupId;
+      state.selectedIds = [block.id];
+      state.selectedGroupId = groupId;
+      state.focusEndpoint = groupId;
+      renderAll();
+    }
+
+    function assignSelectedToGroup(groupId) {
+      if (!groupId) return;
+      ensureGroup(groupId);
+      const ids = state.selectedIds.length ? state.selectedIds : [state.selectedBlockId];
+      ids.filter(Boolean).forEach(id => {
+        const block = state.blocks.find(item => item.id === id);
+        if (block) block.groupId = groupId;
+      });
+      state.selectedBlockId = null;
+      state.selectedGroupId = groupId;
+      state.selectedIds = blocksForGroup(groupId).map(block => block.id);
+      state.focusEndpoint = groupId;
+      renderAll();
+    }
+
+    function renderContextMenuOptions() {
+      const ids = groupIdsInTextOrder();
+      $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join("");
+      $("ctxCombine").disabled = state.selectedIds.length < 2;
+      $("ctxAssignGroup").disabled = ids.length === 0;
+    }
+
+    function linksForGroup(groupId) {
+      return state.links.filter(link => resolvedEndpointId(link.from) === groupId || resolvedEndpointId(link.to) === groupId);
+    }
+
+    function formatLink(link, currentGroupId) {
+      const from = resolvedEndpointId(link.from);
+      const to = resolvedEndpointId(link.to);
+      if (from === currentGroupId && to === currentGroupId) return `self`;
+      if (from === currentGroupId) return `-> ${link.to}`;
+      return `${link.from} ->`;
+    }
+
+    function renderLinkControls() {
+      const endpointCount = state.blocks.length + groupIdsInTextOrder().length;
+      $("connectionStatus").textContent = state.connectingFrom
+        ? `Arrow mode: click the target block or group for ${state.connectingFrom}. Press Esc to cancel.`
+        : endpointCount < 2
+          ? "Create at least two blocks/groups to draw arrows."
+          : "Right-click a block or group to start an arrow.";
+      $("linkSummary").innerHTML = state.links.length
+        ? state.links.map((link, index) => `<span class="link-chip">${escapeHtml(link.from)} -> ${escapeHtml(link.to)} <button class="pill danger" data-remove-link="${index}">x</button></span>`).join("")
+        : `<span class="muted small">No arrows yet.</span>`;
+
+      document.querySelectorAll("[data-remove-link]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.links.splice(Number(button.dataset.removeLink), 1);
+          renderAll();
+        });
+      });
+    }
+
+    function addConnection(from, to) {
+      if (!from || !to) return;
+      if (resolvedEndpointId(from) === resolvedEndpointId(to)) {
+        state.connectingFrom = null;
+        renderAll();
+        return;
+      }
+      if (!state.links.some(link => link.from === from && link.to === to)) {
+        state.links.push({ from, to });
+      }
+      state.connectingFrom = null;
+      renderAll();
+    }
+
+    function resolvedEndpointId(id) {
+      if (!id || !id.startsWith("B")) return id;
+      const block = state.blocks.find(item => item.id === id);
+      return block?.groupId || id;
+    }
+
+    function startDrag(event, id, kind) {
+      const rect = $("groupFlow").getBoundingClientRect();
+      const current = kind === "draft" ? state.draftPos : ensureGroup(id);
+      state.drag = {
+        id,
+        kind,
+        offsetX: (event.clientX - rect.left + $("groupFlow").scrollLeft) / state.zoom - current.x,
+        offsetY: (event.clientY - rect.top + $("groupFlow").scrollTop) / state.zoom - current.y
+      };
+      event.preventDefault();
+    }
+
+    function dragMove(event) {
+      if (!state.drag) return;
+      const rect = $("groupFlow").getBoundingClientRect();
+      const x = Math.max(0, Math.min(3150, (event.clientX - rect.left + $("groupFlow").scrollLeft) / state.zoom - state.drag.offsetX));
+      const y = Math.max(0, Math.min(2000, (event.clientY - rect.top + $("groupFlow").scrollTop) / state.zoom - state.drag.offsetY));
+      if (state.drag.kind === "draft") {
+        state.draftPos = { x, y };
+      } else {
+        const group = ensureGroup(state.drag.id);
+        group.x = x;
+        group.y = y;
+      }
+      renderGroupFlow();
+    }
+
+    function dragEnd() {
+      state.drag = null;
+    }
+
+    function showBlockMenu(x, y, blockId) {
+      state.menuBlockId = blockId;
+      renderContextMenuOptions();
+      hideGroupMenu();
+      hideStreamMenu();
+      const menu = $("blockMenu");
+      menu.hidden = false;
+      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
+      menu.style.top = `${Math.min(y, window.innerHeight - 250)}px`;
+    }
+
+    function hideBlockMenu() {
+      $("blockMenu").hidden = true;
+      state.menuBlockId = null;
+    }
+
+    function showGroupMenu(x, y, groupId) {
+      state.menuGroupId = groupId;
+      hideBlockMenu();
+      hideStreamMenu();
+      const menu = $("groupMenu");
+      menu.hidden = false;
+      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
+      menu.style.top = `${Math.min(y, window.innerHeight - 190)}px`;
+    }
+
+    function hideGroupMenu() {
+      $("groupMenu").hidden = true;
+      state.menuGroupId = null;
+    }
+
+    function showStreamMenu(x, y, streamId) {
+      state.menuStreamId = streamId;
+      hideBlockMenu();
+      hideGroupMenu();
+      const menu = $("streamMenu");
+      menu.hidden = false;
+      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
+      menu.style.top = `${Math.min(y, window.innerHeight - 150)}px`;
+    }
+
+    function hideStreamMenu() {
+      $("streamMenu").hidden = true;
+      state.menuStreamId = null;
+    }
+
+    function closeFloatingActions() {
+      state.connectingFrom = null;
+      hideBlockMenu();
+      hideGroupMenu();
+      hideStreamMenu();
+    }
+
+    function editStream(streamId) {
+      const block = selectedBlock();
+      if (!block) return;
+      const stream = block.streams.find(item => item.id === streamId);
+      if (!stream) return;
+      stream.editing = true;
+      hideStreamMenu();
+      renderStepFlowInspector();
+    }
+
+    function deleteStream(streamId) {
+      const block = selectedBlock();
+      if (!block) return;
+      block.streams = block.streams.filter(stream => stream.id !== streamId);
+      syncLegacyStreamLists(block);
+      hideStreamMenu();
+      renderAll();
+    }
+
+    function removeLinksForGroup(groupId) {
+      state.links = state.links.filter(link => link.from !== groupId && link.to !== groupId);
+      renderAll();
+    }
+
+    function removeLinksForEndpoint(endpointId) {
+      state.links = state.links.filter(link => link.from !== endpointId && link.to !== endpointId);
+      renderAll();
+    }
+
+    function boardOrigin() {
+      $("groupFlow").scrollTo({ left: 0, top: 0, behavior: "smooth" });
+    }
+
+    function revealFocusedEndpoint() {
+      const endpoint = state.focusEndpoint;
+      if (!endpoint) return;
+      state.focusEndpoint = null;
+      const rect = endpointRect(endpoint);
+      const flow = $("groupFlow");
+      if (!rect || !flow) return;
+      const padding = 84;
+      const left = rect.x * state.zoom;
+      const top = rect.y * state.zoom;
+      const right = (rect.x + rect.w) * state.zoom;
+      const bottom = (rect.y + rect.h) * state.zoom;
+      const viewLeft = flow.scrollLeft;
+      const viewTop = flow.scrollTop;
+      const viewRight = viewLeft + flow.clientWidth;
+      const viewBottom = viewTop + flow.clientHeight;
+      const visible = left >= viewLeft + padding
+        && top >= viewTop + padding
+        && right <= viewRight - padding
+        && bottom <= viewBottom - padding;
+      if (visible) return;
+      flow.scrollTo({
+        left: Math.max(0, left - flow.clientWidth * 0.32),
+        top: Math.max(0, top - flow.clientHeight * 0.32),
+        behavior: "smooth"
+      });
+    }
+
+    function centerSelection() {
+      const block = selectedBlock();
+      const endpoint = block?.groupId || block?.id || groupIdsInTextOrder()[0];
+      const center = endpointCenter(endpoint) || { x: 0, y: 0 };
+      $("groupFlow").scrollTo({
+        left: Math.max(0, center.x * state.zoom - $("groupFlow").clientWidth / 2),
+        top: Math.max(0, center.y * state.zoom - $("groupFlow").clientHeight / 2),
+        behavior: "smooth"
+      });
+    }
+
+    function setZoom(nextZoom, anchor = "center") {
+      const flow = $("groupFlow");
+      const oldZoom = state.zoom;
+      const clamped = Math.max(0.25, Math.min(2.6, nextZoom));
+      if (Math.abs(oldZoom - clamped) < 0.001) return;
+      const anchorPoint = zoomAnchorPoint(flow, anchor, oldZoom);
+      state.zoom = clamped;
+      applyZoomToBoard();
+      if (anchorPoint) {
+        flow.scrollTo({
+          left: Math.max(0, anchorPoint.boardX * state.zoom - anchorPoint.viewX),
+          top: Math.max(0, anchorPoint.boardY * state.zoom - anchorPoint.viewY)
+        });
+      }
+    }
+
+    function applyZoomToBoard() {
+      $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
+      const flow = $("groupFlow");
+      const space = flow.querySelector(".board-space");
+      const canvas = flow.querySelector(".board-canvas");
+      if (!space || !canvas) return;
+      const board = boardBounds();
+      space.style.width = `${board.width * state.zoom}px`;
+      space.style.height = `${board.height * state.zoom}px`;
+      canvas.style.width = `${board.width}px`;
+      canvas.style.height = `${board.height}px`;
+      canvas.style.transform = `scale(${state.zoom})`;
+      const svg = canvas.querySelector(".link-layer");
+      if (svg) {
+        svg.style.width = `${board.width}px`;
+        svg.style.height = `${board.height}px`;
+        svg.setAttribute("viewBox", `0 0 ${board.width} ${board.height}`);
+      }
+    }
+
+    function zoomAnchorPoint(flow, anchor, oldZoom) {
+      if (anchor === "none") return null;
+      if (anchor && typeof anchor === "object") {
+        const rect = flow.getBoundingClientRect();
+        const viewX = clamp(anchor.clientX - rect.left, 0, flow.clientWidth);
+        const viewY = clamp(anchor.clientY - rect.top, 0, flow.clientHeight);
+        return {
+          viewX,
+          viewY,
+          boardX: (flow.scrollLeft + viewX) / oldZoom,
+          boardY: (flow.scrollTop + viewY) / oldZoom
+        };
+      }
+      const viewX = flow.clientWidth / 2;
+      const viewY = flow.clientHeight / 2;
+      return {
+        viewX,
+        viewY,
+        boardX: (flow.scrollLeft + viewX) / oldZoom,
+        boardY: (flow.scrollTop + viewY) / oldZoom
+      };
+    }
+
+    function handleGraphWheel(event) {
+      const flow = $("groupFlow");
+      if (!flow.contains(event.target)) return;
+      if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
+      event.preventDefault();
+      const delta = Math.max(-140, Math.min(140, event.deltaY));
+      const factor = Math.exp(-delta * 0.012);
+      setZoom(state.zoom * factor, { clientX: event.clientX, clientY: event.clientY });
+    }
+
+    function showHoverTip(event) {
+      const target = event.target.closest?.(".tip[data-tip]");
+      if (!target) return;
+      const tip = $("hoverTip");
+      tip.textContent = target.dataset.tip;
+      tip.hidden = false;
+      moveHoverTip(event);
+    }
+
+    function moveHoverTip(event) {
+      const tip = $("hoverTip");
+      if (tip.hidden) return;
+      const margin = 14;
+      const width = Math.min(390, window.innerWidth * 0.78);
+      const left = Math.min(window.innerWidth - width - margin, event.clientX + 14);
+      const top = Math.min(window.innerHeight - tip.offsetHeight - margin, event.clientY + 16);
+      tip.style.left = `${Math.max(margin, left)}px`;
+      tip.style.top = `${Math.max(margin, top)}px`;
+    }
+
+    function hideHoverTip(event) {
+      if (event.relatedTarget?.closest?.(".tip[data-tip]")) return;
+      $("hoverTip").hidden = true;
+    }
+
+    function fitBoard() {
+      const flow = $("groupFlow");
+      const ids = groupIdsInTextOrder();
+      const draftBlocks = blocksInOrder().filter(block => !block.groupId);
+      const boxes = [];
+      if (draftBlocks.length) boxes.push({ x: state.draftPos.x, y: state.draftPos.y, w: nodeWidth(draftBlocks.length), h: 300 });
+      ids.forEach(id => {
+        const group = ensureGroup(id);
+        boxes.push({ x: group.x, y: group.y, w: nodeWidth(blocksForGroup(id).length), h: 340 });
+      });
+      if (!boxes.length) return;
+      const minX = Math.min(...boxes.map(b => b.x));
+      const minY = Math.min(...boxes.map(b => b.y));
+      const maxX = Math.max(...boxes.map(b => b.x + b.w));
+      const maxY = Math.max(...boxes.map(b => b.y + b.h));
+      const zoomX = flow.clientWidth / Math.max(700, maxX - minX + 260);
+      const zoomY = flow.clientHeight / Math.max(480, maxY - minY + 240);
+      setZoom(Math.min(1.1, Math.max(0.35, Math.min(zoomX, zoomY))), "none");
+      flow.scrollTo({
+        left: Math.max(0, minX * state.zoom - 80),
+        top: Math.max(0, minY * state.zoom - 80),
+        behavior: "smooth"
+      });
+    }
+
+    function toggleInspector() {
+      $("appMain").classList.toggle("inspector-collapsed");
+      $("toggleInspector").textContent = $("appMain").classList.contains("inspector-collapsed") ? "◑" : "◐";
+    }
+
+    function setInspectorTab(tab) {
+      state.activeInspectorTab = ["inspect", "heuristics", "scale"].includes(tab) ? tab : "inspect";
+      renderInspectorTabs();
+    }
+
+    function openScalePanel() {
+      if ($("appMain").classList.contains("inspector-collapsed")) {
+        $("appMain").classList.remove("inspector-collapsed");
+        $("toggleInspector").textContent = "◐";
+      }
+      setInspectorTab("scale");
+    }
+
+    function renderInspectorTabs() {
+      const active = ["inspect", "heuristics", "scale"].includes(state.activeInspectorTab) ? state.activeInspectorTab : "inspect";
+      $("appMain").classList.toggle("scale-focused", active === "scale");
+      $("appMain").classList.toggle("heuristic-focused", active === "heuristics");
+      document.querySelectorAll("[data-inspector-tab]").forEach(button => {
+        const selected = button.dataset.inspectorTab === active;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+      });
+      $("inspectPanelTab").hidden = active !== "inspect";
+      $("heuristicsPanelTab").hidden = active !== "heuristics";
+      $("scalePanelTab").hidden = active !== "scale";
+    }
+
+    function renderExport() {
+      const blocks = blocksInOrder().map(block => {
+        ensureBlockFlowFields(block);
+        return exportBlock(block);
+      });
+      const scale = scaleModel();
+      const groups = groupIdsInTextOrder().map(groupId => {
+        const group = groupModel(groupId);
+        return {
+          groupId: group.id,
+          task: group.task,
+          blocks: group.blocks.map(block => block.id),
+          phenomena: group.phenomena,
+          selectedUnit: group.selectedUnit,
+          schedule: group.schedule,
+          properties: exportGroupProperties(group),
+          conditionAggregation: aggregateGroupConditions(group),
+          mfaAggregation: aggregateGroupStreams(group).map(roleGroup => ({
+            role: roleGroup.role,
+            items: roleGroup.items.map(item => ({
+              name: item.name,
+              total: item.totalText,
+              totalValue: item.totalValue,
+              totalUnit: item.totalUnit,
+              aggregationStatus: item.aggregationStatus,
+              lines: item.lines,
+              entries: item.entries
+            }))
+          }))
+        };
+      });
+      const materialFlow = blocks.map(block => ({
+        blockId: block.id,
+        streams: block.streams,
+        inputs: block.inputs,
+        outputs: block.outputs,
+        wastes: block.wastes
+      }));
+      const recycle = recycleSummary(scale);
+      const energyBridge = energyBridgeModel(scale);
+      const scaleAssessment = scaleUpAssessmentModel(scale);
+      const heuristicReview = heuristicReviewModel(scale);
+      const ganttSchedule = taskScheduleModel();
+      $("jsonOut").textContent = JSON.stringify({
+        workflow: "source text -> annotated blocks -> material inputs/outputs/waste -> behavior presets -> phenomenon groups -> task/unit alternatives -> heuristic rules/refinement -> scale-up basis -> scaled MFA -> Gantt bottleneck check",
+        text: state.text,
+        scaleUp: {
+          basis: scale.basis,
+          reference: scale.reference,
+          target: scale.target,
+          schedule: scale.schedule,
+          factors: scale.factors,
+          scaledMfa: scale.blocks,
+          scaledRows: scale.rows,
+          ready: scale.ready,
+          assessment: scaleAssessment,
+          heuristicReview,
+          ganttSchedule
+        },
+        recycleSummary: recycle,
+        energyBridge,
+        ruleChecks: state.ruleChecks,
+        aiRefine: state.aiRefine,
+        blocks,
+        materialFlow,
+        groups,
+        links: state.links
+      }, null, 2);
+    }
+
+    function exportBlock(block) {
+      return {
+        id: block.id,
+        groupId: block.groupId,
+        start: block.start,
+        end: block.end,
+        text: block.text,
+        behavior: block.behavior,
+        phenomena: block.phenomena,
+        streams: block.streams.map(stream => exportStream(stream)),
+        conditions: conditionValuesForBlock(block).map(item => exportCondition(item)),
+        inputs: block.inputs,
+        outputs: block.outputs,
+        wastes: block.wastes,
+        phase: block.phase,
+        endpoint: block.endpoint,
+        status: block.status
+      };
+    }
+
+    function exportStream(stream) {
+      return {
+        id: stream.id,
+        role: stream.role,
+        name: stream.name,
+        quantity: stream.quantity,
+        unit: stream.unit,
+        phase: stream.phase,
+        phaseLabel: phaseLabel(stream.phase),
+        timing: stream.timing,
+        status: stream.status,
+        fate: stream.fate,
+        recoveryPercent: stream.recoveryPercent,
+        purgePercent: stream.purgePercent,
+        loopId: stream.loopId,
+        destinationGroup: stream.destinationGroup,
+        makeupRequired: stream.makeupRequired,
+        accumulationRisk: stream.accumulationRisk,
+        note: stream.note
+      };
+    }
+
+    function exportCondition(item) {
+      return {
+        id: item.id,
+        label: item.label,
+        value: item.value,
+        unit: item.unit,
+        display: formatConditionValue(item),
+        kind: item.kind || "text",
+        phenomena: item.phenomena
+      };
+    }
+
+    function exportGroupProperties(group) {
+      return propertyPromptsForGroup(group).map(prompt => {
+        const saved = normalizePropertyValue(ensureGroup(group.id).properties[prompt.id], prompt);
+        return {
+          id: prompt.id,
+          label: prompt.label,
+          value: saved.value,
+          unit: saved.unit,
+          status: saved.status,
+          note: saved.note,
+          reason: prompt.reason,
+          phenomena: prompt.phenomena
+        };
+      }).filter(item => item.value || item.note || item.status !== "missing");
+    }
+
+    function renderAll() {
+      state.blocks.forEach(block => {
+        ensureBlockFlowFields(block);
+        ensureBlockConditionFields(block);
+        sanitizeBlockPhenomena(block);
+      });
+      renderAnnotatedText();
+      renderLinkControls();
+      renderGroupFlow();
+      renderStepFlowInspector();
+      renderInspector();
+      renderContextMenuOptions();
+      renderInspectorTabs();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[c]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
+    }
+
+    $("behaviorSelect").innerHTML = Object.keys(behaviorPresets).map(name => `<option value="${name}">${name}</option>`).join("");
+
+    $("loadSample").addEventListener("click", () => {
+      loadBaseExampleProject();
+    });
+    $("loadText").addEventListener("click", loadTextView);
+    $("loadTextSide").addEventListener("click", loadTextView);
+    $("createBlock").addEventListener("click", createBlockFromSelection);
+    $("createBlockSide").addEventListener("click", createBlockFromSelection);
+    $("openScaleTop").addEventListener("click", openScalePanel);
+    $("clearProject").addEventListener("click", () => {
+      state.blocks = [];
+      state.groups = {};
+      state.links = [];
+      state.draftPos = { x: 24, y: 24 };
+      state.connectingFrom = null;
+      state.focusEndpoint = null;
+      state.zoom = 0.78;
+      state.selectedIds = [];
+      state.selectedBlockId = null;
+      state.selectedGroupId = null;
+      state.ruleChecks = [];
+      state.aiRefine = null;
+      renderAll();
+    });
+    $("exportJson").addEventListener("click", renderExport);
+    $("refineProject").addEventListener("click", runRuleChecks);
+    $("refineProjectAi").addEventListener("click", runAiRefine);
+    $("boardOrigin").addEventListener("click", boardOrigin);
+    $("boardCenter").addEventListener("click", centerSelection);
+    $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.35));
+    $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
+    $("zoomReset").addEventListener("click", () => setZoom(0.78));
+    $("zoomFit").addEventListener("click", fitBoard);
+    $("toggleInspector").addEventListener("click", toggleInspector);
+    $("groupFlow").addEventListener("wheel", handleGraphWheel, { passive: false });
+    document.querySelectorAll("[data-inspector-tab]").forEach(button => {
+      button.addEventListener("click", () => setInspectorTab(button.dataset.inspectorTab));
+    });
+
+    $("annotatedText").addEventListener("mouseup", rememberSelection);
+    $("annotatedText").addEventListener("keyup", rememberSelection);
+    $("sourceInput").addEventListener("mouseup", rememberSelection);
+    $("sourceInput").addEventListener("keyup", rememberSelection);
+
+    $("behaviorSelect").addEventListener("change", event => applyBehavior(event.target.value));
+    $("blockText").addEventListener("input", event => {
+      const block = selectedBlock();
+      if (!block) return;
+      block.text = event.target.value;
+      renderAll();
+    });
+    $("groupTask").addEventListener("input", event => {
+      const group = selectedGroup();
+      if (!group) return;
+      ensureGroup(group.id).task = event.target.value;
+      renderAll();
+    });
+
+    $("ctxCombine").addEventListener("click", () => {
+      combineSelected();
+      hideBlockMenu();
+    });
+    $("ctxNewGroup").addEventListener("click", () => {
+      splitSelectedToNewGroup();
+      hideBlockMenu();
+    });
+    $("ctxAssignGroup").addEventListener("click", () => {
+      assignSelectedToGroup($("ctxGroupSelect").value);
+      hideBlockMenu();
+    });
+    $("ctxStartBlockConnection").addEventListener("click", () => {
+      state.connectingFrom = state.menuBlockId;
+      hideBlockMenu();
+      renderAll();
+    });
+    $("ctxRemoveBlockLinks").addEventListener("click", () => {
+      removeLinksForEndpoint(state.menuBlockId);
+      hideBlockMenu();
+    });
+    $("ctxStartConnection").addEventListener("click", () => {
+      state.connectingFrom = state.menuGroupId;
+      hideGroupMenu();
+      renderAll();
+    });
+    $("ctxRemoveLinks").addEventListener("click", () => {
+      removeLinksForGroup(state.menuGroupId);
+      hideGroupMenu();
+    });
+    $("ctxEditStream").addEventListener("click", () => {
+      editStream(state.menuStreamId);
+    });
+    $("ctxDeleteStream").addEventListener("click", () => {
+      deleteStream(state.menuStreamId);
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeFloatingActions();
+      renderAll();
+    });
+    document.addEventListener("mouseover", showHoverTip);
+    document.addEventListener("mousemove", moveHoverTip);
+    document.addEventListener("mouseout", hideHoverTip);
+    document.addEventListener("mousemove", dragMove);
+    document.addEventListener("mouseup", dragEnd);
+
+    loadBaseExampleProject();
+  </script>
+</body>
+</html>
+"""
+
+
+class AppHandler(BaseHTTPRequestHandler):
+    def do_HEAD(self):
+        if self.path not in ("/", "/index.html"):
+            self.send_error(404)
+            return
+        body = APP_HTML.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path not in ("/", "/index.html"):
+            self.send_error(404)
+            return
+        body = APP_HTML.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        print("%s - %s" % (self.address_string(), format % args))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run the upscaling block annotator.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8787)
+    args = parser.parse_args()
+
+    server = ThreadingHTTPServer((args.host, args.port), AppHandler)
+    print(f"Upscaling Block Annotator running at http://{args.host}:{args.port}")
+    print("Press Ctrl+C to stop.")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
