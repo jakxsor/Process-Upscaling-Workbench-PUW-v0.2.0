@@ -229,10 +229,10 @@
       { id: "vapor_handling", label: "Vapor handling", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "condenser, Dean-Stark, vent, carbon polish..." },
       { id: "mixing_mode", label: "Mixing mode", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "stirred tank, high shear, inline mixer..." },
       { id: "mixing_time", label: "Mixing time", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "0.5", unit: "h", kind: "number" },
-      { id: "agitation_speed", label: "Agitation speed", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "300", unit: "rpm", kind: "number" },
+      { id: "agitation_speed", label: "Agitation speed", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "300", unit: "rpm", kind: "number", hint: "Literature ranges: lab stirred vessels ~200-1000 rpm; pilot/industrial tanks ~30-150 rpm (large impellers keep similar tip speed at much lower rpm); high-shear/rotor-stator ~1000-3000 rpm; anchor/helical ribbon on viscous fluids ~5-50 rpm." },
       { id: "mixing_intensity", label: "Mixing intensity / regime", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "gentle, vigorous, suspension, dispersion..." },
       { id: "addition_mode", label: "Addition mode", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "batch charge, semi-batch dosing, controlled feed..." },
-      { id: "addition_time", label: "Addition / dosing time", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "1", unit: "h", kind: "number" },
+      { id: "addition_time", label: "Addition / dosing time", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "1", unit: "h", kind: "number", hint: "How long you spend adding/dosing this stream into the vessel (e.g. dropwise over 1 h) - distinct from mixing time (how long you keep stirring after) and reaction time (how long the reaction runs)." },
       { id: "contact_time", label: "Phase contact time", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "0.25", unit: "h", kind: "number" },
       { id: "contact_device", label: "Contact device / geometry", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "impeller, packed bed, static mixer, spray..." },
       { id: "agitation_note", label: "Agitation / mass-transfer note", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)", "PC(LL)", "PC(LS)", "PC(VL)", "PC(VS)"], placeholder: "avoid emulsion, suspend solids, improve contact..." },
@@ -301,6 +301,7 @@
       heuristicDecisions: {},
       valueCoiLinks: [],
       showDataReadiness: false,
+      measuredNodeHeights: {},
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -1442,6 +1443,7 @@
         });
       });
 
+      measureNodeHeightsAndRedrawLinks(root, board);
       revealFocusedEndpoint();
     }
 
@@ -1541,7 +1543,7 @@
         x: group.x || 0,
         y: group.y || 0,
         w: nodeWidth(group.blocks.length),
-        h: 255
+        h: state.measuredNodeHeights[groupId] || 255
       };
     }
 
@@ -1553,8 +1555,33 @@
         x: (base.x || 0) + 15 + index * 194,
         y: (base.y || 0) + (block.groupId ? 58 : 102),
         w: 172,
-        h: 142
+        h: (!block.groupId && state.measuredNodeHeights[block.id]) || 142
       };
+    }
+
+    function measureNodeHeightsAndRedrawLinks(root, board) {
+      const canvas = root.querySelector(".board-canvas");
+      if (!canvas) return;
+      let changed = false;
+      root.querySelectorAll("[data-group-box]").forEach(box => {
+        const measured = box.getBoundingClientRect().height / Math.max(0.05, state.zoom);
+        const id = box.dataset.groupBox;
+        if (Math.abs((state.measuredNodeHeights[id] || 0) - measured) > 1) {
+          state.measuredNodeHeights[id] = measured;
+          changed = true;
+        }
+      });
+      root.querySelectorAll('[data-draft-box] [data-block-card]').forEach(card => {
+        const measured = card.getBoundingClientRect().height / Math.max(0.05, state.zoom);
+        const id = card.dataset.blockCard;
+        if (Math.abs((state.measuredNodeHeights[id] || 0) - measured) > 1) {
+          state.measuredNodeHeights[id] = measured;
+          changed = true;
+        }
+      });
+      if (!changed) return;
+      const svg = canvas.querySelector(".link-layer");
+      if (svg) svg.outerHTML = renderLinksSvg(board);
     }
 
     function connectionRoute(fromId, toId) {
@@ -5051,9 +5078,10 @@
         <label class="condition-edit-card">
           <div class="label">${escapeHtml(prompt.label)}</div>
           <div class="condition-input-row">
-            <input data-condition-field="${escapeAttr(prompt.id)}" value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" ${prompt.kind === "number" ? "inputmode=\"decimal\"" : ""}>
+            <input data-condition-field="${escapeAttr(prompt.id)}" value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" ${prompt.kind === "number" ? "inputmode=\"decimal\"" : ""} ${prompt.hint ? `title="${escapeAttr(prompt.hint)}"` : ""}>
             ${conditionUnitControlHtml(prompt, unit)}
           </div>
+          ${prompt.hint ? `<div class="muted small condition-hint">${escapeHtml(prompt.hint)}</div>` : ""}
         </label>
       `;
     }

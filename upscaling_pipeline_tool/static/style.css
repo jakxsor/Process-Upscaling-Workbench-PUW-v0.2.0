@@ -985,6 +985,10 @@
       margin: 0;
     }
 
+    .condition-hint {
+      line-height: 1.35;
+    }
+
     .condition-input-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(54px, auto);
