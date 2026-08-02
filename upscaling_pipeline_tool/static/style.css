@@ -2030,3 +2030,45 @@
       font-size: 10px;
       font-weight: 700;
     }
+
+    .danger-button {
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: #efc6c6;
+    }
+
+    .closure-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      margin-top: 7px;
+    }
+
+    .closure-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 7px;
+      border-radius: 6px;
+      background: var(--orange-soft);
+      color: var(--orange);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .closure-chip.ok {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .selection-basis-row {
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+    }
+
+    .selection-basis-row input {
+      min-height: 26px;
+      font-size: 11px;
+    }

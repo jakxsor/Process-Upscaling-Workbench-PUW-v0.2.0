@@ -72,6 +72,7 @@ APP_HTML = r"""<!doctype html>
               <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
             </div>
             <div class="row">
+              <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
               <button id="boardOrigin">Origin</button>
               <button id="boardCenter">Center Selection</button>
               <button id="zoomOut">-</button>
@@ -83,6 +84,7 @@ APP_HTML = r"""<!doctype html>
           </div>
           <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
           <div id="linkSummary" style="margin-top:7px"></div>
+          <div id="networkClosure" class="closure-strip"></div>
         </div>
         <div id="groupFlow" class="group-flow"></div>
         <div id="stepFlowInspector" class="step-flow-inspector empty">Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
@@ -261,6 +263,10 @@ APP_HTML = r"""<!doctype html>
     <div class="label" style="margin-top:8px">Assign To Group</div>
     <select id="ctxGroupSelect"></select>
     <button id="ctxAssignGroup">Assign To Selected Group</button>
+    <div class="label" style="margin-top:8px">Edit Blocks</div>
+    <button id="ctxMergeBlocks">Merge Selected Blocks</button>
+    <button id="ctxRemoveFromGroup">Remove From Group</button>
+    <button id="ctxDeleteBlock" class="danger-button">Delete Block</button>
   </div>
 
   <div id="groupMenu" class="context-menu" hidden>

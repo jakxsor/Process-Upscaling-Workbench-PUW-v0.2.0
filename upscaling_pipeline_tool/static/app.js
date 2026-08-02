@@ -417,6 +417,7 @@
         state.groups[groupId].schedule = { ...scheduleDefaults(), ...state.groups[groupId].schedule };
       }
       state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
+      if (typeof state.groups[groupId].selectionBasis !== "string") state.groups[groupId].selectionBasis = "";
       return state.groups[groupId];
     }
 
@@ -815,9 +816,9 @@
         G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "21", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "5 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); kinetic bottleneck, cannot be relieved by parallelization" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
         G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
         G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
-        G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection" }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
-        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); recovered cyclohexane to solvent-recovery column (paper U8), loop CYHX to G1" }, properties: { boiling_point: { value: "81", unit: "C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
-        G7: { id: "G7", task: "final purification", selectedUnit: "Distillation", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at 1.5 mbar chosen by heat-sensitivity heuristic (paper U6); secondary bottleneck, can be parallelized; vents to abatement (paper U7)" }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3980, y: 90 }
+        G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "fixed-bed molecular-sieve column: not derivable from protocol phenomena, chosen by drying/adsorption heuristic", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection" }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
+        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", selectionBasis: "thin-film evaporator over flash: heat-sensitivity heuristic H33 for the ester product", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); recovered cyclohexane to solvent-recovery column (paper U8), loop CYHX to G1" }, properties: { boiling_point: { value: "81", unit: "C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
+        G7: { id: "G7", task: "final purification", selectedUnit: "Distillation", selectionBasis: "short-path molecular distillation at 1.5 mbar: heat-sensitivity heuristic, minimize thermal exposure", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at 1.5 mbar chosen by heat-sensitivity heuristic (paper U6); secondary bottleneck, can be parallelized; vents to abatement (paper U7)" }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3980, y: 90 }
       };
       state.links = [
         { from: "G1", to: "G2" },
@@ -4839,6 +4840,13 @@
                 </button>
               `).join("") : `<span class="muted">No alternatives for current group data.</span>`}
             </div>
+            ${group.selectedUnit && alternatives.length > 1 ? `
+              <div class="selection-basis-row">
+                <div class="label">Selection basis — why ${escapeHtml(group.selectedUnit)}?</div>
+                <input data-selection-basis="${escapeAttr(group.id)}" value="${escapeAttr(group.selectionBasis || "")}"
+                  placeholder="deciding rule, e.g. thin-film for heat sensitivity (H33)">
+              </div>
+            ` : ""}
           </div>
         </div>
       `;
@@ -4846,6 +4854,12 @@
         button.addEventListener("click", () => {
           ensureGroup(button.dataset.unitGroup).selectedUnit = button.dataset.unit;
           renderAll();
+        });
+      });
+      root.querySelectorAll("[data-selection-basis]").forEach(input => {
+        input.addEventListener("change", () => {
+          ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
+          renderExport();
         });
       });
     }
@@ -5313,16 +5327,29 @@
         return;
       }
       const candidates = matchesForGroup(group).slice(0, 6);
-      $("groupAlternatives").innerHTML = candidates.length ? candidates.map(candidate => `
+      const basisHtml = group.selectedUnit && candidates.length > 1 ? `
+        <div class="selection-basis-row">
+          <div class="label">Selection basis — why ${escapeHtml(group.selectedUnit)}?</div>
+          <input data-selection-basis="${escapeAttr(group.id)}" value="${escapeAttr(ensureGroup(group.id).selectionBasis || "")}"
+            placeholder="deciding rule, e.g. thin-film for heat sensitivity (H33)">
+        </div>
+      ` : "";
+      $("groupAlternatives").innerHTML = (candidates.length ? candidates.map(candidate => `
         <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
           ${escapeHtml(candidate.name)}
           <span class="pill ${candidate.sameTask ? "blue" : "warn"}">${candidate.sameTask ? "same task" : "related"}</span>
         </button>
-      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`;
+      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`) + basisHtml;
       document.querySelectorAll("[data-inspector-unit]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
           renderAll();
+        });
+      });
+      document.querySelectorAll("[data-selection-basis]").forEach(input => {
+        input.addEventListener("change", () => {
+          ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
+          renderExport();
         });
       });
     }
@@ -5334,6 +5361,184 @@
       block.behavior = behavior;
       block.phenomena = phenomenaForBehaviorAndText(behavior, block.text);
       if (block.groupId) ensureGroup(block.groupId).task = preset.task;
+      renderAll();
+    }
+
+    function hasLinkBetween(fromId, toId) {
+      return state.links.some(link => resolvedEndpointId(link.from) === fromId && resolvedEndpointId(link.to) === toId);
+    }
+
+    function autoConnectGroups() {
+      const order = groupIdsInTextOrder();
+      let added = 0;
+      for (let i = 0; i < order.length - 1; i += 1) {
+        if (!hasLinkBetween(order[i], order[i + 1])) {
+          state.links.push({ from: order[i], to: order[i + 1] });
+          added += 1;
+        }
+      }
+      blocksInOrder().forEach(block => {
+        (block.streams || []).forEach(stream => {
+          const dest = String(stream.destinationGroup || "").trim().toUpperCase();
+          if (!/^G\d+$/.test(dest) || !state.groups[dest]) return;
+          const from = resolvedEndpointId(block.groupId || block.id);
+          if (!from || from === dest || !from.startsWith("G")) return;
+          if (!hasLinkBetween(from, dest)) {
+            state.links.push({ from, to: dest });
+            added += 1;
+          }
+        });
+      });
+      renderAll();
+      $("connectionStatus").textContent = added
+        ? `Auto-connect: ${added} arrow${added === 1 ? "" : "s"} added (text order + declared recycle destinations).`
+        : "Auto-connect: nothing to add — network already connected.";
+    }
+
+    function networkClosureModel() {
+      const issues = [];
+      const groupIds = groupIdsInTextOrder();
+      const lastGroupId = groupIds[groupIds.length - 1];
+      const outgoing = new Set();
+      state.links.forEach(link => outgoing.add(resolvedEndpointId(link.from)));
+      let hasProduct = false;
+      blocksInOrder().forEach(block => {
+        const owner = block.groupId;
+        (block.streams || []).forEach(stream => {
+          if (stream.role === "input") return;
+          const name = stream.name.trim() || "unnamed stream";
+          if (stream.fate === "product") hasProduct = true;
+          if (stream.fate === "unknown") {
+            issues.push({ groupId: owner || block.id, text: `${name}: fate not assigned` });
+            return;
+          }
+          if (stream.fate === "intermediate" && owner && owner !== lastGroupId && !outgoing.has(owner)) {
+            issues.push({ groupId: owner, text: `${name}: intermediate with no outgoing arrow` });
+          }
+          if (["recovered solvent", "recycled input"].includes(stream.fate)) {
+            const dest = String(stream.destinationGroup || "").trim().toUpperCase();
+            if (!dest) {
+              issues.push({ groupId: owner || block.id, text: `${name}: recycle without destination group` });
+            } else if (/^G\d+$/.test(dest) && !state.groups[dest]) {
+              issues.push({ groupId: owner || block.id, text: `${name}: declared destination ${dest} no longer exists` });
+            } else if (/^G\d+$/.test(dest) && state.groups[dest] && owner && !hasLinkBetween(owner, dest)) {
+              issues.push({ groupId: owner, text: `${name}: recycle to ${dest} declared but arrow missing (use Auto-Connect)` });
+            }
+          }
+        });
+      });
+      if (groupIds.length && !hasProduct) {
+        issues.push({ groupId: lastGroupId, text: "no stream anywhere has fate 'product' — the network has no final product outlet" });
+      }
+      const seen = new Set();
+      return issues.filter(issue => {
+        const key = `${issue.groupId}|${issue.text}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function renderNetworkClosure() {
+      const root = $("networkClosure");
+      if (!root) return;
+      if (!state.blocks.length) {
+        root.innerHTML = "";
+        return;
+      }
+      const issues = networkClosureModel();
+      if (!issues.length) {
+        root.innerHTML = `<span class="closure-chip ok">✓ Network closed: every outlet has a destination</span>`;
+        return;
+      }
+      const shown = issues.slice(0, 4);
+      root.innerHTML = `
+        <span class="label" style="margin:0">Network closure</span>
+        ${shown.map(issue => `<span class="closure-chip">${escapeHtml(issue.groupId)}: ${escapeHtml(issue.text)}</span>`).join("")}
+        ${issues.length > shown.length ? `<span class="muted small">+${issues.length - shown.length} more</span>` : ""}
+      `;
+    }
+
+    function cleanupGroupIfEmpty(groupId) {
+      if (!groupId) return;
+      if (blocksForGroup(groupId).length) return;
+      delete state.groups[groupId];
+      state.links = state.links.filter(link => link.from !== groupId && link.to !== groupId);
+      if (state.selectedGroupId === groupId) state.selectedGroupId = null;
+    }
+
+    function deleteBlock(blockId) {
+      const block = state.blocks.find(item => item.id === blockId);
+      if (!block) return;
+      if (!confirm(`Delete block ${blockId}? Its streams and conditions are removed too.`)) return;
+      const groupId = block.groupId;
+      state.blocks = state.blocks.filter(item => item.id !== blockId);
+      state.links = state.links.filter(link => link.from !== blockId && link.to !== blockId);
+      cleanupGroupIfEmpty(groupId);
+      state.selectedIds = state.selectedIds.filter(id => id !== blockId);
+      if (state.selectedBlockId === blockId) state.selectedBlockId = state.selectedIds[0] || null;
+      invalidateAiRefine();
+      renderAll();
+    }
+
+    function removeBlockFromGroup(blockId) {
+      const block = state.blocks.find(item => item.id === blockId);
+      if (!block || !block.groupId) return;
+      const groupId = block.groupId;
+      block.groupId = null;
+      cleanupGroupIfEmpty(groupId);
+      invalidateAiRefine();
+      renderAll();
+    }
+
+    function mergeSelectedBlocks() {
+      const ids = state.selectedIds.filter(id => state.blocks.some(block => block.id === id));
+      const blocks = blocksInOrder().filter(block => ids.includes(block.id));
+      if (blocks.length < 2) {
+        alert("Shift-click at least two blocks, then merge.");
+        return;
+      }
+      const lo = Math.min(...blocks.map(block => block.start));
+      const hi = Math.max(...blocks.map(block => block.end));
+      if (state.blocks.some(block => !ids.includes(block.id) && rangesOverlap(lo, hi, block.start, block.end))) {
+        alert("Cannot merge: another block lies between the selected blocks. Merge only adjacent blocks.");
+        return;
+      }
+      const target = blocks[0];
+      const others = blocks.slice(1);
+      ensureBlockFlowFields(target);
+      ensureBlockConditionFields(target);
+      target.start = lo;
+      target.end = hi;
+      target.text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
+      others.forEach(source => {
+        ensureBlockFlowFields(source);
+        ensureBlockConditionFields(source);
+        source.streams.forEach(stream => {
+          stream.id = nextStreamId(target);
+          target.streams.push(stream);
+        });
+        (source.phenomena || []).forEach(code => {
+          if (!target.phenomena.includes(code)) target.phenomena.push(code);
+        });
+        Object.entries(source.conditions || {}).forEach(([key, value]) => {
+          if (String(value || "").trim() && !String(target.conditions[key] || "").trim()) {
+            target.conditions[key] = value;
+            if (source.conditionUnits?.[key]) target.conditionUnits[key] = source.conditionUnits[key];
+          }
+        });
+        if (!target.endpoint && source.endpoint) target.endpoint = source.endpoint;
+      });
+      const removedIds = new Set(others.map(block => block.id));
+      const removedGroups = new Set(others.map(block => block.groupId).filter(Boolean));
+      state.blocks = state.blocks.filter(block => !removedIds.has(block.id));
+      state.links = state.links.filter(link => !removedIds.has(link.from) && !removedIds.has(link.to));
+      removedGroups.forEach(groupId => cleanupGroupIfEmpty(groupId));
+      sanitizeBlockPhenomena(target);
+      syncLegacyStreamLists(target);
+      state.selectedBlockId = target.id;
+      state.selectedIds = [target.id];
+      invalidateAiRefine();
       renderAll();
     }
 
@@ -5397,6 +5602,9 @@
       $("ctxGroupSelect").innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join("");
       $("ctxCombine").disabled = state.selectedIds.length < 2;
       $("ctxAssignGroup").disabled = ids.length === 0;
+      $("ctxMergeBlocks").disabled = state.selectedIds.length < 2;
+      const menuBlock = state.blocks.find(item => item.id === state.menuBlockId);
+      $("ctxRemoveFromGroup").disabled = !menuBlock?.groupId;
     }
 
     function linksForGroup(groupId) {
@@ -5831,16 +6039,16 @@
         const linkedIds = new Set();
         state.links.forEach(link => { linkedIds.add(link.from); linkedIds.add(link.to); });
         const unconnected = groupIds.filter(groupId => groups.length > 1 && !linkedIds.has(groupId));
-        const missingFate = blocks.some(block => (block.streams || []).some(stream => stream.role !== "input" && !stream.fate));
+        const closureIssues = networkClosureModel();
         if (ungrouped.length || unconnected.length) {
           const parts = [];
           if (ungrouped.length) parts.push(`${ungrouped.length} draft block${ungrouped.length === 1 ? "" : "s"} not in a group`);
-          if (unconnected.length) parts.push(`${unconnected.length} group${unconnected.length === 1 ? "" : "s"} without arrows`);
+          if (unconnected.length) parts.push(`${unconnected.length} group${unconnected.length === 1 ? "" : "s"} without arrows (try Auto-Connect)`);
           set(4, "partial", parts.join("; ") + ".");
-        } else if (missingFate) {
-          set(4, "partial", "Some output/waste streams have no fate (product, waste, recycle).");
+        } else if (closureIssues.length) {
+          set(4, "partial", `${closureIssues.length} outlet${closureIssues.length === 1 ? "" : "s"} not closed — see Network closure under Board Controls.`);
         } else {
-          set(4, "done", "Network closed: all blocks grouped, connected, with stream fates.");
+          set(4, "done", "Network closed: every outlet routed, recycles connected, product outlet present.");
         }
       }
 
@@ -6173,6 +6381,7 @@
           blocks: group.blocks.map(block => block.id),
           phenomena: group.phenomena,
           selectedUnit: group.selectedUnit,
+          selectionBasis: group.selectionBasis || "",
           schedule: group.schedule,
           properties: exportGroupProperties(group),
           conditionAggregation: aggregateGroupConditions(group),
@@ -6320,6 +6529,7 @@
       renderWorkflowStepper();
       renderValuesPanel();
       renderDataReadiness();
+      renderNetworkClosure();
     }
 
     function escapeHtml(value) {
@@ -6343,6 +6553,7 @@
     });
     $("loadText").addEventListener("click", loadTextView);
     $("loadTextSide").addEventListener("click", loadTextView);
+    $("autoConnect").addEventListener("click", autoConnectGroups);
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
@@ -6440,6 +6651,20 @@
       state.connectingFrom = state.menuBlockId;
       hideBlockMenu();
       renderAll();
+    });
+    $("ctxDeleteBlock").addEventListener("click", () => {
+      const blockId = state.menuBlockId;
+      hideBlockMenu();
+      deleteBlock(blockId);
+    });
+    $("ctxRemoveFromGroup").addEventListener("click", () => {
+      const blockId = state.menuBlockId;
+      hideBlockMenu();
+      removeBlockFromGroup(blockId);
+    });
+    $("ctxMergeBlocks").addEventListener("click", () => {
+      hideBlockMenu();
+      mergeSelectedBlocks();
     });
     $("ctxRemoveBlockLinks").addEventListener("click", () => {
       removeLinksForEndpoint(state.menuBlockId);
