@@ -2013,3 +2013,34 @@
       min-height: 26px;
       font-size: 11px;
     }
+
+    .override-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .override-toggle-row .mini-button {
+      flex-shrink: 0;
+    }
+
+    .override-edit-row {
+      display: grid;
+      gap: 5px;
+      margin-top: 5px;
+      padding: 6px;
+      border: 1px solid var(--blue-soft);
+      border-radius: 6px;
+      background: #f7fbff;
+    }
+
+    .override-edit-row input {
+      min-height: 25px;
+      font-size: 11px;
+    }
+
+    .override-note {
+      margin-top: 3px;
+    }

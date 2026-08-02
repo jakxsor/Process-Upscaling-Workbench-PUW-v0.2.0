@@ -472,6 +472,13 @@
       }
       state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
       if (typeof state.groups[groupId].selectionBasis !== "string") state.groups[groupId].selectionBasis = "";
+      if (!state.groups[groupId].conditionOverrides || typeof state.groups[groupId].conditionOverrides !== "object") {
+        state.groups[groupId].conditionOverrides = {};
+      }
+      if (!state.groups[groupId].mfaOverrides || typeof state.groups[groupId].mfaOverrides !== "object") {
+        state.groups[groupId].mfaOverrides = {};
+      }
+      if (typeof state.groups[groupId].openOverrideKey !== "string") state.groups[groupId].openOverrideKey = "";
       return state.groups[groupId];
     }
 
@@ -1956,7 +1963,7 @@
           ${aggregates.map(roleGroup => `
             <div class="group-mfa-role">
               <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
-              ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item)).join("")}
+              ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item, group.id, false)).join("")}
               ${roleGroup.items.length > 3 ? `<span class="muted small">+${roleGroup.items.length - 3} more material groups</span>` : ""}
             </div>
           `).join("")}
@@ -1964,18 +1971,47 @@
       `;
     }
 
-    function groupMfaItemHtml(item) {
+    function groupMfaItemHtml(item, groupId, editable) {
       const total = item.totalText ? item.totalText : "not summed";
+      const pillLabel = item.override ? `${escapeHtml(item.override.value)} ${escapeHtml(item.totalUnit || "")}`.trim() : escapeHtml(total);
       return `
         <div class="group-mfa-item">
           <div class="group-mfa-item-head">
             <strong>${escapeHtml(item.name)}</strong>
-            <span class="pill ${item.totalText ? "blue" : "warn"}">${escapeHtml(total)}</span>
+            <span class="pill ${item.override ? "blue" : item.totalText ? "blue" : "warn"}">${pillLabel}</span>
           </div>
           <div class="group-mfa-lines">
             ${item.lines.slice(0, 4).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
             ${item.lines.length > 4 ? `<span>+${item.lines.length - 4} more entries</span>` : ""}
           </div>
+          ${overrideControlHtml(item, groupId, editable, "mfa", total)}
+        </div>
+      `;
+    }
+
+    function overrideControlHtml(item, groupId, editable, kind, computedDisplay) {
+      if (!editable) {
+        return item.override
+          ? `<div class="muted small override-note">Override: ${escapeHtml(item.override.value)}${item.override.note ? ` — ${escapeHtml(item.override.note)}` : ""} <span class="muted">(computed: ${escapeHtml(computedDisplay)})</span></div>`
+          : "";
+      }
+      const isOpen = groupId && ensureGroup(groupId).openOverrideKey === item.key;
+      if (isOpen) {
+        return `
+          <div class="override-edit-row">
+            <input data-override-value="${escapeAttr(item.key)}" data-override-group="${escapeAttr(groupId)}" data-override-kind="${kind}"
+              value="${escapeAttr(item.override?.value || "")}" placeholder="override value">
+            <input data-override-note="${escapeAttr(item.key)}" data-override-group="${escapeAttr(groupId)}" data-override-kind="${kind}"
+              value="${escapeAttr(item.override?.note || "")}" placeholder="why override this (optional)">
+            <button class="primary" data-save-override="${escapeAttr(item.key)}" data-override-group-save="${escapeAttr(groupId)}" data-override-kind="${kind}">Save</button>
+            ${item.override ? `<button class="mini-button" data-clear-override="${escapeAttr(item.key)}" data-override-group="${escapeAttr(groupId)}" data-override-kind="${kind}">Clear</button>` : ""}
+          </div>
+        `;
+      }
+      return `
+        <div class="override-toggle-row">
+          ${item.override ? `<span class="muted small">Override: ${escapeHtml(item.override.value)}${item.override.note ? ` — ${escapeHtml(item.override.note)}` : ""} <span class="muted">(computed: ${escapeHtml(computedDisplay)})</span></span>` : ""}
+          <button class="mini-button" data-open-override="${escapeAttr(item.key)}" data-override-group="${escapeAttr(groupId)}">${item.override ? "Edit override" : "Override"}</button>
         </div>
       `;
     }
@@ -1986,23 +2022,25 @@
       return `
         <div class="group-mfa">
           <div class="label">Group Conditions</div>
-          ${aggregates.slice(0, 4).map(item => groupConditionItemHtml(item)).join("")}
+          ${aggregates.slice(0, 4).map(item => groupConditionItemHtml(item, group.id, false)).join("")}
           ${aggregates.length > 4 ? `<span class="muted small">+${aggregates.length - 4} more conditions</span>` : ""}
         </div>
       `;
     }
 
-    function groupConditionItemHtml(item) {
+    function groupConditionItemHtml(item, groupId, editable) {
+      const pillLabel = item.override ? `${item.override.value} ${item.unit || ""}`.trim() : item.display;
       return `
         <div class="group-mfa-item">
           <div class="group-mfa-item-head">
             <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(item.display)}</span>
+            <span class="pill ${item.override ? "blue" : item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(pillLabel)}</span>
           </div>
           <div class="group-mfa-lines">
             ${item.lines.slice(0, 3).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
             ${item.lines.length > 3 ? `<span>+${item.lines.length - 3} more entries</span>` : ""}
           </div>
+          ${overrideControlHtml(item, groupId, editable, "condition", item.display)}
         </div>
       `;
     }
@@ -2021,7 +2059,12 @@
         if (!byCondition.has(key)) byCondition.set(key, []);
         byCondition.get(key).push(entry);
       });
-      return Array.from(byCondition.values()).map(items => aggregateConditionItems(items));
+      const overrides = ensureGroup(group.id).conditionOverrides;
+      return Array.from(byCondition.values()).map(items => {
+        const aggregated = aggregateConditionItems(items);
+        const key = `${aggregated.id}||${aggregated.unit || ""}`;
+        return { ...aggregated, key, override: overrides[key] || null };
+      });
     }
 
     function aggregateConditionItems(items) {
@@ -2099,6 +2142,7 @@
           .filter(stream => stream.name.trim())
           .map(stream => ({ ...stream, blockId: block.id }));
       });
+      const mfaOverrides = ensureGroup(group.id).mfaOverrides;
       return ["input", "output", "waste"].map(role => {
         const byMaterial = new Map();
         streams.filter(stream => stream.role === role).forEach(stream => {
@@ -2106,9 +2150,13 @@
           if (!byMaterial.has(key)) byMaterial.set(key, []);
           byMaterial.get(key).push(stream);
         });
-        const items = Array.from(byMaterial.values()).map(materialStreams => aggregateMaterialStreams(materialStreams));
+        const items = Array.from(byMaterial.values()).map(materialStreams => {
+          const aggregated = aggregateMaterialStreams(materialStreams);
+          const key = `${role}||${aggregated.name.toLowerCase()}`;
+          return { ...aggregated, key, override: mfaOverrides[key] || null };
+        });
         return { role, items };
-      }).filter(group => group.items.length);
+      }).filter(roleGroup => roleGroup.items.length);
     }
 
     function aggregateMaterialStreams(streams) {
@@ -4769,7 +4817,7 @@
                 <span class="pill">${roleGroup.items.length}</span>
               </div>
               <div class="mfa-rows">
-                ${roleGroup.items.map(groupMfaItemHtml).join("")}
+                ${roleGroup.items.map(item => groupMfaItemHtml(item, group.id, true)).join("")}
               </div>
             </section>
           `).join("") : `<div class="mfa-empty">No quantified group streams yet.</div>`}
@@ -4780,7 +4828,7 @@
             <span class="muted small">summed when additive, kept separate when values conflict or represent a sequence</span>
           </div>
           <div class="condition-body">
-            ${conditions.length ? conditions.map(groupConditionItemHtml).join("") : `<div class="mfa-empty">No saved group conditions yet.</div>`}
+            ${conditions.length ? conditions.map(item => groupConditionItemHtml(item, group.id, true)).join("") : `<div class="mfa-empty">No saved group conditions yet.</div>`}
           </div>
         </div>
         <div class="condition-panel">
@@ -4816,6 +4864,37 @@
         input.addEventListener("change", () => {
           ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
           renderExport();
+        });
+      });
+      root.querySelectorAll("[data-open-override]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.overrideGroup).openOverrideKey = button.dataset.openOverride;
+          renderStepFlowInspector();
+        });
+      });
+      root.querySelectorAll("[data-save-override]").forEach(button => {
+        button.addEventListener("click", () => {
+          const groupState = ensureGroup(button.dataset.overrideGroupSave);
+          const key = button.dataset.saveOverride;
+          const kind = button.dataset.overrideKind;
+          const valueInput = [...root.querySelectorAll("[data-override-value]")].find(el => el.dataset.overrideValue === key);
+          const noteInput = [...root.querySelectorAll("[data-override-note]")].find(el => el.dataset.overrideNote === key);
+          const value = valueInput?.value.trim() || "";
+          const note = noteInput?.value.trim() || "";
+          const store = kind === "mfa" ? groupState.mfaOverrides : groupState.conditionOverrides;
+          if (value) store[key] = { value, note }; else delete store[key];
+          groupState.openOverrideKey = "";
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-clear-override]").forEach(button => {
+        button.addEventListener("click", () => {
+          const groupState = ensureGroup(button.dataset.overrideGroup);
+          const kind = button.dataset.overrideKind;
+          const store = kind === "mfa" ? groupState.mfaOverrides : groupState.conditionOverrides;
+          delete store[button.dataset.clearOverride];
+          groupState.openOverrideKey = "";
+          renderAll();
         });
       });
     }
@@ -6356,6 +6435,7 @@
               totalValue: item.totalValue,
               totalUnit: item.totalUnit,
               aggregationStatus: item.aggregationStatus,
+              override: item.override,
               lines: item.lines,
               entries: item.entries
             }))
