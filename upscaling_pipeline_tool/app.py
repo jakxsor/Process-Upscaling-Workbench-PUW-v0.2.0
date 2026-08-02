@@ -31,6 +31,7 @@ APP_HTML = r"""<!doctype html>
       <div class="subtitle">Lab protocol to industrial flowsheet in 7 traceable steps: blocks, phenomena, unit operations, network, heuristics, schedule, values.</div>
     </div>
     <div class="row">
+      <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
       <button id="loadSample">Load Octocrylene Case</button>
       <button id="loadText" class="primary">Load Text View</button>
       <button id="createBlock">Create Block From Selection</button>
@@ -154,17 +155,6 @@ APP_HTML = r"""<!doctype html>
               <div class="label">Properties Refinement</div>
               <div id="groupProperties" class="alt-grid"></div>
             </div>
-          </div>
-
-          <div class="card stack">
-            <div class="readiness-head">
-              <div>
-                <div class="label">Framework Readiness</div>
-                <div class="muted small">Checks whether the current project supports steps 1-3 of the paper workflow.</div>
-              </div>
-              <span id="frameworkReadinessScore" class="pill">0/3</span>
-            </div>
-            <div id="frameworkReadiness"></div>
           </div>
 
           <div class="card">

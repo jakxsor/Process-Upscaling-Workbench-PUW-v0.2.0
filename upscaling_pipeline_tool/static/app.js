@@ -327,6 +327,59 @@
 
     const $ = id => document.getElementById(id);
 
+    const undoStack = [];
+
+    function undoSnapshot() {
+      return JSON.stringify({
+        text: state.text,
+        blocks: state.blocks,
+        groups: state.groups,
+        links: state.links,
+        scaleBasis: state.scaleBasis,
+        heuristicDecisions: state.heuristicDecisions,
+        valueCoiLinks: state.valueCoiLinks
+      });
+    }
+
+    function pushUndo() {
+      undoStack.push(undoSnapshot());
+      if (undoStack.length > 50) undoStack.shift();
+      updateUndoButton();
+    }
+
+    function dropLastUndo() {
+      undoStack.pop();
+      updateUndoButton();
+    }
+
+    function undoLast() {
+      const snapshot = undoStack.pop();
+      updateUndoButton();
+      if (!snapshot) return;
+      const data = JSON.parse(snapshot);
+      state.text = data.text;
+      state.blocks = data.blocks;
+      state.groups = data.groups;
+      state.links = data.links;
+      state.scaleBasis = data.scaleBasis;
+      state.heuristicDecisions = data.heuristicDecisions || {};
+      state.valueCoiLinks = data.valueCoiLinks || [];
+      state.selectedBlockId = null;
+      state.selectedGroupId = null;
+      state.selectedIds = [];
+      state.connectingFrom = null;
+      state.aiRefine = null;
+      const source = $("sourceInput");
+      if (source) source.value = state.text;
+      renderValuesPanel(true);
+      renderAll();
+    }
+
+    function updateUndoButton() {
+      const button = $("undoAction");
+      if (button) button.disabled = !undoStack.length;
+    }
+
     function nodeWidth(blockCount) {
       return Math.max(430, 92 + Math.max(1, blockCount) * 194);
     }
@@ -442,6 +495,7 @@
       }
       const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
       if (!text) return;
+      pushUndo();
       const behavior = options.behavior && behaviorPresets[options.behavior] ? options.behavior : inferBehavior(text);
       const phenomena = phenomenaForBehaviorAndText(behavior, text);
       const inferredConditions = inferInitialConditions(text, phenomena);
@@ -1119,6 +1173,8 @@
     }
 
     function loadTextView() {
+      if (state.blocks.length && !confirm("Loading the text view clears all current blocks, groups, and arrows. Continue?")) return;
+      pushUndo();
       state.text = $("sourceInput").value;
       state.blocks = [];
       state.groups = {};
@@ -1288,7 +1344,7 @@
                 <span class="pill blue">${escapeHtml(group.task)}</span>
               </div>
               <div class="row">
-                <button class="mini-button" data-select-group="${escapeAttr(group.id)}" title="Select this group as one aggregated task">Aggregate</button>
+                <button class="mini-button" data-select-group="${escapeAttr(group.id)}" title="Open this group below: summed MFA, aggregated conditions, unit alternatives, and selection basis">Inspect Group</button>
                 <span class="pill">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"}</span>
               </div>
             </div>
@@ -1337,6 +1393,13 @@
           if (!state.selectedIds.includes(card.dataset.blockCard)) selectBlock(card.dataset.blockCard, event.shiftKey);
           showBlockMenu(event.clientX, event.clientY, card.dataset.blockCard);
         });
+      });
+      root.querySelectorAll("[data-delete-block]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
+          deleteBlock(button.dataset.deleteBlock);
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
       });
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
@@ -1781,7 +1844,10 @@
         <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
           <div class="row between">
             <strong>${block.id}</strong>
-            <span class="pill accent">${escapeHtml(block.behavior)}</span>
+            <div class="row" style="gap:4px">
+              <span class="pill accent">${escapeHtml(block.behavior)}</span>
+              <button class="block-card-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete this block">✕</button>
+            </div>
           </div>
           <div class="block-text">${escapeHtml(block.text)}</div>
           <div>${block.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena</span>`}</div>
@@ -4328,156 +4394,17 @@
           : `<span class="pill green">conditions aggregated</span>`
         : `<span class="muted small">No group conditions yet.</span>`;
       $("selectedGroupInfo").innerHTML = group
-        ? `<strong>${escapeHtml(group.id)}</strong><div style="margin-top:6px">Blocks: ${group.blocks.map(item => `<span class="pill">${item.id}</span>`).join("")}</div><div style="margin-top:6px">${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena.</span>`}</div><div style="margin-top:6px">${conditionStatus} ${groupConditions.length ? `<span class="pill">${groupConditions.length} condition${groupConditions.length === 1 ? "" : "s"}</span>` : ""} ${groupMfa.length ? `<span class="pill blue">${groupMfa.reduce((sum, role) => sum + role.items.length, 0)} MFA group${groupMfa.reduce((sum, role) => sum + role.items.length, 0) === 1 ? "" : "s"}</span>` : ""}</div>${group ? groupAggregateInspectorHtml(group) : ""}`
+        ? `<strong>${escapeHtml(group.id)}</strong><div style="margin-top:6px">Blocks: ${group.blocks.map(item => `<span class="pill">${item.id}</span>`).join("")}</div><div style="margin-top:6px">${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena.</span>`}</div><div style="margin-top:6px">${conditionStatus} ${groupConditions.length ? `<span class="pill">${groupConditions.length} condition${groupConditions.length === 1 ? "" : "s"}</span>` : ""} ${groupMfa.length ? `<span class="pill blue">${groupMfa.reduce((sum, role) => sum + role.items.length, 0)} MFA group${groupMfa.reduce((sum, role) => sum + role.items.length, 0) === 1 ? "" : "s"}</span>` : ""}</div><div class="muted small" style="margin-top:6px">Click Inspect Group on the board for the full MFA and conditions detail.</div>`
         : "This block is not assigned to a task group yet.";
       $("groupTask").value = group?.task || "";
       renderGroupAlternatives(group);
       renderGroupProperties(group);
-      renderFrameworkReadinessPanel();
       renderHeuristicsPanel();
       renderScaleBasisPanel();
       refreshReviewPanels();
       renderExport();
     }
 
-    function frameworkReadinessModel() {
-      const blocks = blocksInOrder();
-      const groups = groupIdsInTextOrder().map(groupId => groupModel(groupId));
-      const streamBlocks = blocks.filter(block => {
-        ensureBlockFlowFields(block);
-        return block.streams.some(stream => stream.name.trim() || stream.quantity.trim());
-      });
-      const conditionBlocks = blocks.filter(block => conditionValuesForBlock(block).length);
-      const assignedBlocks = blocks.filter(block => block.behavior && block.behavior !== "unassigned");
-      const groupedBlocks = blocks.filter(block => block.groupId);
-      const phenomenaBlocks = blocks.filter(block => (block.phenomena || []).length);
-      const phaseStreams = blocks.flatMap(block => {
-        ensureBlockFlowFields(block);
-        return block.streams.filter(stream => stream.phase && stream.phase !== "unknown");
-      });
-      const groupsWithPhenomena = groups.filter(group => (group.phenomena || []).length);
-      const groupsWithAlternatives = groups.filter(group => matchesForGroup(group).length);
-      const groupsWithSelectedUnit = groups.filter(group => group.selectedUnit);
-
-      const step1Status = !blocks.length
-        ? "missing"
-        : assignedBlocks.length === blocks.length && (streamBlocks.length || conditionBlocks.length)
-          ? "ready"
-          : "partial";
-      const step2Status = !phenomenaBlocks.length
-        ? "missing"
-        : phenomenaBlocks.length === blocks.length && groupsWithPhenomena.length
-          ? "ready"
-          : "partial";
-      const step3Status = !groups.length
-        ? "missing"
-        : groupsWithSelectedUnit.length === groups.length
-          ? "ready"
-          : groupsWithAlternatives.length
-            ? "partial"
-            : "missing";
-
-      const rows = [
-        {
-          id: "step_1",
-          step: "Step 1",
-          focus: "Protocol mapping",
-          status: step1Status,
-          evidence: blocks.length
-            ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}; ${assignedBlocks.length} with behavior; ${streamBlocks.length} with MFA; ${conditionBlocks.length} with conditions.`
-            : "No source blocks created yet.",
-          action: step1Status === "ready"
-            ? "Enough for a structured lab-protocol map."
-            : "Create text blocks, assign behavior presets, then add only essential MFA/condition labels."
-        },
-        {
-          id: "step_2",
-          step: "Step 2",
-          focus: "Phenomena definition",
-          status: step2Status,
-          evidence: phenomenaBlocks.length
-            ? `${phenomenaBlocks.length}/${blocks.length || 0} blocks have phenomena; ${groupsWithPhenomena.length} grouped phenomena sets; ${phaseStreams.length} streams with Lutze phase.`
-            : "No block has phenomena assigned yet.",
-          action: step2Status === "ready"
-            ? "Enough to discuss block-level and grouped phenomena."
-            : "Complete phenomena on each behavior block and add phases only where streams are defined."
-        },
-        {
-          id: "step_3",
-          step: "Step 3",
-          focus: "Candidate unit operations",
-          status: step3Status,
-          evidence: groups.length
-            ? `${groups.length} task group${groups.length === 1 ? "" : "s"}; ${groupsWithAlternatives.length} with alternatives; ${groupsWithSelectedUnit.length} selected unit operation${groupsWithSelectedUnit.length === 1 ? "" : "s"}.`
-            : "No grouped task exists yet.",
-          action: step3Status === "ready"
-            ? "Enough for a first Table-S3-style unit-operation mapping."
-            : "Combine related blocks into task groups and select one unit operation for each group."
-        }
-      ];
-
-      return {
-        score: rows.filter(row => row.status === "ready").length,
-        total: rows.length,
-        rows
-      };
-    }
-
-    function renderFrameworkReadinessPanel() {
-      const root = $("frameworkReadiness");
-      const score = $("frameworkReadinessScore");
-      if (!root || !score) return;
-      const model = frameworkReadinessModel();
-      score.textContent = `${model.score}/${model.total}`;
-      score.className = `pill ${model.score === model.total ? "green" : model.score ? "blue" : "warn"}`;
-      root.innerHTML = `
-        <div class="readiness-table-wrap">
-          <table class="readiness-table">
-            <thead>
-              <tr>
-                <th>Step</th>
-                <th>Status</th>
-                <th>Evidence</th>
-                <th>Next action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${model.rows.map(row => `
-                <tr class="readiness-${escapeAttr(row.status)}">
-                  <td><strong>${escapeHtml(row.step)}</strong><span>${escapeHtml(row.focus)}</span></td>
-                  <td><span class="readiness-status ${escapeAttr(row.status)}">${escapeHtml(row.status)}</span></td>
-                  <td>${escapeHtml(row.evidence)}</td>
-                  <td>${escapeHtml(row.action)}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    function groupAggregateInspectorHtml(group) {
-      const mfa = aggregateGroupStreams(group);
-      const conditions = aggregateGroupConditions(group);
-      const mfaHtml = mfa.length ? `
-        <div class="group-mfa" style="margin-top:8px">
-          <div class="label">Aggregated MFA</div>
-          ${mfa.map(roleGroup => `
-            <div class="group-mfa-role">
-              <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
-              ${roleGroup.items.map(groupMfaItemHtml).join("")}
-            </div>
-          `).join("")}
-        </div>
-      ` : "";
-      const conditionHtml = conditions.length ? `
-        <div class="group-mfa" style="margin-top:8px">
-          <div class="label">Aggregated Conditions</div>
-          ${conditions.map(groupConditionItemHtml).join("")}
-        </div>
-      ` : "";
-      return `${mfaHtml}${conditionHtml}`;
-    }
 
     function renderGroupProperties(group) {
       const root = $("groupProperties");
@@ -4676,7 +4603,7 @@
           return;
         }
         root.className = "step-flow-inspector empty";
-        root.innerHTML = "Select a block to edit quantified MFA, or click Aggregate on a group to inspect summed MFA and conditions.";
+        root.innerHTML = "Select a block to edit quantified MFA, or click Inspect Group on a group to see summed MFA, conditions, and unit alternatives.";
         return;
       }
       ensureBlockFlowFields(block);
@@ -4707,6 +4634,7 @@
           const current = selectedBlock();
           if (!current) return;
           ensureBlockFlowFields(current);
+          pushUndo();
           const stream = createStream(button.dataset.addStream, { editing: true });
           stream.id = nextStreamId(current);
           current.streams.push(stream);
@@ -4718,6 +4646,7 @@
         button.addEventListener("click", () => {
           const current = selectedBlock();
           if (!current) return;
+          pushUndo();
           current.streams = current.streams.filter(stream => stream.id !== button.dataset.removeStream);
           syncLegacyStreamLists(current);
           renderAll();
@@ -5327,11 +5256,11 @@
         return;
       }
       const candidates = matchesForGroup(group).slice(0, 6);
-      const basisHtml = group.selectedUnit && candidates.length > 1 ? `
-        <div class="selection-basis-row">
-          <div class="label">Selection basis — why ${escapeHtml(group.selectedUnit)}?</div>
-          <input data-selection-basis="${escapeAttr(group.id)}" value="${escapeAttr(ensureGroup(group.id).selectionBasis || "")}"
-            placeholder="deciding rule, e.g. thin-film for heat sensitivity (H33)">
+      const basisNote = group.selectedUnit && candidates.length > 1 ? `
+        <div class="muted small" style="margin-top:6px">
+          ${group.selectionBasis
+            ? `Selection basis: "${escapeHtml(group.selectionBasis)}"`
+            : `Multiple candidates fit — click Inspect Group above to record why ${escapeHtml(group.selectedUnit)} was chosen.`}
         </div>
       ` : "";
       $("groupAlternatives").innerHTML = (candidates.length ? candidates.map(candidate => `
@@ -5339,17 +5268,11 @@
           ${escapeHtml(candidate.name)}
           <span class="pill ${candidate.sameTask ? "blue" : "warn"}">${candidate.sameTask ? "same task" : "related"}</span>
         </button>
-      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`) + basisHtml;
+      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`) + basisNote;
       document.querySelectorAll("[data-inspector-unit]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
           renderAll();
-        });
-      });
-      document.querySelectorAll("[data-selection-basis]").forEach(input => {
-        input.addEventListener("change", () => {
-          ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
-          renderExport();
         });
       });
     }
@@ -5357,6 +5280,7 @@
     function applyBehavior(behavior) {
       const block = selectedBlock();
       if (!block) return;
+      pushUndo();
       const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
       block.behavior = behavior;
       block.phenomena = phenomenaForBehaviorAndText(behavior, block.text);
@@ -5369,6 +5293,7 @@
     }
 
     function autoConnectGroups() {
+      pushUndo();
       const order = groupIdsInTextOrder();
       let added = 0;
       for (let i = 0; i < order.length - 1; i += 1) {
@@ -5389,6 +5314,7 @@
           }
         });
       });
+      if (!added) dropLastUndo();
       renderAll();
       $("connectionStatus").textContent = added
         ? `Auto-connect: ${added} arrow${added === 1 ? "" : "s"} added (text order + declared recycle destinations).`
@@ -5471,6 +5397,7 @@
       const block = state.blocks.find(item => item.id === blockId);
       if (!block) return;
       if (!confirm(`Delete block ${blockId}? Its streams and conditions are removed too.`)) return;
+      pushUndo();
       const groupId = block.groupId;
       state.blocks = state.blocks.filter(item => item.id !== blockId);
       state.links = state.links.filter(link => link.from !== blockId && link.to !== blockId);
@@ -5484,6 +5411,7 @@
     function removeBlockFromGroup(blockId) {
       const block = state.blocks.find(item => item.id === blockId);
       if (!block || !block.groupId) return;
+      pushUndo();
       const groupId = block.groupId;
       block.groupId = null;
       cleanupGroupIfEmpty(groupId);
@@ -5504,6 +5432,7 @@
         alert("Cannot merge: another block lies between the selected blocks. Merge only adjacent blocks.");
         return;
       }
+      pushUndo();
       const target = blocks[0];
       const others = blocks.slice(1);
       ensureBlockFlowFields(target);
@@ -5545,6 +5474,7 @@
     function combineSelected() {
       const ids = state.selectedIds.filter(id => state.blocks.some(block => block.id === id));
       if (ids.length < 2) return;
+      pushUndo();
       const groupId = nextGroupId();
       ensureGroup(groupId, "unassigned");
       ids.forEach(id => {
@@ -5572,6 +5502,7 @@
     function splitSelectedToNewGroup() {
       const block = selectedBlock();
       if (!block) return;
+      pushUndo();
       const groupId = nextGroupId();
       const task = behaviorPresets[block.behavior]?.task || "unassigned";
       ensureGroup(groupId, task);
@@ -5584,6 +5515,7 @@
 
     function assignSelectedToGroup(groupId) {
       if (!groupId) return;
+      pushUndo();
       ensureGroup(groupId);
       const ids = state.selectedIds.length ? state.selectedIds : [state.selectedBlockId];
       ids.filter(Boolean).forEach(id => {
@@ -5632,6 +5564,7 @@
 
       document.querySelectorAll("[data-remove-link]").forEach(button => {
         button.addEventListener("click", () => {
+          pushUndo();
           state.links.splice(Number(button.dataset.removeLink), 1);
           renderAll();
         });
@@ -5646,6 +5579,7 @@
         return;
       }
       if (!state.links.some(link => link.from === from && link.to === to)) {
+        pushUndo();
         state.links.push({ from, to });
       }
       state.connectingFrom = null;
@@ -5755,6 +5689,7 @@
     function deleteStream(streamId) {
       const block = selectedBlock();
       if (!block) return;
+      pushUndo();
       block.streams = block.streams.filter(stream => stream.id !== streamId);
       syncLegacyStreamLists(block);
       hideStreamMenu();
@@ -6411,11 +6346,10 @@
       const scaleAssessment = scaleUpAssessmentModel(scale);
       const heuristicReview = heuristicReviewModel(scale);
       const ganttSchedule = taskScheduleModel();
-      const frameworkReadiness = frameworkReadinessModel();
       $("jsonOut").textContent = JSON.stringify({
         workflow: "source text -> annotated blocks -> material inputs/outputs/waste -> behavior presets -> phenomenon groups -> task/unit alternatives -> heuristic rule application -> scale-up basis -> scaled MFA -> Gantt bottleneck check",
         text: state.text,
-        frameworkReadiness,
+        workflowStepStatus: workflowStepStatuses(),
         scaleUp: {
           basis: scale.basis,
           reference: scale.reference,
@@ -6549,10 +6483,13 @@
     $("behaviorSelect").innerHTML = Object.keys(behaviorPresets).map(name => `<option value="${name}">${name}</option>`).join("");
 
     $("loadSample").addEventListener("click", () => {
+      if (state.blocks.length && !confirm("Load the octocrylene case? This replaces all current blocks, groups, and arrows.")) return;
+      if (state.blocks.length) pushUndo();
       loadBaseExampleProject();
     });
     $("loadText").addEventListener("click", loadTextView);
     $("loadTextSide").addEventListener("click", loadTextView);
+    $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
@@ -6574,6 +6511,9 @@
     $("createBlockSide").addEventListener("click", createBlockFromSelection);
     $("openScaleTop").addEventListener("click", openScalePanel);
     $("clearProject").addEventListener("click", () => {
+      if (!state.blocks.length) return;
+      if (!confirm("Clear all blocks, groups, and arrows? This cannot be undone with more than one step back.")) return;
+      pushUndo();
       state.blocks = [];
       state.groups = {};
       state.links = [];
@@ -6687,14 +6627,21 @@
     });
 
     document.addEventListener("keydown", event => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      if (!$("aiRefineModal").hidden) {
-        closeAiRefineModal();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!$("aiRefineModal").hidden) {
+          closeAiRefineModal();
+          return;
+        }
+        closeFloatingActions();
+        renderAll();
         return;
       }
-      closeFloatingActions();
-      renderAll();
+      const editingField = ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !editingField) {
+        event.preventDefault();
+        undoLast();
+      }
     });
     document.addEventListener("mouseover", showHoverTip);
     document.addEventListener("mousemove", moveHoverTip);

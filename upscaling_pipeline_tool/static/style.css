@@ -468,6 +468,34 @@
       box-shadow: 0 0 0 3px var(--orange-soft);
     }
 
+    .block-card-delete {
+      min-height: 20px;
+      min-width: 20px;
+      padding: 0;
+      line-height: 1;
+      font-size: 11px;
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: #efc6c6;
+      opacity: 0.55;
+    }
+
+    .block-card:hover .block-card-delete {
+      opacity: 1;
+    }
+
+    #undoAction {
+      color: var(--blue);
+      border-color: #cfe0ee;
+      background: #f7fbff;
+    }
+
+    #undoAction:disabled {
+      color: var(--muted);
+      background: #fff;
+      border-color: var(--line);
+    }
+
     .block-text {
       margin: 7px 0;
       color: #2a3943;
@@ -701,97 +729,6 @@
       flex-wrap: wrap;
       color: var(--muted);
       font-size: 11px;
-    }
-
-    .readiness-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .readiness-table-wrap {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
-    }
-
-    .readiness-table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 11px;
-      line-height: 1.32;
-    }
-
-    .readiness-table th,
-    .readiness-table td {
-      padding: 7px;
-      border-bottom: 1px solid #e5ebef;
-      vertical-align: top;
-      text-align: left;
-      overflow-wrap: anywhere;
-    }
-
-    .readiness-table th {
-      color: #314451;
-      background: #eef3f5;
-      font-size: 10px;
-      text-transform: uppercase;
-    }
-
-    .readiness-table th:nth-child(1),
-    .readiness-table td:nth-child(1) {
-      width: 74px;
-    }
-
-    .readiness-table th:nth-child(2),
-    .readiness-table td:nth-child(2) {
-      width: 66px;
-    }
-
-    .readiness-table tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .readiness-table td strong,
-    .readiness-table td span {
-      display: block;
-    }
-
-    .readiness-table td span {
-      margin-top: 2px;
-      color: var(--muted);
-    }
-
-    .readiness-status {
-      display: inline-block;
-      width: max-content;
-      max-width: 100%;
-      padding: 3px 6px;
-      border-radius: 999px;
-      color: #324451;
-      background: #eef3f5;
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 9px;
-      letter-spacing: 0;
-    }
-
-    .readiness-status.ready {
-      color: #155c48;
-      background: #dff3e9;
-    }
-
-    .readiness-status.partial {
-      color: #225b8f;
-      background: #e4f0fb;
-    }
-
-    .readiness-status.missing {
-      color: #955d00;
-      background: #fff0cf;
     }
 
     .mfa-grid {
