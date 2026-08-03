@@ -78,6 +78,7 @@ APP_HTML = r"""<!doctype html>
               <span id="zoomReadout" class="zoom-readout">100%</span>
               <button id="zoomIn">+</button>
               <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
+              <button id="openFlowsheet" title="Open a clean, read-only P&amp;ID-style diagram generated from the current groups and streams">Flowsheet View</button>
             </div>
           </div>
           <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
@@ -276,6 +277,24 @@ APP_HTML = r"""<!doctype html>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
+
+  <div id="flowsheetModal" class="modal-backdrop" hidden>
+    <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Read-only diagram, generated from the current project</div>
+          <h2 id="flowsheetTitle">Flowsheet View</h2>
+        </div>
+        <div class="row">
+          <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
+          <button id="closeFlowsheetModal" class="mini-button">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="flowsheetHost" class="flowsheet-host"></div>
+      </div>
+    </section>
+  </div>
 
   <div id="aiRefineModal" class="modal-backdrop" hidden>
     <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="aiRefineTitle">

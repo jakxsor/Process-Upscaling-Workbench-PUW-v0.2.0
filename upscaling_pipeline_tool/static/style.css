@@ -2314,3 +2314,33 @@
     .override-note {
       margin-top: 3px;
     }
+
+    .bottleneck-split-warning {
+      display: grid;
+      gap: 6px;
+      margin-top: 6px;
+      padding: 8px;
+      border: 1px solid #efc6c6;
+      border-radius: 7px;
+      background: var(--red-soft);
+    }
+
+    .bottleneck-split-warning .mini-button {
+      justify-self: start;
+    }
+
+    .flowsheet-panel {
+      width: min(1500px, calc(100vw - 24px));
+    }
+
+    .flowsheet-host {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .flowsheet-svg {
+      display: block;
+      min-width: 720px;
+    }

@@ -1424,16 +1424,24 @@
       const blocks = blocksInOrder();
       let html = "";
       let cursor = 0;
-      blocks.forEach(block => {
+      let i = 0;
+      while (i < blocks.length) {
+        const block = blocks[i];
+        const siblings = [block];
+        while (i + siblings.length < blocks.length && blocks[i + siblings.length].start === block.start && blocks[i + siblings.length].end === block.end) {
+          siblings.push(blocks[i + siblings.length]);
+        }
+        i += siblings.length;
         html += escapeHtml(state.text.slice(cursor, block.start));
         const classes = [
           "annotated-block",
-          state.selectedIds.includes(block.id) ? "selected" : "",
-          state.selectedBlockId === block.id ? "primary-selected" : ""
+          siblings.some(item => state.selectedIds.includes(item.id)) ? "selected" : "",
+          siblings.some(item => state.selectedBlockId === item.id) ? "primary-selected" : ""
         ].filter(Boolean).join(" ");
-        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(block.id)} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        const extraLabel = siblings.length > 1 ? ` <span class="pill" title="${escapeAttr(siblings.slice(1).map(item => item.id).join(", "))} share this same text (e.g. parallel-unit copies) — manage them on the board">+${siblings.length - 1}</span>` : "";
+        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
         cursor = block.end;
-      });
+      }
       html += escapeHtml(state.text.slice(cursor));
       root.innerHTML = html;
 
@@ -1635,6 +1643,243 @@
 
     function isBackwardLink(link) {
       return flowOrderIndex(link.from) > flowOrderIndex(link.to);
+    }
+
+    const flowsheetCategoryStyle = {
+      reactor: { fill: "#f8dfdf", stroke: "#a23b3b", label: "Reactor" },
+      separation: { fill: "#e4eff9", stroke: "#2d6098", label: "Separation" },
+      utility: { fill: "#fff0d4", stroke: "#965d00", label: "Utility" },
+      storage: { fill: "#e2f2e7", stroke: "#286d3f", label: "Storage" },
+      waste: { fill: "#eef2f4", stroke: "#657480", label: "Waste" }
+    };
+
+    function flowsheetUnitCategory(group) {
+      const name = String(group.selectedUnit || "").toLowerCase();
+      if (/reactor/.test(name)) return "reactor";
+      if (/distillation|evaporat|dry|extraction|decanter|filtration|crystalliz|absorption|membrane|strip|flash|column/.test(name)) return "separation";
+      if (/exchanger|condenser|cooler|heater|abatement|scrubber|neutraliz|wwt|utility/.test(name)) return "utility";
+      if (/tank|vessel|storage|silo|feed/.test(name)) return "storage";
+      const opClass = inferGroupOperationClass(group);
+      if (opClass === "reaction_kinetic") return "reactor";
+      if (["filtration", "drying", "crystallization"].includes(opClass)) return "separation";
+      if (opClass === "heating_cooling") return "utility";
+      return "separation";
+    }
+
+    function flowsheetGroupStreams(group) {
+      const streams = group.blocks.flatMap(block => (block.streams || []).filter(stream => stream.name.trim()));
+      const isProduct = streams.some(stream => stream.role === "output" && stream.fate === "product");
+      const wasteStreams = streams.filter(stream => ["wastewater", "solid waste", "purge", "loss"].includes(stream.fate));
+      const ventStreams = streams.filter(stream => stream.fate === "vent");
+      const recycleStreams = streams.filter(stream => ["recycled input", "recovered solvent"].includes(stream.fate) && stream.destinationGroup.trim());
+      return { isProduct, wasteStreams, ventStreams, recycleStreams };
+    }
+
+    function buildFlowsheetModel() {
+      const groupIds = groupIdsInTextOrder();
+      const boxW = 190;
+      const boxH = 118;
+      const gapX = 90;
+      const rowY = 70;
+      const groups = groupIds.map((groupId, index) => {
+        const group = groupModel(groupId);
+        const category = flowsheetUnitCategory(group);
+        const meta = flowsheetGroupStreams(group);
+        return {
+          id: group.id,
+          unitNumber: index + 1,
+          task: group.task || "unassigned",
+          selectedUnit: group.selectedUnit || "unassigned unit",
+          category,
+          x: 40 + index * (boxW + gapX),
+          y: rowY,
+          w: boxW,
+          h: boxH,
+          ...meta
+        };
+      });
+      const byId = new Map(groups.map(item => [item.id, item]));
+      const forwardLinks = [];
+      const recycleLinks = [];
+      state.links.forEach(link => {
+        const from = resolvedEndpointId(link.from);
+        const to = resolvedEndpointId(link.to);
+        if (!byId.has(from) || !byId.has(to)) return;
+        if (isBackwardLink(link)) recycleLinks.push({ from, to });
+        else forwardLinks.push({ from, to });
+      });
+      const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
+      const stubLaneH = 46;
+      const wasteAreaH = maxWasteVent ? 30 + maxWasteVent * stubLaneH : 0;
+      const recycleLaneBaseY = rowY + boxH + wasteAreaH + 40;
+      const recycleLaneCount = recycleLinks.length;
+      const width = groups.length ? groups[groups.length - 1].x + boxW + 60 : 600;
+      const height = recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 40 : rowY + boxH + wasteAreaH + 60;
+      return { groups, byId, forwardLinks, recycleLinks, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY };
+    }
+
+    function flowsheetBoxCenter(box) {
+      return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    }
+
+    function buildFlowsheetSvg() {
+      const model = buildFlowsheetModel();
+      if (!model.groups.length) {
+        return { svg: "", empty: true };
+      }
+      const defs = `
+        <defs>
+          <marker id="fsArrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,7 L9,3.5 z" fill="#172027"></path>
+          </marker>
+          <marker id="fsArrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,7 L9,3.5 z" fill="#286d3f"></path>
+          </marker>
+          <marker id="fsArrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,7 L9,3.5 z" fill="#965d00"></path>
+          </marker>
+          <marker id="fsArrowGrey" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,7 L9,3.5 z" fill="#657480"></path>
+          </marker>
+        </defs>
+      `;
+
+      const forwardPaths = model.forwardLinks.map(link => {
+        const from = model.byId.get(link.from);
+        const to = model.byId.get(link.to);
+        const y = flowsheetBoxCenter(from).y;
+        const x1 = from.x + from.w;
+        const x2 = to.x;
+        return `<path d="M ${x1} ${y} L ${x2} ${y}" stroke="#172027" stroke-width="2" fill="none" marker-end="url(#fsArrow)"></path>`;
+      }).join("");
+
+      let recycleIndex = 0;
+      const recyclePaths = model.recycleLinks.map(link => {
+        const from = model.byId.get(link.from);
+        const to = model.byId.get(link.to);
+        const laneY = model.recycleLaneBaseY + recycleIndex * 34;
+        recycleIndex += 1;
+        const startX = from.x + from.w * 0.3;
+        const endX = to.x + to.w * 0.7;
+        const points = [
+          { x: startX, y: from.y + from.h },
+          { x: startX, y: laneY },
+          { x: endX, y: laneY },
+          { x: endX, y: to.y + to.h }
+        ];
+        const d = points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
+        return `
+          <path d="${d}" stroke="#286d3f" stroke-width="2" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
+          <text x="${(startX + endX) / 2}" y="${laneY - 6}" font-size="11" fill="#286d3f" text-anchor="middle">recycle ${escapeHtml(link.from)} to ${escapeHtml(link.to)}</text>
+        `;
+      }).join("");
+
+      const boxes = model.groups.map(box => {
+        const style = flowsheetCategoryStyle[box.category];
+        const center = flowsheetBoxCenter(box);
+        const wasteVentHtml = [...box.wasteStreams.map(s => ({ ...s, kind: "waste" })), ...box.ventStreams.map(s => ({ ...s, kind: "vent" }))]
+          .map((stream, i) => {
+            const color = stream.kind === "waste" ? { line: "#965d00", marker: "url(#fsArrowOrange)" } : { line: "#657480", marker: "url(#fsArrowGrey)" };
+            const stubY = box.y + box.h + 24 + i * 44;
+            const stubX = box.x + 24 + (i % 2) * (box.w - 48);
+            return `
+              <path d="M ${stubX} ${box.y + box.h} L ${stubX} ${stubY}" stroke="${color.line}" stroke-width="2" stroke-dasharray="${stream.kind === "vent" ? "4 4" : "none"}" fill="none" marker-end="${color.marker}"></path>
+              <text x="${stubX}" y="${stubY + 13}" font-size="10" fill="${color.line}" text-anchor="middle">${escapeHtml(stream.kind)}: ${escapeHtml(stream.name)}</text>
+            `;
+          }).join("");
+        return `
+          <g>
+            <rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="10"
+              fill="${box.isProduct ? "#e2f2e7" : style.fill}" stroke="${box.isProduct ? "#286d3f" : style.stroke}" stroke-width="${box.isProduct ? 2.5 : 1.6}"></rect>
+            <text x="${box.x + 10}" y="${box.y + 18}" font-size="11" font-weight="700" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 4}" font-size="12" font-weight="700" text-anchor="middle" fill="#172027">
+              ${wrapSvgText(box.selectedUnit, 24).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
+            </text>
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 12}" font-size="10" text-anchor="middle" fill="#657480">${escapeHtml(box.task)}</text>
+            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 14}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
+            ${wasteVentHtml}
+          </g>
+        `;
+      }).join("");
+
+      const legendY = model.height - 8;
+      const legendLineItems = [
+        { label: "Process", color: "#172027", dash: "none" },
+        { label: "Recycle", color: "#286d3f", dash: "7 5" },
+        { label: "Waste", color: "#965d00", dash: "none" },
+        { label: "Vent/VOC", color: "#657480", dash: "4 4" }
+      ];
+      const legendCategoryItems = Object.values(flowsheetCategoryStyle);
+
+      const svg = `
+        <svg class="flowsheet-svg" viewBox="0 0 ${model.width} ${model.height + 34}" xmlns="http://www.w3.org/2000/svg">
+          ${defs}
+          <rect x="0" y="0" width="${model.width}" height="${model.height + 34}" fill="#ffffff"></rect>
+          ${forwardPaths}
+          ${recyclePaths}
+          ${boxes}
+          <g transform="translate(20, ${model.height + 12})">
+            ${legendLineItems.map((item, i) => `
+              <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
+              <text x="${i * 130 + 32}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
+            `).join("")}
+            ${legendCategoryItems.map((item, i) => `
+              <rect x="${520 + i * 110}" y="-8" width="14" height="14" rx="3" fill="${item.fill}" stroke="${item.stroke}"></rect>
+              <text x="${520 + i * 110 + 20}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
+            `).join("")}
+          </g>
+        </svg>
+      `;
+      return { svg, empty: false, width: model.width, height: model.height + 34 };
+    }
+
+    function wrapSvgText(text, maxChars) {
+      const words = String(text || "").split(/\s+/);
+      const lines = [];
+      let current = "";
+      words.forEach(word => {
+        const next = current ? `${current} ${word}` : word;
+        if (next.length > maxChars && current) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = next;
+        }
+      });
+      if (current) lines.push(current);
+      return lines.slice(0, 3);
+    }
+
+    function renderFlowsheetModal() {
+      const host = $("flowsheetHost");
+      if (!host) return;
+      const result = buildFlowsheetSvg();
+      host.innerHTML = result.empty
+        ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
+        : result.svg;
+    }
+
+    function openFlowsheetModal() {
+      $("flowsheetModal").hidden = false;
+      renderFlowsheetModal();
+    }
+
+    function closeFlowsheetModal() {
+      $("flowsheetModal").hidden = true;
+    }
+
+    function downloadFlowsheetSvg() {
+      const result = buildFlowsheetSvg();
+      if (result.empty) return;
+      const blob = new Blob([result.svg], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "flowsheet.svg";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     }
 
     function recycleLaneRoute(link, laneIndex) {
@@ -2771,7 +3016,7 @@
       const missing = [];
       const need = (label, ok) => { if (!ok) missing.push(label); };
       const conditionMap = groupConditionMap(group);
-      const thermal = groupThermalProfile(group);
+      const thermal = thermalProfileForGroup(group);
       const hasStreams = group.blocks.some(block => {
         ensureBlockFlowFields(block);
         return block.streams.some(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)) || Number.isFinite(parseStreamQuantity(stream.quantity)));
@@ -3626,6 +3871,17 @@
       root.querySelectorAll("[data-load-schedule-example]").forEach(button => {
         button.addEventListener("click", applyScheduleExample);
       });
+      root.querySelectorAll("[data-split-bottleneck]").forEach(button => {
+        button.addEventListener("click", () => {
+          const groupId = button.dataset.splitBottleneck;
+          const n = Number(button.dataset.splitCount);
+          const warn = button.dataset.splitConfirmKinetics === "true"
+            ? `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time, only raise throughput. `
+            : "";
+          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`)) return;
+          splitGroupIntoParallelUnits(groupId, n);
+        });
+      });
     }
 
     function focusGroupForEditing(groupId) {
@@ -3917,6 +4173,17 @@
           ? "Check equipment capacity, then test more parallel units or split the grouped task."
           : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
       const testAction = nextEffective ? `Test parallel units = ${nextParallel}; effective time would become about ${nextEffective} h if the split is physically valid.` : "";
+      const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
+      const splitButton = nextEffective ? (
+        isKineticsBound ? `
+          <div class="bottleneck-split-warning">
+            <span class="muted small">This stage is kinetics-bound: splitting it into parallel units does not shorten the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput. Do not use this to relieve the cycle-time bottleneck; see the paper's octocrylene case, where the kinetics-bound reactor "cannot be relieved by parallelization".</span>
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${nextParallel}" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
+          </div>
+        ` : `
+          <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${nextParallel}" class="primary">Accept: split ${escapeHtml(task.groupId)} into ${nextParallel} parallel units</button>
+        `
+      ) : "";
       return `
         <div class="rule-card medium" style="margin:8px 0">
           <span class="severity-pill">bottleneck</span>
@@ -3924,6 +4191,7 @@
           <span>${escapeHtml(split)}</span>
           <span class="muted small">${escapeHtml(recommendation)}</span>
           ${testAction ? `<span class="muted small">${escapeHtml(testAction)}</span>` : ""}
+          ${splitButton}
         </div>
       `;
     }
@@ -6405,6 +6673,74 @@
       renderAll();
     }
 
+    function splitGroupIntoParallelUnits(groupId, n) {
+      const group = groupModel(groupId);
+      if (!group || !Number.isFinite(n) || n < 2) return;
+      pushUndo();
+      const baseState = ensureGroup(groupId);
+      const originalBlocks = group.blocks;
+      const incoming = state.links.filter(link => resolvedEndpointId(link.to) === groupId);
+      const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
+      const otherLinks = state.links.filter(link => resolvedEndpointId(link.to) !== groupId && resolvedEndpointId(link.from) !== groupId);
+      const newGroupIds = [];
+
+      for (let i = 1; i <= n; i += 1) {
+        const newGroupId = `${groupId}-P${i}`;
+        newGroupIds.push(newGroupId);
+        const newGroup = ensureGroup(newGroupId, baseState.task);
+        newGroup.selectedUnit = baseState.selectedUnit;
+        newGroup.selectionBasis = baseState.selectionBasis;
+        newGroup.properties = JSON.parse(JSON.stringify(baseState.properties || {}));
+        newGroup.schedule = {
+          ...baseState.schedule,
+          parallelUnits: "1",
+          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId} to relieve its bottleneck; ${formatNumber(1 / n * 100)}% of the original flow.`].filter(Boolean).join(" ")
+        };
+        newGroup.conditionOverrides = {};
+        newGroup.mfaOverrides = {};
+        newGroup.openOverrideKey = "";
+        newGroup.x = baseState.x;
+        newGroup.y = baseState.y + (i - 1) * 300;
+
+        originalBlocks.forEach(block => {
+          const clone = JSON.parse(JSON.stringify(block));
+          clone.id = `${block.id}-P${i}`;
+          clone.groupId = newGroupId;
+          clone.conditionsEditing = false;
+          clone.openConditionFamily = null;
+          clone.streams = (block.streams || []).map((stream, idx) => {
+            const qty = parseStreamQuantity(stream.quantity);
+            return {
+              ...stream,
+              id: `${clone.id}-S${idx + 1}`,
+              quantity: Number.isFinite(qty) ? formatNumber(qty / n) : stream.quantity,
+              note: [stream.note, `1/${n} of ${block.id} flow (parallel unit ${i} of ${n}).`].filter(Boolean).join(" "),
+              editing: false
+            };
+          });
+          state.blocks.push(clone);
+        });
+      }
+
+      newGroupIds.forEach(newGroupId => {
+        incoming.forEach(link => otherLinks.push({ from: link.from, to: newGroupId }));
+        outgoing.forEach(link => otherLinks.push({ from: newGroupId, to: link.to }));
+      });
+      state.links = otherLinks;
+
+      const originalBlockIds = new Set(originalBlocks.map(block => block.id));
+      state.blocks = state.blocks.filter(block => !originalBlockIds.has(block.id));
+      delete state.groups[groupId];
+
+      state.selectedBlockId = null;
+      state.selectedGroupId = newGroupIds[0];
+      state.selectedIds = [];
+      state.focusEndpoint = newGroupIds[0];
+      state.activeInspectorTab = "scale";
+      invalidateAiRefine();
+      renderAll();
+    }
+
     function combineSelected() {
       const ids = state.selectedIds.filter(id => state.blocks.some(block => block.id === id));
       if (ids.length < 2) return;
@@ -7492,6 +7828,12 @@
     $("refineProject").addEventListener("click", runRuleChecks);
     $("refineProjectAi").addEventListener("click", openAiRefineModal);
     $("closeAiRefineModal").addEventListener("click", closeAiRefineModal);
+    $("openFlowsheet").addEventListener("click", openFlowsheetModal);
+    $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
+    $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
+    $("flowsheetModal").addEventListener("click", event => {
+      if (event.target === $("flowsheetModal")) closeFlowsheetModal();
+    });
     $("rerunLocalRuleApplication").addEventListener("click", () => {
       runAiRefine(currentProcessRuleOptions());
       renderAiRefineModal();
@@ -7601,6 +7943,10 @@
         event.preventDefault();
         if (!$("aiRefineModal").hidden) {
           closeAiRefineModal();
+          return;
+        }
+        if (!$("flowsheetModal").hidden) {
+          closeFlowsheetModal();
           return;
         }
         closeFloatingActions();
