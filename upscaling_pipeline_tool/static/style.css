@@ -1940,6 +1940,19 @@
       font-weight: 700;
     }
 
+    .connection-list,
+    .group-connection-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 5px;
+    }
+
+    .group-connection-chips {
+      padding-top: 5px;
+      border-top: 1px solid rgba(45, 96, 152, 0.12);
+    }
+
     .empty {
       min-height: 150px;
       display: grid;

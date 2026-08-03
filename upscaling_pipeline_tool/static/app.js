@@ -389,6 +389,7 @@
       aiRefine: null,
       heuristicDecisions: {},
       showDataReadiness: false,
+      showConnections: false,
       measuredNodeHeights: {},
       boardCompact: false,
       processRuleOptions: {
@@ -1571,7 +1572,7 @@
               ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena assigned.</span>`}
               ${groupMfaSummaryHtml(group)}
               ${groupConditionSummaryHtml(group)}
-              <div style="margin-top:6px">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>
+              ${state.showConnections && linksForGroup(group.id).length ? `<div class="group-connection-chips">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>` : ""}
               <div class="label" style="margin-top:8px">Alternatives</div>
               <div class="alt-grid">
                 ${candidates.length ? candidates.map(candidate => `
@@ -1693,6 +1694,85 @@
       return "separation";
     }
 
+    function flowsheetUnitSubcategory(group) {
+      const category = flowsheetUnitCategory(group);
+      const name = String(group.selectedUnit || "").toLowerCase();
+      if (category === "reactor") return "reactor";
+      if (category === "storage") return "tank";
+      if (category === "utility" || category === "waste") return "generic";
+      if (/mixer.?settler|decanter|liquid.?liquid extraction/.test(name)) return "mixer_settler";
+      if (/thin.?film|wiped.?film|evaporat/.test(name)) return "evaporator";
+      if (/dry|sieve|adsor|fixed.?bed/.test(name)) return "drying_column";
+      if (/distill|short.?path|rectif/.test(name)) return "distillation";
+      return "generic";
+    }
+
+    function flowsheetShapeMarkup(subcategory, x, y, w, h, stroke) {
+      const cx = x + w / 2;
+      if (subcategory === "reactor") {
+        const bodyTop = y + h * 0.24;
+        const bodyBottom = y + h * 0.92;
+        const domeRy = h * 0.2;
+        const left = x + w * 0.1;
+        const right = x + w * 0.9;
+        return `
+          <path d="M ${left} ${bodyBottom} L ${left} ${bodyTop} A ${w * 0.4} ${domeRy} 0 0 1 ${right} ${bodyTop} L ${right} ${bodyBottom} Z" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
+          <rect x="${cx - w * 0.04}" y="${y}" width="${w * 0.08}" height="${h * 0.14}" fill="#fff" stroke="${stroke}" stroke-width="1.5"></rect>
+          <line x1="${cx}" y1="${y + h * 0.12}" x2="${cx}" y2="${bodyBottom - h * 0.09}" stroke="${stroke}" stroke-width="1.5"></line>
+          <ellipse cx="${cx - w * 0.08}" cy="${bodyBottom - h * 0.09}" rx="${w * 0.09}" ry="${h * 0.04}" fill="#e2e7ea" stroke="${stroke}" stroke-width="1.1"></ellipse>
+          <ellipse cx="${cx + w * 0.08}" cy="${bodyBottom - h * 0.09}" rx="${w * 0.09}" ry="${h * 0.04}" fill="#e2e7ea" stroke="${stroke}" stroke-width="1.1"></ellipse>
+        `;
+      }
+      if (subcategory === "tank") {
+        const ry = h * 0.38;
+        return `<rect x="${x + w * 0.06}" y="${y + h * 0.12}" width="${w * 0.88}" height="${h * 0.76}" rx="${ry}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>`;
+      }
+      if (subcategory === "mixer_settler") {
+        const top = y + h * 0.2;
+        const bottom = y + h * 0.8;
+        const left = x + w * 0.08;
+        const right = x + w * 0.78;
+        const capR = (bottom - top) / 2;
+        return `
+          <path d="M ${left} ${top} L ${right} ${top} A ${capR} ${capR} 0 0 1 ${right} ${bottom} L ${left} ${bottom} Z" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
+          <line x1="${left + (right - left) * 0.4}" y1="${top}" x2="${left + (right - left) * 0.4}" y2="${bottom}" stroke="${stroke}" stroke-width="1.1" stroke-dasharray="3 2"></line>
+        `;
+      }
+      if (subcategory === "evaporator") {
+        const top = y + h * 0.3;
+        const bottom = y + h * 0.7;
+        const left = x + w * 0.12;
+        const right = x + w * 0.88;
+        const capR = (bottom - top) / 2;
+        const hatches = [];
+        for (let i = 0; i < 7; i += 1) {
+          const hx = left + 10 + i * ((right - left - 20) / 6);
+          hatches.push(`<line x1="${hx}" y1="${top + 2}" x2="${hx}" y2="${bottom - 2}" stroke="${stroke}" stroke-width="1"></line>`);
+        }
+        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="${capR}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>${hatches.join("")}`;
+      }
+      if (subcategory === "drying_column") {
+        const left = x + w * 0.34;
+        const right = x + w * 0.66;
+        const top = y + h * 0.1;
+        const bottom = y + h * 0.9;
+        const lines = [0.28, 0.46, 0.64, 0.82].map(f => `<line x1="${left}" y1="${top + (bottom - top) * f}" x2="${right}" y2="${top + (bottom - top) * f}" stroke="${stroke}" stroke-width="1"></line>`).join("");
+        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>${lines}`;
+      }
+      if (subcategory === "distillation") {
+        const top = y + h * 0.14;
+        const bottom = y + h * 0.86;
+        const halfTop = w * 0.11;
+        const halfBottom = w * 0.06;
+        const trapezoid = (tcx) => `M ${tcx - halfTop} ${top} L ${tcx + halfTop} ${top} L ${tcx + halfBottom} ${bottom} L ${tcx - halfBottom} ${bottom} Z`;
+        return `
+          <path d="${trapezoid(x + w * 0.34)}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
+          <path d="${trapezoid(x + w * 0.66)}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
+        `;
+      }
+      return `<rect x="${x + w * 0.05}" y="${y + h * 0.1}" width="${w * 0.9}" height="${h * 0.8}" rx="8" fill="#fff" stroke="${stroke}" stroke-width="1.6"></rect>`;
+    }
+
     function flowsheetGroupStreams(group) {
       const streams = group.blocks.flatMap(block => (block.streams || []).filter(stream => stream.name.trim()));
       const isProduct = streams.some(stream => stream.role === "output" && stream.fate === "product");
@@ -1710,16 +1790,20 @@
       const rowY = 70;
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
+        const stored = ensureGroup(groupId);
         const category = flowsheetUnitCategory(group);
+        const subcategory = flowsheetUnitSubcategory(group);
         const meta = flowsheetGroupStreams(group);
+        const autoX = 40 + index * (boxW + gapX);
         return {
           id: group.id,
           unitNumber: index + 1,
           task: group.task || "unassigned",
           selectedUnit: group.selectedUnit || "unassigned unit",
           category,
-          x: 40 + index * (boxW + gapX),
-          y: rowY,
+          subcategory,
+          x: Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : autoX,
+          y: Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : rowY,
           w: boxW,
           h: boxH,
           ...meta
@@ -1738,10 +1822,12 @@
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 46;
       const wasteAreaH = maxWasteVent ? 30 + maxWasteVent * stubLaneH : 0;
-      const recycleLaneBaseY = rowY + boxH + wasteAreaH + 40;
+      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h)) : rowY + boxH;
+      const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 600;
+      const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 40;
       const recycleLaneCount = recycleLinks.length;
-      const width = groups.length ? groups[groups.length - 1].x + boxW + 60 : 600;
-      const height = recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 40 : rowY + boxH + wasteAreaH + 60;
+      const width = Math.max(600, maxBoxRight + 60);
+      const height = recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 40 : maxBoxBottom + wasteAreaH + 60;
       return { groups, byId, forwardLinks, recycleLinks, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY };
     }
 
@@ -1814,17 +1900,19 @@
               <text x="${stubX}" y="${stubY + 13}" font-size="10" fill="${color.line}" text-anchor="middle">${escapeHtml(stream.kind)}: ${escapeHtml(stream.name)}</text>
             `;
           }).join("");
+        const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
         return `
-          <g>
-            <rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="10"
-              fill="${box.isProduct ? "#e2f2e7" : style.fill}" stroke="${box.isProduct ? "#286d3f" : style.stroke}" stroke-width="${box.isProduct ? 2.5 : 1.6}"></rect>
-            <text x="${box.x + 10}" y="${box.y + 18}" font-size="11" font-weight="700" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
+          <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
+            ${box.isProduct ? `<rect x="${box.x - 5}" y="${box.y - 5}" width="${box.w + 10}" height="${box.h + 10}" rx="12" fill="#e2f2e7" opacity="0.55"></rect>` : ""}
+            ${flowsheetShapeMarkup(box.subcategory, box.x, box.y, box.w, box.h, strokeColor)}
+            <text x="${box.x + 6}" y="${box.y + 12}" font-size="11" font-weight="700" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
             <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 4}" font-size="12" font-weight="700" text-anchor="middle" fill="#172027">
-              ${wrapSvgText(box.selectedUnit, 24).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
+              ${wrapSvgText(box.selectedUnit, 22).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 12}" font-size="10" text-anchor="middle" fill="#657480">${escapeHtml(box.task)}</text>
-            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 14}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 8}" font-size="10" text-anchor="middle" fill="#657480">${escapeHtml(box.task)}</text>
+            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 16}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
+            <rect class="flowsheet-drag-handle" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="transparent" data-tip="Drag to move. Double-click to edit the unit description."></rect>
           </g>
         `;
       }).join("");
@@ -1884,6 +1972,65 @@
       host.innerHTML = result.empty
         ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
         : result.svg;
+      if (!result.empty) wireFlowsheetInteractions(host);
+    }
+
+    function wireFlowsheetInteractions(host) {
+      const svg = host.querySelector("svg.flowsheet-svg");
+      if (!svg) return;
+      host.querySelectorAll(".flowsheet-unit").forEach(unitGroup => {
+        const groupId = unitGroup.dataset.flowsheetGroup;
+        let drag = null;
+        unitGroup.addEventListener("mousedown", event => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const model = buildFlowsheetModel();
+          const box = model.byId.get(groupId);
+          if (!box) return;
+          const rect = svg.getBoundingClientRect();
+          const scale = rect.width > 0 ? model.width / rect.width : 1;
+          drag = {
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            startX: box.x,
+            startY: box.y,
+            scale,
+            moved: false
+          };
+          const onMove = moveEvent => {
+            if (!drag) return;
+            const dx = (moveEvent.clientX - drag.startClientX) * drag.scale;
+            const dy = (moveEvent.clientY - drag.startClientY) * drag.scale;
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
+            unitGroup.setAttribute("transform", `translate(${dx}, ${dy})`);
+          };
+          const onUp = upEvent => {
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            if (!drag) return;
+            if (drag.moved) {
+              const dx = (upEvent.clientX - drag.startClientX) * drag.scale;
+              const dy = (upEvent.clientY - drag.startClientY) * drag.scale;
+              const groupState = ensureGroup(groupId);
+              groupState.flowsheetX = drag.startX + dx;
+              groupState.flowsheetY = drag.startY + dy;
+            }
+            drag = null;
+            renderFlowsheetModal();
+          };
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+        unitGroup.addEventListener("dblclick", event => {
+          event.preventDefault();
+          const groupState = ensureGroup(groupId);
+          const nextLabel = prompt(`Edit the unit description shown for ${groupId}:`, groupState.selectedUnit || "");
+          if (nextLabel === null) return;
+          groupState.selectedUnit = nextLabel.trim();
+          renderFlowsheetModal();
+          renderAll();
+        });
+      });
     }
 
     function openFlowsheetModal() {
@@ -6893,8 +7040,16 @@
           ? "Create at least two blocks/groups to draw arrows."
           : "Right-click a block or group to start an arrow.";
       $("linkSummary").innerHTML = state.links.length
-        ? state.links.map((link, index) => `<span class="link-chip">${escapeHtml(link.from)} -> ${escapeHtml(link.to)} <button class="pill danger" data-remove-link="${index}">x</button></span>`).join("")
+        ? `
+          <button class="mini-button" id="toggleConnectionList">${state.showConnections ? "Hide connections" : `Show connections (${state.links.length})`}</button>
+          ${state.showConnections ? `<div class="connection-list">${state.links.map((link, index) => `<span class="link-chip">${escapeHtml(link.from)} -> ${escapeHtml(link.to)} <button class="pill danger" data-remove-link="${index}">x</button></span>`).join("")}</div>` : `<span class="muted small">${state.links.length} arrow${state.links.length === 1 ? "" : "s"} hidden.</span>`}
+        `
         : `<span class="muted small">No arrows yet.</span>`;
+
+      $("toggleConnectionList")?.addEventListener("click", () => {
+        state.showConnections = !state.showConnections;
+        renderAll();
+      });
 
       document.querySelectorAll("[data-remove-link]").forEach(button => {
         button.addEventListener("click", () => {
