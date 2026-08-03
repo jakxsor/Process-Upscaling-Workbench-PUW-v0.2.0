@@ -7916,6 +7916,15 @@
     $("openFlowsheet").addEventListener("click", openFlowsheetModal);
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
     $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
+    $("resetFlowsheetLayout").addEventListener("click", () => {
+      if (!confirm("Move every unit back to the automatic layout? This clears any manual dragging.")) return;
+      groupIdsInTextOrder().forEach(groupId => {
+        const groupState = ensureGroup(groupId);
+        delete groupState.flowsheetX;
+        delete groupState.flowsheetY;
+      });
+      renderFlowsheetModal();
+    });
     $("flowsheetModal").addEventListener("click", event => {
       if (event.target === $("flowsheetModal")) closeFlowsheetModal();
     });

@@ -2363,3 +2363,8 @@
       padding: 3px 6px;
       text-align: center;
     }
+
+    .flowsheet-unit,
+    .flowsheet-drag-handle {
+      cursor: move;
+    }
