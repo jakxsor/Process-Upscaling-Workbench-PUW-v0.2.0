@@ -1,40 +1,81 @@
 # Upscaling Pipeline Tool
 
-This workspace is now organized around the local upscaling workflow tool.
+Local web app for turning a laboratory synthesis protocol into a traceable
+early-stage scale-up workflow.
 
-The active app lives in:
+The tool is designed to support a phenomena-based upscaling framework. It helps
+the user move from free text to blocks, phenomena, task groups, unit-operation
+alternatives, material-flow assumptions, heuristic checks, preliminary scale-up,
+and schematic Gantt bottleneck review.
+
+It is not a final equipment design tool. It performs deterministic calculations
+where the inputs are available, and otherwise reports missing data, assumptions,
+and low-confidence scale-up risks.
+
+## What It Does
+
+- Create annotated protocol blocks from selected text.
+- Assign behaviour presets and phenomena to each block.
+- Add quantified MFA streams: inputs, outputs, waste/emissions, phase, quantity,
+  unit, timing, data status, recycle/purge/fate, and notes.
+- Combine blocks into task groups while preserving block-level information.
+- Aggregate group-level MFA and operating conditions.
+- Use phase categories to avoid incompatible phenomenon/unit-operation choices.
+- Suggest industrial unit-operation alternatives from grouped phenomena.
+- Show heuristic-rule checks before numerical scale-up.
+- Add optional property refinement only when it helps separation, energy,
+  mixing, or ambiguous alternatives.
+- Screen separation alternatives with a property-based keep/weak/reject layer.
+- Define a scale-up basis: target product, production target, yield, recovery,
+  design margin, OEE, operating schedule, and parallel units.
+- Scale MFA quantities to batch, hourly, and annual views.
+- Build a schematic Gantt chart and identify bottlenecks.
+- Show a Gantt evidence layer with operation class, expected scale behaviour,
+  missing data, schedule margin, and compact references.
+- Optionally run an external OpenAI-compatible process review using a temporary
+  API key or server-side `OPENAI_API_KEY`.
+
+## Reliability Level
+
+The current version is suitable for:
+
+- reproducible early-stage screening;
+- framework demonstration;
+- identifying missing data before scale-up;
+- comparing task grouping and unit-operation alternatives;
+- producing a transparent scaled MFA skeleton;
+- finding schematic bottlenecks from declared or extracted task durations.
+
+The current version is not intended to:
+
+- replace reactor, filter, dryer, distillation, or heat-exchanger design;
+- automatically convert lab durations into validated industrial durations;
+- infer physical properties or kinetic data without user-provided evidence;
+- apply proposed AI changes automatically.
+
+For scheduling, the tool uses:
 
 ```text
-upscaling_pipeline_tool/
+adjusted duration = input duration x (1 + Gantt margin %)
+effective duration = adjusted duration / parallel units
+bottleneck = task with the largest effective duration
+cycle time = sum of non-overlapping effective durations
 ```
 
-It supports:
+If operation-specific data are missing, the Gantt keeps the input duration and
+reports the missing data needed for quantitative correction.
 
-- creating text blocks from a protocol description;
-- adding quantified MFA streams to each block: inputs, outputs, waste/emissions, quantity, unit, phase, data status, and notes;
-- assigning stream timing/role so grouped operations can aggregate compatible streams without losing later additions, recycles, or intermediate transfers;
-- tracking stream fate, recycle loops, recovery percentage, purge percentage, make-up needs, and accumulation risks;
-- using Lutze phase categories for streams and filtering out incompatible phenomenon/unit-operation combinations;
-- recording phenomenon-driven operating conditions with structured value/unit fields for temperature, holding time, pressure, conversion, and loading;
-- capturing phenomenon-specific descriptors such as mixing time, agitation speed, contact time, separation efficiency, carryover limits, and split fractions;
-- aggregating group-level conditions, summing additive durations where valid and keeping conflicting/ranged operating values separate;
-- defining a scale-up basis with target product, target amount, operating schedule, yield, recovery, and design margin;
-- propagating stream quantities into scaled MFA rows for batch, hourly, and annual production views;
-- generating a scale-up assessment for heat transfer, mixing, phase separation, vapor-liquid operations, solids handling, recycle closure, and energy handoff risks;
-- generating recycle/fate summaries and energy-bridge candidates for downstream energy calculations;
-- adding optional property refinement only when phase separation, energy, mixing, or ambiguous alternatives make it useful;
-- screening separation alternatives with a property-based keep/weak/reject layer while keeping manual overrides traceable;
-- running a rule-based Refine / Check pass for missing scale data, phase gaps, condition gaps, unit-choice ambiguity, connectivity, and scale-sensitive risks;
-- optionally running an external OpenAI-compatible process review from a temporary popup API key or server-side `OPENAI_API_KEY`;
-- showing a Gantt evidence layer with operation class, expected scale behaviour, schedule margin, missing data, and references;
-- assigning behavior presets and phenomenological descriptors;
-- combining blocks into task groups;
-- drawing flowchart-style arrows between draft blocks, groups, and assigned blocks;
-- switching the right project panel between the block inspector and the scale-up view;
-- inspecting unit-operation alternatives with heuristic explanations;
-- showing hover explanations for phenomena such as `M(L)`, `2phM(LL)`, `ES(H)`, `PT(VL)`, and `PS(LS)`.
+## Requirements
 
-## Run
+- Python 3.9 or newer is recommended.
+- No external Python packages are required.
+- A modern browser.
+
+The app uses only the Python standard library.
+
+## Quick Start
+
+From the repository root:
 
 ```bash
 python3 run_upscaling_tool.py --port 8787
@@ -42,34 +83,114 @@ python3 run_upscaling_tool.py --port 8787
 
 Then open:
 
+```text
+http://127.0.0.1:8787
+```
+
+On macOS you can also run:
+
 ```bash
 open http://127.0.0.1:8787
 ```
 
-Equivalent direct command:
+## Windows Instructions
 
-```bash
-python3 upscaling_pipeline_tool/app.py --port 8787
-```
-
-## Saved State
-
-Recent scale-up tool snapshots are saved under:
+1. Install Python from:
 
 ```text
-saved_states/upscaling_tool_*/
+https://www.python.org/downloads/windows/
 ```
 
-These snapshots are local backups and are intentionally ignored by git for new saves.
+During installation, enable:
 
-## Dependencies
+```text
+Add Python to PATH
+```
 
-No external Python dependencies are required. The app uses the Python standard library.
+2. Download this repository:
+
+```text
+Code -> Download ZIP
+```
+
+Then extract the ZIP.
+
+3. Open PowerShell in the extracted folder, where `run_upscaling_tool.py` is
+located.
+
+4. Run:
+
+```powershell
+python run_upscaling_tool.py --port 8787
+```
+
+If `python` is not recognized, use:
+
+```powershell
+py run_upscaling_tool.py --port 8787
+```
+
+5. Open the browser at:
+
+```text
+http://127.0.0.1:8787
+```
+
+## Optional AI Review
+
+The app works without an API key.
+
+For the external process review, either paste a temporary key in the popup or
+start the server with an environment variable.
+
+macOS/Linux:
+
+```bash
+export OPENAI_API_KEY="your_key_here"
+python3 run_upscaling_tool.py --port 8787
+```
+
+Windows PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="your_key_here"
+python run_upscaling_tool.py --port 8787
+```
+
+Do not commit API keys to the repository.
+
+## Workflow
+
+1. Paste or load the source protocol.
+2. Select text and create blocks.
+3. Assign behaviour presets, phenomena, phases, conditions, and MFA streams.
+4. Combine related blocks into task groups.
+5. Choose unit-operation alternatives and record the selection basis.
+6. Run heuristic checks and property-based separation screening where useful.
+7. Define the scale-up basis and review scaled MFA results.
+8. Use the Gantt panel to inspect cycle time, bottlenecks, schedule margin, and
+   missing operation-specific scale-up data.
+9. Export JSON for traceability or downstream analysis.
+
+## Built-In Example
+
+The app includes an octocrylene benchmark case that can be loaded from the UI.
+It demonstrates:
+
+- grouped reaction and work-up operations;
+- cyclohexane recovery/recycle;
+- scaled MFA from a lab basis to annual production;
+- heuristic review;
+- scale-up/Gantt bottleneck screening.
 
 ## Code Layout
 
-`upscaling_pipeline_tool/app.py` holds the HTTP server and HTML skeleton
-only. CSS and client-side JS were split out into
-`upscaling_pipeline_tool/static/style.css` and
-`upscaling_pipeline_tool/static/app.js`, served at `/style.css` and
-`/app.js` respectively.
+```text
+run_upscaling_tool.py              Entry point
+upscaling_pipeline_tool/app.py     Local HTTP server and HTML shell
+upscaling_pipeline_tool/static/    Client-side app and styling
+upscaling_pipeline_tool/README.md  Package-level notes
+```
+
+Local backup snapshots may exist under `saved_states/`, but that directory is
+ignored by git.
