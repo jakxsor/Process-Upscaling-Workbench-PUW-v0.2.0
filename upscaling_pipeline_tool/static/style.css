@@ -2504,3 +2504,7 @@
     .flowsheet-drag-handle {
       cursor: move;
     }
+
+    .split-group-panel {
+      width: min(480px, calc(100vw - 24px));
+    }

@@ -392,6 +392,7 @@
       showConnections: false,
       measuredNodeHeights: {},
       boardCompact: false,
+      pendingSplitGroupId: null,
       sourcePanelTab: "protocol",
       processRuleOptions: {
         sequence: true,
@@ -1781,13 +1782,40 @@
       const wasteStreams = streams.filter(stream => ["wastewater", "solid waste", "purge", "loss"].includes(stream.fate));
       const ventStreams = streams.filter(stream => stream.fate === "vent");
       const recycleStreams = streams.filter(stream => ["recycled input", "recovered solvent"].includes(stream.fate) && stream.destinationGroup.trim());
-      return { isProduct, wasteStreams, ventStreams, recycleStreams };
+      const outputStreams = streams.filter(stream => stream.role === "output");
+      const inputStreams = streams.filter(stream => stream.role === "input");
+      const totalOutputKg = outputStreams.reduce((sum, stream) => {
+        const kg = massToKg(stream.quantity, stream.unit);
+        return sum + (Number.isFinite(kg) ? kg : 0);
+      }, 0);
+      return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, totalOutputKg };
+    }
+
+    function flowsheetGroupSpecs(group) {
+      const conditions = aggregateGroupConditions(group);
+      const byId = id => conditions.find(item => item.id === id);
+      const temp = byId("target_temperature") || byId("holding_temperature") || byId("initial_temperature");
+      const pressure = byId("target_pressure") || byId("initial_pressure");
+      const duration = byId("reaction_time") || byId("holding_time") || byId("phase_change_time") || byId("contact_time");
+      const lines = [];
+      if (temp) lines.push(temp.display);
+      if (pressure) lines.push(pressure.display);
+      if (duration) lines.push(`${duration.display} hold`);
+      return lines;
+    }
+
+    function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
+      const header = `${fromBox.id} -> ${toBox.id}`;
+      const massLine = Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch (from ${fromBox.id} outputs)` : "quantity not available";
+      const substances = fromBox.outputStreams.filter(s => !["wastewater", "solid waste", "purge", "loss", "vent"].includes(s.fate)).slice(0, 6)
+        .map(s => `- ${s.name}: ${s.quantity || "?"} ${s.unit || ""}`.trim());
+      return [header, massLine, ...(substances.length ? ["Substances:", ...substances] : [])].join("\n");
     }
 
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
       const boxW = 190;
-      const boxH = 118;
+      const boxH = 132;
       const gapX = 90;
       const rowY = 70;
       const groups = groupIds.map((groupId, index) => {
@@ -1796,6 +1824,8 @@
         const category = flowsheetUnitCategory(group);
         const subcategory = flowsheetUnitSubcategory(group);
         const meta = flowsheetGroupStreams(group);
+        const specs = flowsheetGroupSpecs(group);
+        const tip = groupContentsTip(group);
         const autoX = 40 + index * (boxW + gapX);
         return {
           id: group.id,
@@ -1804,6 +1834,8 @@
           selectedUnit: group.selectedUnit || "unassigned unit",
           category,
           subcategory,
+          specs,
+          tip,
           x: Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : autoX,
           y: Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : rowY,
           w: boxW,
@@ -1821,6 +1853,7 @@
         if (isBackwardLink(link)) recycleLinks.push({ from, to });
         else forwardLinks.push({ from, to });
       });
+      const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 46;
       const wasteAreaH = maxWasteVent ? 30 + maxWasteVent * stubLaneH : 0;
@@ -1830,7 +1863,7 @@
       const recycleLaneCount = recycleLinks.length;
       const width = Math.max(600, maxBoxRight + 60);
       const height = recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 40 : maxBoxBottom + wasteAreaH + 60;
-      return { groups, byId, forwardLinks, recycleLinks, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY };
+      return { groups, byId, forwardLinks, recycleLinks, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg };
     }
 
     function flowsheetBoxCenter(box) {
@@ -1859,13 +1892,20 @@
         </defs>
       `;
 
+      const sankeyWidth = (kg) => {
+        if (!Number.isFinite(kg) || kg <= 0 || model.maxOutputKg <= 0) return 2;
+        return Math.min(14, Math.max(2, (kg / model.maxOutputKg) * 13 + 1.5));
+      };
+
       const forwardPaths = model.forwardLinks.map(link => {
         const from = model.byId.get(link.from);
         const to = model.byId.get(link.to);
         const y = flowsheetBoxCenter(from).y;
         const x1 = from.x + from.w;
         const x2 = to.x;
-        return `<path d="M ${x1} ${y} L ${x2} ${y}" stroke="#172027" stroke-width="2" fill="none" marker-end="url(#fsArrow)"></path>`;
+        const strokeWidth = sankeyWidth(from.totalOutputKg);
+        const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
+        return `<path class="tip" data-tip="${escapeAttr(tooltip)}" d="M ${x1} ${y} L ${x2} ${y}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>`;
       }).join("");
 
       let recycleIndex = 0;
@@ -1883,8 +1923,19 @@
           { x: endX, y: to.y + to.h }
         ];
         const d = points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
+        const recycleKg = from.recycleStreams.reduce((sum, s) => {
+          const kg = massToKg(s.quantity, s.unit);
+          return sum + (Number.isFinite(kg) ? kg : 0);
+        }, 0);
+        const strokeWidth = Math.max(2, sankeyWidth(recycleKg) * 0.75);
+        const recycleTooltip = [
+          `recycle ${link.from} -> ${link.to}`,
+          from.recycleStreams.length
+            ? from.recycleStreams.map(s => `- ${s.name}: ${s.quantity || "?"} ${s.unit || ""}`.trim()).join("\n")
+            : "quantity not available"
+        ].join("\n");
         return `
-          <path d="${d}" stroke="#286d3f" stroke-width="2" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
+          <path class="tip" data-tip="${escapeAttr(recycleTooltip)}" d="${d}" stroke="#286d3f" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
           <text x="${(startX + endX) / 2}" y="${laneY - 6}" font-size="11" fill="#286d3f" text-anchor="middle">recycle ${escapeHtml(link.from)} to ${escapeHtml(link.to)}</text>
         `;
       }).join("");
@@ -1903,18 +1954,21 @@
             `;
           }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
+        const specsLine = [box.specs.join(" / "), box.totalOutputKg > 0 ? `${formatNumber(box.totalOutputKg)} kg/batch` : ""].filter(Boolean).join(" — ");
+        const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
         return `
           <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
             ${box.isProduct ? `<rect x="${box.x - 5}" y="${box.y - 5}" width="${box.w + 10}" height="${box.h + 10}" rx="12" fill="#e2f2e7" opacity="0.55"></rect>` : ""}
             ${flowsheetShapeMarkup(box.subcategory, box.x, box.y, box.w, box.h, strokeColor)}
             <text x="${box.x + 6}" y="${box.y + 12}" font-size="11" font-weight="700" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 4}" font-size="12" font-weight="700" text-anchor="middle" fill="#172027">
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 10}" font-size="12" font-weight="700" text-anchor="middle" fill="#172027">
               ${wrapSvgText(box.selectedUnit, 22).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
+            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 + 26}" font-size="10" font-weight="600" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine)}</text>` : ""}
             <text x="${box.x + box.w / 2}" y="${box.y + box.h - 8}" font-size="10" text-anchor="middle" fill="#657480">${escapeHtml(box.task)}</text>
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 16}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
-            <rect class="flowsheet-drag-handle" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="transparent" data-tip="Drag to move. Double-click to edit the unit description."></rect>
+            <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="transparent"></rect>
           </g>
         `;
       }).join("");
@@ -6870,6 +6924,56 @@
       renderAll();
     }
 
+    function openSplitGroupModal(groupId) {
+      const group = groupModel(groupId);
+      if (!group) return;
+      const entry = taskScheduleEntry(group, 0);
+      const baseDuration = Number.isFinite(entry.adjustedDurationH) && entry.adjustedDurationH > 0 ? entry.adjustedDurationH : NaN;
+      const suggestion = Math.max(2, Math.ceil((Number.isFinite(entry.parallelUnits) ? entry.parallelUnits : 1) + 1));
+      state.pendingSplitGroupId = groupId;
+      $("splitGroupIdLabel").textContent = groupId;
+      const nInput = $("splitGroupN");
+      nInput.value = String(suggestion);
+      nInput.dataset.splitBaseDuration = Number.isFinite(baseDuration) ? String(baseDuration) : "";
+      const warning = $("splitGroupWarning");
+      if (entry.scaleSensitivity === "kinetics-bound") {
+        warning.hidden = false;
+        warning.textContent = `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput.`;
+      } else {
+        warning.hidden = true;
+        warning.textContent = "";
+      }
+      renderSplitGroupPreview();
+      $("splitGroupModal").hidden = false;
+    }
+
+    function renderSplitGroupPreview() {
+      const nInput = $("splitGroupN");
+      const preview = $("splitGroupPreview");
+      if (!nInput || !preview) return;
+      let n = Math.round(Number(nInput.value));
+      if (!Number.isFinite(n) || n < 2) n = 2;
+      const baseDuration = Number(nInput.dataset.splitBaseDuration);
+      const groupId = state.pendingSplitGroupId || "";
+      preview.textContent = Number.isFinite(baseDuration) && baseDuration > 0
+        ? `Each of the ${n} parallel units would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h as one unit). Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`
+        : `No duration set yet, so time cannot be split proportionally. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow. ${groupId} itself is removed. This can be undone.`;
+    }
+
+    function closeSplitGroupModal() {
+      $("splitGroupModal").hidden = true;
+      state.pendingSplitGroupId = null;
+    }
+
+    function confirmSplitGroupModal() {
+      const groupId = state.pendingSplitGroupId;
+      if (!groupId) return;
+      let n = Math.round(Number($("splitGroupN").value));
+      if (!Number.isFinite(n) || n < 2) n = 2;
+      closeSplitGroupModal();
+      splitGroupIntoParallelUnits(groupId, n);
+    }
+
     function splitGroupIntoParallelUnits(groupId, n) {
       const group = groupModel(groupId);
       if (!group || !Number.isFinite(n) || n < 2) return;
@@ -8005,7 +8109,7 @@
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
     $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
     $("resetFlowsheetLayout").addEventListener("click", () => {
-      if (!confirm("Move every unit back to the automatic layout? This clears any manual dragging.")) return;
+      pushUndo();
       groupIdsInTextOrder().forEach(groupId => {
         const groupState = ensureGroup(groupId);
         delete groupState.flowsheetX;
@@ -8015,6 +8119,13 @@
     });
     $("flowsheetModal").addEventListener("click", event => {
       if (event.target === $("flowsheetModal")) closeFlowsheetModal();
+    });
+    $("closeSplitGroupModal").addEventListener("click", closeSplitGroupModal);
+    $("cancelSplitGroup").addEventListener("click", closeSplitGroupModal);
+    $("confirmSplitGroup").addEventListener("click", confirmSplitGroupModal);
+    $("splitGroupN").addEventListener("input", renderSplitGroupPreview);
+    $("splitGroupModal").addEventListener("click", event => {
+      if (event.target === $("splitGroupModal")) closeSplitGroupModal();
     });
     $("rerunLocalRuleApplication").addEventListener("click", () => {
       runAiRefine(currentProcessRuleOptions());
@@ -8115,26 +8226,7 @@
     $("ctxSplitGroup").addEventListener("click", () => {
       const groupId = state.menuGroupId;
       hideGroupMenu();
-      if (!groupId) return;
-      const group = groupModel(groupId);
-      if (!group) return;
-      const entry = taskScheduleEntry(group, 0);
-      const baseDuration = Number.isFinite(entry.adjustedDurationH) && entry.adjustedDurationH > 0 ? entry.adjustedDurationH : NaN;
-      const suggestion = Math.max(2, Math.ceil((Number.isFinite(entry.parallelUnits) ? entry.parallelUnits : 1) + 1));
-      const promptLabel = `Split ${groupId} into how many parallel units?` + (Number.isFinite(baseDuration) ? ` Currently ${formatNumber(baseDuration)} h per batch.` : " No duration set yet, so time cannot be split proportionally.");
-      const input = prompt(promptLabel, String(suggestion));
-      if (input === null) return;
-      const n = Math.round(Number(input));
-      if (!Number.isFinite(n) || n < 2) {
-        alert("Enter a whole number of 2 or more.");
-        return;
-      }
-      const kineticsWarning = entry.scaleSensitivity === "kinetics-bound"
-        ? `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time, only raise throughput. `
-        : "";
-      const previewText = Number.isFinite(baseDuration) ? `Each unit would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h). ` : "";
-      if (!confirm(`${kineticsWarning}${previewText}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow and duration, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`)) return;
-      splitGroupIntoParallelUnits(groupId, n);
+      if (groupId) openSplitGroupModal(groupId);
     });
     $("ctxEditStream").addEventListener("click", () => {
       editStream(state.menuStreamId);
@@ -8159,6 +8251,10 @@
         }
         if (!$("flowsheetModal").hidden) {
           closeFlowsheetModal();
+          return;
+        }
+        if (!$("splitGroupModal").hidden) {
+          closeSplitGroupModal();
           return;
         }
         closeFloatingActions();
