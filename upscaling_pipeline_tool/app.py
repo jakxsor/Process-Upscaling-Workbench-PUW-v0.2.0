@@ -32,6 +32,7 @@ APP_HTML = r"""<!doctype html>
     </div>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
+      <button id="openTutorial" title="Open a short guided tour of the main workflow">Tutorial</button>
       <button id="loadSample">Load Octocrylene Case</button>
       <button id="openScaleTop">Scale-Up</button>
       <button id="openFlowsheet" title="Open a clean, read-only P&amp;ID-style diagram generated from the current groups and streams">Flowsheet View</button>
@@ -264,6 +265,20 @@ APP_HTML = r"""<!doctype html>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
+
+  <div id="tutorialOverlay" class="tutorial-overlay" hidden>
+    <div id="tutorialSpotlight" class="tutorial-spotlight"></div>
+    <section id="tutorialCard" class="tutorial-card" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
+      <div class="tutorial-progress" id="tutorialProgress">1 / 7</div>
+      <h2 id="tutorialTitle">Tutorial</h2>
+      <p id="tutorialBody"></p>
+      <div class="tutorial-actions">
+        <button id="tutorialPrev" class="mini-button">Back</button>
+        <button id="tutorialNext" class="primary">Next</button>
+        <button id="tutorialSkip" class="mini-button">Close</button>
+      </div>
+    </section>
+  </div>
 
   <div id="flowsheetModal" class="modal-backdrop" hidden>
     <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">

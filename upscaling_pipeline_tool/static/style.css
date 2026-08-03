@@ -2322,6 +2322,68 @@
       width: min(1500px, calc(100vw - 24px));
     }
 
+    .tutorial-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      background: rgba(15, 24, 31, 0.58);
+    }
+
+    .tutorial-overlay[hidden] {
+      display: none;
+    }
+
+    .tutorial-spotlight {
+      position: fixed;
+      z-index: 901;
+      border: 2px solid #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 0 9999px rgba(15, 24, 31, 0.58), 0 0 0 4px rgba(45, 96, 152, 0.35);
+      pointer-events: none;
+      transition: left 140ms ease, top 140ms ease, width 140ms ease, height 140ms ease;
+    }
+
+    .tutorial-card {
+      position: fixed;
+      z-index: 902;
+      display: grid;
+      gap: 9px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+
+    .tutorial-card h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .tutorial-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .tutorial-progress {
+      width: fit-content;
+      padding: 2px 7px;
+      border-radius: 999px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .tutorial-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
     .flowsheet-host {
       overflow: auto;
       border: 1px solid var(--line);

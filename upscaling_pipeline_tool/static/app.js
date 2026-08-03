@@ -405,6 +405,7 @@
       selectedBlockId: null,
       selectedGroupId: null,
       selectedIds: [],
+      tutorialIndex: 0,
       menuBlockId: null,
       menuGroupId: null,
       menuStreamId: null,
@@ -7389,6 +7390,60 @@
       $("toggleInspector").textContent = $("appMain").classList.contains("inspector-collapsed") ? "◑" : "◐";
     }
 
+    const tutorialSteps = [
+      { target: "#sourceInput", title: "1. Source Protocol", body: "Paste the lab protocol here. The workflow starts from text, so every block remains traceable to the original synthesis description." },
+      { target: "#createBlockSide", title: "2. Create Blocks", body: "Select one operation in the protocol, then create a block. Blocks are the smallest editable units of the process." },
+      { target: "#annotatedText", title: "3. Annotated Text", body: "Created blocks appear highlighted in the text. You can inspect them, delete them, or use right-click actions from this linked view." },
+      { target: "#groupFlow", title: "4. Board And Flowchart", body: "Blocks and task groups appear on this board. Drag them, combine related blocks, and draw arrows to build the process network." },
+      { target: "#inspectorPanel", title: "5. Inspector", body: "Use the right panel to edit phenomena, task assignment, MFA streams, operating conditions, unit alternatives, and separation properties." },
+      { target: "[data-inspector-tab='heuristics']", title: "6. Heuristic Rules", body: "Apply process-synthesis rules to detect missing data, conflicts, risky choices, and choices that need justification." },
+      { target: "[data-inspector-tab='scale']", title: "7. Scale-Up And Gantt", body: "Set production target, yield, recovery, schedule assumptions, Gantt durations, and review bottlenecks with scale-behaviour evidence." },
+      { target: "#openFlowsheet", title: "8. Flowsheet View", body: "Open a cleaner P&ID-style diagram generated from the current groups and streams. Use it for presentation and layout checking." },
+      { target: "#exportJson", title: "9. Export", body: "Export the project as JSON for traceability, reporting, or downstream tools." }
+    ];
+
+    function openTutorial(index = 0) {
+      state.tutorialIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
+      $("tutorialOverlay").hidden = false;
+      renderTutorialStep();
+    }
+
+    function closeTutorial() {
+      $("tutorialOverlay").hidden = true;
+    }
+
+    function renderTutorialStep() {
+      const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
+      const target = document.querySelector(step.target);
+      if (target) target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+      requestAnimationFrame(() => positionTutorialStep(step));
+    }
+
+    function positionTutorialStep(step) {
+      const overlay = $("tutorialOverlay");
+      if (overlay.hidden) return;
+      const target = document.querySelector(step.target);
+      const card = $("tutorialCard");
+      const spotlight = $("tutorialSpotlight");
+      const rect = target ? target.getBoundingClientRect() : { left: 24, top: 90, width: 220, height: 90 };
+      const pad = 8;
+      spotlight.style.left = `${Math.max(8, rect.left - pad)}px`;
+      spotlight.style.top = `${Math.max(8, rect.top - pad)}px`;
+      spotlight.style.width = `${Math.min(window.innerWidth - 16, rect.width + pad * 2)}px`;
+      spotlight.style.height = `${Math.min(window.innerHeight - 16, rect.height + pad * 2)}px`;
+      $("tutorialProgress").textContent = `${state.tutorialIndex + 1} / ${tutorialSteps.length}`;
+      $("tutorialTitle").textContent = step.title;
+      $("tutorialBody").textContent = step.body;
+      $("tutorialPrev").disabled = state.tutorialIndex === 0;
+      $("tutorialNext").textContent = state.tutorialIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
+      const cardWidth = Math.min(360, window.innerWidth - 32);
+      const placeRight = rect.right + 18 + cardWidth < window.innerWidth;
+      const placeLeft = rect.left - 18 - cardWidth > 0;
+      card.style.width = `${cardWidth}px`;
+      card.style.left = `${placeRight ? rect.right + 18 : placeLeft ? rect.left - cardWidth - 18 : Math.max(16, (window.innerWidth - cardWidth) / 2)}px`;
+      card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - 260))}px`;
+    }
+
     function setInspectorTab(tab) {
       state.activeInspectorTab = ["inspect", "heuristics", "scale"].includes(tab) ? tab : "inspect";
       renderInspectorTabs();
@@ -7910,6 +7965,23 @@
       renderAll();
     });
     $("exportJson").addEventListener("click", renderExport);
+    $("openTutorial").addEventListener("click", () => openTutorial());
+    $("tutorialSkip").addEventListener("click", closeTutorial);
+    $("tutorialPrev").addEventListener("click", () => {
+      state.tutorialIndex = Math.max(0, state.tutorialIndex - 1);
+      renderTutorialStep();
+    });
+    $("tutorialNext").addEventListener("click", () => {
+      if (state.tutorialIndex >= tutorialSteps.length - 1) {
+        closeTutorial();
+        return;
+      }
+      state.tutorialIndex += 1;
+      renderTutorialStep();
+    });
+    $("tutorialOverlay").addEventListener("click", event => {
+      if (event.target === $("tutorialOverlay")) closeTutorial();
+    });
     $("refineProject").addEventListener("click", runRuleChecks);
     $("refineProjectAi").addEventListener("click", openAiRefineModal);
     $("closeAiRefineModal").addEventListener("click", closeAiRefineModal);
