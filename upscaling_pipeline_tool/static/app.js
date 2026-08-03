@@ -4453,7 +4453,7 @@
       const hasBlock = Boolean(block);
       ["behaviorSelect", "blockText"].forEach(id => $(id).disabled = !hasBlock);
       $("selectedBlockInfo").innerHTML = block
-        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span><div style="margin-top:6px">${escapeHtml(block.text)}</div>`
+        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span>`
         : "No block selected.";
       $("behaviorSelect").value = block?.behavior || "unassigned";
       $("blockText").value = block?.text || "";
@@ -5813,7 +5813,9 @@
       renderAll();
     }
 
-    function boardOrigin() {
+    function resetView() {
+      state.zoom = 0.78;
+      applyZoomToBoard();
       $("groupFlow").scrollTo({ left: 0, top: 0, behavior: "smooth" });
     }
 
@@ -6595,7 +6597,6 @@
       if (state.blocks.length) pushUndo();
       loadBaseExampleProject();
     });
-    $("loadText").addEventListener("click", loadTextView);
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
@@ -6615,7 +6616,6 @@
       setInspectorTab(step.tab);
       renderWorkflowStepper();
     });
-    $("createBlock").addEventListener("click", createBlockFromSelection);
     $("createBlockSide").addEventListener("click", createBlockFromSelection);
     $("openScaleTop").addEventListener("click", openScalePanel);
     $("clearProject").addEventListener("click", () => {
@@ -6652,11 +6652,10 @@
       });
     });
     $("runExternalAiRefine").addEventListener("click", runExternalAiRefine);
-    $("boardOrigin").addEventListener("click", boardOrigin);
+    $("resetView").addEventListener("click", resetView);
     $("boardCenter").addEventListener("click", centerSelection);
     $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.35));
     $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
-    $("zoomReset").addEventListener("click", () => setZoom(0.78));
     $("zoomFit").addEventListener("click", fitBoard);
     $("toggleInspector").addEventListener("click", toggleInspector);
     $("groupFlow").addEventListener("wheel", handleGraphWheel, { passive: false });

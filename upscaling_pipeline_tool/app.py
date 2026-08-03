@@ -33,8 +33,6 @@ APP_HTML = r"""<!doctype html>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
       <button id="loadSample">Load Octocrylene Case</button>
-      <button id="loadText" class="primary">Load Text View</button>
-      <button id="createBlock">Create Block From Selection</button>
       <button id="openScaleTop">Scale-Up</button>
       <button id="exportJson">Export JSON</button>
     </div>
@@ -74,13 +72,12 @@ APP_HTML = r"""<!doctype html>
             </div>
             <div class="row">
               <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
-              <button id="boardOrigin">Origin</button>
-              <button id="boardCenter">Center Selection</button>
+              <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset View</button>
+              <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center Selection</button>
               <button id="zoomOut">-</button>
               <span id="zoomReadout" class="zoom-readout">100%</span>
               <button id="zoomIn">+</button>
-              <button id="zoomReset">Board</button>
-              <button id="zoomFit">Fit</button>
+              <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
             </div>
           </div>
           <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
@@ -245,17 +242,19 @@ APP_HTML = r"""<!doctype html>
   </main>
 
   <div id="blockMenu" class="context-menu" hidden>
-    <div class="label">Block Actions</div>
+    <div class="label">Arrows</div>
     <button id="ctxStartBlockConnection" class="primary">Start Arrow From This Block</button>
     <button id="ctxRemoveBlockLinks">Remove Arrows For This Block</button>
-    <button id="ctxCombine" class="primary">Combine Selected</button>
-    <button id="ctxNewGroup">Create New Group For Block</button>
-    <div class="label" style="margin-top:8px">Assign To Group</div>
+
+    <div class="label" style="margin-top:10px">Task Grouping (Step 3) — keeps blocks separate</div>
+    <button id="ctxCombine" class="primary" title="Group the selected blocks under one new task (Gx). Blocks stay separate and keep their own text/streams/conditions; the group just bundles them for a shared unit operation.">Group Into New Task</button>
+    <button id="ctxNewGroup" title="Put only this block into its own new task group, on its own.">Put This Block In Its Own Task</button>
     <select id="ctxGroupSelect"></select>
-    <button id="ctxAssignGroup">Assign To Selected Group</button>
-    <div class="label" style="margin-top:8px">Edit Blocks</div>
-    <button id="ctxMergeBlocks">Merge Selected Blocks</button>
-    <button id="ctxRemoveFromGroup">Remove From Group</button>
+    <button id="ctxAssignGroup" title="Add the selected block(s) to the task group chosen above, instead of creating a new one.">Assign To Selected Task Above</button>
+    <button id="ctxRemoveFromGroup" title="Take this block out of its task group. It becomes an ungrouped draft block again; nothing about the block itself changes.">Remove From Task Group</button>
+
+    <div class="label" style="margin-top:10px">Block Editing (Step 1) — changes the blocks themselves</div>
+    <button id="ctxMergeBlocks" title="Fuse the selected adjacent blocks into a single block: their text is concatenated and their streams/phenomena/conditions are combined into one. The block count goes down — this cannot be split back automatically.">Merge Into One Block</button>
     <button id="ctxDeleteBlock" class="danger-button">Delete Block</button>
   </div>
 
