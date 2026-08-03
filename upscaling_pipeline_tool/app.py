@@ -149,7 +149,7 @@ APP_HTML = r"""<!doctype html>
               <div id="groupAlternatives" class="alt-grid"></div>
             </div>
             <div>
-              <div class="label">Properties Refinement</div>
+              <div class="label">Separation Properties</div>
               <div id="groupProperties" class="alt-grid"></div>
             </div>
           </div>
@@ -268,6 +268,11 @@ APP_HTML = r"""<!doctype html>
     <div class="label">Stream Actions</div>
     <button id="ctxEditStream" class="primary">Edit</button>
     <button id="ctxDeleteStream">Delete</button>
+  </div>
+
+  <div id="textSelectionMenu" class="context-menu" hidden>
+    <div class="label">Text Selection</div>
+    <button id="ctxCreateBlockFromText" class="primary">Create Block From Selection</button>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>

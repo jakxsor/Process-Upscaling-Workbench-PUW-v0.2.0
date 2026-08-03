@@ -214,6 +214,91 @@
     ];
     const scheduleScaleOptions = ["unknown", "kinetics-bound", "roughly constant", "increases with scale", "decreases with scale", "equipment dependent"];
     const scheduleOverlapOptions = ["no", "yes"];
+    const scheduleOperationClassOptions = [
+      "auto",
+      "heating_cooling",
+      "reaction_kinetic",
+      "filtration",
+      "drying",
+      "pumping_transfer",
+      "crystallization",
+      "cleaning_turnaround",
+      "generic"
+    ];
+    const operationScaleProfiles = {
+      heating_cooling: {
+        label: "Heating/cooling",
+        sensitivity: "increases with scale",
+        badge: "high",
+        behavior: "Duration can increase because heat-transfer area does not scale as fast as vessel inventory.",
+        defaultAction: "Keep input duration for schematic Gantt; flag heat-transfer data before quantitative correction.",
+        missing: ["mass basis", "Cp", "initial/final T", "U or heat-transfer coefficient", "heat-transfer area", "utility temperature"],
+        refs: "Perry; Piccinno et al."
+      },
+      reaction_kinetic: {
+        label: "Kinetic reaction",
+        sensitivity: "kinetics-bound",
+        badge: "low",
+        behavior: "Reaction time is usually kept if temperature, mixing, heat removal, and mass transfer remain adequate.",
+        defaultAction: "Keep input reaction duration; flag transport or heat-removal risks instead of shrinking time by scale.",
+        missing: ["reaction time", "conversion/yield", "temperature window", "mixing adequacy", "heat-removal risk"],
+        refs: "Levenspiel"
+      },
+      filtration: {
+        label: "Solid-liquid filtration",
+        sensitivity: "increases with scale",
+        badge: "medium-high",
+        behavior: "Time depends on cake volume and available filter area; flux per area is often the key scale variable.",
+        defaultAction: "Keep input duration for screening; flag solids/cake data before calculating filter time or area.",
+        missing: ["slurry volume", "solid loading", "filter area", "pressure drop", "cake resistance", "particle size"],
+        refs: "Anlauf"
+      },
+      drying: {
+        label: "Drying",
+        sensitivity: "increases with scale",
+        badge: "high",
+        behavior: "Inventory per effective drying area often increases, so drying time can become a schedule bottleneck.",
+        defaultAction: "Keep input duration for schematic Gantt; flag wet inventory, endpoint, and drying-area data.",
+        missing: ["wet inventory", "initial/final moisture", "drying area", "drying rate/curve", "temperature limit"],
+        refs: "Havlik and Dlouhy"
+      },
+      pumping_transfer: {
+        label: "Pumping/transfer",
+        sensitivity: "roughly constant",
+        badge: "low",
+        behavior: "Duration is mainly volume divided by transfer rate; per-kg timing is often less scale-sensitive.",
+        defaultAction: "Keep input duration unless transfer rate, line length, or hold-up constraints are specified.",
+        missing: ["transfer volume", "flow rate", "line/hold-up constraints"],
+        refs: "Piccinno et al."
+      },
+      crystallization: {
+        label: "Crystallization",
+        sensitivity: "equipment dependent",
+        badge: "medium",
+        behavior: "Nucleation, growth, cooling profile, and seeding can change product quality and hold time at scale.",
+        defaultAction: "Keep input duration for screening; flag solubility and supersaturation path before quantitative correction.",
+        missing: ["solubility curve", "cooling profile", "seed policy", "hold time", "particle size target"],
+        refs: "Myerson"
+      },
+      cleaning_turnaround: {
+        label: "Cleaning/turnaround",
+        sensitivity: "equipment dependent",
+        badge: "medium",
+        behavior: "Turnaround can scale with surface area and plant procedure, and may cap batches per year.",
+        defaultAction: "Keep as explicit schedule allowance; do not hide it inside reaction or separation time.",
+        missing: ["cleaning time", "CIP/manual basis", "surface/contacted equipment", "changeover assumption"],
+        refs: "Seider et al."
+      },
+      generic: {
+        label: "Generic task",
+        sensitivity: "unknown",
+        badge: "unknown",
+        behavior: "No operation-specific scaling behaviour assigned yet.",
+        defaultAction: "Use input duration only and add an operation class when this task affects bottleneck logic.",
+        missing: ["operation class", "duration basis"],
+        refs: "framework assumption"
+      }
+    };
 
     const conditionPromptCatalog = [
       { id: "initial_temperature", label: "Initial temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "20", unit: "C", kind: "number" },
@@ -258,6 +343,7 @@
     const propertyPromptCatalog = [
       { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
       { id: "vapor_pressure", label: "Vapor pressure", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "mbar", placeholder: "at operating T", reason: "Clarifies vacuum operation, vent load, and volatile losses." },
+      { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
       { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
       { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
       { id: "density_difference", label: "Density difference", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)"], unit: "kg/m3", placeholder: "organic vs aqueous", reason: "Needed for decanting and interface-settling plausibility." },
@@ -266,6 +352,8 @@
       { id: "solubility", label: "Solubility", phenomena: ["PT(LS)", "PS(LS)", "PCh(L->S)", "PCh(S->L)"], unit: "g/L", placeholder: "vs temperature if known", reason: "Supports crystallization, precipitation, and dissolution choices." },
       { id: "particle_size", label: "Particle size", phenomena: ["PS(LS)", "PC(LS)", "2phM(LS)"], unit: "um", placeholder: "d50 or range", reason: "Relevant for filtration, drying, suspension, and cake behavior." },
       { id: "cake_resistance", label: "Cake resistance / compressibility", phenomena: ["PS(LS)", "PC(LS)"], unit: "", placeholder: "low, medium, high", reason: "Flags solid-liquid separation scale-up difficulty." },
+      { id: "separation_selectivity", label: "Selectivity / affinity", phenomena: ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"], unit: "", placeholder: "selectivity, affinity, sorption preference", reason: "Supports membrane, adsorption, extraction, drying-agent, and other property-based separations when simple phase split is weak." },
+      { id: "separating_agent", label: "Separating agent", phenomena: ["PT(VL)", "PS(VL)", "PT(LL)", "PC(LL)", "PT(MLL)", "PT(MVL)"], unit: "", placeholder: "entrainer, extractant, adsorbent, membrane", reason: "Documents the extra agent or material that makes an otherwise weak separation feasible." },
       { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
       { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed only when mixing, residence volume, settling, or equipment sizing depends on volume rather than just mass." },
       { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." },
@@ -289,6 +377,7 @@
         hoursPerDay: "16",
         batchesPerDay: "1",
         batchDuration: "",
+        scheduleMarginPercent: "0",
         oeePercent: "80",
         parallelUnits: "1",
         yieldPercent: "100",
@@ -320,6 +409,7 @@
       menuStreamId: null,
       connectingFrom: null,
       lastSelection: null,
+      lastSelectionAt: 0,
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
@@ -471,7 +561,18 @@
         state.groups[groupId].schedule = { ...scheduleDefaults(), ...state.groups[groupId].schedule };
       }
       state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
+      state.groups[groupId].conditionsEditing = Boolean(state.groups[groupId].conditionsEditing);
       if (typeof state.groups[groupId].selectionBasis !== "string") state.groups[groupId].selectionBasis = "";
+      if (!state.groups[groupId].propertyPredictor || typeof state.groups[groupId].propertyPredictor !== "object" || Array.isArray(state.groups[groupId].propertyPredictor)) {
+        state.groups[groupId].propertyPredictor = { mode: "skip", expanded: false };
+      } else {
+        const predictor = state.groups[groupId].propertyPredictor;
+        predictor.mode = ["skip", "minimal"].includes(predictor.mode) ? predictor.mode : "skip";
+        predictor.expanded = Boolean(predictor.expanded);
+      }
+      if (!state.groups[groupId].alternativeDecisions || typeof state.groups[groupId].alternativeDecisions !== "object" || Array.isArray(state.groups[groupId].alternativeDecisions)) {
+        state.groups[groupId].alternativeDecisions = {};
+      }
       if (!state.groups[groupId].conditionOverrides || typeof state.groups[groupId].conditionOverrides !== "object") {
         state.groups[groupId].conditionOverrides = {};
       }
@@ -487,6 +588,7 @@
         durationH: "",
         parallelUnits: "1",
         canOverlap: "no",
+        operationClass: "auto",
         scaleSensitivity: "unknown",
         dependency: "previous",
         notes: ""
@@ -1210,7 +1312,7 @@
       pre.setEnd(range.startContainer, range.startOffset);
       const start = pre.toString().length;
       const end = start + range.toString().length;
-      return { start, end };
+      return { start, end, source: "annotated" };
     }
 
     function createBlockFromSelection() {
@@ -1238,16 +1340,78 @@
       }
       return {
         start: Math.min(source.selectionStart, source.selectionEnd),
-        end: Math.max(source.selectionStart, source.selectionEnd)
+        end: Math.max(source.selectionStart, source.selectionEnd),
+        source: "source"
       };
     }
 
     function rememberSelection() {
       const offsets = selectionOffsets() || sourceInputSelection();
       state.lastSelection = offsets;
+      state.lastSelectionAt = offsets ? Date.now() : 0;
       $("selectionInfo").textContent = offsets
         ? `Selected characters ${offsets.start}-${offsets.end}.`
         : "No active text selection.";
+    }
+
+    function handleTextSelectionRightMouseDown(event) {
+      if (event.button !== 2) return;
+      if (event.target.closest?.("[data-block-id]")) return;
+      const offsets = selectionOffsets() || sourceInputSelection();
+      if (!offsets) return;
+      event.preventDefault();
+      state.lastSelection = offsets;
+      state.lastSelectionAt = Date.now();
+      $("selectionInfo").textContent = `Selected characters ${offsets.start}-${offsets.end}.`;
+      restoreTextSelection(offsets);
+    }
+
+    function handleTextSelectionContextMenu(event) {
+      if (event.target.closest?.("[data-block-id]")) return;
+      const recentStored = state.lastSelection && Date.now() - state.lastSelectionAt < 2500 ? state.lastSelection : null;
+      const offsets = selectionOffsets() || sourceInputSelection() || recentStored;
+      if (!offsets) return;
+      event.preventDefault();
+      state.lastSelection = offsets;
+      state.lastSelectionAt = Date.now();
+      $("selectionInfo").textContent = `Selected characters ${offsets.start}-${offsets.end}.`;
+      restoreTextSelection(offsets);
+      showTextSelectionMenu(event.clientX, event.clientY);
+    }
+
+    function restoreTextSelection(offsets = state.lastSelection) {
+      if (!offsets) return;
+      if (offsets.source === "source") {
+        const source = $("sourceInput");
+        source.focus({ preventScroll: true });
+        source.setSelectionRange(offsets.start, offsets.end);
+        return;
+      }
+      if (offsets.source === "annotated") restoreAnnotatedSelection(offsets.start, offsets.end);
+    }
+
+    function restoreAnnotatedSelection(start, end) {
+      const root = $("annotatedText");
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      let pos = 0;
+      let startSet = false;
+      let node;
+      while ((node = walker.nextNode())) {
+        const next = pos + node.nodeValue.length;
+        if (!startSet && start >= pos && start <= next) {
+          range.setStart(node, start - pos);
+          startSet = true;
+        }
+        if (startSet && end >= pos && end <= next) {
+          range.setEnd(node, end - pos);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          return;
+        }
+        pos = next;
+      }
     }
 
     function renderAnnotatedText() {
@@ -1267,7 +1431,7 @@
           state.selectedIds.includes(block.id) ? "selected" : "",
           state.selectedBlockId === block.id ? "primary-selected" : ""
         ].filter(Boolean).join(" ");
-        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(block.id)} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}</span>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(block.id)} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
         cursor = block.end;
       });
       html += escapeHtml(state.text.slice(cursor));
@@ -1275,6 +1439,7 @@
 
       root.querySelectorAll("[data-block-id]").forEach(span => {
         span.addEventListener("click", event => {
+          if (event.target.closest?.("[data-delete-block]")) return;
           if (state.connectingFrom && state.connectingFrom !== span.dataset.blockId) {
             addConnection(state.connectingFrom, span.dataset.blockId);
             return;
@@ -1285,6 +1450,13 @@
           event.preventDefault();
           if (!state.selectedIds.includes(span.dataset.blockId)) selectBlock(span.dataset.blockId, event.shiftKey);
           showBlockMenu(event.clientX, event.clientY, span.dataset.blockId);
+        });
+      });
+      root.querySelectorAll("[data-delete-block]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          deleteBlock(button.dataset.deleteBlock);
         });
       });
     }
@@ -2029,7 +2201,7 @@
     }
 
     function groupConditionItemHtml(item, groupId, editable) {
-      const pillLabel = item.override ? `${item.override.value} ${item.unit || ""}`.trim() : item.display;
+      const pillLabel = item.effectiveDisplay || (item.override ? `${item.override.value} ${item.unit || ""}`.trim() : item.display);
       return `
         <div class="group-mfa-item">
           <div class="group-mfa-item-head">
@@ -2043,6 +2215,88 @@
           ${overrideControlHtml(item, groupId, editable, "condition", item.display)}
         </div>
       `;
+    }
+
+    function groupConditionProfileHtml(group, conditions) {
+      const groupState = ensureGroup(group.id);
+      if (!conditions.length) return `<div class="mfa-empty">No saved group conditions yet.</div>`;
+      const families = groupConditionDisplayItems(conditions, conditionFamilyForPrompt);
+      if (groupState.conditionsEditing) {
+        return `
+          <div class="group-condition-profile">
+            ${families.map(family => `
+              <div class="condition-family">
+                <div class="condition-family-head">
+                  <span>${escapeHtml(family.title)}</span>
+                  <span class="pill">${family.items.length}</span>
+                </div>
+                <div class="condition-grid">
+                  ${family.items.map(item => groupConditionEditCardHtml(group.id, item)).join("")}
+                </div>
+              </div>
+            `).join("")}
+            <div class="condition-actions">
+              <button class="primary" data-save-group-conditions="${escapeAttr(group.id)}">Save Group Conditions</button>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="group-condition-profile">
+          ${families.map(family => `
+            <div class="condition-family">
+              <div class="condition-family-head">
+                <span>${escapeHtml(family.title)}</span>
+                <span class="pill">${family.items.length}</span>
+              </div>
+              <div class="condition-grid">
+                ${family.items.map(item => groupConditionLabelCardHtml(item)).join("")}
+              </div>
+            </div>
+          `).join("")}
+          <div class="condition-actions">
+            <button data-edit-group-conditions="${escapeAttr(group.id)}">${conditions.some(item => item.overrideApplied) ? "Edit Group Conditions" : "Edit Aggregated Conditions"}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function groupConditionLabelCardHtml(item) {
+      const source = item.lines.join("\n");
+      return `
+        <article class="condition-label-card group-condition-card tip" data-tip="${escapeAttr(source || "No source condition lines.")}">
+          <strong>${escapeHtml(item.label)} ${item.overrideApplied ? `<span class="pill blue">edited</span>` : ""}</strong>
+          <span>${escapeHtml(item.effectiveDisplay || item.display)}</span>
+          <span class="pill ${item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(groupConditionStatusLabel(item))}</span>
+        </article>
+      `;
+    }
+
+    function groupConditionEditCardHtml(groupId, item) {
+      const value = item.override?.value || item.value || "";
+      const note = item.override?.note || "";
+      return `
+        <label class="condition-edit-card group-condition-card tip" data-tip="${escapeAttr(item.lines.join("\n"))}">
+          <div class="condition-family-head property-need-head">
+            <span>${escapeHtml(item.label)}</span>
+            <span class="pill ${item.overrideApplied ? "blue" : ""}">${escapeHtml(groupConditionStatusLabel(item))}</span>
+          </div>
+          <div class="condition-input-row">
+            <input data-group-condition-value="${escapeAttr(item.key)}" data-group-condition-group="${escapeAttr(groupId)}"
+              value="${escapeAttr(value)}" placeholder="${escapeAttr(item.value || item.display)}">
+            <span class="unit-badge">${escapeHtml(item.unit || "note")}</span>
+          </div>
+          <input data-group-condition-note="${escapeAttr(item.key)}" data-group-condition-group="${escapeAttr(groupId)}"
+            value="${escapeAttr(note)}" placeholder="why edit this group condition (optional)">
+        </label>
+      `;
+    }
+
+    function groupConditionStatusLabel(item) {
+      if (item.overrideApplied) return "edited group value";
+      if (item.status === "summed_numeric_same_unit") return "summed";
+      if (item.status === "common_value") return "same value";
+      return "combined";
     }
 
     function aggregateGroupConditions(group) {
@@ -2063,7 +2317,10 @@
       return Array.from(byCondition.values()).map(items => {
         const aggregated = aggregateConditionItems(items);
         const key = `${aggregated.id}||${aggregated.unit || ""}`;
-        return { ...aggregated, key, override: overrides[key] || null };
+        const override = overrides[key] || null;
+        const effectiveValue = override?.value || aggregated.value || "";
+        const effectiveDisplay = override?.value ? `${override.value} ${aggregated.unit || ""}`.trim() : aggregated.display;
+        return { ...aggregated, key, override, effectiveValue, effectiveDisplay, overrideApplied: Boolean(override) };
       });
     }
 
@@ -2090,14 +2347,15 @@
       }
       const uniqueDisplays = Array.from(new Set(items.map(formatConditionValue)));
       const status = uniqueDisplays.length === 1 ? "common_value" : "sequence_or_conflict";
+      const combinedDisplay = uniqueDisplays.length === 1 ? uniqueDisplays[0] : uniqueDisplays.join(" + ");
       return {
         id: first.id,
         label: first.label,
         unit,
-        display: uniqueDisplays.length === 1 ? uniqueDisplays[0] : `${uniqueDisplays.length} values`,
-        value: uniqueDisplays.length === 1 ? first.value : "",
+        display: combinedDisplay,
+        value: uniqueDisplays.length === 1 ? first.value : combinedDisplay,
         status,
-        aggregationMode: status === "common_value" ? "same_condition_across_group" : "kept_separate_by_block",
+        aggregationMode: status === "common_value" ? "same_condition_across_group" : "combined_group_condition",
         lines,
         entries: items.map(exportConditionEntry)
       };
@@ -2345,6 +2603,7 @@
       const duration = effectiveBatchDurationH(basis);
       const oee = percentFactor(basis.oeePercent, 100);
       const parallel = parseStreamQuantity(basis.parallelUnits);
+      const scheduleMargin = Math.max(0, parseStreamQuantity(basis.scheduleMarginPercent) || 0);
       return {
         method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
@@ -2352,7 +2611,8 @@
         annualCapacityKg: Number.isFinite(targetYear) ? formatNumber(targetYear) : "",
         batchDurationH: Number.isFinite(duration) ? formatNumber(duration) : "",
         oeePercent: Number.isFinite(oee) ? formatNumber(oee * 100) : "",
-        parallelUnits: Number.isFinite(parallel) ? formatNumber(parallel) : ""
+        parallelUnits: Number.isFinite(parallel) ? formatNumber(parallel) : "",
+        scheduleMarginPercent: formatNumber(scheduleMargin)
       };
     }
 
@@ -2408,9 +2668,19 @@
       const manualDuration = parseDurationHoursValue(schedule.durationH);
       const durationH = Number.isFinite(manualDuration) && manualDuration > 0 ? manualDuration : inferred.durationH;
       const parallel = Math.max(1, parseDurationHoursValue(schedule.parallelUnits) || 1);
-      const sensitivity = schedule.scaleSensitivity && schedule.scaleSensitivity !== "unknown"
+      const hasManualOperationClass = schedule.operationClass && schedule.operationClass !== "auto" && scheduleOperationClassOptions.includes(schedule.operationClass);
+      const operationClass = hasManualOperationClass
+        ? schedule.operationClass
+        : inferGroupOperationClass(group);
+      const profile = operationScaleProfile(operationClass);
+      const sensitivity = hasManualOperationClass
+        ? profile.sensitivity
+        : schedule.scaleSensitivity && schedule.scaleSensitivity !== "unknown"
         ? schedule.scaleSensitivity
-        : inferGroupScaleSensitivity(group);
+        : profile.sensitivity || inferGroupScaleSensitivity(group);
+      const scheduleMargin = Math.max(0, parseStreamQuantity(ensureScaleBasis().scheduleMarginPercent) || 0);
+      const adjustedDurationH = Number.isFinite(durationH) ? durationH * (1 + scheduleMargin / 100) : NaN;
+      const missingScaleData = operationScaleMissingData(group, operationClass);
       return {
         groupId: group.id,
         task: group.task || `Task ${index + 1}`,
@@ -2418,13 +2688,19 @@
         blocks: group.blocks.map(block => block.id),
         durationInput: schedule.durationH,
         durationH,
+        adjustedDurationH,
         durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
         parallelUnits: parallel,
         canOverlap: scheduleOverlapOptions.includes(schedule.canOverlap) ? schedule.canOverlap : "no",
+        operationClass,
+        operationProfile: profile,
         scaleSensitivity: sensitivity,
+        scheduleMarginPercent: scheduleMargin,
+        correctionMode: Number.isFinite(durationH) ? "warning-only" : "missing duration",
+        missingScaleData,
         dependency: schedule.dependency || "previous",
         notes: schedule.notes || "",
-        effectiveTimeH: Number.isFinite(durationH) ? durationH / parallel : NaN,
+        effectiveTimeH: Number.isFinite(adjustedDurationH) ? adjustedDurationH / parallel : NaN,
         phenomena: group.phenomena
       };
     }
@@ -2470,6 +2746,69 @@
       if ([...phen].some(code => ["PS(LL)", "PC(LL)", "PT(LL)", "2phM(LL)"].includes(code))) return "roughly constant";
       if ([...phen].some(code => code.startsWith("M(") || code.startsWith("2phM("))) return "roughly constant";
       return "unknown";
+    }
+
+    function operationScaleProfile(operationClass) {
+      return operationScaleProfiles[operationClass] || operationScaleProfiles.generic;
+    }
+
+    function inferGroupOperationClass(group) {
+      const phen = new Set(group.phenomena || []);
+      const text = `${group.task || ""} ${group.text || ""} ${group.selectedUnit || ""}`.toLowerCase();
+      if (/clean|turnaround|cip|washdown|rinse equipment|changeover/.test(text)) return "cleaning_turnaround";
+      if (/crystalli[sz]|precipitat|nucleat|seed/.test(text)) return "crystallization";
+      if (/dry|drying|sieve|moisture|desiccan|mgso4|na2so4/.test(text)) return "drying";
+      if (/filtrat|filter|centrifug|cake/.test(text)) return "filtration";
+      if ([...phen].some(code => code.startsWith("R("))) return "reaction_kinetic";
+      if ([...phen].some(code => ["ES(H)", "ES(C)"].includes(code)) || /heat|cool|reflux|condens|jacket|coil|thermal|evapor|distill|solvent recover/.test(text)) return "heating_cooling";
+      if (/pump|transfer|charge|feed|dose|move|line|pipe/.test(text)) return "pumping_transfer";
+      if ([...phen].some(code => ["PS(LS)", "PC(LS)", "2phM(LS)"].includes(code))) return "filtration";
+      return "generic";
+    }
+
+    function operationScaleMissingData(group, operationClass) {
+      const profile = operationScaleProfile(operationClass);
+      const missing = [];
+      const need = (label, ok) => { if (!ok) missing.push(label); };
+      const conditionMap = groupConditionMap(group);
+      const thermal = groupThermalProfile(group);
+      const hasStreams = group.blocks.some(block => {
+        ensureBlockFlowFields(block);
+        return block.streams.some(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)) || Number.isFinite(parseStreamQuantity(stream.quantity)));
+      });
+      if (operationClass === "heating_cooling") {
+        need("mass basis", hasStreams);
+        need("Cp", propertyHasValue(group, "heat_capacity"));
+        need("initial/final T", Number.isFinite(thermal.initialTemperature) && Number.isFinite(thermal.targetTemperature));
+        need("heat-transfer device / utility", Boolean(conditionMap.thermal_mode || conditionMap.vapor_handling));
+        missing.push("U/A if quantitative correction is needed");
+      } else if (operationClass === "reaction_kinetic") {
+        need("reaction time", Boolean(conditionMap.reaction_time || conditionMap.holding_time));
+        need("conversion/yield", Boolean(conditionMap.conversion_yield || ensureScaleBasis().yieldPercent));
+        if (group.phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("))) need("mixing adequacy", Boolean(conditionMap.mixing_mode || conditionMap.agitation_note));
+        if (group.phenomena.some(code => ["ES(H)", "ES(C)"].includes(code))) need("heat-removal/thermal control note", Boolean(conditionMap.thermal_mode || conditionMap.thermal_ramp));
+      } else if (operationClass === "filtration") {
+        need("solid loading", Boolean(conditionMap.solid_loading));
+        need("particle/cake behaviour", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size") || propertyHasValue(group, "cake_resistance")));
+        missing.push("filter area / cake resistance if quantitative correction is needed");
+      } else if (operationClass === "drying") {
+        need("wet inventory", hasStreams);
+        need("moisture endpoint", Boolean(conditionMap.solid_endpoint || conditionMap.transfer_endpoint));
+        missing.push("drying area/rate if quantitative correction is needed");
+      } else if (operationClass === "pumping_transfer") {
+        need("transfer volume or mass", hasStreams);
+        need("flow rate / transfer time", Boolean(conditionMap.contact_time || conditionMap.transfer_endpoint));
+      } else if (operationClass === "crystallization") {
+        need("solubility", propertyHasValue(group, "solubility"));
+        need("cooling/supersaturation profile", Boolean(conditionMap.thermal_ramp || conditionMap.transfer_endpoint));
+        need("seed/particle target", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size")));
+      } else if (operationClass === "cleaning_turnaround") {
+        need("cleaning/turnaround duration", Boolean(conditionMap.contact_time || conditionMap.holding_time));
+        missing.push("surface/CIP basis if quantitative correction is needed");
+      } else {
+        missing.push(...profile.missing);
+      }
+      return [...new Set(missing)].slice(0, 6);
     }
 
     function candidateBasisStreams() {
@@ -3076,7 +3415,11 @@
 
     function groupConditionMap(group) {
       return aggregateGroupConditions(group).reduce((acc, item) => {
-        acc[item.id] = item;
+        acc[item.id] = {
+          ...item,
+          value: item.effectiveValue || item.value,
+          display: item.effectiveDisplay || item.display
+        };
         return acc;
       }, {});
     }
@@ -3228,6 +3571,10 @@
             <label class="scale-wide">
               <div class="label">Batch duration, h</div>
               <input data-scale-field="batchDuration" value="${escapeAttr(basis.batchDuration)}" inputmode="decimal" placeholder="optional">
+            </label>
+            <label>
+              <div class="label">Gantt margin, %</div>
+              <input data-scale-field="scheduleMarginPercent" value="${escapeAttr(basis.scheduleMarginPercent)}" inputmode="decimal" placeholder="0">
             </label>
             <label>
               <div class="label">OEE, %</div>
@@ -3534,7 +3881,7 @@
     function ganttPanelHtml(gantt) {
       return `
         <div class="mfa-empty" style="margin-bottom:8px">
-          Bottleneck = the task with the largest effective time. Effective time is task duration divided by parallel units. The cycle time sums tasks that cannot overlap.
+          Bottleneck = the task with the largest adjusted effective time. Adjusted time = input duration plus Gantt margin, divided by parallel units. The cycle time sums tasks that cannot overlap.
         </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
@@ -3560,10 +3907,10 @@
     function bottleneckActionHtml(task) {
       const effective = Number.isFinite(task.effectiveTimeH) ? `${formatNumber(task.effectiveTimeH)} h` : "missing";
       const split = Number.isFinite(task.durationH) && task.durationH > 0
-        ? `${formatNumber(task.durationH)} h / ${formatNumber(task.parallelUnits)} unit${task.parallelUnits === 1 ? "" : "s"} = ${effective}`
+        ? `${formatNumber(task.adjustedDurationH || task.durationH)} h adjusted / ${formatNumber(task.parallelUnits)} unit${task.parallelUnits === 1 ? "" : "s"} = ${effective}`
         : effective;
       const nextParallel = Number.isFinite(task.parallelUnits) ? Math.max(2, Math.ceil(task.parallelUnits + 1)) : 2;
-      const nextEffective = Number.isFinite(task.durationH) && task.durationH > 0 ? formatNumber(task.durationH / nextParallel) : "";
+      const nextEffective = Number.isFinite(task.adjustedDurationH) && task.adjustedDurationH > 0 ? formatNumber(task.adjustedDurationH / nextParallel) : "";
       const recommendation = task.scaleSensitivity === "kinetics-bound"
         ? "Use parallel reactors or process intensification; larger equipment alone may not reduce this time."
         : task.scaleSensitivity === "increases with scale" || task.scaleSensitivity === "equipment dependent"
@@ -3583,13 +3930,18 @@
 
     function ganttRowHtml(task) {
       const duration = Number.isFinite(task.durationH) ? `${formatNumber(task.durationH)} h` : "missing duration";
+      const adjusted = Number.isFinite(task.adjustedDurationH) && Math.abs(task.adjustedDurationH - task.durationH) > 0.0001
+        ? `; adjusted ${formatNumber(task.adjustedDurationH)} h with ${formatNumber(task.scheduleMarginPercent)}% margin`
+        : "";
       const effective = Number.isFinite(task.effectiveTimeH) ? `${formatNumber(task.effectiveTimeH)} h effective` : "not scheduled";
+      const profile = task.operationProfile || operationScaleProfile(task.operationClass);
+      const missing = task.missingScaleData || [];
       return `
         <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""}">
           <div class="gantt-task-meta">
             <strong>${escapeHtml(task.groupId)} - ${escapeHtml(task.task)}</strong>
             <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
-            <span class="muted small">${escapeHtml(duration)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
+            <span class="muted small">${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
             ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
           </div>
           <div>
@@ -3599,8 +3951,19 @@
             <div class="gantt-controls">
               <input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours">
               <input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units">
-              <select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How duration behaves during scale-up">${optionHtml(scheduleScaleOptions, task.scaleSensitivity)}</select>
+              <select data-schedule-field="operationClass" data-schedule-group="${escapeAttr(task.groupId)}" title="Operation class used for scale-behaviour evidence">${scheduleOperationClassOptionHtml(ensureGroup(task.groupId).schedule.operationClass || "auto")}</select>
               <select data-schedule-field="canOverlap" data-schedule-group="${escapeAttr(task.groupId)}" title="Can this task overlap the previous task?">${optionHtml(scheduleOverlapOptions, task.canOverlap)}</select>
+            </div>
+            <div class="gantt-evidence">
+              <div class="gantt-evidence-head">
+                <strong>${escapeHtml(profile.label)}</strong>
+                <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
+                <span class="pill">${escapeHtml(task.correctionMode)}</span>
+              </div>
+              <span>${escapeHtml(profile.behavior)}</span>
+              <span class="muted small">${escapeHtml(profile.defaultAction)}</span>
+              <span class="muted small">For calculation/check: ${missing.length ? escapeHtml(missing.join(", ")) : "minimum evidence present for this screening level"}.</span>
+              <span class="muted small">Refs: ${escapeHtml(profile.refs)}.</span>
             </div>
           </div>
         </div>
@@ -3713,11 +4076,11 @@
     function applyScheduleExample() {
       const groups = groupIdsInTextOrder().map(groupModel);
       const fallback = [
-        { durationH: "0.5", scaleSensitivity: "roughly constant", notes: "charge/pre-mix" },
-        { durationH: "20", scaleSensitivity: "kinetics-bound", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
-        { durationH: "2.5", scaleSensitivity: "roughly constant", notes: "aqueous/brine wash" },
-        { durationH: "1", scaleSensitivity: "increases with scale", notes: "drying/contact step" },
-        { durationH: "4", scaleSensitivity: "equipment dependent", notes: "solvent removal or final distillation" }
+        { durationH: "0.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", notes: "charge/pre-mix" },
+        { durationH: "20", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
+        { durationH: "2.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", notes: "aqueous/brine wash" },
+        { durationH: "1", operationClass: "drying", scaleSensitivity: "increases with scale", notes: "drying/contact step" },
+        { durationH: "4", operationClass: "heating_cooling", scaleSensitivity: "equipment dependent", notes: "solvent removal or final distillation" }
       ];
       groups.forEach((group, index) => {
         const text = `${group.task} ${group.text} ${group.selectedUnit || ""}`.toLowerCase();
@@ -3733,6 +4096,7 @@
           durationH: preset.durationH,
           parallelUnits: "1",
           canOverlap: "no",
+          operationClass: preset.operationClass,
           scaleSensitivity: preset.scaleSensitivity,
           notes: preset.notes
         };
@@ -3741,6 +4105,7 @@
       state.scaleBasis.targetAmount = "750";
       state.scaleBasis.targetUnit = "t/year";
       state.scaleBasis.oeePercent = "80";
+      state.scaleBasis.scheduleMarginPercent = "0";
       state.scaleBasis.batchDuration = "";
       renderScaleBasisPanel();
       renderHeuristicsPanel();
@@ -4231,6 +4596,15 @@
         if (group.selectedUnit && !matchesForGroup(group).some(candidate => candidate.name === group.selectedUnit)) {
           issues.push(ruleIssue("medium", "Selected unit no longer compatible", "The selected industrial alternative does not match the current grouped phenomena, phases, or task logic.", group.id, "Re-select a unit alternative after checking the grouped phases and phenomena.", "phases"));
         }
+        if (separationPredictorApplies(group)) {
+          const predictor = propertySeparationPredictorModel(group);
+          const selectedDecision = predictor.rows.find(row => row.name === group.selectedUnit);
+          if (predictor.mode === "minimal" && selectedDecision?.decision === "reject") {
+            issues.push(ruleIssue("medium", "Selected separation rejected by property screen", `${group.selectedUnit} is marked reject: ${selectedDecision.reason}`, group.id, `Review missing data (${selectedDecision.missing.join(", ") || "none"}) or override the decision with a written selection basis.`, "phases"));
+          } else if (predictor.mode === "skip" && matchesForGroup(group).filter(candidate => candidate.task === "separation" || candidate.task.includes("separation")).length > 1) {
+            issues.push(ruleIssue("low", "Property predictor skipped", "Multiple separation alternatives fit the grouped phenomena, but no property-based keep/weak/reject screen has been applied.", group.id, "Use Minimal predictor if you need a defendable selected/rejected alternatives table.", "phases"));
+          }
+        }
         if (group.phenomena.some(code => code.startsWith("R(")) && group.phenomena.some(code => code.startsWith("PS(") || code.startsWith("PT("))) {
           issues.push(ruleIssue("low", "Integrated option candidate", "Reaction and separation phenomena appear in the same group, which can justify an intensified alternative if operating windows are compatible.", group.id, "Compare conventional reactor plus separator against an integrated reaction-separation option."));
         }
@@ -4489,23 +4863,46 @@
       }
       const prompts = propertyPromptsForGroup(group);
       const groupState = ensureGroup(group.id);
-      if (!prompts.length) {
+      const predictorHtml = propertyPredictorPanelHtml(group);
+      if (!prompts.length && !predictorHtml) {
         root.innerHTML = `<span class="muted">No property refinement needed for the current phenomena at framework level.</span>`;
         return;
       }
       if (groupState.propertiesEditing) {
+        const promptGroups = propertyPromptGroups(prompts);
         root.innerHTML = `
-          <div class="mfa-empty">Only fill properties marked needed or risk when they affect unit choice, scale-up, energy handoff, separation, or safety. Leave optional fields blank unless you are comparing alternatives.</div>
-          ${prompts.map(prompt => propertyEditHtml(groupState, prompt)).join("")}
-          <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save Properties</button>
+          ${predictorHtml}
+          <section class="property-section">
+            <div class="property-section-head">
+              <div>
+                <strong>Property Inputs</strong>
+                <span>Fill only values that affect separation, scale-up, energy handoff, or safety.</span>
+              </div>
+              <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save</button>
+            </div>
+            ${propertyMissingStripHtml(group, prompts)}
+            ${promptGroups.map(grouping => propertyPromptFamilyHtml(groupState, grouping)).join("")}
+          </section>
         `;
       } else {
         const values = propertyValuesForGroup(group);
+        const neededCount = prompts.filter(prompt => propertyNeedLevel(prompt, group) !== "optional").length;
         root.innerHTML = `
-          <button data-edit-properties="${escapeAttr(group.id)}">${values.length ? "Edit Properties" : "Add Properties"}</button>
-          ${values.length ? values.map(propertyLabelHtml).join("") : `<span class="muted small">Minimal mode active: properties are requested only when alternatives, energy bridge, separation, mixing scale-up, or safety checks need them.</span>`}
+          ${predictorHtml}
+          <section class="property-section">
+            <div class="property-section-head">
+              <div>
+                <strong>Property Inputs</strong>
+                <span>${values.length}/${prompts.length} filled, ${neededCount} framework-relevant</span>
+              </div>
+              <button data-edit-properties="${escapeAttr(group.id)}">${values.length ? "Edit" : "Add"}</button>
+            </div>
+            ${propertyMissingStripHtml(group, prompts)}
+            ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No property data entered yet. The tool will still run, but separation decisions remain lower-confidence.</div>`}
+          </section>
         `;
       }
+      bindPropertyPredictorControls(root, group.id);
       root.querySelectorAll("[data-edit-properties]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(button.dataset.editProperties).propertiesEditing = true;
@@ -4524,11 +4921,331 @@
       });
     }
 
+    function propertyPredictorPanelHtml(group) {
+      if (!separationPredictorApplies(group)) return "";
+      const model = propertySeparationPredictorModel(group);
+      const stateLabel = model.mode === "minimal"
+        ? `${model.counts.keep} keep / ${model.counts.weak} weak / ${model.counts.reject} reject`
+        : "skipped";
+      const applies = groupSeparationFamilies(group);
+      const familyLabel = applies.size ? Array.from(applies).map(item => item.toUpperCase()).join(", ") : "from alternatives";
+      return `
+        <section class="predictor-card">
+          <div class="predictor-head">
+            <div>
+              <div class="label">Separation Property Screen</div>
+              <div class="muted small">Checks only the alternatives that depend on phase split, volatility, solids, affinity, or an added separating agent.</div>
+            </div>
+            <span class="pill ${model.mode === "minimal" ? "blue" : ""}">${escapeHtml(stateLabel)}</span>
+          </div>
+          <div class="predictor-summary-grid">
+            <span><strong>Scope</strong>${escapeHtml(familyLabel)}</span>
+            <span><strong>Open data</strong>${model.unresolved}</span>
+            <span><strong>Mode</strong>${model.mode === "minimal" ? "screening" : "not screened"}</span>
+          </div>
+          <div class="predictor-controls">
+            <label>
+              <span class="label">Mode</span>
+              <select data-predictor-mode="${escapeAttr(group.id)}">
+                <option value="skip" ${model.mode === "skip" ? "selected" : ""}>Skip</option>
+                <option value="minimal" ${model.mode === "minimal" ? "selected" : ""}>Minimal</option>
+              </select>
+            </label>
+            <button data-toggle-predictor="${escapeAttr(group.id)}">${model.expanded ? "Hide table" : "Show table"}</button>
+          </div>
+          ${model.expanded ? propertyPredictorTableHtml(group, model) : `
+            <div class="predictor-help">${model.mode === "skip"
+              ? "Alternatives still come from phenomena and phase compatibility. Switch to Minimal when you want a keep/weak/reject rationale."
+              : model.summary}</div>
+          `}
+        </section>
+      `;
+    }
+
+    function propertyPredictorTableHtml(group, model) {
+      if (!model.rows.length) return `<div class="mfa-empty">No alternatives available for this group yet.</div>`;
+      return `
+        <div class="predictor-table">
+          ${model.rows.map(row => `
+            <div class="predictor-row ${escapeAttr(row.decision)}">
+              <div class="predictor-row-top">
+                <strong>${escapeHtml(row.name)}</strong>
+                <select data-alt-decision="${escapeAttr(row.name)}" data-alt-decision-group="${escapeAttr(group.id)}">
+                  ${optionHtml(["auto", "keep", "weak", "reject"], row.manualDecision || "auto")}
+                </select>
+              </div>
+              <div class="predictor-meta">
+                <span class="pill ${row.decision === "keep" || row.decision === "selected" ? "green" : row.decision === "reject" ? "warn" : "blue"}">${escapeHtml(row.decision)}</span>
+                <span class="pill ${row.confidence === "high" ? "green" : row.confidence === "medium" ? "blue" : row.confidence === "not screened" ? "" : "warn"}">${escapeHtml(row.confidence)}</span>
+              </div>
+              <div class="predictor-reason">${escapeHtml(row.reason)}</div>
+              <div class="predictor-missing">${row.missing.length ? row.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("") : `<span class="pill green">no missing property</span>`}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function bindPropertyPredictorControls(root, groupId) {
+      root.querySelectorAll("[data-predictor-mode]").forEach(select => {
+        select.addEventListener("change", () => {
+          pushUndo();
+          const predictor = ensureGroup(select.dataset.predictorMode).propertyPredictor;
+          predictor.mode = select.value;
+          predictor.expanded = select.value === "minimal" ? true : predictor.expanded;
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-toggle-predictor]").forEach(button => {
+        button.addEventListener("click", () => {
+          const predictor = ensureGroup(button.dataset.togglePredictor).propertyPredictor;
+          predictor.expanded = !predictor.expanded;
+          renderInspector();
+        });
+      });
+      root.querySelectorAll("[data-alt-decision]").forEach(select => {
+        select.addEventListener("change", () => {
+          pushUndo();
+          const groupState = ensureGroup(select.dataset.altDecisionGroup);
+          const name = select.dataset.altDecision;
+          if (select.value === "auto") {
+            delete groupState.alternativeDecisions[name];
+          } else {
+            groupState.alternativeDecisions[name] = { decision: select.value };
+          }
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+    }
+
+    function separationPredictorApplies(group) {
+      const phen = new Set(group.phenomena || []);
+      if ([...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("))) return true;
+      return matchesForGroup(group).some(candidate => candidate.task === "separation" || candidate.task.includes("separation"));
+    }
+
+    function propertySeparationPredictorModel(group) {
+      const groupState = ensureGroup(group.id);
+      const mode = groupState.propertyPredictor.mode || "skip";
+      const candidates = matchesForGroup(group).slice(0, 8);
+      const rows = candidates.map(candidate => propertyDecisionForCandidate(group, candidate, mode));
+      const counts = rows.reduce((acc, row) => {
+        if (row.decision === "keep" || row.decision === "selected") acc.keep += 1;
+        else if (row.decision === "reject") acc.reject += 1;
+        else acc.weak += 1;
+        return acc;
+      }, { keep: 0, weak: 0, reject: 0 });
+      const unresolved = rows.filter(row => row.missing.length).length;
+      return {
+        groupId: group.id,
+        mode,
+        expanded: Boolean(groupState.propertyPredictor.expanded),
+        counts,
+        unresolved,
+        summary: rows.length
+          ? `${rows.length} alternatives screened; ${unresolved} need more data for a stronger decision.`
+          : "No alternatives to screen yet.",
+        rows
+      };
+    }
+
+    function propertyDecisionForCandidate(group, candidate, mode) {
+      const groupState = ensureGroup(group.id);
+      const manualDecision = groupState.alternativeDecisions?.[candidate.name]?.decision || "auto";
+      const auto = mode === "minimal"
+        ? minimalPropertyDecision(group, candidate)
+        : {
+            decision: group.selectedUnit === candidate.name ? "selected" : "weak",
+            confidence: "not screened",
+            reason: "Property predictor skipped; candidate comes from phenomena, task, and phase compatibility.",
+            missing: minimalMissingForCandidate(group, candidate).slice(0, 3)
+          };
+      if (manualDecision && manualDecision !== "auto") {
+        return {
+          ...auto,
+          name: candidate.name,
+          decision: manualDecision,
+          confidence: "manual",
+          reason: `Manual override: ${manualDecision}. Auto result was ${auto.decision}: ${auto.reason}`,
+          manualDecision
+        };
+      }
+      return { ...auto, name: candidate.name, manualDecision: "auto" };
+    }
+
+    function minimalPropertyDecision(group, candidate) {
+      const phen = new Set(group.phenomena || []);
+      const family = candidateSeparationFamily(candidate);
+      const groupFamilies = groupSeparationFamilies(group);
+      const missing = minimalMissingForCandidate(group, candidate);
+      const selectedBoost = group.selectedUnit === candidate.name;
+      const candidateName = candidate.name.toLowerCase();
+      const prop = id => normalizedGroupProperty(group, id);
+      const propText = id => `${prop(id).value} ${prop(id).note}`.toLowerCase();
+      const miscibility = propText("miscibility");
+      const azeotrope = propText("azeotrope_risk");
+      const has = id => propertyHasValue(group, id);
+      const hasSelectivity = has("separation_selectivity") || has("partition_coefficient");
+      const hasAgent = has("separating_agent");
+
+      if (family === "vl" && groupFamilies.has("ll") && !groupFamilies.has("vl")) {
+        return {
+          decision: selectedBoost ? "weak" : "reject",
+          confidence: "medium",
+          reason: "This option relies mainly on V-L driving force, while the group evidence is L-L contact/separation.",
+          missing: ["boiling point gap", "VLE/azeotrope check"]
+        };
+      }
+      if (family === "ll" && groupFamilies.has("vl") && !groupFamilies.has("ll")) {
+        return {
+          decision: selectedBoost ? "weak" : "reject",
+          confidence: "medium",
+          reason: "This option relies mainly on L-L phase split/contact, while the group evidence is V-L phase transition/separation.",
+          missing: ["miscibility", "partition preference"]
+        };
+      }
+      if (family === "ls" && !groupFamilies.has("ls") && (groupFamilies.has("vl") || groupFamilies.has("ll"))) {
+        return {
+          decision: selectedBoost ? "weak" : "reject",
+          confidence: "medium",
+          reason: "Solid-liquid evidence is not present in the grouped phenomena or stream phases.",
+          missing: ["solid loading", "particle/cake behavior"]
+        };
+      }
+
+      if (family === "ll") {
+        if (/\bimmiscible\b|partial|two phase|two-phase|ll/.test(miscibility)) {
+          return {
+            decision: "keep",
+            confidence: has("density_difference") || has("partition_coefficient") ? "high" : "medium",
+            reason: "L-L split/contact is consistent with the group and miscibility supports a liquid-liquid route.",
+            missing
+          };
+        }
+        if (/\bmiscible\b|single phase|single-phase/.test(miscibility) && !hasAgent) {
+          return {
+            decision: selectedBoost ? "weak" : "reject",
+            confidence: "high",
+            reason: "Reported miscibility weakens a decanter/extraction choice unless a separating agent or phase split is created.",
+            missing: ["separating agent or miscibility gap evidence"]
+          };
+        }
+        return {
+          decision: "weak",
+          confidence: "medium",
+          reason: "L-L phenomena fit, but miscibility/partition evidence is not yet sufficient to justify keep vs reject.",
+          missing
+        };
+      }
+
+      if (family === "vl") {
+        if (/yes|azeotrope|difficult|pressure/.test(azeotrope) && /distillation|evaporation|flash/.test(candidateName) && !/extractive|azeotropic|membrane|entrainer/.test(candidateName) && !hasAgent) {
+          return {
+            decision: selectedBoost ? "weak" : "reject",
+            confidence: "medium",
+            reason: "Azeotrope or difficult VLE evidence makes a simple V-L alternative weak; consider an intensified or entrainer-based option.",
+            missing: ["pressure sensitivity", "separating agent check"]
+          };
+        }
+        return {
+          decision: has("boiling_point") || has("vapor_pressure") ? "keep" : "weak",
+          confidence: has("boiling_point") && (has("vapor_pressure") || has("azeotrope_risk")) ? "high" : "medium",
+          reason: "V-L phenomena fit; boiling point, vapor pressure, and VLE notes determine whether this is robust or only plausible.",
+          missing
+        };
+      }
+
+      if (family === "ls") {
+        return {
+          decision: has("solubility") || has("solid_loading") || has("particle_size") || has("cake_resistance") ? "keep" : "weak",
+          confidence: has("particle_size") || has("cake_resistance") ? "medium" : "low",
+          reason: "Solid-liquid phenomena fit, but equipment choice depends on solids loading, solubility, and cake/particle behavior.",
+          missing
+        };
+      }
+
+      if (family === "membrane") {
+        return {
+          decision: hasSelectivity ? "keep" : "weak",
+          confidence: hasSelectivity ? "medium" : "low",
+          reason: "Membrane alternatives need selectivity or affinity evidence; keep as an intensified option when conventional separation is weak.",
+          missing: missing.length ? missing : ["selectivity / affinity", "fouling risk"]
+        };
+      }
+
+      return {
+        decision: candidate.sameTask || candidate.overlap?.length ? "weak" : "reject",
+        confidence: "low",
+        reason: "No specific property-screening rule matched this alternative; keep only if manually justified by process context.",
+        missing: missing.length ? missing : ["selection basis"]
+      };
+    }
+
+    function groupSeparationFamilies(group) {
+      const phen = new Set(group.phenomena || []);
+      const context = groupPhaseContext(group);
+      const families = new Set();
+      if ([...phen].some(code => code.includes("VL") || code === "PCh(L->V)" || code === "PCh(V->L)") || phaseContextHas(context, "VL")) families.add("vl");
+      if ([...phen].some(code => code.includes("LL")) || phaseContextHas(context, "LL")) families.add("ll");
+      if ([...phen].some(code => code.includes("LS") || code === "PCh(L->S)" || code === "PCh(S->L)") || phaseContextHas(context, "LS")) families.add("ls");
+      if ([...phen].some(code => code.includes("MV"))) families.add("membrane");
+      return families;
+    }
+
+    function candidateSeparationFamily(candidate) {
+      const text = `${candidate.name} ${candidate.task} ${candidate.phenomena?.join(" ") || ""}`.toLowerCase();
+      if (/membrane|pervaporation|permeation/.test(text)) return "membrane";
+      if (/liquid-liquid|decanter|extraction|mixer-settler|\bll\b|pc\(ll\)|ps\(ll\)|pt\(ll\)/.test(text)) return "ll";
+      if (/filtration|crystallization|drying|solid|molecular sieve|\bls\b|pc\(ls\)|ps\(ls\)|pt\(ls\)/.test(text)) return "ls";
+      if (/distillation|evaporation|flash|condensation|stripping|absorption|reboil|\bvl\b|pc\(vl\)|ps\(vl\)|pt\(vl\)/.test(text)) return "vl";
+      return "other";
+    }
+
+    function minimalMissingForCandidate(group, candidate) {
+      const family = candidateSeparationFamily(candidate);
+      const name = candidate.name.toLowerCase();
+      const missing = [];
+      const need = (id, label) => { if (!propertyHasValue(group, id)) missing.push(label); };
+      if (family === "ll") {
+        need("miscibility", "miscibility");
+        if (/decanter|settler|liquid-liquid/.test(name)) need("density_difference", "density gap");
+        if (/extraction|wash|mixer-settler/.test(name)) need("partition_coefficient", "partition preference");
+        if (/extract|agent|solvent/.test(name)) need("separating_agent", "separating agent");
+      } else if (family === "vl") {
+        need("boiling_point", "boiling point gap");
+        need("azeotrope_risk", "VLE/azeotrope check");
+        if (/extractive|azeotropic|entrainer/.test(name)) need("separating_agent", "entrainer / separating agent");
+        if (/vacuum|distillation|evaporation|thin|short-path|solvent|purification/.test(name)) need("degradation_temperature", "thermal limit");
+      } else if (family === "ls") {
+        if (/crystall/.test(name)) need("solubility", "solubility");
+        if (/filter|dry|solid|sieve/.test(name)) need("solid_loading", "solid loading");
+        if (/filter|centrif|dry/.test(name)) need("particle_size", "particle/cake behavior");
+      } else if (family === "membrane") {
+        need("separation_selectivity", "selectivity / affinity");
+        missing.push("fouling risk");
+      }
+      return [...new Set(missing)].slice(0, 4);
+    }
+
+    function normalizedGroupProperty(group, id) {
+      const prompt = propertyPromptCatalog.find(item => item.id === id) || { id, unit: "" };
+      return normalizePropertyValue(ensureGroup(group.id).properties[id], prompt);
+    }
+
+    function propertyHasValue(group, id) {
+      const value = normalizedGroupProperty(group, id);
+      if (Boolean(String(value.value || "").trim() || String(value.note || "").trim()) && value.status !== "missing") return true;
+      const conditions = groupConditionMap(group);
+      return Boolean(String(conditions[id] || "").trim());
+    }
+
     function propertyPromptsForGroup(group) {
       const phenomena = new Set(group.phenomena || []);
       const groupState = ensureGroup(group.id);
       return propertyPromptCatalog
-        .filter(prompt => prompt.phenomena.some(code => phenomena.has(code)) || Boolean(groupState.properties?.[prompt.id]))
+        .filter(prompt => prompt.phenomena.some(code => phenomena.has(code)) || Boolean(groupState.properties?.[prompt.id]) || propertyNeededForFramework(prompt, group))
         .filter(prompt => propertyNeededForFramework(prompt, group));
     }
 
@@ -4536,7 +5253,7 @@
       const phen = new Set(group.phenomena || []);
       const conditions = groupConditionMap(group);
       const text = `${group.task || ""} ${group.text || ""} ${group.selectedUnit || ""}`.toLowerCase();
-      if (["boiling_point", "vapor_pressure", "degradation_temperature"].includes(prompt.id)) {
+      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
         return [...phen].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))
           || Boolean(conditions.target_pressure || conditions.pressure_control || conditions.vapor_handling)
           || /vacuum|evapor|distill|solvent|volatile|reflux|conden/.test(text);
@@ -4546,6 +5263,14 @@
       }
       if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
         return [...phen].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code));
+      }
+      if (prompt.id === "separation_selectivity") {
+        return [...phen].some(code => ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"].includes(code))
+          || /membrane|adsorb|affinity|selectiv|extract|wash|drying agent|molecular sieve/.test(text);
+      }
+      if (prompt.id === "separating_agent") {
+        return [...phen].some(code => ["PT(MVL)", "PT(MLL)", "PC(LL)", "PT(LL)", "PS(LL)"].includes(code))
+          || /entrainer|extractant|separating agent|adsorbent|molecular sieve|membrane|extractive|azeotropic/.test(text);
       }
       if (prompt.id === "heat_capacity") {
         return phen.has("ES(H)") || phen.has("ES(C)");
@@ -4576,7 +5301,8 @@
     }
 
     function propertyNeedLevel(prompt, group) {
-      if (["heat_capacity", "boiling_point", "vapor_pressure", "miscibility", "density_difference", "particle_size", "cake_resistance"].includes(prompt.id)) return "needed";
+      if (["heat_capacity", "boiling_point", "vapor_pressure", "azeotrope_risk", "miscibility", "density_difference", "particle_size", "cake_resistance", "separation_selectivity"].includes(prompt.id)) return "needed";
+      if (["separating_agent", "partition_coefficient"].includes(prompt.id)) return "risk";
       if (["density", "viscosity"].includes(prompt.id)) return mixingPhysicalPropertiesNeeded(group) ? "needed" : "optional";
       if (["degradation_temperature", "emulsion_risk", "hazard_note"].includes(prompt.id)) return "risk";
       return "optional";
@@ -4590,6 +5316,63 @@
           return { ...prompt, ...saved, needLevel: propertyNeedLevel(prompt, group) };
         })
         .filter(item => item.value || item.note);
+    }
+
+    function propertyMissingStripHtml(group, prompts) {
+      const missing = prompts
+        .filter(prompt => propertyNeedLevel(prompt, group) !== "optional" && !propertyHasValue(group, prompt.id))
+        .map(prompt => prompt.label);
+      if (!missing.length) return `<div class="property-readiness ok"><strong>Ready</strong><span>Required separation properties are present or inherited from conditions.</span></div>`;
+      return `
+        <div class="property-readiness">
+          <strong>Missing for stronger decisions</strong>
+          <span>${missing.slice(0, 6).map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}${missing.length > 6 ? `<span class="pill">${missing.length - 6} more</span>` : ""}</span>
+        </div>
+      `;
+    }
+
+    function propertyFamilyForPrompt(prompt) {
+      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
+        return { id: "vl", title: "Vapor-Liquid / Volatility" };
+      }
+      if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
+        return { id: "ll", title: "Liquid-Liquid" };
+      }
+      if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
+        return { id: "ls", title: "Solid-Liquid / Solids" };
+      }
+      if (["separation_selectivity", "separating_agent"].includes(prompt.id)) {
+        return { id: "affinity", title: "Affinity / Separating Agent" };
+      }
+      if (["heat_capacity", "density", "viscosity"].includes(prompt.id)) {
+        return { id: "physical", title: "Physical / Energy" };
+      }
+      return { id: "risk", title: "Risk / Compatibility" };
+    }
+
+    function propertyPromptGroups(prompts) {
+      const order = ["vl", "ll", "ls", "affinity", "physical", "risk"];
+      const byFamily = new Map();
+      prompts.forEach(prompt => {
+        const family = propertyFamilyForPrompt(prompt);
+        if (!byFamily.has(family.id)) byFamily.set(family.id, { ...family, items: [] });
+        byFamily.get(family.id).items.push(prompt);
+      });
+      return Array.from(byFamily.values()).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    }
+
+    function propertyPromptFamilyHtml(groupState, family) {
+      return `
+        <div class="condition-family property-family">
+          <div class="condition-family-head">
+            <span>${escapeHtml(family.title)}</span>
+            <span class="pill">${family.items.length}</span>
+          </div>
+          <div class="condition-grid property-edit-grid">
+            ${family.items.map(prompt => propertyEditHtml(groupState, prompt)).join("")}
+          </div>
+        </div>
+      `;
     }
 
     function normalizePropertyValue(value, prompt) {
@@ -4824,11 +5607,11 @@
         </div>
         <div class="condition-panel">
           <div class="condition-head">
-            <strong>Aggregated Conditions</strong>
-            <span class="muted small">summed when additive, kept separate when values conflict or represent a sequence</span>
+            <strong>Group Condition Profile</strong>
+            <span class="muted small">composite group values, editable like a block-level condition set</span>
           </div>
           <div class="condition-body">
-            ${conditions.length ? conditions.map(item => groupConditionItemHtml(item, group.id, true)).join("") : `<div class="mfa-empty">No saved group conditions yet.</div>`}
+            ${groupConditionProfileHtml(group, conditions)}
           </div>
         </div>
         <div class="condition-panel">
@@ -4851,6 +5634,7 @@
                   placeholder="deciding rule, e.g. thin-film for heat sensitivity (H33)">
               </div>
             ` : ""}
+            ${propertyPredictorPanelHtml(group)}
           </div>
         </div>
       `;
@@ -4865,6 +5649,23 @@
           ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
           renderExport();
         });
+      });
+      bindPropertyPredictorControls(root, group.id);
+      root.querySelectorAll("[data-edit-group-conditions]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.editGroupConditions).conditionsEditing = true;
+          renderStepFlowInspector();
+        });
+      });
+      root.querySelectorAll("[data-save-group-conditions]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.saveGroupConditions).conditionsEditing = false;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-group-condition-value], [data-group-condition-note]").forEach(input => {
+        input.addEventListener("input", updateGroupConditionOverrideField);
+        input.addEventListener("change", updateGroupConditionOverrideField);
       });
       root.querySelectorAll("[data-open-override]").forEach(button => {
         button.addEventListener("click", () => {
@@ -4897,6 +5698,25 @@
           renderAll();
         });
       });
+    }
+
+    function updateGroupConditionOverrideField(event) {
+      const input = event.target;
+      const groupId = input.dataset.groupConditionGroup;
+      const key = input.dataset.groupConditionValue || input.dataset.groupConditionNote;
+      const groupState = ensureGroup(groupId);
+      const root = $("stepFlowInspector");
+      const valueInput = [...root.querySelectorAll("[data-group-condition-value]")].find(el => el.dataset.groupConditionValue === key);
+      const noteInput = [...root.querySelectorAll("[data-group-condition-note]")].find(el => el.dataset.groupConditionNote === key);
+      const value = valueInput?.value.trim() || "";
+      const note = noteInput?.value.trim() || "";
+      invalidateAiRefine();
+      if (value || note) {
+        groupState.conditionOverrides[key] = { value, note };
+      } else {
+        delete groupState.conditionOverrides[key];
+      }
+      renderExport();
     }
 
     function conditionPanelHtml(block) {
@@ -5331,6 +6151,13 @@
       return values.map(value => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
     }
 
+    function scheduleOperationClassOptionHtml(selected) {
+      return scheduleOperationClassOptions.map(value => {
+        const label = value === "auto" ? "Auto" : operationScaleProfile(value).label;
+        return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+
     function updateStreamField(event) {
       const current = selectedBlock();
       if (!current) return;
@@ -5503,7 +6330,7 @@
     function deleteBlock(blockId) {
       const block = state.blocks.find(item => item.id === blockId);
       if (!block) return;
-      if (!confirm(`Delete block ${blockId}? Its streams and conditions are removed too.`)) return;
+      if (!confirm(`Are you sure you want to delete block ${blockId}? Its streams, phenomena, and conditions will be removed too.`)) return;
       pushUndo();
       const groupId = block.groupId;
       state.blocks = state.blocks.filter(item => item.id !== blockId);
@@ -5735,10 +6562,10 @@
       renderContextMenuOptions();
       hideGroupMenu();
       hideStreamMenu();
+      hideTextSelectionMenu();
       const menu = $("blockMenu");
       menu.hidden = false;
-      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
-      menu.style.top = `${Math.min(y, window.innerHeight - 250)}px`;
+      positionContextMenu(menu, x, y);
     }
 
     function hideBlockMenu() {
@@ -5750,10 +6577,10 @@
       state.menuGroupId = groupId;
       hideBlockMenu();
       hideStreamMenu();
+      hideTextSelectionMenu();
       const menu = $("groupMenu");
       menu.hidden = false;
-      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
-      menu.style.top = `${Math.min(y, window.innerHeight - 190)}px`;
+      positionContextMenu(menu, x, y);
     }
 
     function hideGroupMenu() {
@@ -5765,10 +6592,10 @@
       state.menuStreamId = streamId;
       hideBlockMenu();
       hideGroupMenu();
+      hideTextSelectionMenu();
       const menu = $("streamMenu");
       menu.hidden = false;
-      menu.style.left = `${Math.min(x, window.innerWidth - 295)}px`;
-      menu.style.top = `${Math.min(y, window.innerHeight - 150)}px`;
+      positionContextMenu(menu, x, y);
     }
 
     function hideStreamMenu() {
@@ -5776,11 +6603,35 @@
       state.menuStreamId = null;
     }
 
+    function showTextSelectionMenu(x, y) {
+      hideBlockMenu();
+      hideGroupMenu();
+      hideStreamMenu();
+      const menu = $("textSelectionMenu");
+      menu.hidden = false;
+      positionContextMenu(menu, x, y);
+    }
+
+    function hideTextSelectionMenu() {
+      const menu = $("textSelectionMenu");
+      if (menu) menu.hidden = true;
+    }
+
+    function positionContextMenu(menu, x, y) {
+      const margin = 10;
+      const width = menu.offsetWidth || 275;
+      const height = Math.min(menu.scrollHeight || 120, window.innerHeight - margin * 2);
+      menu.style.maxHeight = `${Math.max(120, window.innerHeight - margin * 2)}px`;
+      menu.style.left = `${Math.max(margin, Math.min(x, window.innerWidth - width - margin))}px`;
+      menu.style.top = `${Math.max(margin, Math.min(y, window.innerHeight - height - margin))}px`;
+    }
+
     function closeFloatingActions() {
       state.connectingFrom = null;
       hideBlockMenu();
       hideGroupMenu();
       hideStreamMenu();
+      hideTextSelectionMenu();
     }
 
     function editStream(streamId) {
@@ -6426,6 +7277,7 @@
           phenomena: group.phenomena,
           selectedUnit: group.selectedUnit,
           selectionBasis: group.selectionBasis || "",
+          propertyPredictor: propertySeparationPredictorModel(group),
           schedule: group.schedule,
           properties: exportGroupProperties(group),
           conditionAggregation: aggregateGroupConditions(group),
@@ -6665,8 +7517,12 @@
 
     $("annotatedText").addEventListener("mouseup", rememberSelection);
     $("annotatedText").addEventListener("keyup", rememberSelection);
+    $("annotatedText").addEventListener("mousedown", handleTextSelectionRightMouseDown);
+    $("annotatedText").addEventListener("contextmenu", handleTextSelectionContextMenu);
     $("sourceInput").addEventListener("mouseup", rememberSelection);
     $("sourceInput").addEventListener("keyup", rememberSelection);
+    $("sourceInput").addEventListener("mousedown", handleTextSelectionRightMouseDown);
+    $("sourceInput").addEventListener("contextmenu", handleTextSelectionContextMenu);
 
     $("behaviorSelect").addEventListener("change", event => applyBehavior(event.target.value));
     $("blockText").addEventListener("input", event => {
@@ -6731,6 +7587,13 @@
     });
     $("ctxDeleteStream").addEventListener("click", () => {
       deleteStream(state.menuStreamId);
+    });
+    $("textSelectionMenu").addEventListener("mousedown", event => {
+      event.preventDefault();
+    });
+    $("ctxCreateBlockFromText").addEventListener("click", () => {
+      hideTextSelectionMenu();
+      createBlockFromSelection();
     });
 
     document.addEventListener("keydown", event => {

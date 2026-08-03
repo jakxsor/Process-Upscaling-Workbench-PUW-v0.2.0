@@ -25,7 +25,9 @@ establishment, heuristic rules, preliminary scheduling, value deduction):
 - define a production scale-up basis and propagate block MFA quantities to batch, hourly, and annual values;
 - generate recycle/fate summaries and energy-bridge candidates for downstream energy calculations;
 - add optional property refinement only when phase separation, energy, mixing, or ambiguous alternatives make it useful;
+- screen separation alternatives with a property-based keep/weak/reject layer while keeping manual overrides traceable;
 - run a rule-based Refine / Check review for missing scale data, phase gaps, condition gaps, connectivity, and ambiguous separation choices.
+- review Gantt bottlenecks through a scale-behaviour evidence layer with operation class, schedule margin, expected larger-scale behaviour, missing data, and compact references.
 
 ## Run
 

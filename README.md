@@ -23,7 +23,10 @@ It supports:
 - generating a scale-up assessment for heat transfer, mixing, phase separation, vapor-liquid operations, solids handling, recycle closure, and energy handoff risks;
 - generating recycle/fate summaries and energy-bridge candidates for downstream energy calculations;
 - adding optional property refinement only when phase separation, energy, mixing, or ambiguous alternatives make it useful;
+- screening separation alternatives with a property-based keep/weak/reject layer while keeping manual overrides traceable;
 - running a rule-based Refine / Check pass for missing scale data, phase gaps, condition gaps, unit-choice ambiguity, connectivity, and scale-sensitive risks;
+- optionally running an external OpenAI-compatible process review from a temporary popup API key or server-side `OPENAI_API_KEY`;
+- showing a Gantt evidence layer with operation class, expected scale behaviour, schedule margin, missing data, and references;
 - assigning behavior presets and phenomenological descriptors;
 - combining blocks into task groups;
 - drawing flowchart-style arrows between draft blocks, groups, and assigned blocks;
@@ -56,6 +59,8 @@ Recent scale-up tool snapshots are saved under:
 ```text
 saved_states/upscaling_tool_*/
 ```
+
+These snapshots are local backups and are intentionally ignored by git for new saves.
 
 ## Dependencies
 
