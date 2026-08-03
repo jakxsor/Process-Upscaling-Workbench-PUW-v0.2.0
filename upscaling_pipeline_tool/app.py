@@ -269,10 +269,11 @@ APP_HTML = r"""<!doctype html>
     <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">
       <div class="modal-head">
         <div>
-          <div class="label">Read-only diagram, generated from the current project</div>
+          <div class="label">Generated from the current project — drag a unit to move it, double-click to edit its description</div>
           <h2 id="flowsheetTitle">Flowsheet View</h2>
         </div>
         <div class="row">
+          <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
           <button id="closeFlowsheetModal" class="mini-button">Close</button>
         </div>
