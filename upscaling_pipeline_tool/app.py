@@ -44,11 +44,14 @@ APP_HTML = r"""<!doctype html>
 
   <main id="appMain">
     <section class="panel">
-      <div class="panel-head">
-        <h2>Source Protocol</h2>
+      <div class="panel-head source-panel-head">
+        <div>
+          <h2>Workflow Input</h2>
+          <span class="muted small">Text first, board controls when needed</span>
+        </div>
         <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
-          <button class="mini-button source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
-          <button class="mini-button source-panel-tab" data-source-tab="board" role="tab">Board</button>
+          <button class="source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
+          <button class="source-panel-tab" data-source-tab="board" role="tab">Board</button>
         </div>
       </div>
       <div class="panel-body stack">
@@ -64,23 +67,29 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div id="sourceBoardTab" class="source-tab-view stack" hidden>
           <div class="graph-controls">
-            <div>
+            <div class="board-control-head">
               <div class="label">Board Controls</div>
               <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
             </div>
-            <div class="board-control-grid">
+            <div class="board-control-section">
+              <div class="label">Network</div>
               <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
-              <button id="toggleCompact" class="mini-button" title="Switch group boxes between full detail and compact icon + label view">Compact View</button>
+              <div id="connectionStatus" class="connection-status"></div>
+              <div id="linkSummary"></div>
+              <div id="networkClosure" class="closure-strip"></div>
+            </div>
+            <div class="board-control-section">
+              <div class="label">View</div>
+              <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact View</button>
               <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset View</button>
               <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center Selection</button>
-              <button id="zoomOut">-</button>
-              <span id="zoomReadout" class="zoom-readout">100%</span>
-              <button id="zoomIn">+</button>
               <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
+              <div class="board-zoom-row">
+                <button id="zoomOut">-</button>
+                <span id="zoomReadout" class="zoom-readout">100%</span>
+                <button id="zoomIn">+</button>
+              </div>
             </div>
-            <div id="connectionStatus" class="connection-status"></div>
-            <div id="linkSummary"></div>
-            <div id="networkClosure" class="closure-strip"></div>
           </div>
         </div>
       </div>
@@ -281,6 +290,31 @@ APP_HTML = r"""<!doctype html>
         <button id="tutorialPrev" class="mini-button">Back</button>
         <button id="tutorialNext" class="primary">Next</button>
         <button id="tutorialSkip" class="mini-button">Close</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="splitGroupModal" class="modal-backdrop" hidden>
+    <section class="modal-panel split-group-panel" role="dialog" aria-modal="true" aria-labelledby="splitGroupTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Scale-up bottleneck relief</div>
+          <h2 id="splitGroupTitle">Split <span id="splitGroupIdLabel"></span> Into Parallel Units</h2>
+        </div>
+        <button id="closeSplitGroupModal" class="mini-button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="splitGroupWarning" class="muted small" hidden></div>
+        <label class="split-n-label">
+          Split into
+          <input type="number" min="2" max="20" step="1" id="splitGroupN" value="2">
+          parallel units
+        </label>
+        <div id="splitGroupPreview" class="muted small"></div>
+        <div class="row between" style="margin-top:8px">
+          <button id="cancelSplitGroup">Cancel</button>
+          <button id="confirmSplitGroup" class="primary">Split</button>
+        </div>
       </div>
     </section>
   </div>
