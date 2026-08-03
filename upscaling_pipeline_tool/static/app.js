@@ -390,6 +390,7 @@
       heuristicDecisions: {},
       showDataReadiness: false,
       measuredNodeHeights: {},
+      boardCompact: false,
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -469,8 +470,17 @@
     }
 
     function nodeWidth(blockCount) {
+      if (state.boardCompact) return 200;
       return Math.max(430, 92 + Math.max(1, blockCount) * 194);
     }
+
+    const flowsheetCategoryIcon = {
+      reactor: "⚗",
+      separation: "⬡",
+      utility: "⚙",
+      storage: "◉",
+      waste: "♻"
+    };
 
     function boardBounds() {
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
@@ -1521,8 +1531,28 @@
         const group = groupModel(groupId);
         const candidates = matchesForGroup(group).slice(0, 4);
         const active = state.selectedGroupId === group.id || group.blocks.some(block => state.selectedIds.includes(block.id));
+        const boxClasses = `group-box tip ${state.boardCompact ? "compact" : ""} ${active ? "active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}`;
+        if (state.boardCompact) {
+          const category = flowsheetUnitCategory(group);
+          const icon = flowsheetCategoryIcon[category] || "◼";
+          return `
+            <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+              <div class="group-head">
+                <div class="row">
+                  <span class="compact-icon compact-icon-${category}">${icon}</span>
+                  <strong>${escapeHtml(group.id)}</strong>
+                </div>
+                <span class="pill">${group.blocks.length}</span>
+              </div>
+              <div class="compact-body">
+                <strong>${escapeHtml(group.selectedUnit || "no unit selected")}</strong>
+                <span class="muted small">${escapeHtml(group.task)}</span>
+              </div>
+            </section>
+          `;
+        }
         return `
-          <section class="group-box tip ${active ? "active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+          <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
             <div class="group-head">
               <div class="row">
                 <strong>${escapeHtml(group.id)}</strong>
@@ -7747,6 +7777,12 @@
     });
     $("runExternalAiRefine").addEventListener("click", runExternalAiRefine);
     $("resetView").addEventListener("click", resetView);
+    $("toggleCompact").addEventListener("click", () => {
+      state.boardCompact = !state.boardCompact;
+      $("toggleCompact").textContent = state.boardCompact ? "Detailed View" : "Compact View";
+      $("toggleCompact").classList.toggle("primary", state.boardCompact);
+      renderAll();
+    });
     $("boardCenter").addEventListener("click", centerSelection);
     $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.35));
     $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
@@ -7823,6 +7859,30 @@
     $("ctxRemoveLinks").addEventListener("click", () => {
       removeLinksForGroup(state.menuGroupId);
       hideGroupMenu();
+    });
+    $("ctxSplitGroup").addEventListener("click", () => {
+      const groupId = state.menuGroupId;
+      hideGroupMenu();
+      if (!groupId) return;
+      const group = groupModel(groupId);
+      if (!group) return;
+      const entry = taskScheduleEntry(group, 0);
+      const baseDuration = Number.isFinite(entry.adjustedDurationH) && entry.adjustedDurationH > 0 ? entry.adjustedDurationH : NaN;
+      const suggestion = Math.max(2, Math.ceil((Number.isFinite(entry.parallelUnits) ? entry.parallelUnits : 1) + 1));
+      const promptLabel = `Split ${groupId} into how many parallel units?` + (Number.isFinite(baseDuration) ? ` Currently ${formatNumber(baseDuration)} h per batch.` : " No duration set yet, so time cannot be split proportionally.");
+      const input = prompt(promptLabel, String(suggestion));
+      if (input === null) return;
+      const n = Math.round(Number(input));
+      if (!Number.isFinite(n) || n < 2) {
+        alert("Enter a whole number of 2 or more.");
+        return;
+      }
+      const kineticsWarning = entry.scaleSensitivity === "kinetics-bound"
+        ? `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time, only raise throughput. `
+        : "";
+      const previewText = Number.isFinite(baseDuration) ? `Each unit would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h). ` : "";
+      if (!confirm(`${kineticsWarning}${previewText}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow and duration, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`)) return;
+      splitGroupIntoParallelUnits(groupId, n);
     });
     $("ctxEditStream").addEventListener("click", () => {
       editStream(state.menuStreamId);

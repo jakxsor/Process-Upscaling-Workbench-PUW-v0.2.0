@@ -70,6 +70,7 @@ APP_HTML = r"""<!doctype html>
             <div>
               <div class="label">Board Controls</div>
               <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
+              <button id="toggleCompact" class="mini-button" style="margin-top:5px" title="Switch group boxes between full detail (MFA, phenomena, alternatives) and a compact icon + label view">Compact View</button>
             </div>
             <div class="row">
               <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
@@ -247,6 +248,8 @@ APP_HTML = r"""<!doctype html>
     <div class="label">Group Actions</div>
     <button id="ctxStartConnection" class="primary">Start Arrow From This Group</button>
     <button id="ctxRemoveLinks">Remove Arrows For This Group</button>
+    <div class="label" style="margin-top:10px">Scale-Up</div>
+    <button id="ctxSplitGroup" title="Split this group into N parallel units, each handling 1/N of its material flow and duration, wired in parallel between the same predecessor and successor">Split Into Parallel Units</button>
   </div>
 
   <div id="streamMenu" class="context-menu" hidden>
