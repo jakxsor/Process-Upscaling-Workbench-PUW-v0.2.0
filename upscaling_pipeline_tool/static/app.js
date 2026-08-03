@@ -392,6 +392,7 @@
       showConnections: false,
       measuredNodeHeights: {},
       boardCompact: false,
+      sourcePanelTab: "protocol",
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -7390,6 +7391,17 @@
       $("toggleInspector").textContent = $("appMain").classList.contains("inspector-collapsed") ? "◑" : "◐";
     }
 
+    function setSourcePanelTab(tab) {
+      state.sourcePanelTab = tab === "board" ? "board" : "protocol";
+      $("sourceProtocolTab").hidden = state.sourcePanelTab !== "protocol";
+      $("sourceBoardTab").hidden = state.sourcePanelTab !== "board";
+      document.querySelectorAll("[data-source-tab]").forEach(button => {
+        const selected = button.dataset.sourceTab === state.sourcePanelTab;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+      });
+    }
+
     const tutorialSteps = [
       { target: "#sourceInput", title: "1. Source Protocol", body: "Paste the lab protocol here. The workflow starts from text, so every block remains traceable to the original synthesis description." },
       { target: "#createBlockSide", title: "2. Create Blocks", body: "Select one operation in the protocol, then create a block. Blocks are the smallest editable units of the process." },
@@ -7898,6 +7910,7 @@
       renderStepFlowInspector();
       renderInspector();
       renderContextMenuOptions();
+      setSourcePanelTab(state.sourcePanelTab);
       renderInspectorTabs();
       renderWorkflowStepper();
       renderDataReadiness();
@@ -7965,6 +7978,9 @@
       renderAll();
     });
     $("exportJson").addEventListener("click", renderExport);
+    document.querySelectorAll("[data-source-tab]").forEach(button => {
+      button.addEventListener("click", () => setSourcePanelTab(button.dataset.sourceTab));
+    });
     $("openTutorial").addEventListener("click", () => openTutorial());
     $("tutorialSkip").addEventListener("click", closeTutorial);
     $("tutorialPrev").addEventListener("click", () => {

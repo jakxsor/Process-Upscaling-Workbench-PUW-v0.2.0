@@ -210,6 +210,23 @@
     .row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
     .between { justify-content: space-between; }
 
+    .source-panel-tabs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .source-panel-tab.active {
+      color: #fff;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .source-tab-view[hidden] {
+      display: none;
+    }
+
     .label {
       margin-bottom: 4px;
       color: var(--muted);
@@ -630,11 +647,24 @@
     .context-menu button { width: 100%; margin-top: 6px; text-align: left; }
 
     .graph-controls {
-      margin-bottom: 8px;
+      display: grid;
+      gap: 8px;
       padding: 8px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fbfcfc;
+    }
+
+    .board-control-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      align-items: center;
+    }
+
+    .board-control-grid .zoom-readout {
+      justify-self: center;
+      min-width: 0;
     }
 
     .panel-tabs {

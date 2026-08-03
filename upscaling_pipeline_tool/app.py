@@ -46,17 +46,43 @@ APP_HTML = r"""<!doctype html>
     <section class="panel">
       <div class="panel-head">
         <h2>Source Protocol</h2>
-        <span class="muted small">Step 1 — select text to create blocks</span>
+        <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
+          <button class="mini-button source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
+          <button class="mini-button source-panel-tab" data-source-tab="board" role="tab">Board</button>
+        </div>
       </div>
       <div class="panel-body stack">
-        <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
-        <div class="row">
-          <button id="loadTextSide" class="primary">Load Text View</button>
-          <button id="createBlockSide">Create Block From Selection</button>
-          <button id="clearProject">Clear Blocks</button>
+        <div id="sourceProtocolTab" class="source-tab-view stack">
+          <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
+          <div class="row">
+            <button id="loadTextSide" class="primary">Load Text View</button>
+            <button id="createBlockSide">Create Block From Selection</button>
+            <button id="clearProject">Clear Blocks</button>
+          </div>
+          <div id="selectionInfo" class="muted">No active text selection.</div>
+          <div id="annotatedText" class="text-surface"></div>
         </div>
-        <div id="selectionInfo" class="muted">No active text selection.</div>
-        <div id="annotatedText" class="text-surface"></div>
+        <div id="sourceBoardTab" class="source-tab-view stack" hidden>
+          <div class="graph-controls">
+            <div>
+              <div class="label">Board Controls</div>
+              <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
+            </div>
+            <div class="board-control-grid">
+              <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
+              <button id="toggleCompact" class="mini-button" title="Switch group boxes between full detail and compact icon + label view">Compact View</button>
+              <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset View</button>
+              <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center Selection</button>
+              <button id="zoomOut">-</button>
+              <span id="zoomReadout" class="zoom-readout">100%</span>
+              <button id="zoomIn">+</button>
+              <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
+            </div>
+            <div id="connectionStatus" class="connection-status"></div>
+            <div id="linkSummary"></div>
+            <div id="networkClosure" class="closure-strip"></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -66,27 +92,6 @@ APP_HTML = r"""<!doctype html>
         <span class="muted small">Steps 1-4 — draft blocks, task groups, then arrows to close the network</span>
       </div>
       <div class="panel-body">
-        <div class="graph-controls">
-          <div class="row between">
-            <div>
-              <div class="label">Board Controls</div>
-              <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
-              <button id="toggleCompact" class="mini-button" style="margin-top:5px" title="Switch group boxes between full detail (MFA, phenomena, alternatives) and a compact icon + label view">Compact View</button>
-            </div>
-            <div class="row">
-              <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
-              <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset View</button>
-              <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center Selection</button>
-              <button id="zoomOut">-</button>
-              <span id="zoomReadout" class="zoom-readout">100%</span>
-              <button id="zoomIn">+</button>
-              <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
-            </div>
-          </div>
-          <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
-          <div id="linkSummary" style="margin-top:7px"></div>
-          <div id="networkClosure" class="closure-strip"></div>
-        </div>
         <div id="groupFlow" class="group-flow"></div>
         <div id="stepFlowInspector" class="step-flow-inspector empty">Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
       </div>
