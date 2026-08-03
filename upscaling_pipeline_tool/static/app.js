@@ -388,7 +388,6 @@
       ruleChecks: [],
       aiRefine: null,
       heuristicDecisions: {},
-      valueCoiLinks: [],
       showDataReadiness: false,
       measuredNodeHeights: {},
       processRuleOptions: {
@@ -428,7 +427,7 @@
         links: state.links,
         scaleBasis: state.scaleBasis,
         heuristicDecisions: state.heuristicDecisions,
-        valueCoiLinks: state.valueCoiLinks
+        activeInspectorTab: state.activeInspectorTab
       });
     }
 
@@ -454,7 +453,6 @@
       state.links = data.links;
       state.scaleBasis = data.scaleBasis;
       state.heuristicDecisions = data.heuristicDecisions || {};
-      state.valueCoiLinks = data.valueCoiLinks || [];
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.selectedIds = [];
@@ -462,7 +460,6 @@
       state.aiRefine = null;
       const source = $("sourceInput");
       if (source) source.value = state.text;
-      renderValuesPanel(true);
       renderAll();
     }
 
@@ -3454,10 +3451,8 @@
       const triggered = heuristicRuleLibrary
         .map(rule => heuristicRuleCard(rule, ctx))
         .filter(Boolean)
-        .map(card => ({ ...card, prioritizedCois: prioritizedCoisForRule(card) }))
         .sort((a, b) =>
-          (b.prioritizedCois.length ? 1 : 0) - (a.prioritizedCois.length ? 1 : 0)
-          || severityRank(a.severity) - severityRank(b.severity)
+          severityRank(a.severity) - severityRank(b.severity)
           || a.id.localeCompare(b.id));
       return {
         totalRules: heuristicRuleLibrary.length,
@@ -3871,6 +3866,19 @@
       root.querySelectorAll("[data-load-schedule-example]").forEach(button => {
         button.addEventListener("click", applyScheduleExample);
       });
+      root.querySelectorAll("[data-split-n]").forEach(input => {
+        input.addEventListener("input", () => {
+          let n = Math.round(Number(input.value));
+          if (!Number.isFinite(n) || n < 2) n = 2;
+          if (n > 20) n = 20;
+          const groupId = input.dataset.splitN;
+          const baseDuration = Number(input.dataset.splitBaseDuration);
+          const preview = [...root.querySelectorAll("[data-split-preview]")].find(el => el.dataset.splitPreview === groupId);
+          if (preview) preview.textContent = bottleneckSplitPreviewText(baseDuration, n);
+          const button = [...root.querySelectorAll("[data-split-bottleneck]")].find(el => el.dataset.splitBottleneck === groupId);
+          if (button) button.dataset.splitCount = String(n);
+        });
+      });
       root.querySelectorAll("[data-split-bottleneck]").forEach(button => {
         button.addEventListener("click", () => {
           const groupId = button.dataset.splitBottleneck;
@@ -4160,28 +4168,48 @@
       `;
     }
 
+    function bottleneckSplitPreviewText(baseDuration, n) {
+      if (!Number.isFinite(baseDuration) || baseDuration <= 0 || !Number.isFinite(n) || n < 2) return "";
+      return `Each of the ${n} parallel units would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h as one unit).`;
+    }
+
     function bottleneckActionHtml(task) {
       const effective = Number.isFinite(task.effectiveTimeH) ? `${formatNumber(task.effectiveTimeH)} h` : "missing";
       const split = Number.isFinite(task.durationH) && task.durationH > 0
         ? `${formatNumber(task.adjustedDurationH || task.durationH)} h adjusted / ${formatNumber(task.parallelUnits)} unit${task.parallelUnits === 1 ? "" : "s"} = ${effective}`
         : effective;
-      const nextParallel = Number.isFinite(task.parallelUnits) ? Math.max(2, Math.ceil(task.parallelUnits + 1)) : 2;
-      const nextEffective = Number.isFinite(task.adjustedDurationH) && task.adjustedDurationH > 0 ? formatNumber(task.adjustedDurationH / nextParallel) : "";
+      const baseDuration = Number.isFinite(task.adjustedDurationH) && task.adjustedDurationH > 0 ? task.adjustedDurationH : NaN;
+      const baseParallel = Number.isFinite(task.parallelUnits) && task.parallelUnits > 0 ? task.parallelUnits : 1;
+      const defaultN = Math.max(2, Math.ceil(baseParallel + 1));
       const recommendation = task.scaleSensitivity === "kinetics-bound"
         ? "Use parallel reactors or process intensification; larger equipment alone may not reduce this time."
         : task.scaleSensitivity === "increases with scale" || task.scaleSensitivity === "equipment dependent"
           ? "Check equipment capacity, then test more parallel units or split the grouped task."
           : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
-      const testAction = nextEffective ? `Test parallel units = ${nextParallel}; effective time would become about ${nextEffective} h if the split is physically valid.` : "";
       const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
-      const splitButton = nextEffective ? (
+      const canSplit = Number.isFinite(baseDuration);
+      const pickerHtml = canSplit ? `
+        <div class="bottleneck-split-picker">
+          <label class="split-n-label">
+            Split into
+            <input type="number" min="2" max="20" step="1" value="${defaultN}" data-split-n="${escapeAttr(task.groupId)}" data-split-base-duration="${baseDuration}">
+            parallel units
+          </label>
+          <span class="muted small" data-split-preview="${escapeAttr(task.groupId)}">${escapeHtml(bottleneckSplitPreviewText(baseDuration, defaultN))}</span>
+        </div>
+      ` : "";
+      const splitButton = canSplit ? (
         isKineticsBound ? `
           <div class="bottleneck-split-warning">
             <span class="muted small">This stage is kinetics-bound: splitting it into parallel units does not shorten the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput. Do not use this to relieve the cycle-time bottleneck; see the paper's octocrylene case, where the kinetics-bound reactor "cannot be relieved by parallelization".</span>
-            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${nextParallel}" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
+            ${pickerHtml}
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
           </div>
         ` : `
-          <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${nextParallel}" class="primary">Accept: split ${escapeHtml(task.groupId)} into ${nextParallel} parallel units</button>
+          <div class="bottleneck-split-controls">
+            ${pickerHtml}
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" class="primary">Split ${escapeHtml(task.groupId)}</button>
+          </div>
         `
       ) : "";
       return `
@@ -4190,7 +4218,6 @@
           <strong>${escapeHtml(task.groupId)} controls the cycle time</strong>
           <span>${escapeHtml(split)}</span>
           <span class="muted small">${escapeHtml(recommendation)}</span>
-          ${testAction ? `<span class="muted small">${escapeHtml(testAction)}</span>` : ""}
           ${splitButton}
         </div>
       `;
@@ -4244,10 +4271,8 @@
       const decisionButton = (value, label) => `
         <button class="mini-button heuristic-decision-button ${chosen === value ? "chosen" : ""}" data-heuristic-decision="${escapeAttr(value)}" data-heuristic-rule="${escapeAttr(item.id)}">${label}</button>
       `;
-      const prioritized = item.prioritizedCois || prioritizedCoisForRule(item);
       return `
-        <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""} ${prioritized.length ? "coi-prioritized" : ""}">
-          ${prioritized.length ? `<span class="coi-priority-pill" title="Prioritized by the project values linked in the Values &amp; COI tab">★ ${escapeHtml(prioritized.join(", "))}</span>` : ""}
+        <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""}">
           <span class="severity-pill">${escapeHtml(item.severity)}</span>
           <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
           <span>${escapeHtml(item.recommendation)}</span>
@@ -4786,7 +4811,6 @@
       const recycle = recycleSummary(model);
       const energyEvents = energyBridgeModel(model);
       const scaleAssessment = scaleUpAssessmentModel(model);
-      const heuristicReview = heuristicReviewModel(model);
       const gantt = taskScheduleModel();
       if (!state.blocks.length) {
         issues.push(ruleIssue("high", "No process blocks", "The framework needs explicit block-level tasks before scale-up can be reviewed.", "project", "Create blocks from the source text."));
@@ -4893,12 +4917,6 @@
         .filter(item => ["high", "medium"].includes(item.severity))
         .forEach(item => {
           issues.push(ruleIssue(item.severity, "Scale-up risk needs review", `${item.title}: ${item.recommendation}`, item.groupId || item.task, "Complete the missing/check fields before treating the scaled process as robust."));
-        });
-      heuristicReview.triggered
-        .filter(item => ["high", "medium"].includes(item.severity))
-        .slice(0, 10)
-        .forEach(item => {
-          issues.push(ruleIssue(item.severity, `${item.id} heuristic triggered`, `${item.title}: ${item.recommendation}`, item.area, `Review evidence: ${item.evidence}.`));
         });
       return issues.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
     }
@@ -6683,6 +6701,10 @@
       const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
       const otherLinks = state.links.filter(link => resolvedEndpointId(link.to) !== groupId && resolvedEndpointId(link.from) !== groupId);
       const newGroupIds = [];
+      const originalDurationH = parseDurationHoursValue(baseState.schedule.durationH);
+      const splitDurationText = Number.isFinite(originalDurationH) && originalDurationH > 0
+        ? formatNumber(originalDurationH / n)
+        : baseState.schedule.durationH;
 
       for (let i = 1; i <= n; i += 1) {
         const newGroupId = `${groupId}-P${i}`;
@@ -6693,8 +6715,12 @@
         newGroup.properties = JSON.parse(JSON.stringify(baseState.properties || {}));
         newGroup.schedule = {
           ...baseState.schedule,
+          durationH: splitDurationText,
           parallelUnits: "1",
-          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId} to relieve its bottleneck; ${formatNumber(1 / n * 100)}% of the original flow.`].filter(Boolean).join(" ")
+          // Only the first parallel unit counts toward the additive cycle-time sum; the rest
+          // are marked as overlapping with it so N simultaneous units are not counted N times.
+          canOverlap: i === 1 ? (baseState.schedule.canOverlap || "no") : "yes",
+          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId} to relieve its bottleneck; ${formatNumber(1 / n * 100)}% of the original flow and duration.`].filter(Boolean).join(" ")
         };
         newGroup.conditionOverrides = {};
         newGroup.mfaOverrides = {};
@@ -6717,6 +6743,14 @@
               note: [stream.note, `1/${n} of ${block.id} flow (parallel unit ${i} of ${n}).`].filter(Boolean).join(" "),
               editing: false
             };
+          });
+          const additiveIds = additiveConditionIds();
+          Object.keys(clone.conditions || {}).forEach(conditionId => {
+            if (!additiveIds.has(conditionId)) return;
+            const raw = parseDurationHoursValue(clone.conditions[conditionId]);
+            if (Number.isFinite(raw) && raw > 0) {
+              clone.conditions[conditionId] = formatNumber(raw / n);
+            }
           });
           state.blocks.push(clone);
         });
@@ -7171,7 +7205,7 @@
     }
 
     function setInspectorTab(tab) {
-      state.activeInspectorTab = ["inspect", "heuristics", "scale", "values"].includes(tab) ? tab : "inspect";
+      state.activeInspectorTab = ["inspect", "heuristics", "scale"].includes(tab) ? tab : "inspect";
       renderInspectorTabs();
     }
 
@@ -7184,9 +7218,9 @@
     }
 
     function renderInspectorTabs() {
-      const active = ["inspect", "heuristics", "scale", "values"].includes(state.activeInspectorTab) ? state.activeInspectorTab : "inspect";
+      const active = ["inspect", "heuristics", "scale"].includes(state.activeInspectorTab) ? state.activeInspectorTab : "inspect";
       $("appMain").classList.toggle("scale-focused", active === "scale");
-      $("appMain").classList.toggle("heuristic-focused", active === "heuristics" || active === "values");
+      $("appMain").classList.toggle("heuristic-focused", active === "heuristics");
       document.querySelectorAll("[data-inspector-tab]").forEach(button => {
         const selected = button.dataset.inspectorTab === active;
         button.classList.toggle("active", selected);
@@ -7195,7 +7229,6 @@
       $("inspectPanelTab").hidden = active !== "inspect";
       $("heuristicsPanelTab").hidden = active !== "heuristics";
       $("scalePanelTab").hidden = active !== "scale";
-      $("valuesPanelTab").hidden = active !== "values";
     }
 
     const workflowSteps = [
@@ -7204,8 +7237,7 @@
       { id: 3, name: "Unit Ops", paperName: "Unit operation deduction", tab: "inspect" },
       { id: 4, name: "Network", paperName: "Network establishment", tab: "inspect" },
       { id: 5, name: "Heuristics", paperName: "Heuristic rules application", tab: "heuristics" },
-      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale" },
-      { id: 7, name: "Values", paperName: "Value deduction", tab: "values" }
+      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale" }
     ];
 
     function blockExpectsStreams(block) {
@@ -7304,13 +7336,6 @@
         set(6, "done", "Scale basis and task durations defined. Review bottleneck in Scale-Up tab.");
       }
 
-      const links = state.valueCoiLinks || [];
-      if (!links.length) {
-        set(7, "todo", "Link project values to COIs to rank heuristic suggestions.");
-      } else {
-        set(7, "done", `${links.length} value-to-COI link${links.length === 1 ? "" : "s"} defined.`);
-      }
-
       return statuses;
     }
 
@@ -7335,129 +7360,6 @@
           <strong>Step ${hintTarget.id}. ${escapeHtml(hintTarget.paperName)}:</strong> ${escapeHtml(hintInfo.hint || "")}
         </span>
       `);
-    }
-
-    const coiCatalog = [
-      { id: "energy_demand", label: "Energy demand", heuristicTags: ["heating", "cooling", "heat_exchange", "utility", "boiling", "condensation", "high_temperature", "endotherm", "drying"] },
-      { id: "material_efficiency", label: "Material efficiency", heuristicTags: ["selectivity", "reversible", "valuable", "reaction"] },
-      { id: "solvent_recovery", label: "Solvent recovery", heuristicTags: ["recycle", "purge", "valuable", "vl", "boiling"] },
-      { id: "waste_generation", label: "Waste generation", heuristicTags: ["purge", "washing", "accumulation", "wastewater"] },
-      { id: "voc_emissions", label: "VOC emissions", heuristicTags: ["vent", "vapor", "vacuum"] },
-      { id: "safety_thermal_risk", label: "Safety and thermal risk", heuristicTags: ["hazard", "exotherm", "heat_sensitive", "pressure"] },
-      { id: "product_quality", label: "Product quality / thermal sensitivity", heuristicTags: ["heat_sensitive", "crystallization", "selectivity"] },
-      { id: "data_quality", label: "Data quality / uncertainty", heuristicTags: ["condition"] },
-      { id: "industrial_plausibility", label: "Industrial plausibility / compliance", heuristicTags: ["vent", "wastewater", "utility", "compliance"] },
-      { id: "scheduling_feasibility", label: "Scheduling feasibility", heuristicTags: ["drying", "filtration", "solid_liquid"] }
-    ];
-
-    const valueCatalog = [
-      { id: "min_env_burden", label: "Minimize environmental burden", suggestedCois: ["energy_demand", "waste_generation", "solvent_recovery"] },
-      { id: "preserve_quality", label: "Preserve product quality", suggestedCois: ["product_quality", "safety_thermal_risk"] },
-      { id: "max_traceability", label: "Maximize traceability", suggestedCois: ["data_quality"] },
-      { id: "reduce_uncertainty", label: "Reduce LCA inventory uncertainty", suggestedCois: ["data_quality", "material_efficiency"] },
-      { id: "industrial_plausibility", label: "Ensure industrial plausibility", suggestedCois: ["industrial_plausibility", "voc_emissions", "scheduling_feasibility"] },
-      { id: "reduce_solvent_losses", label: "Reduce solvent losses", suggestedCois: ["solvent_recovery", "voc_emissions"] },
-      { id: "min_hazardous_waste", label: "Minimize hazardous waste", suggestedCois: ["waste_generation", "safety_thermal_risk"] },
-      { id: "conservative_choices", label: "Prioritize conservative engineering choices", suggestedCois: ["industrial_plausibility", "safety_thermal_risk"] }
-    ];
-
-    function activeCoiIds() {
-      const ids = new Set();
-      (state.valueCoiLinks || []).forEach(link => (link.cois || []).forEach(id => ids.add(id)));
-      return ids;
-    }
-
-    function prioritizedCoisForRule(item) {
-      const active = activeCoiIds();
-      if (!active.size) return [];
-      const ruleTags = new Set([...(item.triggeredBy || []), ...(heuristicRuleLibrary.find(rule => rule.id === item.id)?.tags || [])]);
-      return coiCatalog
-        .filter(coi => active.has(coi.id) && coi.heuristicTags.some(tag => ruleTags.has(tag)))
-        .map(coi => coi.label);
-    }
-
-    function valuesForCoi(coiId) {
-      return (state.valueCoiLinks || [])
-        .filter(link => (link.cois || []).includes(coiId))
-        .map(link => valueCatalog.find(v => v.id === link.value)?.label || link.value);
-    }
-
-    function renderValuesPanel(force) {
-      const root = $("valuesPanel");
-      if (!root) return;
-      const links = state.valueCoiLinks || [];
-      const signature = JSON.stringify(links);
-      if (!force && root.dataset.signature === signature && root.innerHTML) return;
-      root.dataset.signature = signature;
-      const usedValues = new Set(links.map(link => link.value));
-      const availableValues = valueCatalog.filter(v => !usedValues.has(v.id));
-      root.innerHTML = `
-        <div class="stack">
-          <div>
-            <div class="label">Linked Values</div>
-            ${links.length ? links.map((link, index) => {
-              const value = valueCatalog.find(v => v.id === link.value);
-              const coiLabels = (link.cois || []).map(id => coiCatalog.find(c => c.id === id)?.label || id);
-              return `
-                <div class="value-link-row">
-                  <div>
-                    <strong>${escapeHtml(value?.label || link.value)}</strong>
-                    <div class="muted small">COIs: ${escapeHtml(coiLabels.join(", ") || "none")}</div>
-                    ${link.note ? `<div class="muted small">Note: ${escapeHtml(link.note)}</div>` : ""}
-                  </div>
-                  <button class="mini-button" data-remove-value-link="${index}">Remove</button>
-                </div>
-              `;
-            }).join("") : `<div class="mfa-empty">No values linked yet. Project priorities are what turn heuristic screening into ranked guidance (paper Step 7).</div>`}
-          </div>
-          ${availableValues.length ? `
-            <div class="stack value-add-form">
-              <div class="label">Add Value</div>
-              <select id="valueSelect">
-                ${availableValues.map(v => `<option value="${escapeAttr(v.id)}">${escapeHtml(v.label)}</option>`).join("")}
-              </select>
-              <div class="label">Connected COIs</div>
-              <div id="valueCoiChecks" class="coi-check-grid">
-                ${coiCatalog.map(coi => `
-                  <label><input type="checkbox" value="${escapeAttr(coi.id)}"> ${escapeHtml(coi.label)}</label>
-                `).join("")}
-              </div>
-              <input id="valueLinkNote" type="text" placeholder="optional note: why this value matters here">
-              <button id="addValueLink" class="primary">Link Value To COIs</button>
-              <div class="muted small">Prioritized COIs highlight and re-rank the triggered heuristic rules in the Heuristic Rules tab, and are exported with the project.</div>
-            </div>
-          ` : `<div class="muted small">All catalog values are linked. Remove one to change its COIs.</div>`}
-        </div>
-      `;
-      const select = root.querySelector("#valueSelect");
-      if (select) {
-        const syncSuggested = () => {
-          const value = valueCatalog.find(v => v.id === select.value);
-          root.querySelectorAll("#valueCoiChecks input").forEach(input => {
-            input.checked = Boolean(value?.suggestedCois?.includes(input.value));
-          });
-        };
-        select.addEventListener("change", syncSuggested);
-        syncSuggested();
-      }
-      root.querySelector("#addValueLink")?.addEventListener("click", () => {
-        const value = root.querySelector("#valueSelect")?.value;
-        if (!value) return;
-        const cois = [...root.querySelectorAll("#valueCoiChecks input:checked")].map(input => input.value);
-        const note = root.querySelector("#valueLinkNote")?.value.trim() || "";
-        state.valueCoiLinks.push({ value, cois, note });
-        renderValuesPanel();
-        renderHeuristicsPanel();
-        renderWorkflowStepper();
-      });
-      root.querySelectorAll("[data-remove-value-link]").forEach(button => {
-        button.addEventListener("click", () => {
-          state.valueCoiLinks.splice(Number(button.dataset.removeValueLink), 1);
-          renderValuesPanel();
-          renderHeuristicsPanel();
-          renderWorkflowStepper();
-        });
-      });
     }
 
     function dataReadinessModel() {
@@ -7667,7 +7569,6 @@
         aiRefine: state.aiRefine,
         dataReadiness: dataReadinessModel(),
         heuristicDecisions: state.heuristicDecisions,
-        valueCoiLinks: state.valueCoiLinks,
         blocks,
         materialFlow,
         groups,
@@ -7759,7 +7660,6 @@
       renderContextMenuOptions();
       renderInspectorTabs();
       renderWorkflowStepper();
-      renderValuesPanel();
       renderDataReadiness();
       renderNetworkClosure();
     }

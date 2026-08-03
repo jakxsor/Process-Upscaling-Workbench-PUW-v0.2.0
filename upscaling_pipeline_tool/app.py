@@ -28,12 +28,13 @@ APP_HTML = r"""<!doctype html>
   <header>
     <div>
       <h1>Upscaling Block Annotator</h1>
-      <div class="subtitle">Lab protocol to industrial flowsheet in 7 traceable steps: blocks, phenomena, unit operations, network, heuristics, schedule, values.</div>
+      <div class="subtitle">Lab protocol to industrial flowsheet: blocks, phenomena, unit operations, network, heuristics, and scale-up schedule.</div>
     </div>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
       <button id="loadSample">Load Octocrylene Case</button>
       <button id="openScaleTop">Scale-Up</button>
+      <button id="openFlowsheet" title="Open a clean, read-only P&amp;ID-style diagram generated from the current groups and streams">Flowsheet View</button>
       <button id="exportJson">Export JSON</button>
     </div>
   </header>
@@ -78,7 +79,6 @@ APP_HTML = r"""<!doctype html>
               <span id="zoomReadout" class="zoom-readout">100%</span>
               <button id="zoomIn">+</button>
               <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
-              <button id="openFlowsheet" title="Open a clean, read-only P&amp;ID-style diagram generated from the current groups and streams">Flowsheet View</button>
             </div>
           </div>
           <div id="connectionStatus" class="connection-status" style="margin-top:7px"></div>
@@ -100,7 +100,6 @@ APP_HTML = r"""<!doctype html>
           <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Inspector</button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristics</button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up</button>
-          <button class="panel-tab" data-inspector-tab="values" role="tab">Values</button>
         </div>
       </div>
       <div class="panel-body stack">
@@ -223,21 +222,6 @@ APP_HTML = r"""<!doctype html>
           </div>
         </div>
 
-        <div id="valuesPanelTab" class="tab-view scale-tab" hidden>
-          <section class="card stack scale-sticky-card">
-            <div class="scale-run-row">
-              <div>
-                <div class="label">Step 7. Value Deduction</div>
-                <div class="muted small">Link project values to Criteria of Interest (COIs) so design priorities drive rule ranking and warnings.</div>
-              </div>
-            </div>
-          </section>
-          <div class="scale-scroll-body stack">
-            <section class="card stack">
-              <div id="valuesPanel"></div>
-            </section>
-          </div>
-        </div>
       </div>
     </section>
   </main>
