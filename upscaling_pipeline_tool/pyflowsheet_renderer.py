@@ -287,9 +287,9 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     stage_rows: dict[int, int] = {}
     nodes: list[dict[str, Any]] = []
     by_gid: dict[str, dict[str, Any]] = {}
-    base_x, step_x, base_y = 230, 244, 150
+    base_x, step_x, base_y = 250, 290, 210
     card_w, card_h = 178, 172
-    max_stages_per_band = 5
+    max_stages_per_band = 4
 
     for index, group in enumerate(groups):
         if not isinstance(group, dict):
@@ -301,8 +301,8 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         overlap = row > 0
         band = stage // max_stages_per_band
         column = stage % max_stages_per_band
-        x = base_x + column * step_x + (row * 20 if overlap else 0)
-        y = base_y + band * 520 + row * 84
+        x = base_x + column * step_x
+        y = base_y + band * 620 + row * (card_h + 86)
         gid = _clean(group.get("groupId"), f"G{index + 1}")
         node = {
             "gid": gid,
@@ -320,10 +320,10 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         nodes.append(node)
         by_gid[gid] = node
 
-    max_x = max(node["x"] + node["w"] for node in nodes) + 260
-    max_y = max(node["y"] + node["h"] for node in nodes) + 230
-    width = max(1280, max_x)
-    height = max(720, max_y)
+    max_x = max(node["x"] + node["w"] for node in nodes) + 300
+    max_y = max(node["y"] + node["h"] for node in nodes) + 260
+    width = max(1360, max_x)
+    height = max(820, max_y)
     dwg = svgwrite.Drawing(size=("1280px", "720px"), profile="full")
     dwg.viewbox(0, 0, width, height)
     dwg.add(dwg.rect(insert=(0, 0), size=(width, height), fill="#ffffff"))
@@ -337,17 +337,50 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         marker.add(dwg.path(d="M 0 0 L 13 6 L 0 12 z", fill=color, stroke=color, stroke_width=0.4))
         defs.add(marker)
 
-    feed = {"x": 42, "y": base_y + 48, "w": 112, "h": 48}
+    feed = {"x": 54, "y": base_y + 48, "w": 112, "h": 48}
     product = {"x": min(width - 185, nodes[-1]["x"] + nodes[-1]["w"] + 82), "y": nodes[-1]["y"] + 52, "w": 124, "h": 54}
 
-    def add_connection(points: list[tuple[float, float]], color: str, marker: str, dash: str | None = None, width_: float = 2.8) -> None:
+    def add_connection(points: list[tuple[float, float]], color: str, marker: str | None, dash: str | None = None, width_: float = 2.8) -> None:
         d = _path(points)
         halo = dwg.path(d=d, fill="none", stroke="#ffffff", stroke_width=width_ + 6, stroke_linecap="round", stroke_linejoin="round")
-        line = dwg.path(d=d, fill="none", stroke=color, stroke_width=width_, stroke_linecap="round", stroke_linejoin="round", marker_end=f"url(#{marker})")
+        line = dwg.path(d=d, fill="none", stroke=color, stroke_width=width_, stroke_linecap="round", stroke_linejoin="round")
+        if marker:
+            line["marker-end"] = f"url(#{marker})"
         if dash:
             line["stroke-dasharray"] = dash
         dwg.add(halo)
         dwg.add(line)
+
+    def add_manifold_dot(point: tuple[float, float], color: str = "#172027") -> None:
+        dwg.add(dwg.circle(center=point, r=3.4, fill="#ffffff", stroke=color, stroke_width=1.8))
+
+    def add_fanout(src: dict[str, Any], targets: list[dict[str, Any]]) -> None:
+        targets = sorted(targets, key=lambda node: (node["y"], node["x"]))
+        source = _port_for(src, "right", 12)
+        target_ports = [_port_for(dst, "left", 16) for dst in targets]
+        manifold_x = min(port[0] for port in target_ports) - 42
+        start_lane = (source[0], source[1])
+        trunk_point = (manifold_x, source[1])
+        add_connection([start_lane, trunk_point], "#172027", None, width_=2.8)
+        y_values = [source[1], *[port[1] for port in target_ports]]
+        add_connection([(manifold_x, min(y_values)), (manifold_x, max(y_values))], "#172027", None, width_=2.8)
+        add_manifold_dot(trunk_point)
+        for target_port in target_ports:
+            add_connection([(manifold_x, target_port[1]), target_port], "#172027", "arrow_process", width_=2.8)
+            add_manifold_dot((manifold_x, target_port[1]))
+
+    def add_fanin(sources: list[dict[str, Any]], dst: dict[str, Any]) -> None:
+        sources = sorted(sources, key=lambda node: (node["y"], node["x"]))
+        source_ports = [_port_for(src, "right", 12) for src in sources]
+        target = _port_for(dst, "left", 16)
+        manifold_x = max(port[0] for port in source_ports) + 46
+        y_values = [target[1], *[port[1] for port in source_ports]]
+        for source_port in source_ports:
+            add_connection([source_port, (manifold_x, source_port[1])], "#172027", None, width_=2.8)
+            add_manifold_dot((manifold_x, source_port[1]))
+        add_connection([(manifold_x, min(y_values)), (manifold_x, max(y_values))], "#172027", None, width_=2.8)
+        add_connection([(manifold_x, target[1]), target], "#172027", "arrow_process", width_=2.8)
+        add_manifold_dot((manifold_x, target[1]))
 
     if nodes:
         s = (feed["x"] + feed["w"] + 12, feed["y"] + feed["h"] / 2)
@@ -355,27 +388,64 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         mid = (s[0] + e[0]) / 2
         add_connection([s, (mid, s[1]), (mid, e[1]), e], "#172027", "arrow_process")
 
-    rendered = set()
+    rendered: set[tuple[str, str]] = set()
     order_index = {node["gid"]: i for i, node in enumerate(nodes)}
+    valid_links: list[tuple[str, str]] = []
     for link in links if isinstance(links, list) else []:
         if not isinstance(link, dict):
             continue
         from_id, to_id = _clean(link.get("from")), _clean(link.get("to"))
         if from_id not in by_gid or to_id not in by_gid or from_id == to_id:
             continue
+        valid_links.append((from_id, to_id))
+
+    forward_links = [(from_id, to_id) for from_id, to_id in valid_links if order_index[from_id] <= order_index[to_id] and by_gid[from_id]["stage"] != by_gid[to_id]["stage"]]
+    recycle_links = [(from_id, to_id) for from_id, to_id in valid_links if order_index[from_id] > order_index[to_id]]
+    same_stage_links = [(from_id, to_id) for from_id, to_id in valid_links if order_index[from_id] <= order_index[to_id] and by_gid[from_id]["stage"] == by_gid[to_id]["stage"]]
+
+    outgoing_by_source_stage: dict[tuple[str, int], list[str]] = {}
+    incoming_by_target_stage: dict[tuple[str, int], list[str]] = {}
+    for from_id, to_id in forward_links:
+        outgoing_by_source_stage.setdefault((from_id, by_gid[to_id]["stage"]), []).append(to_id)
+        incoming_by_target_stage.setdefault((to_id, by_gid[from_id]["stage"]), []).append(from_id)
+
+    for (from_id, _stage_id), target_ids in outgoing_by_source_stage.items():
+        unique_targets = list(dict.fromkeys(target_ids))
+        if len(unique_targets) < 2:
+            continue
+        add_fanout(by_gid[from_id], [by_gid[to_id] for to_id in unique_targets])
+        rendered.update((from_id, to_id) for to_id in unique_targets)
+
+    for (to_id, _stage_id), source_ids in incoming_by_target_stage.items():
+        unique_sources = list(dict.fromkeys(source_ids))
+        remaining_sources = [from_id for from_id in unique_sources if (from_id, to_id) not in rendered]
+        if len(remaining_sources) < 2:
+            continue
+        add_fanin([by_gid[from_id] for from_id in remaining_sources], by_gid[to_id])
+        rendered.update((from_id, to_id) for from_id in remaining_sources)
+
+    for from_id, to_id in recycle_links:
         src, dst = by_gid[from_id], by_gid[to_id]
         rendered.add((from_id, to_id))
-        if order_index[from_id] > order_index[to_id]:
-            lane = max_y - 84 - 18 * len([pair for pair in rendered if order_index[pair[0]] > order_index[pair[1]]])
-            s, e = _port_for(src, "bottom", 12), _port_for(dst, "bottom", 16)
-            add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="9 6", width_=2.5)
-            dwg.add(_svg_text(dwg, f"recycle {from_id} to {to_id}", ((s[0] + e[0]) / 2, lane - 7), size=10, fill="#25834a"))
-        elif dst["stage"] == src["stage"]:
-            points = _route_between(src, dst, nodes, lane="parallel")
-            add_connection(points, "#6c7680", "arrow_overlap", dash="6 4", width_=2.3)
-            dwg.add(_svg_text(dwg, "parallel", ((points[0][0] + points[-1][0]) / 2, min(points[0][1], points[-1][1]) - 8), size=9, fill="#6c7680"))
-        else:
-            add_connection(_route_between(src, dst, nodes), "#172027", "arrow_process")
+        lane = max_y - 92 - 26 * len([pair for pair in rendered if order_index[pair[0]] > order_index[pair[1]]])
+        s, e = _port_for(src, "bottom", 12), _port_for(dst, "bottom", 16)
+        add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="9 6", width_=2.5)
+        dwg.add(_svg_text(dwg, f"recycle {from_id} to {to_id}", ((s[0] + e[0]) / 2, lane - 7), size=10, fill="#25834a"))
+
+    for from_id, to_id in same_stage_links:
+        if (from_id, to_id) in rendered:
+            continue
+        src, dst = by_gid[from_id], by_gid[to_id]
+        rendered.add((from_id, to_id))
+        points = _route_between(src, dst, nodes, lane="parallel")
+        add_connection(points, "#6c7680", "arrow_overlap", dash="6 4", width_=2.3)
+        dwg.add(_svg_text(dwg, "parallel", ((points[0][0] + points[-1][0]) / 2, min(points[0][1], points[-1][1]) - 8), size=9, fill="#6c7680"))
+
+    for from_id, to_id in forward_links:
+        if (from_id, to_id) in rendered:
+            continue
+        rendered.add((from_id, to_id))
+        add_connection(_route_between(by_gid[from_id], by_gid[to_id], nodes), "#172027", "arrow_process")
 
     if not rendered and len(nodes) > 1:
         for src, dst in zip(nodes, nodes[1:]):

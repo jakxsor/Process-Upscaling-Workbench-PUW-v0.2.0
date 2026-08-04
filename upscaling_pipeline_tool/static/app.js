@@ -1855,10 +1855,10 @@
       const groupIds = groupIdsInTextOrder();
       const boxW = 248;
       const boxH = 190;
-      const gapX = 78;
-      const topY = 138;
-      const maxStagesPerBand = 5;
-      const topStartX = 300;
+      const gapX = 116;
+      const topY = 178;
+      const maxStagesPerBand = 4;
+      const topStartX = 330;
       let stage = -1;
       const stageRows = new Map();
       const groups = groupIds.map((groupId, index) => {
@@ -1876,7 +1876,7 @@
         const column = stage % maxStagesPerBand;
         const auto = {
           x: topStartX + column * (boxW + gapX),
-          y: topY + band * 430 + stageRow * (boxH + 88)
+          y: topY + band * 560 + stageRow * (boxH + 116)
         };
         const x = Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x;
         const y = Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y;
@@ -1927,7 +1927,7 @@
       const feedBox = groups.length ? {
         id: "feeds",
         x: Math.max(34, minBoxLeft - 250),
-        y: topY + 4,
+        y: topY + 12,
         w: 178,
         h: Math.max(118, Math.min(204, 54 + groups[0].inputStreams.slice(0, 4).length * 34))
       } : null;
@@ -1935,7 +1935,7 @@
       const productBox = lastGroup ? {
         id: "product",
         x: lastGroup.y > topY + 100 ? Math.max(34, lastGroup.x - 238) : maxBoxRight + 76,
-        y: lastGroup.y + 28,
+        y: lastGroup.y + 36,
         w: 190,
         h: 92
       } : null;
@@ -2145,11 +2145,15 @@
         const wasteVentHtml = [...box.wasteStreams.map(s => ({ ...s, kind: "waste" })), ...box.ventStreams.map(s => ({ ...s, kind: "vent" }))]
           .map((stream, i) => {
             const color = stream.kind === "waste" ? { line: "#965d00", marker: "url(#fsArrowOrange)" } : { line: "#657480", marker: "url(#fsArrowGrey)" };
-            const stubY = box.y + box.h + 24 + i * 44;
-            const stubX = box.x + 24 + (i % 2) * (box.w - 48);
+            const leftSide = i % 2 === 1;
+            const stubX = box.x + box.w * (leftSide ? 0.24 : 0.76);
+            const stubY = box.y + box.h + 34 + Math.floor(i / 2) * 42;
+            const labelX = stubX + (leftSide ? -18 : 18);
+            const labelAnchor = leftSide ? "end" : "start";
+            const label = `${stream.kind}: ${stream.name}`;
             return `
               <path d="M ${stubX} ${box.y + box.h} L ${stubX} ${stubY}" stroke="${color.line}" stroke-width="2" stroke-dasharray="${stream.kind === "vent" ? "4 4" : "none"}" fill="none" marker-end="${color.marker}"></path>
-              <text x="${stubX}" y="${stubY + 13}" font-size="10" fill="${color.line}" text-anchor="middle">${escapeHtml(stream.kind)}: ${escapeHtml(stream.name)}</text>
+              <text x="${labelX}" y="${stubY + 4}" font-size="10" fill="${color.line}" text-anchor="${labelAnchor}">${escapeHtml(label.length > 34 ? `${label.slice(0, 33)}...` : label)}</text>
             `;
           }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
