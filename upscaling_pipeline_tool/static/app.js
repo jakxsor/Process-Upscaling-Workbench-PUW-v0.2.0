@@ -1836,6 +1836,13 @@
       return lines;
     }
 
+    function flowsheetCanOverlap(group) {
+      const schedule = group?.schedule || {};
+      return String(schedule.canOverlap || "").toLowerCase() === "yes"
+        || /overlap|parallel|concurrent/i.test(String(schedule.dependency || ""))
+        || /-P[2-9]\d*$/i.test(String(group?.id || ""));
+    }
+
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
       const header = `${fromBox.id} -> ${toBox.id}`;
       const massLine = Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch (from ${fromBox.id} outputs)` : "quantity not available";
@@ -1850,17 +1857,10 @@
       const boxH = 190;
       const gapX = 78;
       const topY = 138;
-      const lowerY = 428;
-      const maxTopRow = groupIds.length > 5 ? 5 : groupIds.length;
+      const maxStagesPerBand = 5;
       const topStartX = 300;
-      const lowerStartX = topStartX + Math.max(0, maxTopRow - 2) * (boxW + gapX);
-      const autoPosition = (index) => {
-        if (index < maxTopRow) {
-          return { x: topStartX + index * (boxW + gapX), y: topY };
-        }
-        const lowerIndex = index - maxTopRow;
-        return { x: Math.max(topStartX, lowerStartX - lowerIndex * (boxW + gapX)), y: lowerY };
-      };
+      let stage = -1;
+      const stageRows = new Map();
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
         const stored = ensureGroup(groupId);
@@ -1869,7 +1869,15 @@
         const meta = flowsheetGroupStreams(group);
         const specs = flowsheetGroupSpecs(group);
         const tip = groupContentsTip(group);
-        const auto = autoPosition(index);
+        if (index === 0 || !flowsheetCanOverlap(group)) stage += 1;
+        const stageRow = stageRows.get(stage) || 0;
+        stageRows.set(stage, stageRow + 1);
+        const band = Math.floor(stage / maxStagesPerBand);
+        const column = stage % maxStagesPerBand;
+        const auto = {
+          x: topStartX + column * (boxW + gapX),
+          y: topY + band * 430 + stageRow * (boxH + 88)
+        };
         const x = Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x;
         const y = Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y;
         return {
@@ -1884,6 +1892,9 @@
           x,
           y,
           symbolCenterY: y + 62,
+          stage,
+          stageRow,
+          concurrent: stageRow > 0,
           w: boxW,
           h: boxH,
           ...meta
@@ -1908,7 +1919,7 @@
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 34;
       const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
-      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h)) : topY + boxH;
+      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 54)) : topY + boxH;
       const minBoxLeft = groups.length ? Math.min(...groups.map(item => item.x)) : 120;
       const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 900;
       const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 54;
@@ -1938,21 +1949,19 @@
       return { x: box.x + box.w / 2, y: Number.isFinite(box.symbolCenterY) ? box.symbolCenterY : box.y + box.h / 2 };
     }
 
-    function flowsheetPort(from, to, source = true) {
+    function flowsheetPort(from, to, offset = 12) {
       const fromCenter = flowsheetBoxCenter(from);
       const toCenter = flowsheetBoxCenter(to);
       const dx = toCenter.x - fromCenter.x;
       const dy = toCenter.y - fromCenter.y;
       if (Math.abs(dx) >= Math.abs(dy)) {
-        if ((source && dx >= 0) || (!source && dx < 0)) {
-          return { x: from.x + from.w, y: fromCenter.y };
-        }
-        return { x: from.x, y: fromCenter.y };
+        return dx >= 0
+          ? { x: from.x + from.w + offset, y: fromCenter.y }
+          : { x: from.x - offset, y: fromCenter.y };
       }
-      if ((source && dy >= 0) || (!source && dy < 0)) {
-        return { x: fromCenter.x, y: from.y + from.h };
-      }
-      return { x: fromCenter.x, y: from.y };
+      return dy >= 0
+        ? { x: fromCenter.x, y: from.y + from.h + offset }
+        : { x: fromCenter.x, y: from.y - offset };
     }
 
     function flowsheetRectsIntersectBand(rect, x1, x2, y1, y2) {
@@ -1965,8 +1974,8 @@
 
     function flowsheetConnectorPoints(model, from, to) {
       const pad = 4;
-      const fromPt = flowsheetPort(from, to, true);
-      const toPt = flowsheetPort(to, from, false);
+      const fromPt = flowsheetPort(from, to, 10);
+      const toPt = flowsheetPort(to, from, 14);
       const others = model.groups.filter(box => box.id !== from.id && box.id !== to.id);
       const mostlyHorizontal = Math.abs(fromPt.x - toPt.x) >= Math.abs(fromPt.y - toPt.y);
       const sameRow = Math.abs(fromPt.y - toPt.y) < 3;
@@ -2008,17 +2017,17 @@
       }
       const defs = `
         <defs>
-          <marker id="fsArrow" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#172027"></path>
+          <marker id="fsArrow" markerWidth="13" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L12,6 L0,12 z" fill="#172027"></path>
           </marker>
-          <marker id="fsArrowGreen" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#286d3f"></path>
+          <marker id="fsArrowGreen" markerWidth="13" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L12,6 L0,12 z" fill="#286d3f"></path>
           </marker>
-          <marker id="fsArrowOrange" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#965d00"></path>
+          <marker id="fsArrowOrange" markerWidth="13" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L12,6 L0,12 z" fill="#965d00"></path>
           </marker>
-          <marker id="fsArrowGrey" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#657480"></path>
+          <marker id="fsArrowGrey" markerWidth="13" markerHeight="12" refX="11" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L12,6 L0,12 z" fill="#657480"></path>
           </marker>
         </defs>
       `;
@@ -2090,7 +2099,7 @@
         }).join("");
         const pathRows = names.map((stream, i) => {
           const start = { x: box.x + box.w, y: box.y + 34 + i * 30 };
-          const end = { x: first.x, y: first.y + Math.min(first.h - 24, 38 + i * 22) };
+          const end = { x: first.x - 14, y: first.y + Math.min(first.h - 24, 38 + i * 22) };
           const midX = (start.x + end.x) / 2;
           const d = orthogonalPath([start, { x: midX, y: start.y }, { x: midX, y: end.y }, end], 10);
           const tip = `${stream.name || "feed"} -> ${first.id}`;
@@ -2112,8 +2121,8 @@
       const productMarkup = model.productBox && model.groups.length ? (() => {
         const box = model.productBox;
         const last = model.groups[model.groups.length - 1];
-        const start = flowsheetPort(last, box, true);
-        const end = flowsheetPort(box, last, false);
+        const start = flowsheetPort(last, box, 10);
+        const end = flowsheetPort(box, last, 14);
         const midX = (start.x + end.x) / 2;
         const d = orthogonalPath([start, { x: midX, y: start.y }, { x: midX, y: end.y }, end], 12);
         const productStreams = last.outputStreams.filter(stream => stream.fate === "product" || /product|octocrylene/i.test(stream.name)).slice(0, 2);
@@ -2153,6 +2162,7 @@
         const taskLine = wrapSvgText(box.task, 38)[0] || "";
         return `
           <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
+            ${box.concurrent ? `<rect x="${box.x - 24}" y="${box.y - 24}" width="${box.w + 20}" height="${box.h + 20}" rx="7" fill="#eef2f4" stroke="#9aa7b0" stroke-width="1" opacity="0.55"></rect>` : ""}
             <rect x="${box.x - 10}" y="${box.y - 10}" width="${box.w + 20}" height="${box.h + 20}" rx="6" fill="#ffffff" stroke="#d6e0e5" stroke-width="1" opacity="0.86"></rect>
             <rect x="${box.x - 10}" y="${box.y - 10}" width="4" height="${box.h + 20}" rx="2" fill="${strokeColor}"></rect>
             ${flowsheetShapeMarkup(box.subcategory, box.x, symbolY, box.w, symbolH, strokeColor)}
@@ -2163,6 +2173,7 @@
             </text>
             ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine.length > 54 ? `${specsLine.slice(0, 53)}...` : specsLine)}</text>` : ""}
             <text x="${box.x + box.w / 2}" y="${box.y + box.h + 34}" font-size="10.2" text-anchor="middle" fill="#657480">${escapeHtml(taskLine)}</text>
+            ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 50}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
@@ -2262,12 +2273,15 @@
       if (!host) return;
       const requestSeq = ++flowsheetRequestSeq;
       renderFlowsheetModeButtons();
+      host.classList.toggle("technical-mode", state.flowsheetMode === "technical");
+      host.classList.toggle("editable-mode", state.flowsheetMode !== "technical");
       const result = buildFlowsheetSvg();
       if (state.flowsheetMode !== "technical") {
         host.innerHTML = result.empty
           ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
           : `<div class="flowsheet-render-status ok">Editable board mode. Drag units, double-click unit labels, and hover arrows/units for details. Use Technical PFD only for a static export preview.</div>${result.svg}`;
         if (!result.empty) wireFlowsheetInteractions(host);
+        if (!result.empty) requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
         return;
       }
       host.innerHTML = result.empty
@@ -2279,11 +2293,12 @@
         const data = await renderPyflowsheetSvg();
         if (requestSeq !== flowsheetRequestSeq || $("flowsheetModal").hidden) return;
         host.innerHTML = `
-          <div class="flowsheet-render-status ok">Technical PFD rendered with ${escapeHtml(data.renderer || "Python renderer")} (${data.unitCount || 0} units). Concurrent steps are drawn as overlapping units when schedule overlap is enabled.</div>
+          <div class="flowsheet-render-status ok">Technical PFD rendered with ${escapeHtml(data.renderer || "Python renderer")} (${data.unitCount || 0} units). Parallel/split steps are stacked in the same stage and connected with explicit inlet/outlet arrows.</div>
           ${data.svg}
         `;
         const svg = host.querySelector("svg");
         if (svg) svg.classList.add("flowsheet-svg", "pyflowsheet-svg");
+        requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
       } catch (err) {
         if (requestSeq !== flowsheetRequestSeq) return;
         const banner = host.querySelector(".flowsheet-render-status");

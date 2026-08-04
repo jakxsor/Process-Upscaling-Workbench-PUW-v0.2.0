@@ -92,7 +92,12 @@ def _schedule(group: dict[str, Any]) -> dict[str, Any]:
 
 def _can_overlap(group: dict[str, Any]) -> bool:
     schedule = _schedule(group)
-    return _clean(schedule.get("canOverlap")).lower() == "yes" or "overlap" in _clean(schedule.get("dependency")).lower()
+    gid = _clean(group.get("groupId"))
+    return (
+        _clean(schedule.get("canOverlap")).lower() == "yes"
+        or any(word in _clean(schedule.get("dependency")).lower() for word in ("overlap", "parallel", "concurrent"))
+        or bool(re.search(r"-P[2-9]\d*$", gid, flags=re.I))
+    )
 
 
 def _duration_label(group: dict[str, Any]) -> str:
@@ -128,14 +133,105 @@ def _path(points: list[tuple[float, float]]) -> str:
     return " ".join(parts)
 
 
-def _port_for(node: dict[str, Any], side: str) -> tuple[float, float]:
+def _port_for(node: dict[str, Any], side: str, offset: float = 0) -> tuple[float, float]:
     if side == "left":
-        return node["x"], node["y"] + node["h"] * 0.44
+        return node["x"] - offset, node["y"] + node["h"] * 0.44
     if side == "right":
-        return node["x"] + node["w"], node["y"] + node["h"] * 0.44
+        return node["x"] + node["w"] + offset, node["y"] + node["h"] * 0.44
     if side == "top":
-        return node["x"] + node["w"] * 0.5, node["y"]
-    return node["x"] + node["w"] * 0.5, node["y"] + node["h"]
+        return node["x"] + node["w"] * 0.5, node["y"] - offset
+    return node["x"] + node["w"] * 0.5, node["y"] + node["h"] + offset
+
+
+def _center(node: dict[str, Any]) -> tuple[float, float]:
+    return node["x"] + node["w"] / 2, node["y"] + node["h"] / 2
+
+
+def _side_toward(node: dict[str, Any], other: dict[str, Any]) -> str:
+    cx, cy = _center(node)
+    ox, oy = _center(other)
+    dx, dy = ox - cx, oy - cy
+    if abs(dx) >= abs(dy):
+        return "right" if dx >= 0 else "left"
+    return "bottom" if dy >= 0 else "top"
+
+
+def _opposite(side: str) -> str:
+    return {"right": "left", "left": "right", "top": "bottom", "bottom": "top"}.get(side, "left")
+
+
+def _segment_hits_rect(a: tuple[float, float], b: tuple[float, float], rect: dict[str, Any], pad: float = 18) -> bool:
+    rx, ry = rect["x"] - pad, rect["y"] - pad
+    rw, rh = rect["w"] + pad * 2, rect["h"] + pad * 2
+    min_x, max_x = sorted((a[0], b[0]))
+    min_y, max_y = sorted((a[1], b[1]))
+    if abs(a[1] - b[1]) < 0.1:
+        y = a[1]
+        return ry < y < ry + rh and max_x > rx and min_x < rx + rw
+    if abs(a[0] - b[0]) < 0.1:
+        x = a[0]
+        return rx < x < rx + rw and max_y > ry and min_y < ry + rh
+    return False
+
+
+def _compact_points(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    deduped: list[tuple[float, float]] = []
+    for point in points:
+        if not deduped or abs(point[0] - deduped[-1][0]) > 0.1 or abs(point[1] - deduped[-1][1]) > 0.1:
+            deduped.append(point)
+    compacted: list[tuple[float, float]] = []
+    for index, point in enumerate(deduped):
+        if index == 0 or index == len(deduped) - 1:
+            compacted.append(point)
+            continue
+        prev, nxt = deduped[index - 1], deduped[index + 1]
+        same_x = abs(prev[0] - point[0]) < 0.1 and abs(point[0] - nxt[0]) < 0.1
+        same_y = abs(prev[1] - point[1]) < 0.1 and abs(point[1] - nxt[1]) < 0.1
+        if not same_x and not same_y:
+            compacted.append(point)
+    return compacted
+
+
+def _route_score(points: list[tuple[float, float]], obstacles: list[dict[str, Any]]) -> float:
+    compacted = _compact_points(points)
+    length = sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(compacted, compacted[1:]))
+    score = length + max(0, len(compacted) - 2) * 18
+    for a, b in zip(compacted, compacted[1:]):
+        for rect in obstacles:
+            if _segment_hits_rect(a, b, rect):
+                score += 12000
+    return score
+
+
+def _route_between(src: dict[str, Any], dst: dict[str, Any], nodes: list[dict[str, Any]], *, lane: str = "process") -> list[tuple[float, float]]:
+    if lane == "recycle":
+        s, e = _port_for(src, "bottom", 12), _port_for(dst, "bottom", 16)
+        lane_y = max(node["y"] + node["h"] for node in nodes) + 72
+        return _compact_points([s, (s[0], lane_y), (e[0], lane_y), e])
+    if lane == "parallel":
+        s, e = _port_for(src, "bottom", 12), _port_for(dst, "top", 16)
+        bridge_y = max(s[1] + 26, e[1] - 26)
+        return _compact_points([s, (s[0], bridge_y), (e[0], bridge_y), e])
+
+    preferred_start = _side_toward(src, dst)
+    preferred_end = _opposite(preferred_start)
+    side_order = [preferred_start, "right", "bottom", "top", "left"]
+    end_order = [preferred_end, "left", "top", "bottom", "right"]
+    candidates: list[list[tuple[float, float]]] = []
+    for start_side in dict.fromkeys(side_order):
+        for end_side in dict.fromkeys(end_order):
+            s, e = _port_for(src, start_side, 12), _port_for(dst, end_side, 16)
+            mid_x = (s[0] + e[0]) / 2
+            mid_y = (s[1] + e[1]) / 2
+            candidates.append([s, (mid_x, s[1]), (mid_x, e[1]), e])
+            candidates.append([s, (s[0], mid_y), (e[0], mid_y), e])
+            top_lane = max(34, min(src["y"], dst["y"]) - 48)
+            bottom_lane = max(src["y"] + src["h"], dst["y"] + dst["h"]) + 48
+            candidates.append([s, (s[0], top_lane), (e[0], top_lane), e])
+            candidates.append([s, (s[0], bottom_lane), (e[0], bottom_lane), e])
+
+    obstacles = [node for node in nodes if node["gid"] not in (src["gid"], dst["gid"])]
+    return min((_compact_points(points) for points in candidates), key=lambda points: _route_score(points, obstacles))
 
 
 def _draw_equipment_symbol(dwg: Any, group: Any, node: dict[str, Any], kind: str, stroke: str) -> None:
@@ -191,8 +287,9 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     stage_rows: dict[int, int] = {}
     nodes: list[dict[str, Any]] = []
     by_gid: dict[str, dict[str, Any]] = {}
-    base_x, step_x, base_y = 230, 214, 150
+    base_x, step_x, base_y = 230, 244, 150
     card_w, card_h = 178, 172
+    max_stages_per_band = 5
 
     for index, group in enumerate(groups):
         if not isinstance(group, dict):
@@ -202,11 +299,10 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         row = stage_rows.get(stage, 0)
         stage_rows[stage] = row + 1
         overlap = row > 0
-        x = base_x + stage * step_x + (row * 46 if overlap else 0)
-        y = base_y + (row * 56 if overlap else 0)
-        if stage > 4:
-            x = base_x + (stage - 5) * step_x + (row * 46 if overlap else 0)
-            y = 420 + (row * 56 if overlap else 0)
+        band = stage // max_stages_per_band
+        column = stage % max_stages_per_band
+        x = base_x + column * step_x + (row * 20 if overlap else 0)
+        y = base_y + band * 520 + row * 84
         gid = _clean(group.get("groupId"), f"G{index + 1}")
         node = {
             "gid": gid,
@@ -225,7 +321,7 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         by_gid[gid] = node
 
     max_x = max(node["x"] + node["w"] for node in nodes) + 260
-    max_y = max(node["y"] + node["h"] for node in nodes) + 150
+    max_y = max(node["y"] + node["h"] for node in nodes) + 230
     width = max(1280, max_x)
     height = max(720, max_y)
     dwg = svgwrite.Drawing(size=("1280px", "720px"), profile="full")
@@ -254,8 +350,8 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         dwg.add(line)
 
     if nodes:
-        s = (feed["x"] + feed["w"], feed["y"] + feed["h"] / 2)
-        e = _port_for(nodes[0], "left")
+        s = (feed["x"] + feed["w"] + 12, feed["y"] + feed["h"] / 2)
+        e = _port_for(nodes[0], "left", 14)
         mid = (s[0] + e[0]) / 2
         add_connection([s, (mid, s[1]), (mid, e[1]), e], "#172027", "arrow_process")
 
@@ -270,27 +366,22 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         src, dst = by_gid[from_id], by_gid[to_id]
         rendered.add((from_id, to_id))
         if order_index[from_id] > order_index[to_id]:
-            s, e = _port_for(src, "bottom"), _port_for(dst, "bottom")
             lane = max_y - 84 - 18 * len([pair for pair in rendered if order_index[pair[0]] > order_index[pair[1]]])
+            s, e = _port_for(src, "bottom", 12), _port_for(dst, "bottom", 16)
             add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="9 6", width_=2.5)
             dwg.add(_svg_text(dwg, f"recycle {from_id} to {to_id}", ((s[0] + e[0]) / 2, lane - 7), size=10, fill="#25834a"))
         elif dst["stage"] == src["stage"]:
-            s, e = _port_for(src, "bottom"), _port_for(dst, "top")
-            bridge_y = max(s[1] + 20, e[1] - 20)
-            add_connection([s, (s[0], bridge_y), (e[0], bridge_y), e], "#6c7680", "arrow_overlap", dash="6 4", width_=2.3)
-            dwg.add(_svg_text(dwg, "overlap", ((s[0] + e[0]) / 2, bridge_y - 6), size=9, fill="#6c7680"))
+            points = _route_between(src, dst, nodes, lane="parallel")
+            add_connection(points, "#6c7680", "arrow_overlap", dash="6 4", width_=2.3)
+            dwg.add(_svg_text(dwg, "parallel", ((points[0][0] + points[-1][0]) / 2, min(points[0][1], points[-1][1]) - 8), size=9, fill="#6c7680"))
         else:
-            s, e = _port_for(src, "right"), _port_for(dst, "left")
-            mid_x = (s[0] + e[0]) / 2
-            add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process")
+            add_connection(_route_between(src, dst, nodes), "#172027", "arrow_process")
 
     if not rendered and len(nodes) > 1:
         for src, dst in zip(nodes, nodes[1:]):
-            s, e = _port_for(src, "right"), _port_for(dst, "left")
-            mid_x = (s[0] + e[0]) / 2
-            add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process")
+            add_connection(_route_between(src, dst, nodes), "#172027", "arrow_process")
 
-    s, e = _port_for(nodes[-1], "right"), (product["x"], product["y"] + product["h"] / 2)
+    s, e = _port_for(nodes[-1], "right", 12), (product["x"] - 16, product["y"] + product["h"] / 2)
     mid_x = (s[0] + e[0]) / 2
     add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process", width_=2.4)
 
@@ -299,14 +390,16 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         aggr = node["group"].get("mfaAggregation") or []
         waste_items = []
         for role_group in aggr if isinstance(aggr, list) else []:
-            if isinstance(role_group, dict) and role_group.get("role") in ("waste", "emission"):
+            role_name = _clean(role_group.get("role")).lower() if isinstance(role_group, dict) else ""
+            if isinstance(role_group, dict) and any(token in role_name for token in ("waste", "emission", "loss", "purge")):
                 waste_items.extend(item for item in role_group.get("items") or [] if isinstance(item, dict))
-        for item_index, item in enumerate(waste_items[:2]):
-            s = (node["x"] + node["w"] * (0.32 + item_index * 0.26), node["y"] + node["h"])
-            e = (s[0], min(height - 118, s[1] + 64 + item_index * 28))
+        for item_index, item in enumerate(waste_items[:3]):
+            s = (node["x"] + node["w"] * (0.24 + item_index * 0.24), node["y"] + node["h"] + 10)
+            e = (s[0], min(height - 128, s[1] + 48 + item_index * 22))
             add_connection([s, e], "#b97916", "arrow_waste", width_=2.1)
-            label_x = e[0] + (34 if item_index % 2 == 0 else -34)
-            dwg.add(_svg_text(dwg, _short(f"waste: {item.get('name', '')}", 28), (label_x, e[1] + 14), size=9, fill="#b97916", anchor="middle"))
+            label_x = e[0] + (46 if item_index % 2 == 0 else -46)
+            anchor = "start" if item_index % 2 == 0 else "end"
+            dwg.add(_svg_text(dwg, _short(f"waste: {item.get('name', '')}", 34), (label_x, e[1] + 3), size=9, fill="#b97916", anchor=anchor))
 
     dwg.add(dwg.rect(insert=(feed["x"], feed["y"]), size=(feed["w"], feed["h"]), rx=24, fill="#fff", stroke="#25834a", stroke_width=1.8))
     dwg.add(_svg_text(dwg, "FEED", (feed["x"] + feed["w"] / 2, feed["y"] + 30), size=12, weight="800", fill="#25834a"))
