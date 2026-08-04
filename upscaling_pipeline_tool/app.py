@@ -329,6 +329,9 @@ APP_HTML = r"""<!doctype html>
           <h2 id="flowsheetTitle">Flowsheet View</h2>
         </div>
         <div class="row flowsheet-toolbar">
+          <button id="flowsheetEditableMode" class="mini-button primary" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
+          <button id="flowsheetTechnicalMode" class="mini-button" title="Static technical PFD preview generated from the current project data">Technical PFD</button>
+          <span class="flowsheet-toolbar-divider"></span>
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
           <span class="flowsheet-toolbar-divider"></span>

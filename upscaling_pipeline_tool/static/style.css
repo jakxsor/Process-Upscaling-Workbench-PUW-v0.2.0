@@ -2405,6 +2405,17 @@
       gap: 8px;
     }
 
+    .flowsheet-toolbar .mini-button.primary {
+      color: #fff;
+      background: var(--blue);
+      border-color: var(--blue);
+    }
+
+    .flowsheet-toolbar .mini-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     .flowsheet-toolbar-divider {
       width: 1px;
       align-self: stretch;

@@ -417,6 +417,7 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
+      flowsheetMode: "editable",
       drag: null
     };
 
@@ -2247,11 +2248,28 @@
       return data;
     }
 
+    function renderFlowsheetModeButtons() {
+      const editable = $("flowsheetEditableMode");
+      const technical = $("flowsheetTechnicalMode");
+      if (!editable || !technical) return;
+      editable.classList.toggle("primary", state.flowsheetMode === "editable");
+      technical.classList.toggle("primary", state.flowsheetMode === "technical");
+      $("resetFlowsheetLayout").disabled = state.flowsheetMode !== "editable";
+    }
+
     async function renderFlowsheetModal() {
       const host = $("flowsheetHost");
       if (!host) return;
       const requestSeq = ++flowsheetRequestSeq;
+      renderFlowsheetModeButtons();
       const result = buildFlowsheetSvg();
+      if (state.flowsheetMode !== "technical") {
+        host.innerHTML = result.empty
+          ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
+          : `<div class="flowsheet-render-status ok">Editable board mode. Drag units, double-click unit labels, and hover arrows/units for details. Use Technical PFD only for a static export preview.</div>${result.svg}`;
+        if (!result.empty) wireFlowsheetInteractions(host);
+        return;
+      }
       host.innerHTML = result.empty
         ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
         : `<div class="flowsheet-render-status">Rendering technical PFD...</div>${result.svg}`;
@@ -2336,6 +2354,7 @@
 
     function openFlowsheetModal() {
       $("flowsheetModal").hidden = false;
+      state.flowsheetMode = "editable";
       renderFlowsheetModal();
     }
 
@@ -8357,6 +8376,14 @@
     $("closeAiRefineModal").addEventListener("click", closeAiRefineModal);
     $("openFlowsheet").addEventListener("click", openFlowsheetModal);
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
+    $("flowsheetEditableMode").addEventListener("click", () => {
+      state.flowsheetMode = "editable";
+      renderFlowsheetModal();
+    });
+    $("flowsheetTechnicalMode").addEventListener("click", () => {
+      state.flowsheetMode = "technical";
+      renderFlowsheetModal();
+    });
     $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
     $("resetFlowsheetLayout").addEventListener("click", () => {
       pushUndo();
