@@ -85,12 +85,294 @@ def _ports(unit: Any, kind: str) -> tuple[Any, Any]:
     return _port(unit, ("In", "Feed", "TIn")), _port(unit, ("Out", "Bottom", "LOut", "TOut", "Top"))
 
 
+def _schedule(group: dict[str, Any]) -> dict[str, Any]:
+    schedule = group.get("schedule")
+    return schedule if isinstance(schedule, dict) else {}
+
+
+def _can_overlap(group: dict[str, Any]) -> bool:
+    schedule = _schedule(group)
+    return _clean(schedule.get("canOverlap")).lower() == "yes" or "overlap" in _clean(schedule.get("dependency")).lower()
+
+
+def _duration_label(group: dict[str, Any]) -> str:
+    duration = _clean(_schedule(group).get("durationH"))
+    return f"{duration} h" if duration else ""
+
+
+def _svg_text(dwg: Any, text: str, insert: tuple[float, float], *, size: int = 12, weight: str = "400", fill: str = "#172027", anchor: str = "middle") -> Any:
+    return dwg.text(text, insert=insert, font_size=size, font_family="Arial, Helvetica, sans-serif", font_weight=weight, fill=fill, text_anchor=anchor)
+
+
+def _wrap(text: Any, width: int, max_lines: int = 2) -> list[str]:
+    words = _clean(text).split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines[:max_lines]
+
+
+def _path(points: list[tuple[float, float]]) -> str:
+    if not points:
+        return ""
+    parts = [f"M {points[0][0]:.1f} {points[0][1]:.1f}"]
+    parts.extend(f"L {x:.1f} {y:.1f}" for x, y in points[1:])
+    return " ".join(parts)
+
+
+def _port_for(node: dict[str, Any], side: str) -> tuple[float, float]:
+    if side == "left":
+        return node["x"], node["y"] + node["h"] * 0.44
+    if side == "right":
+        return node["x"] + node["w"], node["y"] + node["h"] * 0.44
+    if side == "top":
+        return node["x"] + node["w"] * 0.5, node["y"]
+    return node["x"] + node["w"] * 0.5, node["y"] + node["h"]
+
+
+def _draw_equipment_symbol(dwg: Any, group: Any, node: dict[str, Any], kind: str, stroke: str) -> None:
+    x, y, w, h = node["x"], node["y"], node["w"], node["h"]
+    cx = x + w / 2
+    sy = y + 12
+    sh = 92
+    if kind == "reactor":
+        left, right = x + 50, x + 128
+        top, bottom = sy + 2, sy + sh
+        group.add(dwg.path(d=f"M {left} {bottom} L {left} {top + 24} A 39 24 0 0 1 {right} {top + 24} L {right} {bottom} Z", fill="#fff", stroke=stroke, stroke_width=2))
+        group.add(dwg.line((cx, sy + 8), (cx, bottom - 10), stroke=stroke, stroke_width=1.6))
+        group.add(dwg.rect(insert=(cx - 7, sy), size=(14, 16), rx=3, fill="#fff", stroke=stroke, stroke_width=1.5))
+        group.add(dwg.path(d=f"M {cx - 28} {bottom - 14} C {cx - 10} {bottom - 30}, {cx + 6} {bottom - 2}, {cx + 28} {bottom - 16}", fill="none", stroke=stroke, stroke_width=1.5))
+        group.add(dwg.path(d=f"M {right + 12} {sy + 38} h 26 v 9 h -26 v 9 h 26 v 9 h -26", fill="none", stroke=stroke, stroke_width=1.4))
+    elif kind == "heat_exchanger":
+        group.add(dwg.circle(center=(cx, sy + 48), r=34, fill="#fff", stroke=stroke, stroke_width=2))
+        group.add(dwg.path(d=f"M {cx - 34} {sy + 48} H {cx - 18} L {cx - 5} {sy + 30} L {cx + 16} {sy + 66} L {cx + 28} {sy + 48} H {cx + 34}", fill="none", stroke=stroke, stroke_width=1.7))
+    elif kind == "distillation":
+        col_x, top, bottom = cx - 20, sy - 8, sy + 108
+        group.add(dwg.path(d=f"M {col_x} {top + 18} A 20 18 0 0 1 {col_x + 40} {top + 18} L {col_x + 40} {bottom - 18} A 20 18 0 0 1 {col_x} {bottom - 18} Z", fill="#fff", stroke=stroke, stroke_width=2))
+        for yy in (top + 42, top + 62, top + 82):
+            group.add(dwg.line((col_x + 4, yy), (col_x + 36, yy), stroke=stroke, stroke_width=1))
+    elif kind in ("settler", "evaporator", "tank"):
+        rx = 24
+        group.add(dwg.path(d=f"M {x + 34 + rx} {sy + 28} H {x + 142 - rx} A {rx} {rx} 0 0 1 {x + 142 - rx} {sy + 76} H {x + 34 + rx} A {rx} {rx} 0 0 1 {x + 34 + rx} {sy + 28}", fill="#fff", stroke=stroke, stroke_width=2))
+        if kind == "settler":
+            group.add(dwg.line((x + 84, sy + 28), (x + 84, sy + 76), stroke=stroke, stroke_dasharray="4 3", stroke_width=1.2))
+            group.add(dwg.line((x + 46, sy + 52), (x + 120, sy + 52), stroke=stroke, stroke_width=1))
+        if kind == "evaporator":
+            for xx in range(58, 124, 10):
+                group.add(dwg.line((x + xx, sy + 32), (x + xx, sy + 72), stroke=stroke, stroke_width=0.9))
+    elif kind == "dryer":
+        group.add(dwg.rect(insert=(cx - 18, sy - 4), size=(36, 106), rx=3, fill="#fff", stroke=stroke, stroke_width=2))
+        for yy in (sy + 22, sy + 44, sy + 66, sy + 88):
+            group.add(dwg.line((cx - 18, yy), (cx + 18, yy), stroke=stroke, stroke_width=1))
+    else:
+        group.add(dwg.rect(insert=(x + 28, sy + 16), size=(124, 62), rx=5, fill="#fff", stroke=stroke, stroke_width=1.8))
+
+
+def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
+    try:
+        import svgwrite
+    except Exception as exc:  # pragma: no cover - optional package path
+        return {"ok": False, "error": f"svgwrite is not installed or could not be imported: {exc}"}
+
+    groups = project.get("groups") or []
+    links = project.get("links") or []
+    if not isinstance(groups, list) or not groups:
+        return {"ok": False, "error": "No grouped operations available for technical rendering."}
+
+    stage = -1
+    stage_rows: dict[int, int] = {}
+    nodes: list[dict[str, Any]] = []
+    by_gid: dict[str, dict[str, Any]] = {}
+    base_x, step_x, base_y = 230, 214, 150
+    card_w, card_h = 178, 172
+
+    for index, group in enumerate(groups):
+        if not isinstance(group, dict):
+            continue
+        if index == 0 or not _can_overlap(group):
+            stage += 1
+        row = stage_rows.get(stage, 0)
+        stage_rows[stage] = row + 1
+        overlap = row > 0
+        x = base_x + stage * step_x + (row * 46 if overlap else 0)
+        y = base_y + (row * 56 if overlap else 0)
+        if stage > 4:
+            x = base_x + (stage - 5) * step_x + (row * 46 if overlap else 0)
+            y = 420 + (row * 56 if overlap else 0)
+        gid = _clean(group.get("groupId"), f"G{index + 1}")
+        node = {
+            "gid": gid,
+            "unit": f"U{index + 1}",
+            "group": group,
+            "kind": _unit_kind(group),
+            "x": x,
+            "y": y,
+            "w": card_w,
+            "h": card_h,
+            "stage": stage,
+            "overlap": overlap,
+            "row": row,
+        }
+        nodes.append(node)
+        by_gid[gid] = node
+
+    max_x = max(node["x"] + node["w"] for node in nodes) + 260
+    max_y = max(node["y"] + node["h"] for node in nodes) + 150
+    width = max(1280, max_x)
+    height = max(720, max_y)
+    dwg = svgwrite.Drawing(size=("1280px", "720px"), profile="full")
+    dwg.viewbox(0, 0, width, height)
+    dwg.add(dwg.rect(insert=(0, 0), size=(width, height), fill="#ffffff"))
+    dwg.add(dwg.rect(insert=(18, 18), size=(width - 36, height - 36), fill="none", stroke="#172027", stroke_width=1.2))
+    dwg.add(_svg_text(dwg, "Generated Process Flowsheet", (38, 50), size=18, weight="900", anchor="start"))
+    dwg.add(_svg_text(dwg, "Technical schematic from grouped blocks, MFA streams, schedule overlap, and process connections.", (38, 70), size=11, fill="#657480", anchor="start"))
+
+    defs = dwg.defs
+    for marker_id, color in (("arrow_process", "#172027"), ("arrow_recycle", "#25834a"), ("arrow_waste", "#b97916"), ("arrow_overlap", "#6c7680")):
+        marker = dwg.marker(id=marker_id, insert=(9, 5), size=(10, 10), orient="auto", markerUnits="strokeWidth")
+        marker.add(dwg.path(d="M 0 0 L 10 5 L 0 10 z", fill=color))
+        defs.add(marker)
+
+    feed = {"x": 42, "y": base_y + 48, "w": 112, "h": 48}
+    product = {"x": min(width - 185, nodes[-1]["x"] + nodes[-1]["w"] + 82), "y": nodes[-1]["y"] + 52, "w": 124, "h": 54}
+
+    def add_connection(points: list[tuple[float, float]], color: str, marker: str, dash: str | None = None, width_: float = 2.2) -> None:
+        d = _path(points)
+        halo = dwg.path(d=d, fill="none", stroke="#ffffff", stroke_width=width_ + 5, stroke_linecap="round", stroke_linejoin="round")
+        line = dwg.path(d=d, fill="none", stroke=color, stroke_width=width_, stroke_linecap="round", stroke_linejoin="round", marker_end=f"url(#{marker})")
+        if dash:
+            line["stroke-dasharray"] = dash
+        dwg.add(halo)
+        dwg.add(line)
+
+    if nodes:
+        s = (feed["x"] + feed["w"], feed["y"] + feed["h"] / 2)
+        e = _port_for(nodes[0], "left")
+        mid = (s[0] + e[0]) / 2
+        add_connection([s, (mid, s[1]), (mid, e[1]), e], "#172027", "arrow_process")
+
+    rendered = set()
+    order_index = {node["gid"]: i for i, node in enumerate(nodes)}
+    for link in links if isinstance(links, list) else []:
+        if not isinstance(link, dict):
+            continue
+        from_id, to_id = _clean(link.get("from")), _clean(link.get("to"))
+        if from_id not in by_gid or to_id not in by_gid or from_id == to_id:
+            continue
+        src, dst = by_gid[from_id], by_gid[to_id]
+        rendered.add((from_id, to_id))
+        if order_index[from_id] > order_index[to_id]:
+            s, e = _port_for(src, "bottom"), _port_for(dst, "bottom")
+            lane = max_y - 84 - 18 * len([pair for pair in rendered if order_index[pair[0]] > order_index[pair[1]]])
+            add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="8 6", width_=2.0)
+            dwg.add(_svg_text(dwg, f"recycle {from_id} to {to_id}", ((s[0] + e[0]) / 2, lane - 7), size=10, fill="#25834a"))
+        elif dst["stage"] == src["stage"]:
+            s, e = _port_for(src, "bottom"), _port_for(dst, "top")
+            bridge_y = max(s[1] + 20, e[1] - 20)
+            add_connection([s, (s[0], bridge_y), (e[0], bridge_y), e], "#6c7680", "arrow_overlap", dash="5 4", width_=1.8)
+            dwg.add(_svg_text(dwg, "overlap", ((s[0] + e[0]) / 2, bridge_y - 6), size=9, fill="#6c7680"))
+        else:
+            s, e = _port_for(src, "right"), _port_for(dst, "left")
+            mid_x = (s[0] + e[0]) / 2
+            add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process")
+
+    if not rendered and len(nodes) > 1:
+        for src, dst in zip(nodes, nodes[1:]):
+            s, e = _port_for(src, "right"), _port_for(dst, "left")
+            mid_x = (s[0] + e[0]) / 2
+            add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process")
+
+    s, e = _port_for(nodes[-1], "right"), (product["x"], product["y"] + product["h"] / 2)
+    mid_x = (s[0] + e[0]) / 2
+    add_connection([s, (mid_x, s[1]), (mid_x, e[1]), e], "#172027", "arrow_process", width_=2.4)
+
+    # Draw waste and vent stubs after the main network, still behind equipment.
+    for node in nodes:
+        aggr = node["group"].get("mfaAggregation") or []
+        waste_items = []
+        for role_group in aggr if isinstance(aggr, list) else []:
+            if isinstance(role_group, dict) and role_group.get("role") in ("waste", "emission"):
+                waste_items.extend(item for item in role_group.get("items") or [] if isinstance(item, dict))
+        for item_index, item in enumerate(waste_items[:2]):
+            s = (node["x"] + node["w"] * (0.32 + item_index * 0.26), node["y"] + node["h"])
+            e = (s[0], min(height - 108, s[1] + 54 + item_index * 24))
+            add_connection([s, e], "#b97916", "arrow_waste", width_=1.7)
+            dwg.add(_svg_text(dwg, _short(f"waste: {item.get('name', '')}", 24), (e[0], e[1] + 14), size=9, fill="#b97916"))
+
+    dwg.add(dwg.rect(insert=(feed["x"], feed["y"]), size=(feed["w"], feed["h"]), rx=24, fill="#fff", stroke="#25834a", stroke_width=1.8))
+    dwg.add(_svg_text(dwg, "FEED", (feed["x"] + feed["w"] / 2, feed["y"] + 30), size=12, weight="800", fill="#25834a"))
+    dwg.add(dwg.rect(insert=(product["x"], product["y"]), size=(product["w"], product["h"]), rx=5, fill="#e9f7ed", stroke="#25834a", stroke_width=1.8))
+    dwg.add(_svg_text(dwg, "PRODUCT", (product["x"] + product["w"] / 2, product["y"] + 32), size=12, weight="800", fill="#25834a"))
+
+    palette = {
+        "reactor": ("#cf4b42", "#fff8f7"),
+        "heat_exchanger": ("#b97916", "#fffaf0"),
+        "distillation": ("#1671c2", "#f5f9ff"),
+        "settler": ("#1671c2", "#f5f9ff"),
+        "evaporator": ("#1671c2", "#f5f9ff"),
+        "dryer": ("#1671c2", "#f5f9ff"),
+        "tank": ("#25834a", "#f4fbf6"),
+        "blackbox": ("#6c7680", "#f8fafb"),
+    }
+    for node in nodes:
+        stroke, fill = palette.get(node["kind"], palette["blackbox"])
+        g = dwg.g(id=f"node_{node['unit']}_{node['gid']}")
+        if node["overlap"]:
+            g.add(dwg.rect(insert=(node["x"] - 16, node["y"] - 16), size=(node["w"], node["h"]), rx=7, fill="#eef2f4", stroke="#9aa7b0", stroke_width=1, opacity=0.55))
+        g.add(dwg.rect(insert=(node["x"], node["y"]), size=(node["w"], node["h"]), rx=6, fill="#fff", stroke="#cdd7dd", stroke_width=1.1))
+        g.add(dwg.rect(insert=(node["x"], node["y"]), size=(5, node["h"]), rx=2.5, fill=stroke))
+        _draw_equipment_symbol(dwg, g, node, node["kind"], stroke)
+        tag_y = node["y"] + 122
+        g.add(dwg.rect(insert=(node["x"] + 14, tag_y - 14), size=(node["w"] - 28, 40), rx=3, fill=fill, stroke=stroke, stroke_width=0.8))
+        g.add(_svg_text(dwg, f"{node['unit']} {node['gid']}", (node["x"] + node["w"] / 2, tag_y), size=12, weight="900", fill=stroke))
+        for line_no, line in enumerate(_wrap(node["group"].get("selectedUnit") or node["group"].get("task"), 27, 2)):
+            g.add(_svg_text(dwg, line, (node["x"] + node["w"] / 2, tag_y + 16 + line_no * 12), size=10.5, weight="700"))
+        foot = " | ".join(part for part in (_duration_label(node["group"]), _conditions_line(node["group"]), _mass_line(node["group"])) if part)
+        if foot:
+            g.add(_svg_text(dwg, _short(foot, 40), (node["x"] + node["w"] / 2, node["y"] + node["h"] + 16), size=9.5, fill=stroke))
+        if node["overlap"]:
+            g.add(_svg_text(dwg, "concurrent", (node["x"] + node["w"] - 12, node["y"] + 14), size=9, weight="800", fill="#6c7680", anchor="end"))
+        dwg.add(g)
+
+    legend_y = height - 52
+    legend = [("Process", "#172027", None), ("Concurrent/overlap", "#6c7680", "5 4"), ("Recycle", "#25834a", "8 6"), ("Waste", "#b97916", None)]
+    for idx, (label, color, dash) in enumerate(legend):
+        x = 38 + idx * 168
+        line = dwg.line((x, legend_y), (x + 34, legend_y), stroke=color, stroke_width=2.2)
+        if dash:
+            line["stroke-dasharray"] = dash
+        dwg.add(line)
+        dwg.add(_svg_text(dwg, label, (x + 42, legend_y + 4), size=10.5, anchor="start"))
+
+    title_x = max(780, width - 470)
+    dwg.add(dwg.rect(insert=(title_x, height - 92), size=(430, 54), fill="#fff", stroke="#172027", stroke_width=0.9))
+    dwg.add(dwg.line((title_x, height - 65), (title_x + 430, height - 65), stroke="#172027", stroke_width=0.7))
+    dwg.add(dwg.line((title_x + 122, height - 92), (title_x + 122, height - 38), stroke="#172027", stroke_width=0.7))
+    dwg.add(_svg_text(dwg, "DRAWING", (title_x + 10, height - 74), size=10, weight="800", anchor="start"))
+    dwg.add(_svg_text(dwg, "Scale-up support PFD", (title_x + 132, height - 74), size=10, anchor="start"))
+    dwg.add(_svg_text(dwg, "BASIS", (title_x + 10, height - 47), size=10, weight="800", anchor="start"))
+    dwg.add(_svg_text(dwg, f"{len(nodes)} grouped operations", (title_x + 132, height - 47), size=10, anchor="start"))
+    return {"ok": True, "svg": dwg.tostring(), "renderer": "technical-svgwrite-pfd", "unitCount": len(nodes)}
+
+
 def render_pyflowsheet_svg(project: dict[str, Any]) -> dict[str, Any]:
     """Render the current project as SVG with pyflowsheet.
 
     The app treats this renderer as an optional technical PFD backend. It returns
     a compact error instead of raising when pyflowsheet is unavailable.
     """
+
+    technical = _svgwrite_pfd(project)
+    if technical.get("ok"):
+        return technical
 
     try:
         from pyflowsheet import (

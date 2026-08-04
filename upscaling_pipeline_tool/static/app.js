@@ -2261,7 +2261,7 @@
         const data = await renderPyflowsheetSvg();
         if (requestSeq !== flowsheetRequestSeq || $("flowsheetModal").hidden) return;
         host.innerHTML = `
-          <div class="flowsheet-render-status ok">Technical PFD rendered with pyflowsheet (${data.unitCount || 0} units). The SVG fallback remains used if the Python renderer is unavailable.</div>
+          <div class="flowsheet-render-status ok">Technical PFD rendered with ${escapeHtml(data.renderer || "Python renderer")} (${data.unitCount || 0} units). Concurrent steps are drawn as overlapping units when schedule overlap is enabled.</div>
           ${data.svg}
         `;
         const svg = host.querySelector("svg");
