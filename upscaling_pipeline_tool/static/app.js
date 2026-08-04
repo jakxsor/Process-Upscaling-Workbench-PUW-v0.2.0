@@ -1870,6 +1870,35 @@
       return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
     }
 
+    function flowsheetRectsIntersectBand(rect, x1, x2, y1, y2) {
+      const left = Math.min(x1, x2);
+      const right = Math.max(x1, x2);
+      const top = Math.min(y1, y2);
+      const bottom = Math.max(y1, y2);
+      return rect.x < right && rect.x + rect.w > left && rect.y < bottom && rect.y + rect.h > top;
+    }
+
+    function flowsheetConnectorPoints(model, from, to) {
+      const pad = 4;
+      const fromPt = { x: from.x + from.w, y: flowsheetBoxCenter(from).y };
+      const toPt = { x: to.x, y: flowsheetBoxCenter(to).y };
+      const others = model.groups.filter(box => box.id !== from.id && box.id !== to.id);
+      const forwardOk = toPt.x >= fromPt.x - 1;
+      const sameRow = Math.abs(fromPt.y - toPt.y) < pad;
+      if (forwardOk && sameRow) {
+        const blocked = others.some(box => flowsheetRectsIntersectBand(box, fromPt.x, toPt.x, fromPt.y - pad, fromPt.y + pad));
+        if (!blocked) return [fromPt, toPt];
+      }
+      let midX = forwardOk ? (fromPt.x + toPt.x) / 2 : Math.max(fromPt.x, toPt.x) + 55;
+      const hitsObstacle = () => others.some(box => flowsheetRectsIntersectBand(box, midX - pad, midX + pad, fromPt.y, toPt.y));
+      let guard = 0;
+      while (hitsObstacle() && guard < 6) {
+        midX += 45;
+        guard += 1;
+      }
+      return [fromPt, { x: midX, y: fromPt.y }, { x: midX, y: toPt.y }, toPt];
+    }
+
     function buildFlowsheetSvg() {
       const model = buildFlowsheetModel();
       if (!model.groups.length) {
@@ -1877,17 +1906,17 @@
       }
       const defs = `
         <defs>
-          <marker id="fsArrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,7 L9,3.5 z" fill="#172027"></path>
+          <marker id="fsArrow" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#172027"></path>
           </marker>
-          <marker id="fsArrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,7 L9,3.5 z" fill="#286d3f"></path>
+          <marker id="fsArrowGreen" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#286d3f"></path>
           </marker>
-          <marker id="fsArrowOrange" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,7 L9,3.5 z" fill="#965d00"></path>
+          <marker id="fsArrowOrange" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#965d00"></path>
           </marker>
-          <marker id="fsArrowGrey" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,7 L9,3.5 z" fill="#657480"></path>
+          <marker id="fsArrowGrey" markerWidth="9" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0.5 L0,7.5 L8,4 z" fill="#657480"></path>
           </marker>
         </defs>
       `;
@@ -1900,12 +1929,11 @@
       const forwardPaths = model.forwardLinks.map(link => {
         const from = model.byId.get(link.from);
         const to = model.byId.get(link.to);
-        const y = flowsheetBoxCenter(from).y;
-        const x1 = from.x + from.w;
-        const x2 = to.x;
+        const points = flowsheetConnectorPoints(model, from, to);
+        const d = orthogonalPath(points, 14);
         const strokeWidth = sankeyWidth(from.totalOutputKg);
         const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
-        return `<path class="tip" data-tip="${escapeAttr(tooltip)}" d="M ${x1} ${y} L ${x2} ${y}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>`;
+        return `<path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>`;
       }).join("");
 
       let recycleIndex = 0;
@@ -1922,7 +1950,7 @@
           { x: endX, y: laneY },
           { x: endX, y: to.y + to.h }
         ];
-        const d = points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
+        const d = orthogonalPath(points, 12);
         const recycleKg = from.recycleStreams.reduce((sum, s) => {
           const kg = massToKg(s.quantity, s.unit);
           return sum + (Number.isFinite(kg) ? kg : 0);

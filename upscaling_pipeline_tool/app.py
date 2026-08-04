@@ -323,15 +323,17 @@ APP_HTML = r"""<!doctype html>
     <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">
       <div class="modal-head">
         <div>
-          <div class="label">Generated from the current project — drag a unit to move it, double-click to edit its description</div>
+          <div class="label">Generated from the current project</div>
           <h2 id="flowsheetTitle">Flowsheet View</h2>
         </div>
-        <div class="row">
+        <div class="row flowsheet-toolbar">
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
-          <button id="closeFlowsheetModal" class="mini-button">Close</button>
+          <span class="flowsheet-toolbar-divider"></span>
+          <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
+      <div class="flowsheet-hint">Drag a unit to move it. Double-click a unit to edit its description. Hover an arrow or a unit for details.</div>
       <div class="modal-body">
         <div id="flowsheetHost" class="flowsheet-host"></div>
       </div>
