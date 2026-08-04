@@ -68,16 +68,18 @@ reports the missing data needed for quantitative correction.
 ## Requirements
 
 - Python 3.9 or newer is recommended.
-- No external Python packages are required.
+- Python packages listed in `upscaling_pipeline_tool/requirements.txt`.
 - A modern browser.
 
-The app uses only the Python standard library.
+`pyflowsheet` is used for the technical PFD-style Flowsheet View. If it is not
+installed, the app can still fall back to the built-in SVG renderer.
 
 ## Quick Start
 
 From the repository root:
 
 ```bash
+python3 -m pip install -r upscaling_pipeline_tool/requirements.txt
 python3 run_upscaling_tool.py --port 8787
 ```
 
@@ -121,12 +123,14 @@ located.
 4. Run:
 
 ```powershell
+python -m pip install -r upscaling_pipeline_tool/requirements.txt
 python run_upscaling_tool.py --port 8787
 ```
 
 If `python` is not recognized, use:
 
 ```powershell
+py -m pip install -r upscaling_pipeline_tool/requirements.txt
 py run_upscaling_tool.py --port 8787
 ```
 

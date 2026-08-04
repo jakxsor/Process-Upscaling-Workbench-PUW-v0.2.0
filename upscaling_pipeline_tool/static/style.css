@@ -2525,6 +2525,35 @@
       box-shadow: 0 10px 28px rgba(15, 23, 32, 0.08);
     }
 
+    .pyflowsheet-svg {
+      width: min(1480px, calc(100vw - 120px));
+      min-width: 1180px;
+    }
+
+    .flowsheet-render-status {
+      justify-self: stretch;
+      margin-bottom: 8px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    .flowsheet-render-status.ok {
+      color: var(--green);
+      border-color: #bfddc8;
+      background: #f4fbf6;
+    }
+
+    .flowsheet-render-status.warn {
+      color: var(--orange);
+      border-color: #efcf9b;
+      background: var(--orange-soft);
+    }
+
     .bottleneck-split-controls {
       display: grid;
       gap: 6px;

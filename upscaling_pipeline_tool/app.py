@@ -8,6 +8,8 @@ import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
+from .pyflowsheet_renderer import render_pyflowsheet_svg
+
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 
@@ -466,13 +468,16 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path != "/api/refine":
+        if self.path not in ("/api/refine", "/api/flowsheet"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = self._run_external_refine(payload)
+            if self.path == "/api/flowsheet":
+                result = render_pyflowsheet_svg(payload.get("project", payload))
+            else:
+                result = self._run_external_refine(payload)
             self._send_json(200, result)
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": str(exc)})

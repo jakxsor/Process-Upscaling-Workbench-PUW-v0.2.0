@@ -423,6 +423,7 @@
     const $ = id => document.getElementById(id);
 
     const undoStack = [];
+    let flowsheetRequestSeq = 0;
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -2233,14 +2234,46 @@
       return lines.slice(0, 3);
     }
 
-    function renderFlowsheetModal() {
+    async function renderPyflowsheetSvg() {
+      const project = buildProjectExport();
+      const response = await fetch("/api/flowsheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!data.ok || !data.svg) throw new Error(data.error || "pyflowsheet returned no SVG");
+      return data;
+    }
+
+    async function renderFlowsheetModal() {
       const host = $("flowsheetHost");
       if (!host) return;
+      const requestSeq = ++flowsheetRequestSeq;
       const result = buildFlowsheetSvg();
       host.innerHTML = result.empty
         ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-        : result.svg;
+        : `<div class="flowsheet-render-status">Rendering technical PFD with pyflowsheet...</div>${result.svg}`;
       if (!result.empty) wireFlowsheetInteractions(host);
+      if (result.empty) return;
+      try {
+        const data = await renderPyflowsheetSvg();
+        if (requestSeq !== flowsheetRequestSeq || $("flowsheetModal").hidden) return;
+        host.innerHTML = `
+          <div class="flowsheet-render-status ok">Technical PFD rendered with pyflowsheet (${data.unitCount || 0} units). The SVG fallback remains used if the Python renderer is unavailable.</div>
+          ${data.svg}
+        `;
+        const svg = host.querySelector("svg");
+        if (svg) svg.classList.add("flowsheet-svg", "pyflowsheet-svg");
+      } catch (err) {
+        if (requestSeq !== flowsheetRequestSeq) return;
+        const banner = host.querySelector(".flowsheet-render-status");
+        if (banner) {
+          banner.className = "flowsheet-render-status warn";
+          banner.textContent = `pyflowsheet renderer unavailable; showing interactive fallback. ${err.message || err}`;
+        }
+      }
     }
 
     function wireFlowsheetInteractions(host) {
@@ -2311,9 +2344,10 @@
     }
 
     function downloadFlowsheetSvg() {
-      const result = buildFlowsheetSvg();
-      if (result.empty) return;
-      const blob = new Blob([result.svg], { type: "image/svg+xml" });
+      const visibleSvg = $("flowsheetHost")?.querySelector("svg");
+      const svgText = visibleSvg ? visibleSvg.outerHTML : buildFlowsheetSvg().svg;
+      if (!svgText) return;
+      const blob = new Blob([svgText], { type: "image/svg+xml" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -8068,7 +8102,7 @@
       `).join("");
     }
 
-    function renderExport() {
+    function buildProjectExport() {
       const blocks = blocksInOrder().map(block => {
         ensureBlockFlowFields(block);
         return exportBlock(block);
@@ -8114,7 +8148,7 @@
       const scaleAssessment = scaleUpAssessmentModel(scale);
       const heuristicReview = heuristicReviewModel(scale);
       const ganttSchedule = taskScheduleModel();
-      $("jsonOut").textContent = JSON.stringify({
+      return {
         workflow: "source text -> annotated blocks -> material inputs/outputs/waste -> behavior presets -> phenomenon groups -> task/unit alternatives -> heuristic rule application -> scale-up basis -> scaled MFA -> Gantt bottleneck check",
         text: state.text,
         workflowStepStatus: workflowStepStatuses(),
@@ -8141,7 +8175,11 @@
         materialFlow,
         groups,
         links: state.links
-      }, null, 2);
+      };
+    }
+
+    function renderExport() {
+      $("jsonOut").textContent = JSON.stringify(buildProjectExport(), null, 2);
     }
 
     function exportBlock(block) {

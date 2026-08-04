@@ -24,18 +24,21 @@ for final equipment design.
 macOS/Linux:
 
 ```bash
+python3 -m pip install -r upscaling_pipeline_tool/requirements.txt
 python3 run_upscaling_tool.py --port 8787
 ```
 
 Windows PowerShell:
 
 ```powershell
+python -m pip install -r upscaling_pipeline_tool/requirements.txt
 python run_upscaling_tool.py --port 8787
 ```
 
 or:
 
 ```powershell
+py -m pip install -r upscaling_pipeline_tool/requirements.txt
 py run_upscaling_tool.py --port 8787
 ```
 
@@ -49,10 +52,11 @@ http://127.0.0.1:8787
 
 ```text
 app.py            HTTP server and HTML shell
+pyflowsheet_renderer.py  Optional technical PFD renderer
 static/app.js     Client-side tool logic
 static/style.css  UI styling
 workshop.md       Workshop notes
 ```
 
-The tool uses only the Python standard library. No package installation is
-required for normal local use.
+The technical Flowsheet View uses `pyflowsheet`. If dependencies are missing,
+the browser still falls back to the built-in SVG renderer instead of crashing.
