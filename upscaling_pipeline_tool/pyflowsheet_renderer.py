@@ -237,16 +237,16 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
 
     defs = dwg.defs
     for marker_id, color in (("arrow_process", "#172027"), ("arrow_recycle", "#25834a"), ("arrow_waste", "#b97916"), ("arrow_overlap", "#6c7680")):
-        marker = dwg.marker(id=marker_id, insert=(9, 5), size=(10, 10), orient="auto", markerUnits="strokeWidth")
-        marker.add(dwg.path(d="M 0 0 L 10 5 L 0 10 z", fill=color))
+        marker = dwg.marker(id=marker_id, insert=(12, 6), size=(13, 12), orient="auto", markerUnits="userSpaceOnUse")
+        marker.add(dwg.path(d="M 0 0 L 13 6 L 0 12 z", fill=color, stroke=color, stroke_width=0.4))
         defs.add(marker)
 
     feed = {"x": 42, "y": base_y + 48, "w": 112, "h": 48}
     product = {"x": min(width - 185, nodes[-1]["x"] + nodes[-1]["w"] + 82), "y": nodes[-1]["y"] + 52, "w": 124, "h": 54}
 
-    def add_connection(points: list[tuple[float, float]], color: str, marker: str, dash: str | None = None, width_: float = 2.2) -> None:
+    def add_connection(points: list[tuple[float, float]], color: str, marker: str, dash: str | None = None, width_: float = 2.8) -> None:
         d = _path(points)
-        halo = dwg.path(d=d, fill="none", stroke="#ffffff", stroke_width=width_ + 5, stroke_linecap="round", stroke_linejoin="round")
+        halo = dwg.path(d=d, fill="none", stroke="#ffffff", stroke_width=width_ + 6, stroke_linecap="round", stroke_linejoin="round")
         line = dwg.path(d=d, fill="none", stroke=color, stroke_width=width_, stroke_linecap="round", stroke_linejoin="round", marker_end=f"url(#{marker})")
         if dash:
             line["stroke-dasharray"] = dash
@@ -272,12 +272,12 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         if order_index[from_id] > order_index[to_id]:
             s, e = _port_for(src, "bottom"), _port_for(dst, "bottom")
             lane = max_y - 84 - 18 * len([pair for pair in rendered if order_index[pair[0]] > order_index[pair[1]]])
-            add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="8 6", width_=2.0)
+            add_connection([s, (s[0], lane), (e[0], lane), e], "#25834a", "arrow_recycle", dash="9 6", width_=2.5)
             dwg.add(_svg_text(dwg, f"recycle {from_id} to {to_id}", ((s[0] + e[0]) / 2, lane - 7), size=10, fill="#25834a"))
         elif dst["stage"] == src["stage"]:
             s, e = _port_for(src, "bottom"), _port_for(dst, "top")
             bridge_y = max(s[1] + 20, e[1] - 20)
-            add_connection([s, (s[0], bridge_y), (e[0], bridge_y), e], "#6c7680", "arrow_overlap", dash="5 4", width_=1.8)
+            add_connection([s, (s[0], bridge_y), (e[0], bridge_y), e], "#6c7680", "arrow_overlap", dash="6 4", width_=2.3)
             dwg.add(_svg_text(dwg, "overlap", ((s[0] + e[0]) / 2, bridge_y - 6), size=9, fill="#6c7680"))
         else:
             s, e = _port_for(src, "right"), _port_for(dst, "left")
@@ -303,9 +303,10 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
                 waste_items.extend(item for item in role_group.get("items") or [] if isinstance(item, dict))
         for item_index, item in enumerate(waste_items[:2]):
             s = (node["x"] + node["w"] * (0.32 + item_index * 0.26), node["y"] + node["h"])
-            e = (s[0], min(height - 108, s[1] + 54 + item_index * 24))
-            add_connection([s, e], "#b97916", "arrow_waste", width_=1.7)
-            dwg.add(_svg_text(dwg, _short(f"waste: {item.get('name', '')}", 24), (e[0], e[1] + 14), size=9, fill="#b97916"))
+            e = (s[0], min(height - 118, s[1] + 64 + item_index * 28))
+            add_connection([s, e], "#b97916", "arrow_waste", width_=2.1)
+            label_x = e[0] + (34 if item_index % 2 == 0 else -34)
+            dwg.add(_svg_text(dwg, _short(f"waste: {item.get('name', '')}", 28), (label_x, e[1] + 14), size=9, fill="#b97916", anchor="middle"))
 
     dwg.add(dwg.rect(insert=(feed["x"], feed["y"]), size=(feed["w"], feed["h"]), rx=24, fill="#fff", stroke="#25834a", stroke_width=1.8))
     dwg.add(_svg_text(dwg, "FEED", (feed["x"] + feed["w"] / 2, feed["y"] + 30), size=12, weight="800", fill="#25834a"))

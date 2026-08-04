@@ -2254,7 +2254,7 @@
       const result = buildFlowsheetSvg();
       host.innerHTML = result.empty
         ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-        : `<div class="flowsheet-render-status">Rendering technical PFD with pyflowsheet...</div>${result.svg}`;
+        : `<div class="flowsheet-render-status">Rendering technical PFD...</div>${result.svg}`;
       if (!result.empty) wireFlowsheetInteractions(host);
       if (result.empty) return;
       try {
@@ -2271,7 +2271,7 @@
         const banner = host.querySelector(".flowsheet-render-status");
         if (banner) {
           banner.className = "flowsheet-render-status warn";
-          banner.textContent = `pyflowsheet renderer unavailable; showing interactive fallback. ${err.message || err}`;
+          banner.textContent = `Technical renderer unavailable; showing interactive fallback. ${err.message || err}`;
         }
       }
     }
