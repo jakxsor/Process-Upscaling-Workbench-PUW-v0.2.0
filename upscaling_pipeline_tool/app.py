@@ -333,7 +333,7 @@ APP_HTML = r"""<!doctype html>
           <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
-      <div class="flowsheet-hint">Drag a unit to move it. Double-click a unit to edit its description. Hover an arrow or a unit for details.</div>
+      <div class="flowsheet-hint">PFD-style board generated from groups, streams, recycle, waste, and selected unit operations. Drag units to refine the layout; double-click a unit label to edit it.</div>
       <div class="modal-body">
         <div id="flowsheetHost" class="flowsheet-host"></div>
       </div>

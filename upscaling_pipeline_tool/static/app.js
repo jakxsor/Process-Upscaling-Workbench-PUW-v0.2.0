@@ -1677,18 +1677,19 @@
     }
 
     const flowsheetCategoryStyle = {
-      reactor: { fill: "#f8dfdf", stroke: "#a23b3b", label: "Reactor" },
-      separation: { fill: "#e4eff9", stroke: "#2d6098", label: "Separation" },
-      utility: { fill: "#fff0d4", stroke: "#965d00", label: "Utility" },
-      storage: { fill: "#e2f2e7", stroke: "#286d3f", label: "Storage" },
-      waste: { fill: "#eef2f4", stroke: "#657480", label: "Waste" }
+      reactor: { fill: "#fff8f7", stroke: "#cf4b42", label: "Reactor" },
+      separation: { fill: "#f5f9ff", stroke: "#1671c2", label: "Separation" },
+      utility: { fill: "#fffaf0", stroke: "#b97916", label: "Utility" },
+      storage: { fill: "#f4fbf6", stroke: "#25834a", label: "Storage" },
+      waste: { fill: "#faf8f5", stroke: "#8b7057", label: "Waste" }
     };
 
     function flowsheetUnitCategory(group) {
       const name = String(group.selectedUnit || "").toLowerCase();
       if (/reactor/.test(name)) return "reactor";
       if (/distillation|evaporat|dry|extraction|decanter|filtration|crystalliz|absorption|membrane|strip|flash|column/.test(name)) return "separation";
-      if (/exchanger|condenser|cooler|heater|abatement|scrubber|neutraliz|wwt|utility/.test(name)) return "utility";
+      if (/wwt|waste|abatement|scrubber|neutraliz|carbon/.test(name)) return "waste";
+      if (/exchanger|condenser|cooler|heater|utility/.test(name)) return "utility";
       if (/tank|vessel|storage|silo|feed/.test(name)) return "storage";
       const opClass = inferGroupOperationClass(group);
       if (opClass === "reaction_kinetic") return "reactor";
@@ -1702,7 +1703,9 @@
       const name = String(group.selectedUnit || "").toLowerCase();
       if (category === "reactor") return "reactor";
       if (category === "storage") return "tank";
-      if (category === "utility" || category === "waste") return "generic";
+      if (category === "waste") return "waste_treatment";
+      if (/exchanger|condenser|cooler|heater/.test(name)) return "heat_exchanger";
+      if (category === "utility") return "utility_box";
       if (/mixer.?settler|decanter|liquid.?liquid extraction/.test(name)) return "mixer_settler";
       if (/thin.?film|wiped.?film|evaporat/.test(name)) return "evaporator";
       if (/dry|sieve|adsor|fixed.?bed/.test(name)) return "drying_column";
@@ -1712,47 +1715,60 @@
 
     function flowsheetShapeMarkup(subcategory, x, y, w, h, stroke) {
       const cx = x + w / 2;
+      const cy = y + h / 2;
+      const shellFill = "#fff";
       if (subcategory === "reactor") {
-        const bodyTop = y + h * 0.24;
-        const bodyBottom = y + h * 0.92;
-        const domeRy = h * 0.2;
-        const left = x + w * 0.1;
-        const right = x + w * 0.9;
+        const bodyTop = y + h * 0.2;
+        const bodyBottom = y + h * 0.9;
+        const domeRy = h * 0.18;
+        const left = x + w * 0.14;
+        const right = x + w * 0.72;
+        const coilX = x + w * 0.78;
         return `
-          <path d="M ${left} ${bodyBottom} L ${left} ${bodyTop} A ${w * 0.4} ${domeRy} 0 0 1 ${right} ${bodyTop} L ${right} ${bodyBottom} Z" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
-          <rect x="${cx - w * 0.04}" y="${y}" width="${w * 0.08}" height="${h * 0.14}" fill="#fff" stroke="${stroke}" stroke-width="1.5"></rect>
-          <line x1="${cx}" y1="${y + h * 0.12}" x2="${cx}" y2="${bodyBottom - h * 0.09}" stroke="${stroke}" stroke-width="1.5"></line>
-          <ellipse cx="${cx - w * 0.08}" cy="${bodyBottom - h * 0.09}" rx="${w * 0.09}" ry="${h * 0.04}" fill="#e2e7ea" stroke="${stroke}" stroke-width="1.1"></ellipse>
-          <ellipse cx="${cx + w * 0.08}" cy="${bodyBottom - h * 0.09}" rx="${w * 0.09}" ry="${h * 0.04}" fill="#e2e7ea" stroke="${stroke}" stroke-width="1.1"></ellipse>
+          <path d="M ${left} ${bodyBottom} L ${left} ${bodyTop} A ${w * 0.29} ${domeRy} 0 0 1 ${right} ${bodyTop} L ${right} ${bodyBottom} Z" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></path>
+          <rect x="${cx - w * 0.035}" y="${y + 2}" width="${w * 0.07}" height="${h * 0.13}" rx="3" fill="${shellFill}" stroke="${stroke}" stroke-width="1.6"></rect>
+          <line x1="${cx}" y1="${y + h * 0.14}" x2="${cx}" y2="${bodyBottom - h * 0.1}" stroke="${stroke}" stroke-width="1.6"></line>
+          <path d="M ${cx - w * 0.2} ${bodyBottom - h * 0.12} C ${cx - w * 0.1} ${bodyBottom - h * 0.2}, ${cx - w * 0.02} ${bodyBottom - h * 0.05}, ${cx} ${bodyBottom - h * 0.12} C ${cx + w * 0.1} ${bodyBottom - h * 0.2}, ${cx + w * 0.18} ${bodyBottom - h * 0.05}, ${cx + w * 0.24} ${bodyBottom - h * 0.12}" fill="none" stroke="${stroke}" stroke-width="1.5"></path>
+          <path d="M ${coilX} ${y + h * 0.36} h ${w * 0.12} v ${h * 0.07} h ${-w * 0.12} v ${h * 0.07} h ${w * 0.12} v ${h * 0.07} h ${-w * 0.12} v ${h * 0.07} h ${w * 0.12}" fill="none" stroke="${stroke}" stroke-width="1.4"></path>
         `;
       }
       if (subcategory === "tank") {
-        const ry = h * 0.38;
-        return `<rect x="${x + w * 0.06}" y="${y + h * 0.12}" width="${w * 0.88}" height="${h * 0.76}" rx="${ry}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>`;
+        const top = y + h * 0.28;
+        const bottom = y + h * 0.74;
+        const left = x + w * 0.08;
+        const right = x + w * 0.88;
+        const rx = (bottom - top) / 2;
+        return `
+          <path d="M ${left + rx} ${top} L ${right - rx} ${top} A ${rx} ${rx} 0 0 1 ${right - rx} ${bottom} L ${left + rx} ${bottom} A ${rx} ${rx} 0 0 1 ${left + rx} ${top}" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></path>
+          <line x1="${right - rx}" y1="${top}" x2="${right - rx}" y2="${bottom}" stroke="${stroke}" stroke-width="1.1"></line>
+        `;
       }
       if (subcategory === "mixer_settler") {
-        const top = y + h * 0.2;
-        const bottom = y + h * 0.8;
+        const top = y + h * 0.24;
+        const bottom = y + h * 0.72;
         const left = x + w * 0.08;
-        const right = x + w * 0.78;
+        const right = x + w * 0.84;
         const capR = (bottom - top) / 2;
         return `
-          <path d="M ${left} ${top} L ${right} ${top} A ${capR} ${capR} 0 0 1 ${right} ${bottom} L ${left} ${bottom} Z" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
-          <line x1="${left + (right - left) * 0.4}" y1="${top}" x2="${left + (right - left) * 0.4}" y2="${bottom}" stroke="${stroke}" stroke-width="1.1" stroke-dasharray="3 2"></line>
+          <path d="M ${left} ${top} L ${right - capR} ${top} A ${capR} ${capR} 0 0 1 ${right - capR} ${bottom} L ${left} ${bottom} Z" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></path>
+          <line x1="${left + (right - left) * 0.42}" y1="${top}" x2="${left + (right - left) * 0.42}" y2="${bottom}" stroke="${stroke}" stroke-width="1.2" stroke-dasharray="4 3"></line>
+          <line x1="${left + 18}" y1="${cy}" x2="${right - capR - 10}" y2="${cy}" stroke="${stroke}" stroke-width="1.1"></line>
+          <text x="${cx}" y="${cy - 8}" font-size="8.5" fill="${stroke}" text-anchor="middle">organic</text>
+          <text x="${cx}" y="${cy + 15}" font-size="8.5" fill="${stroke}" text-anchor="middle">aqueous</text>
         `;
       }
       if (subcategory === "evaporator") {
-        const top = y + h * 0.3;
-        const bottom = y + h * 0.7;
-        const left = x + w * 0.12;
-        const right = x + w * 0.88;
+        const top = y + h * 0.18;
+        const bottom = y + h * 0.82;
+        const left = x + w * 0.16;
+        const right = x + w * 0.8;
         const capR = (bottom - top) / 2;
         const hatches = [];
-        for (let i = 0; i < 7; i += 1) {
-          const hx = left + 10 + i * ((right - left - 20) / 6);
+        for (let i = 0; i < 8; i += 1) {
+          const hx = left + 10 + i * ((right - left - 20) / 7);
           hatches.push(`<line x1="${hx}" y1="${top + 2}" x2="${hx}" y2="${bottom - 2}" stroke="${stroke}" stroke-width="1"></line>`);
         }
-        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="${capR}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>${hatches.join("")}`;
+        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="${capR}" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></rect>${hatches.join("")}<line x1="${right}" y1="${cy}" x2="${x + w * 0.92}" y2="${cy}" stroke="${stroke}" stroke-width="1.3"></line>`;
       }
       if (subcategory === "drying_column") {
         const left = x + w * 0.34;
@@ -1760,20 +1776,34 @@
         const top = y + h * 0.1;
         const bottom = y + h * 0.9;
         const lines = [0.28, 0.46, 0.64, 0.82].map(f => `<line x1="${left}" y1="${top + (bottom - top) * f}" x2="${right}" y2="${top + (bottom - top) * f}" stroke="${stroke}" stroke-width="1"></line>`).join("");
-        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></rect>${lines}`;
+        return `<rect x="${left}" y="${top}" width="${right - left}" height="${bottom - top}" rx="3" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></rect>${lines}<line x1="${left - 12}" y1="${top + 8}" x2="${right + 12}" y2="${top + 8}" stroke="${stroke}" stroke-width="1.4"></line>`;
       }
       if (subcategory === "distillation") {
         const top = y + h * 0.14;
-        const bottom = y + h * 0.86;
+        const bottom = y + h * 0.84;
         const halfTop = w * 0.11;
-        const halfBottom = w * 0.06;
+        const halfBottom = w * 0.055;
+        const trayLines = (tcx) => [0.3, 0.48, 0.66].map(f => `<line x1="${tcx - halfBottom * 0.8}" y1="${top + (bottom - top) * f}" x2="${tcx + halfBottom * 0.8}" y2="${top + (bottom - top) * f}" stroke="${stroke}" stroke-width="1"></line>`).join("");
         const trapezoid = (tcx) => `M ${tcx - halfTop} ${top} L ${tcx + halfTop} ${top} L ${tcx + halfBottom} ${bottom} L ${tcx - halfBottom} ${bottom} Z`;
         return `
-          <path d="${trapezoid(x + w * 0.34)}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
-          <path d="${trapezoid(x + w * 0.66)}" fill="#fff" stroke="${stroke}" stroke-width="1.8"></path>
+          <path d="${trapezoid(x + w * 0.38)}" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></path>
+          ${trayLines(x + w * 0.38)}
+          <path d="${trapezoid(x + w * 0.66)}" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></path>
+          ${trayLines(x + w * 0.66)}
         `;
       }
-      return `<rect x="${x + w * 0.05}" y="${y + h * 0.1}" width="${w * 0.9}" height="${h * 0.8}" rx="8" fill="#fff" stroke="${stroke}" stroke-width="1.6"></rect>`;
+      if (subcategory === "heat_exchanger") {
+        const left = x + w * 0.12;
+        const top = y + h * 0.25;
+        const ww = w * 0.76;
+        const hh = h * 0.42;
+        const tubes = [0.22, 0.38, 0.54, 0.7].map(f => `<line x1="${left + 12}" y1="${top + hh * f}" x2="${left + ww - 12}" y2="${top + hh * f}" stroke="${stroke}" stroke-width="1"></line>`).join("");
+        return `<rect x="${left}" y="${top}" width="${ww}" height="${hh}" rx="7" fill="${shellFill}" stroke="${stroke}" stroke-width="2"></rect>${tubes}<line x1="${left + ww * 0.2}" y1="${top - 18}" x2="${left + ww * 0.2}" y2="${top}" stroke="${stroke}" stroke-width="1.2"></line><line x1="${left + ww * 0.78}" y1="${top + hh}" x2="${left + ww * 0.78}" y2="${top + hh + 18}" stroke="${stroke}" stroke-width="1.2"></line>`;
+      }
+      if (subcategory === "waste_treatment") {
+        return `<rect x="${x + w * 0.08}" y="${y + h * 0.18}" width="${w * 0.84}" height="${h * 0.62}" rx="4" fill="${shellFill}" stroke="${stroke}" stroke-width="1.8"></rect><path d="M ${x + w * 0.18} ${y + h * 0.52} C ${x + w * 0.34} ${y + h * 0.42}, ${x + w * 0.48} ${y + h * 0.62}, ${x + w * 0.64} ${y + h * 0.52} C ${x + w * 0.72} ${y + h * 0.47}, ${x + w * 0.8} ${y + h * 0.5}, ${x + w * 0.86} ${y + h * 0.55}" fill="none" stroke="${stroke}" stroke-width="1.2"></path>`;
+      }
+      return `<rect x="${x + w * 0.08}" y="${y + h * 0.16}" width="${w * 0.84}" height="${h * 0.64}" rx="6" fill="${shellFill}" stroke="${stroke}" stroke-width="1.8"></rect>`;
     }
 
     function flowsheetGroupStreams(group) {
@@ -1814,10 +1844,21 @@
 
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
-      const boxW = 190;
-      const boxH = 132;
-      const gapX = 90;
-      const rowY = 70;
+      const boxW = 238;
+      const boxH = 166;
+      const gapX = 78;
+      const topY = 138;
+      const lowerY = 428;
+      const maxTopRow = groupIds.length > 5 ? 5 : groupIds.length;
+      const topStartX = 300;
+      const lowerStartX = topStartX + Math.max(0, maxTopRow - 2) * (boxW + gapX);
+      const autoPosition = (index) => {
+        if (index < maxTopRow) {
+          return { x: topStartX + index * (boxW + gapX), y: topY };
+        }
+        const lowerIndex = index - maxTopRow;
+        return { x: Math.max(topStartX, lowerStartX - lowerIndex * (boxW + gapX)), y: lowerY };
+      };
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
         const stored = ensureGroup(groupId);
@@ -1826,7 +1867,7 @@
         const meta = flowsheetGroupStreams(group);
         const specs = flowsheetGroupSpecs(group);
         const tip = groupContentsTip(group);
-        const autoX = 40 + index * (boxW + gapX);
+        const auto = autoPosition(index);
         return {
           id: group.id,
           unitNumber: index + 1,
@@ -1836,8 +1877,8 @@
           subcategory,
           specs,
           tip,
-          x: Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : autoX,
-          y: Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : rowY,
+          x: Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x,
+          y: Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y,
           w: boxW,
           h: boxH,
           ...meta
@@ -1853,21 +1894,60 @@
         if (isBackwardLink(link)) recycleLinks.push({ from, to });
         else forwardLinks.push({ from, to });
       });
+      if (!state.links.length && groups.length > 1) {
+        for (let i = 0; i < groups.length - 1; i += 1) {
+          forwardLinks.push({ from: groups[i].id, to: groups[i + 1].id });
+        }
+      }
       const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
-      const stubLaneH = 46;
-      const wasteAreaH = maxWasteVent ? 30 + maxWasteVent * stubLaneH : 0;
-      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h)) : rowY + boxH;
-      const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 600;
-      const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 40;
+      const stubLaneH = 34;
+      const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
+      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h)) : topY + boxH;
+      const minBoxLeft = groups.length ? Math.min(...groups.map(item => item.x)) : 120;
+      const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 900;
+      const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 54;
       const recycleLaneCount = recycleLinks.length;
-      const width = Math.max(600, maxBoxRight + 60);
-      const height = recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 40 : maxBoxBottom + wasteAreaH + 60;
-      return { groups, byId, forwardLinks, recycleLinks, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg };
+      const feedBox = groups.length ? {
+        id: "feeds",
+        x: Math.max(34, minBoxLeft - 250),
+        y: topY + 4,
+        w: 178,
+        h: Math.max(118, Math.min(204, 54 + groups[0].inputStreams.slice(0, 4).length * 34))
+      } : null;
+      const lastGroup = groups[groups.length - 1];
+      const productBox = lastGroup ? {
+        id: "product",
+        x: lastGroup.y > topY + 100 ? Math.max(34, lastGroup.x - 238) : maxBoxRight + 76,
+        y: lastGroup.y + 28,
+        w: 190,
+        h: 92
+      } : null;
+      const maxDiagramRight = Math.max(maxBoxRight, productBox ? productBox.x + productBox.w : 0);
+      const width = Math.max(1180, maxDiagramRight + 90);
+      const height = Math.max(660, recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 74 : maxBoxBottom + wasteAreaH + 118);
+      return { groups, byId, forwardLinks, recycleLinks, feedBox, productBox, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg };
     }
 
     function flowsheetBoxCenter(box) {
       return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    }
+
+    function flowsheetPort(from, to, source = true) {
+      const fromCenter = flowsheetBoxCenter(from);
+      const toCenter = flowsheetBoxCenter(to);
+      const dx = toCenter.x - fromCenter.x;
+      const dy = toCenter.y - fromCenter.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if ((source && dx >= 0) || (!source && dx < 0)) {
+          return { x: from.x + from.w, y: fromCenter.y };
+        }
+        return { x: from.x, y: fromCenter.y };
+      }
+      if ((source && dy >= 0) || (!source && dy < 0)) {
+        return { x: fromCenter.x, y: from.y + from.h };
+      }
+      return { x: fromCenter.x, y: from.y };
     }
 
     function flowsheetRectsIntersectBand(rect, x1, x2, y1, y2) {
@@ -1880,23 +1960,40 @@
 
     function flowsheetConnectorPoints(model, from, to) {
       const pad = 4;
-      const fromPt = { x: from.x + from.w, y: flowsheetBoxCenter(from).y };
-      const toPt = { x: to.x, y: flowsheetBoxCenter(to).y };
+      const fromPt = flowsheetPort(from, to, true);
+      const toPt = flowsheetPort(to, from, false);
       const others = model.groups.filter(box => box.id !== from.id && box.id !== to.id);
-      const forwardOk = toPt.x >= fromPt.x - 1;
-      const sameRow = Math.abs(fromPt.y - toPt.y) < pad;
-      if (forwardOk && sameRow) {
+      const mostlyHorizontal = Math.abs(fromPt.x - toPt.x) >= Math.abs(fromPt.y - toPt.y);
+      const sameRow = Math.abs(fromPt.y - toPt.y) < 3;
+      const sameColumn = Math.abs(fromPt.x - toPt.x) < 3;
+      if (mostlyHorizontal && sameRow) {
         const blocked = others.some(box => flowsheetRectsIntersectBand(box, fromPt.x, toPt.x, fromPt.y - pad, fromPt.y + pad));
         if (!blocked) return [fromPt, toPt];
       }
-      let midX = forwardOk ? (fromPt.x + toPt.x) / 2 : Math.max(fromPt.x, toPt.x) + 55;
-      const hitsObstacle = () => others.some(box => flowsheetRectsIntersectBand(box, midX - pad, midX + pad, fromPt.y, toPt.y));
+      if (!mostlyHorizontal && sameColumn) {
+        const blocked = others.some(box => flowsheetRectsIntersectBand(box, fromPt.x - pad, fromPt.x + pad, fromPt.y, toPt.y));
+        if (!blocked) return [fromPt, toPt];
+      }
+      if (mostlyHorizontal) {
+        let midX = (fromPt.x + toPt.x) / 2;
+        const direction = toPt.x >= fromPt.x ? 1 : -1;
+        const hitsObstacle = () => others.some(box => flowsheetRectsIntersectBand(box, midX - pad, midX + pad, fromPt.y, toPt.y));
+        let guard = 0;
+        while (hitsObstacle() && guard < 7) {
+          midX += direction * 48;
+          guard += 1;
+        }
+        return [fromPt, { x: midX, y: fromPt.y }, { x: midX, y: toPt.y }, toPt];
+      }
+      let midY = (fromPt.y + toPt.y) / 2;
+      const direction = toPt.y >= fromPt.y ? 1 : -1;
+      const hitsObstacle = () => others.some(box => flowsheetRectsIntersectBand(box, fromPt.x, toPt.x, midY - pad, midY + pad));
       let guard = 0;
-      while (hitsObstacle() && guard < 6) {
-        midX += 45;
+      while (hitsObstacle() && guard < 7) {
+        midY += direction * 42;
         guard += 1;
       }
-      return [fromPt, { x: midX, y: fromPt.y }, { x: midX, y: toPt.y }, toPt];
+      return [fromPt, { x: fromPt.x, y: midY }, { x: toPt.x, y: midY }, toPt];
     }
 
     function buildFlowsheetSvg() {
@@ -1922,8 +2019,8 @@
       `;
 
       const sankeyWidth = (kg) => {
-        if (!Number.isFinite(kg) || kg <= 0 || model.maxOutputKg <= 0) return 2;
-        return Math.min(14, Math.max(2, (kg / model.maxOutputKg) * 13 + 1.5));
+        if (!Number.isFinite(kg) || kg <= 0 || model.maxOutputKg <= 0) return 2.2;
+        return Math.min(4.8, Math.max(2.2, (kg / model.maxOutputKg) * 3.1 + 1.7));
       };
 
       const forwardPaths = model.forwardLinks.map(link => {
@@ -1933,7 +2030,10 @@
         const d = orthogonalPath(points, 14);
         const strokeWidth = sankeyWidth(from.totalOutputKg);
         const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
-        return `<path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>`;
+        return `
+          <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 5}" stroke-linejoin="round" stroke-linecap="round" fill="none"></path>
+          <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>
+        `;
       }).join("");
 
       let recycleIndex = 0;
@@ -1963,10 +2063,67 @@
             : "quantity not available"
         ].join("\n");
         return `
-          <path class="tip" data-tip="${escapeAttr(recycleTooltip)}" d="${d}" stroke="#286d3f" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
+          <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 4}" stroke-linecap="round" fill="none"></path>
+          <path class="tip" data-tip="${escapeAttr(recycleTooltip)}" d="${d}" stroke="#25834a" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
           <text x="${(startX + endX) / 2}" y="${laneY - 6}" font-size="11" fill="#286d3f" text-anchor="middle">recycle ${escapeHtml(link.from)} to ${escapeHtml(link.to)}</text>
         `;
       }).join("");
+
+      const feedStreams = model.groups[0]?.inputStreams?.filter(stream => stream.name.trim()) || [];
+      const feedBoxMarkup = model.feedBox && model.groups.length ? (() => {
+        const box = model.feedBox;
+        const first = model.groups[0];
+        const listed = feedStreams.slice(0, 4);
+        const names = listed.length ? listed : [{ name: "feed inputs", quantity: "", unit: "" }];
+        const feedRows = names.map((stream, i) => {
+          const rowY = box.y + 34 + i * 30;
+          const label = `${stream.name}${stream.quantity ? ` ${stream.quantity} ${stream.unit || ""}` : ""}`.trim();
+          return `
+            <rect x="${box.x + 10}" y="${rowY - 14}" width="${box.w - 20}" height="23" rx="11.5" fill="#fff" stroke="#25834a" stroke-width="1.2"></rect>
+            <text x="${box.x + box.w / 2}" y="${rowY + 1}" font-size="10.5" font-weight="600" fill="#172027" text-anchor="middle">${escapeHtml(label.length > 25 ? `${label.slice(0, 24)}...` : label)}</text>
+          `;
+        }).join("");
+        const pathRows = names.map((stream, i) => {
+          const start = { x: box.x + box.w, y: box.y + 34 + i * 30 };
+          const end = { x: first.x, y: first.y + Math.min(first.h - 24, 38 + i * 22) };
+          const midX = (start.x + end.x) / 2;
+          const d = orthogonalPath([start, { x: midX, y: start.y }, { x: midX, y: end.y }, end], 10);
+          const tip = `${stream.name || "feed"} -> ${first.id}`;
+          return `
+            <path d="${d}" stroke="#fff" stroke-width="5" fill="none"></path>
+            <path class="tip" data-tip="${escapeAttr(tip)}" d="${d}" stroke="#657480" stroke-width="1.7" fill="none" marker-end="url(#fsArrowGrey)"></path>
+          `;
+        }).join("");
+        return `
+          ${pathRows}
+          <g class="flowsheet-feed-node">
+            <rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="6" fill="#f4fbf6" stroke="#25834a" stroke-width="1.6"></rect>
+            <text x="${box.x + 10}" y="${box.y + 18}" font-size="11" font-weight="800" fill="#25834a">FEED / STORAGE</text>
+            ${feedRows}
+          </g>
+        `;
+      })() : "";
+
+      const productMarkup = model.productBox && model.groups.length ? (() => {
+        const box = model.productBox;
+        const last = model.groups[model.groups.length - 1];
+        const start = flowsheetPort(last, box, true);
+        const end = flowsheetPort(box, last, false);
+        const midX = (start.x + end.x) / 2;
+        const d = orthogonalPath([start, { x: midX, y: start.y }, { x: midX, y: end.y }, end], 12);
+        const productStreams = last.outputStreams.filter(stream => stream.fate === "product" || /product|octocrylene/i.test(stream.name)).slice(0, 2);
+        const label = productStreams[0]?.name || "final product";
+        const qty = productStreams[0]?.quantity ? `${productStreams[0].quantity} ${productStreams[0].unit || ""}`.trim() : "";
+        return `
+          <path d="${d}" stroke="#fff" stroke-width="7" fill="none"></path>
+          <path class="tip" data-tip="${escapeAttr(`${last.id} -> product\n${label}${qty ? `: ${qty}` : ""}`)}" d="${d}" stroke="#172027" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>
+          <g class="flowsheet-product-node">
+            <rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="4" fill="#e9f7ed" stroke="#25834a" stroke-width="1.8"></rect>
+            <text x="${box.x + box.w / 2}" y="${box.y + 36}" font-size="15" font-weight="800" fill="#172027" text-anchor="middle">${escapeHtml(wrapSvgText(label, 20)[0] || "Product")}</text>
+            ${qty ? `<text x="${box.x + box.w / 2}" y="${box.y + 58}" font-size="11" font-weight="700" fill="#25834a" text-anchor="middle">${escapeHtml(qty)}</text>` : ""}
+          </g>
+        `;
+      })() : "";
 
       const boxes = model.groups.map(box => {
         const style = flowsheetCategoryStyle[box.category];
@@ -1986,14 +2143,14 @@
         const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
         return `
           <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
-            ${box.isProduct ? `<rect x="${box.x - 5}" y="${box.y - 5}" width="${box.w + 10}" height="${box.h + 10}" rx="12" fill="#e2f2e7" opacity="0.55"></rect>` : ""}
+            <rect x="${box.x - 8}" y="${box.y - 8}" width="${box.w + 16}" height="${box.h + 16}" rx="10" fill="${style.fill}" stroke="${box.isProduct ? "#25834a" : "#d6e0e5"}" stroke-width="${box.isProduct ? 1.5 : 1}" opacity="${box.isProduct ? 0.82 : 0.92}"></rect>
             ${flowsheetShapeMarkup(box.subcategory, box.x, box.y, box.w, box.h, strokeColor)}
-            <text x="${box.x + 6}" y="${box.y + 12}" font-size="11" font-weight="700" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 10}" font-size="12" font-weight="700" text-anchor="middle" fill="#172027">
-              ${wrapSvgText(box.selectedUnit, 22).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
+            <text x="${box.x + 8}" y="${box.y + 16}" font-size="12" font-weight="800" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 18}" font-size="12.5" font-weight="800" text-anchor="middle" fill="#172027">
+              ${wrapSvgText(box.selectedUnit, 24).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
-            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 + 26}" font-size="10" font-weight="600" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine)}</text>` : ""}
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 8}" font-size="10" text-anchor="middle" fill="#657480">${escapeHtml(box.task)}</text>
+            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 + 28}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine.length > 48 ? `${specsLine.slice(0, 47)}...` : specsLine)}</text>` : ""}
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 12}" font-size="10.5" text-anchor="middle" fill="#657480">${escapeHtml(wrapSvgText(box.task, 36)[0] || "")}</text>
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 16}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="transparent"></rect>
@@ -2014,9 +2171,11 @@
         <svg class="flowsheet-svg" viewBox="0 0 ${model.width} ${model.height + 34}" xmlns="http://www.w3.org/2000/svg">
           ${defs}
           <rect x="0" y="0" width="${model.width}" height="${model.height + 34}" fill="#ffffff"></rect>
+          ${feedBoxMarkup}
           ${forwardPaths}
           ${recyclePaths}
           ${boxes}
+          ${productMarkup}
           <g transform="translate(20, ${model.height + 12})">
             ${legendLineItems.map((item, i) => `
               <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
