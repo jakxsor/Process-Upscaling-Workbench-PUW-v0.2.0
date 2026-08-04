@@ -100,6 +100,10 @@ def _can_overlap(group: dict[str, Any]) -> bool:
     )
 
 
+def _base_gid(gid: str) -> str:
+    return re.sub(r"-P\d+$", "", _clean(gid), flags=re.I)
+
+
 def _duration_label(group: dict[str, Any]) -> str:
     duration = _clean(_schedule(group).get("durationH"))
     return f"{duration} h" if duration else ""
@@ -283,27 +287,62 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(groups, list) or not groups:
         return {"ok": False, "error": "No grouped operations available for technical rendering."}
 
-    stage = -1
+    raw_groups = [group for group in groups if isinstance(group, dict)]
+    raw_ids = [_clean(group.get("groupId"), f"G{index + 1}") for index, group in enumerate(raw_groups)]
+    block_to_gid: dict[str, str] = {}
+    for gid, group in zip(raw_ids, raw_groups):
+        for block_id in group.get("blocks") or []:
+            block_to_gid[_clean(block_id)] = gid
+
+    def endpoint_gid(value: Any) -> str:
+        raw = _clean(value)
+        return raw if raw in raw_ids else block_to_gid.get(raw, "")
+
+    base_ids: list[str] = []
+    for gid in raw_ids:
+        base_id = _base_gid(gid)
+        if base_id not in base_ids:
+            base_ids.append(base_id)
+    group_order = {gid: index for index, gid in enumerate(raw_ids)}
+    base_edges: list[tuple[str, str]] = []
+    for link in links if isinstance(links, list) else []:
+        if not isinstance(link, dict):
+            continue
+        from_id, to_id = endpoint_gid(link.get("from")), endpoint_gid(link.get("to"))
+        if from_id not in group_order or to_id not in group_order or group_order[from_id] > group_order[to_id]:
+            continue
+        from_base, to_base = _base_gid(from_id), _base_gid(to_id)
+        if from_base != to_base:
+            base_edges.append((from_base, to_base))
+    stage_by_base = {base_id: 0 for base_id in base_ids}
+    if not base_edges:
+        stage_by_base = {base_id: index for index, base_id in enumerate(base_ids)}
+    else:
+        for _ in range(max(1, len(base_ids))):
+            for from_base, to_base in base_edges:
+                stage_by_base[to_base] = max(stage_by_base.get(to_base, 0), stage_by_base.get(from_base, 0) + 1)
+        for index, base_id in enumerate(base_ids):
+            participates = any(from_base == base_id or to_base == base_id for from_base, to_base in base_edges)
+            if not participates:
+                stage_by_base[base_id] = max(index, max(stage_by_base.values(), default=0) + 1)
+
     stage_rows: dict[int, int] = {}
     nodes: list[dict[str, Any]] = []
     by_gid: dict[str, dict[str, Any]] = {}
-    base_x, step_x, base_y = 250, 290, 210
+    base_x, step_x, base_y = 260, 320, 260
     card_w, card_h = 178, 172
     max_stages_per_band = 4
 
-    for index, group in enumerate(groups):
-        if not isinstance(group, dict):
-            continue
-        if index == 0 or not _can_overlap(group):
-            stage += 1
+    for index, group in enumerate(raw_groups):
+        gid = raw_ids[index]
+        stage = stage_by_base.get(_base_gid(gid), index)
         row = stage_rows.get(stage, 0)
         stage_rows[stage] = row + 1
         overlap = row > 0
         band = stage // max_stages_per_band
         column = stage % max_stages_per_band
         x = base_x + column * step_x
-        y = base_y + band * 620 + row * (card_h + 86)
-        gid = _clean(group.get("groupId"), f"G{index + 1}")
+        y = base_y + band * 680 + row * (card_h + 118)
         node = {
             "gid": gid,
             "unit": f"U{index + 1}",
@@ -394,7 +433,7 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     for link in links if isinstance(links, list) else []:
         if not isinstance(link, dict):
             continue
-        from_id, to_id = _clean(link.get("from")), _clean(link.get("to"))
+        from_id, to_id = endpoint_gid(link.get("from")), endpoint_gid(link.get("to"))
         if from_id not in by_gid or to_id not in by_gid or from_id == to_id:
             continue
         valid_links.append((from_id, to_id))

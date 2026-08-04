@@ -425,6 +425,7 @@
 
     const undoStack = [];
     let flowsheetRequestSeq = 0;
+    const flowsheetLayoutVersion = "layered-process-v3";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -1843,6 +1844,59 @@
         || /-P[2-9]\d*$/i.test(String(group?.id || ""));
     }
 
+    function flowsheetStageBaseId(id) {
+      return String(id || "").replace(/-P\d+$/i, "");
+    }
+
+    function flowsheetAutoLayout(groupIds) {
+      const baseIds = [];
+      groupIds.forEach(groupId => {
+        const baseId = flowsheetStageBaseId(groupId);
+        if (!baseIds.includes(baseId)) baseIds.push(baseId);
+      });
+      const groupOrder = new Map(groupIds.map((id, index) => [id, index]));
+      const baseEdges = [];
+      state.links.forEach(link => {
+        const from = resolvedEndpointId(link.from);
+        const to = resolvedEndpointId(link.to);
+        if (!groupOrder.has(from) || !groupOrder.has(to)) return;
+        if (isBackwardLink({ from, to })) return;
+        const fromBase = flowsheetStageBaseId(from);
+        const toBase = flowsheetStageBaseId(to);
+        if (fromBase === toBase) return;
+        baseEdges.push([fromBase, toBase]);
+      });
+
+      const stageByBase = new Map(baseIds.map(id => [id, 0]));
+      if (!baseEdges.length) {
+        baseIds.forEach((id, index) => stageByBase.set(id, index));
+      } else {
+        for (let pass = 0; pass < Math.max(1, baseIds.length); pass += 1) {
+          baseEdges.forEach(([fromBase, toBase]) => {
+            stageByBase.set(toBase, Math.max(stageByBase.get(toBase) || 0, (stageByBase.get(fromBase) || 0) + 1));
+          });
+        }
+        baseIds.forEach((id, index) => {
+          const participates = baseEdges.some(([fromBase, toBase]) => fromBase === id || toBase === id);
+          if (!participates) {
+            stageByBase.set(id, Math.max(index, ...Array.from(stageByBase.values())) + 1);
+          }
+        });
+      }
+
+      const rowByStage = new Map();
+      const rowById = new Map();
+      const stageById = new Map();
+      groupIds.forEach(groupId => {
+        const stage = stageByBase.get(flowsheetStageBaseId(groupId)) || 0;
+        const row = rowByStage.get(stage) || 0;
+        rowByStage.set(stage, row + 1);
+        stageById.set(groupId, stage);
+        rowById.set(groupId, row);
+      });
+      return { stageById, rowById, rowByStage };
+    }
+
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
       const header = `${fromBox.id} -> ${toBox.id}`;
       const massLine = Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch (from ${fromBox.id} outputs)` : "quantity not available";
@@ -1856,11 +1910,10 @@
       const boxW = 248;
       const boxH = 190;
       const gapX = 116;
-      const topY = 178;
+      const topY = 232;
       const maxStagesPerBand = 4;
       const topStartX = 330;
-      let stage = -1;
-      const stageRows = new Map();
+      const layout = flowsheetAutoLayout(groupIds);
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
         const stored = ensureGroup(groupId);
@@ -1869,17 +1922,17 @@
         const meta = flowsheetGroupStreams(group);
         const specs = flowsheetGroupSpecs(group);
         const tip = groupContentsTip(group);
-        if (index === 0 || !flowsheetCanOverlap(group)) stage += 1;
-        const stageRow = stageRows.get(stage) || 0;
-        stageRows.set(stage, stageRow + 1);
+        const stage = layout.stageById.get(groupId) ?? index;
+        const stageRow = layout.rowById.get(groupId) || 0;
         const band = Math.floor(stage / maxStagesPerBand);
         const column = stage % maxStagesPerBand;
         const auto = {
           x: topStartX + column * (boxW + gapX),
           y: topY + band * 560 + stageRow * (boxH + 116)
         };
-        const x = Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x;
-        const y = Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y;
+        const useStored = stored.flowsheetLayoutVersion === flowsheetLayoutVersion && Number.isFinite(stored.flowsheetX) && Number.isFinite(stored.flowsheetY);
+        const x = useStored ? stored.flowsheetX : auto.x;
+        const y = useStored ? stored.flowsheetY : auto.y;
         return {
           id: group.id,
           unitNumber: index + 1,
@@ -1894,7 +1947,7 @@
           symbolCenterY: y + 62,
           stage,
           stageRow,
-          concurrent: stageRow > 0,
+          concurrent: stageRow > 0 || flowsheetCanOverlap(group),
           w: boxW,
           h: boxH,
           ...meta
@@ -2352,6 +2405,7 @@
               const groupState = ensureGroup(groupId);
               groupState.flowsheetX = drag.startX + dx;
               groupState.flowsheetY = drag.startY + dy;
+              groupState.flowsheetLayoutVersion = flowsheetLayoutVersion;
             }
             drag = null;
             renderFlowsheetModal();
@@ -8410,6 +8464,7 @@
         const groupState = ensureGroup(groupId);
         delete groupState.flowsheetX;
         delete groupState.flowsheetY;
+        delete groupState.flowsheetLayoutVersion;
       });
       renderFlowsheetModal();
     });
