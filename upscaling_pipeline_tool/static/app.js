@@ -1844,8 +1844,8 @@
 
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
-      const boxW = 238;
-      const boxH = 166;
+      const boxW = 248;
+      const boxH = 190;
       const gapX = 78;
       const topY = 138;
       const lowerY = 428;
@@ -1868,6 +1868,8 @@
         const specs = flowsheetGroupSpecs(group);
         const tip = groupContentsTip(group);
         const auto = autoPosition(index);
+        const x = Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x;
+        const y = Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y;
         return {
           id: group.id,
           unitNumber: index + 1,
@@ -1877,8 +1879,9 @@
           subcategory,
           specs,
           tip,
-          x: Number.isFinite(stored.flowsheetX) ? stored.flowsheetX : auto.x,
-          y: Number.isFinite(stored.flowsheetY) ? stored.flowsheetY : auto.y,
+          x,
+          y,
+          symbolCenterY: y + 62,
           w: boxW,
           h: boxH,
           ...meta
@@ -1930,7 +1933,7 @@
     }
 
     function flowsheetBoxCenter(box) {
-      return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+      return { x: box.x + box.w / 2, y: Number.isFinite(box.symbolCenterY) ? box.symbolCenterY : box.y + box.h / 2 };
     }
 
     function flowsheetPort(from, to, source = true) {
@@ -2141,24 +2144,30 @@
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
         const specsLine = [box.specs.join(" / "), box.totalOutputKg > 0 ? `${formatNumber(box.totalOutputKg)} kg/batch` : ""].filter(Boolean).join(" — ");
         const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
+        const symbolY = box.y + 10;
+        const symbolH = 118;
+        const tagY = box.y + 142;
+        const unitLines = wrapSvgText(box.selectedUnit, 28);
+        const taskLine = wrapSvgText(box.task, 38)[0] || "";
         return `
           <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
-            <rect x="${box.x - 8}" y="${box.y - 8}" width="${box.w + 16}" height="${box.h + 16}" rx="10" fill="${style.fill}" stroke="${box.isProduct ? "#25834a" : "#d6e0e5"}" stroke-width="${box.isProduct ? 1.5 : 1}" opacity="${box.isProduct ? 0.82 : 0.92}"></rect>
-            ${flowsheetShapeMarkup(box.subcategory, box.x, box.y, box.w, box.h, strokeColor)}
-            <text x="${box.x + 8}" y="${box.y + 16}" font-size="12" font-weight="800" fill="${style.stroke}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 - 18}" font-size="12.5" font-weight="800" text-anchor="middle" fill="#172027">
-              ${wrapSvgText(box.selectedUnit, 24).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 14}">${escapeHtml(line)}</tspan>`).join("")}
+            <rect x="${box.x - 10}" y="${box.y - 10}" width="${box.w + 20}" height="${box.h + 20}" rx="6" fill="#ffffff" stroke="#d6e0e5" stroke-width="1" opacity="0.86"></rect>
+            <rect x="${box.x - 10}" y="${box.y - 10}" width="4" height="${box.h + 20}" rx="2" fill="${strokeColor}"></rect>
+            ${flowsheetShapeMarkup(box.subcategory, box.x, symbolY, box.w, symbolH, strokeColor)}
+            <rect x="${box.x + 16}" y="${tagY - 12}" width="${box.w - 32}" height="${box.h - symbolH - 18}" rx="3" fill="${style.fill}" stroke="${strokeColor}" stroke-width="0.8" opacity="0.9"></rect>
+            <text x="${box.x + box.w / 2}" y="${tagY}" font-size="12" font-weight="900" text-anchor="middle" fill="${strokeColor}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
+            <text x="${box.x + box.w / 2}" y="${tagY + 17}" font-size="11.5" font-weight="800" text-anchor="middle" fill="#172027">
+              ${unitLines.slice(0, 2).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 13}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
-            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h / 2 + 28}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine.length > 48 ? `${specsLine.slice(0, 47)}...` : specsLine)}</text>` : ""}
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h - 12}" font-size="10.5" text-anchor="middle" fill="#657480">${escapeHtml(wrapSvgText(box.task, 36)[0] || "")}</text>
-            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 16}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
+            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine.length > 54 ? `${specsLine.slice(0, 53)}...` : specsLine)}</text>` : ""}
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h + 34}" font-size="10.2" text-anchor="middle" fill="#657480">${escapeHtml(taskLine)}</text>
+            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 50}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
-            <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="transparent"></rect>
+            <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
           </g>
         `;
       }).join("");
 
-      const legendY = model.height - 8;
       const legendLineItems = [
         { label: "Process", color: "#172027", dash: "none" },
         { label: "Recycle", color: "#286d3f", dash: "7 5" },
@@ -2166,29 +2175,45 @@
         { label: "Vent/VOC", color: "#657480", dash: "4 4" }
       ];
       const legendCategoryItems = Object.values(flowsheetCategoryStyle);
+      const drawingHeight = model.height + 88;
+      const titleBlockX = Math.max(620, model.width - 470);
 
       const svg = `
-        <svg class="flowsheet-svg" viewBox="0 0 ${model.width} ${model.height + 34}" xmlns="http://www.w3.org/2000/svg">
+        <svg class="flowsheet-svg" viewBox="0 0 ${model.width} ${drawingHeight}" xmlns="http://www.w3.org/2000/svg">
           ${defs}
-          <rect x="0" y="0" width="${model.width}" height="${model.height + 34}" fill="#ffffff"></rect>
+          <rect x="0" y="0" width="${model.width}" height="${drawingHeight}" fill="#ffffff"></rect>
+          <rect x="18" y="18" width="${model.width - 36}" height="${drawingHeight - 36}" fill="none" stroke="#172027" stroke-width="1.2"></rect>
+          <text x="36" y="48" font-size="18" font-weight="900" fill="#172027">Generated Process Flowsheet</text>
+          <text x="36" y="68" font-size="11" fill="#657480">Draft PFD generated from the current block/group model. Hover units and streams for MFA and condition details.</text>
           ${feedBoxMarkup}
           ${forwardPaths}
           ${recyclePaths}
           ${boxes}
           ${productMarkup}
-          <g transform="translate(20, ${model.height + 12})">
+          <g transform="translate(36, ${drawingHeight - 52})">
             ${legendLineItems.map((item, i) => `
               <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
               <text x="${i * 130 + 32}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
             `).join("")}
             ${legendCategoryItems.map((item, i) => `
-              <rect x="${520 + i * 110}" y="-8" width="14" height="14" rx="3" fill="${item.fill}" stroke="${item.stroke}"></rect>
-              <text x="${520 + i * 110 + 20}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
+              <rect x="${i * 102}" y="18" width="14" height="14" rx="2" fill="${item.fill}" stroke="${item.stroke}"></rect>
+              <text x="${i * 102 + 20}" y="30" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
             `).join("")}
+          </g>
+          <g transform="translate(${titleBlockX}, ${drawingHeight - 92})">
+            <rect x="0" y="0" width="440" height="56" fill="#fff" stroke="#172027" stroke-width="0.9"></rect>
+            <line x1="0" y1="27" x2="440" y2="27" stroke="#172027" stroke-width="0.7"></line>
+            <line x1="120" y1="0" x2="120" y2="56" stroke="#172027" stroke-width="0.7"></line>
+            <line x1="285" y1="27" x2="285" y2="56" stroke="#172027" stroke-width="0.7"></line>
+            <text x="10" y="18" font-size="10" font-weight="800" fill="#172027">DRAWING</text>
+            <text x="130" y="18" font-size="10" fill="#172027">Scale-up support flowsheet</text>
+            <text x="10" y="45" font-size="10" font-weight="800" fill="#172027">BASIS</text>
+            <text x="130" y="45" font-size="10" fill="#172027">${model.groups.length} grouped operations</text>
+            <text x="296" y="45" font-size="10" fill="#172027">Rev. draft</text>
           </g>
         </svg>
       `;
-      return { svg, empty: false, width: model.width, height: model.height + 34 };
+      return { svg, empty: false, width: model.width, height: drawingHeight };
     }
 
     function wrapSvgText(text, maxChars) {
