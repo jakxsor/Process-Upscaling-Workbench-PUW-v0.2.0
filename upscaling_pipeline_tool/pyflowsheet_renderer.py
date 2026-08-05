@@ -32,9 +32,45 @@ def _unit_kind(group: dict[str, Any]) -> str:
         return "dryer"
     if any(word in text for word in ("evaporat", "thin-film", "flash")):
         return "evaporator"
-    if any(word in text for word in ("tank", "feed", "charge", "storage")):
+    if any(word in text for word in ("tank", "vessel", "feed", "charge", "storage")):
         return "tank"
     return "blackbox"
+
+
+def _pfd_role(group: dict[str, Any], index: int) -> str:
+    text = f"{group.get('groupId', '')} {group.get('selectedUnit', '')} {group.get('task', '')}".lower()
+    if any(word in text for word in ("reactor", "reaction", "reflux")):
+        return "reactor"
+    if any(word in text for word in ("mixer-settler", "extract", "wash", "decanter", "liquid-liquid")):
+        return "extraction"
+    if any(word in text for word in ("dry", "sieve", "adsorb", "bed")):
+        return "drying"
+    if any(word in text for word in ("evaporat", "thin-film", "flash")):
+        return "evaporation"
+    if any(word in text for word in ("distill", "short-path", "purification")):
+        return "distillation"
+    if any(word in text for word in ("exchanger", "cool", "heat", "condenser", "utility")):
+        return "feed_prep" if index == 0 else "utility"
+    if any(word in text for word in ("wwt", "waste", "abatement", "scrubber", "neutraliz", "carbon")):
+        return "waste_treatment"
+    if any(word in text for word in ("tank", "vessel", "feed", "charge", "storage")):
+        return "feed_prep" if index == 0 else "storage"
+    return "feed_prep" if index == 0 else "generic"
+
+
+def _pfd_slot(role: str) -> tuple[float, float]:
+    return {
+        "feed_prep": (240, 185),
+        "reactor": (520, 95),
+        "extraction": (840, 145),
+        "drying": (1165, 145),
+        "evaporation": (1165, 425),
+        "distillation": (835, 485),
+        "utility": (650, 390),
+        "storage": (240, 405),
+        "waste_treatment": (1490, 500),
+        "generic": (520, 520),
+    }.get(role, (520, 520))
 
 
 def _conditions_line(group: dict[str, Any]) -> str:
@@ -329,20 +365,23 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     stage_rows: dict[int, int] = {}
     nodes: list[dict[str, Any]] = []
     by_gid: dict[str, dict[str, Any]] = {}
-    base_x, step_x, base_y = 260, 320, 260
-    card_w, card_h = 178, 172
-    max_stages_per_band = 4
+    card_w, card_h = 166, 150
+    role_counts: dict[str, int] = {}
 
     for index, group in enumerate(raw_groups):
         gid = raw_ids[index]
         stage = stage_by_base.get(_base_gid(gid), index)
         row = stage_rows.get(stage, 0)
         stage_rows[stage] = row + 1
+        role = _pfd_role(group, index)
+        role_index = role_counts.get(role, 0)
+        role_counts[role] = role_index + 1
+        x, y = _pfd_slot(role)
+        x += role_index * (34 if role not in ("feed_prep", "storage") else 205)
+        y += role_index * (205 if role not in ("feed_prep", "storage") else 62)
+        node_w = 208 if role == "reactor" else card_w
+        node_h = 198 if role == "reactor" else card_h
         overlap = row > 0
-        band = stage // max_stages_per_band
-        column = stage % max_stages_per_band
-        x = base_x + column * step_x
-        y = base_y + band * 680 + row * (card_h + 118)
         node = {
             "gid": gid,
             "unit": f"U{index + 1}",
@@ -350,20 +389,22 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
             "kind": _unit_kind(group),
             "x": x,
             "y": y,
-            "w": card_w,
-            "h": card_h,
+            "w": node_w,
+            "h": node_h,
             "stage": stage,
             "overlap": overlap,
             "row": row,
+            "role": role,
         }
         nodes.append(node)
         by_gid[gid] = node
 
-    max_x = max(node["x"] + node["w"] for node in nodes) + 300
+    rightmost = max(node["x"] + node["w"] for node in nodes)
     max_y = max(node["y"] + node["h"] for node in nodes) + 260
-    width = max(1360, max_x)
+    product = {"x": rightmost + 86, "y": nodes[-1]["y"] + 46, "w": 132, "h": 58}
+    width = max(1760, product["x"] + product["w"] + 64)
     height = max(820, max_y)
-    dwg = svgwrite.Drawing(size=("1280px", "720px"), profile="full")
+    dwg = svgwrite.Drawing(size=(f"{width}px", f"{height}px"), profile="full")
     dwg.viewbox(0, 0, width, height)
     dwg.add(dwg.rect(insert=(0, 0), size=(width, height), fill="#ffffff"))
     dwg.add(dwg.rect(insert=(18, 18), size=(width - 36, height - 36), fill="none", stroke="#172027", stroke_width=1.2))
@@ -376,8 +417,8 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
         marker.add(dwg.path(d="M 0 0 L 13 6 L 0 12 z", fill=color, stroke=color, stroke_width=0.4))
         defs.add(marker)
 
-    feed = {"x": 54, "y": base_y + 48, "w": 112, "h": 48}
-    product = {"x": min(width - 185, nodes[-1]["x"] + nodes[-1]["w"] + 82), "y": nodes[-1]["y"] + 52, "w": 124, "h": 54}
+    first_y = nodes[0]["y"] + 45 if nodes else 230
+    feed = {"x": 54, "y": first_y, "w": 112, "h": 48}
 
     def add_connection(points: list[tuple[float, float]], color: str, marker: str | None, dash: str | None = None, width_: float = 2.8) -> None:
         d = _path(points)

@@ -2526,7 +2526,8 @@
     }
 
     .flowsheet-host.editable-mode {
-      place-items: center;
+      place-items: start;
+      align-content: start;
     }
 
     .flowsheet-host.technical-mode {
@@ -2536,7 +2537,7 @@
 
     .flowsheet-svg {
       display: block;
-      width: max(1320px, calc(100vw - 120px));
+      width: auto;
       max-width: none;
       height: auto;
       border: 1px solid #d6e0e5;
@@ -2546,7 +2547,7 @@
     }
 
     .pyflowsheet-svg {
-      width: min(1560px, calc(100vw - 120px));
+      width: auto;
       min-width: 0;
     }
 

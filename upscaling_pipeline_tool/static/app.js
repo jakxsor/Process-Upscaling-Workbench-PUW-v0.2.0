@@ -417,7 +417,7 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetMode: "editable",
+      flowsheetMode: "technical",
       drag: null
     };
 
@@ -425,7 +425,7 @@
 
     const undoStack = [];
     let flowsheetRequestSeq = 0;
-    const flowsheetLayoutVersion = "layered-process-v3";
+    const flowsheetLayoutVersion = "process-train-v4";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -1897,6 +1897,43 @@
       return { stageById, rowById, rowByStage };
     }
 
+    function flowsheetPfdRole(group, index) {
+      const text = `${group?.id || ""} ${group?.task || ""} ${group?.selectedUnit || ""}`.toLowerCase();
+      if (/reactor|reaction|reflux/.test(text)) return "reactor";
+      if (/mixer.?settler|extract|wash|decanter|liquid.?liquid/.test(text)) return "extraction";
+      if (/dry|sieve|adsorb|bed/.test(text)) return "drying";
+      if (/evaporat|thin.?film|flash/.test(text)) return "evaporation";
+      if (/distill|short.?path|purification/.test(text)) return "distillation";
+      if (/exchanger|cool|heat|condenser|utility/.test(text)) return index === 0 ? "feed_prep" : "utility";
+      if (/wwt|waste|abatement|scrubber|neutraliz|carbon/.test(text)) return "waste_treatment";
+      if (/tank|vessel|feed|charge|storage/.test(text)) return index === 0 ? "feed_prep" : "storage";
+      return index === 0 ? "feed_prep" : "generic";
+    }
+
+    function flowsheetPfdPosition(group, index, roleCounts) {
+      const role = flowsheetPfdRole(group, index);
+      const slot = {
+        feed_prep: { x: 300, y: 210 },
+        reactor: { x: 620, y: 130 },
+        extraction: { x: 980, y: 150 },
+        drying: { x: 1320, y: 150 },
+        evaporation: { x: 1320, y: 430 },
+        distillation: { x: 970, y: 500 },
+        utility: { x: 720, y: 405 },
+        storage: { x: 300, y: 430 },
+        waste_treatment: { x: 1620, y: 500 },
+        generic: { x: 620, y: 520 }
+      }[role] || { x: 620, y: 520 };
+      const count = roleCounts.get(role) || 0;
+      roleCounts.set(role, count + 1);
+      const verticalRoles = new Set(["reactor", "extraction", "drying", "evaporation", "distillation", "utility", "generic"]);
+      return {
+        role,
+        x: slot.x + (verticalRoles.has(role) ? count * 34 : count * 220),
+        y: slot.y + (verticalRoles.has(role) ? count * 230 : count * 64)
+      };
+    }
+
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
       const header = `${fromBox.id} -> ${toBox.id}`;
       const massLine = Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch (from ${fromBox.id} outputs)` : "quantity not available";
@@ -1907,13 +1944,10 @@
 
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
-      const boxW = 248;
-      const boxH = 190;
-      const gapX = 116;
-      const topY = 232;
-      const maxStagesPerBand = 4;
-      const topStartX = 330;
       const layout = flowsheetAutoLayout(groupIds);
+      const boxW = 230;
+      const boxH = 174;
+      const roleCounts = new Map();
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
         const stored = ensureGroup(groupId);
@@ -1924,12 +1958,8 @@
         const tip = groupContentsTip(group);
         const stage = layout.stageById.get(groupId) ?? index;
         const stageRow = layout.rowById.get(groupId) || 0;
-        const band = Math.floor(stage / maxStagesPerBand);
-        const column = stage % maxStagesPerBand;
-        const auto = {
-          x: topStartX + column * (boxW + gapX),
-          y: topY + band * 560 + stageRow * (boxH + 116)
-        };
+        const pfd = flowsheetPfdPosition(group, index, roleCounts);
+        const auto = { x: pfd.x, y: pfd.y };
         const useStored = stored.flowsheetLayoutVersion === flowsheetLayoutVersion && Number.isFinite(stored.flowsheetX) && Number.isFinite(stored.flowsheetY);
         const x = useStored ? stored.flowsheetX : auto.x;
         const y = useStored ? stored.flowsheetY : auto.y;
@@ -1947,6 +1977,7 @@
           symbolCenterY: y + 62,
           stage,
           stageRow,
+          pfdRole: pfd.role,
           concurrent: stageRow > 0 || flowsheetCanOverlap(group),
           w: boxW,
           h: boxH,
@@ -1972,7 +2003,7 @@
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 34;
       const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
-      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 54)) : topY + boxH;
+      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 54)) : 210 + boxH;
       const minBoxLeft = groups.length ? Math.min(...groups.map(item => item.x)) : 120;
       const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 900;
       const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 54;
@@ -1980,20 +2011,20 @@
       const feedBox = groups.length ? {
         id: "feeds",
         x: Math.max(34, minBoxLeft - 250),
-        y: topY + 12,
+        y: groups[0].y + 22,
         w: 178,
         h: Math.max(118, Math.min(204, 54 + groups[0].inputStreams.slice(0, 4).length * 34))
       } : null;
       const lastGroup = groups[groups.length - 1];
       const productBox = lastGroup ? {
         id: "product",
-        x: lastGroup.y > topY + 100 ? Math.max(34, lastGroup.x - 238) : maxBoxRight + 76,
-        y: lastGroup.y + 36,
+        x: maxBoxRight + 90,
+        y: lastGroup.pfdRole === "distillation" ? lastGroup.y + 40 : Math.max(250, lastGroup.y + 36),
         w: 190,
         h: 92
       } : null;
       const maxDiagramRight = Math.max(maxBoxRight, productBox ? productBox.x + productBox.w : 0);
-      const width = Math.max(1180, maxDiagramRight + 90);
+      const width = Math.max(1880, maxDiagramRight + 120);
       const height = Math.max(660, recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 74 : maxBoxBottom + wasteAreaH + 118);
       return { groups, byId, forwardLinks, recycleLinks, feedBox, productBox, width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg };
     }
@@ -2090,18 +2121,80 @@
         return Math.min(4.8, Math.max(2.2, (kg / model.maxOutputKg) * 3.1 + 1.7));
       };
 
-      const forwardPaths = model.forwardLinks.map(link => {
-        const from = model.byId.get(link.from);
-        const to = model.byId.get(link.to);
-        const points = flowsheetConnectorPoints(model, from, to);
+      const flowPathMarkup = (points, strokeWidth, tooltip, marker = "url(#fsArrow)", color = "#172027", dash = "") => {
         const d = orthogonalPath(points, 14);
-        const strokeWidth = sankeyWidth(from.totalOutputKg);
-        const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
         return `
           <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 5}" stroke-linejoin="round" stroke-linecap="round" fill="none"></path>
-          <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="#172027" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" marker-end="url(#fsArrow)"></path>
+          <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="${color}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" ${dash ? `stroke-dasharray="${dash}"` : ""} ${marker ? `marker-end="${marker}"` : ""}></path>
         `;
-      }).join("");
+      };
+
+      const renderedForward = new Set();
+      const forwardLinkKey = (fromId, toId) => `${fromId}->${toId}`;
+      const forwardGroups = [];
+      const fanoutBySourceStage = new Map();
+      const faninByTargetStage = new Map();
+      model.forwardLinks.forEach(link => {
+        const from = model.byId.get(link.from);
+        const to = model.byId.get(link.to);
+        if (!from || !to) return;
+        const sourceKey = `${from.id}|${to.stage}`;
+        const targetKey = `${to.id}|${from.stage}`;
+        if (!fanoutBySourceStage.has(sourceKey)) fanoutBySourceStage.set(sourceKey, { from, targets: [] });
+        fanoutBySourceStage.get(sourceKey).targets.push(to);
+        if (!faninByTargetStage.has(targetKey)) faninByTargetStage.set(targetKey, { to, sources: [] });
+        faninByTargetStage.get(targetKey).sources.push(from);
+      });
+
+      fanoutBySourceStage.forEach(entry => {
+        const targets = Array.from(new Map(entry.targets.map(target => [target.id, target])).values());
+        if (targets.length < 2) return;
+        const from = entry.from;
+        const strokeWidth = sankeyWidth(from.totalOutputKg);
+        const source = { x: from.x + from.w + 12, y: flowsheetBoxCenter(from).y };
+        const targetPorts = targets
+          .sort((a, b) => a.y - b.y)
+          .map(target => ({ target, point: { x: target.x - 14, y: flowsheetBoxCenter(target).y } }));
+        const manifoldX = Math.min(...targetPorts.map(item => item.point.x)) - 46;
+        forwardGroups.push(flowPathMarkup([source, { x: manifoldX, y: source.y }], strokeWidth, `split from ${from.id}`, "", "#172027"));
+        const yValues = [source.y, ...targetPorts.map(item => item.point.y)];
+        forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: Math.min(...yValues) }, { x: manifoldX, y: Math.max(...yValues) }], strokeWidth, `parallel manifold from ${from.id}`, "", "#172027"));
+        targetPorts.forEach(({ target, point }) => {
+          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], strokeWidth, flowsheetFlowTooltip(from, target, from.totalOutputKg), "url(#fsArrow)", "#172027"));
+          renderedForward.add(forwardLinkKey(from.id, target.id));
+        });
+      });
+
+      faninByTargetStage.forEach(entry => {
+        const sources = Array.from(new Map(entry.sources.map(source => [source.id, source])).values())
+          .filter(source => !renderedForward.has(forwardLinkKey(source.id, entry.to.id)));
+        if (sources.length < 2) return;
+        const to = entry.to;
+        const sourcePorts = sources
+          .sort((a, b) => a.y - b.y)
+          .map(source => ({ source, point: { x: source.x + source.w + 12, y: flowsheetBoxCenter(source).y } }));
+        const target = { x: to.x - 14, y: flowsheetBoxCenter(to).y };
+        const manifoldX = Math.max(...sourcePorts.map(item => item.point.x)) + 46;
+        sourcePorts.forEach(({ source, point }) => {
+          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(source.totalOutputKg), flowsheetFlowTooltip(source, to, source.totalOutputKg), "", "#172027"));
+          renderedForward.add(forwardLinkKey(source.id, to.id));
+        });
+        const yValues = [target.y, ...sourcePorts.map(item => item.point.y)];
+        forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: Math.min(...yValues) }, { x: manifoldX, y: Math.max(...yValues) }], 2.8, `combine into ${to.id}`, "", "#172027"));
+        forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: target.y }, target], 2.8, `combined feed to ${to.id}`, "url(#fsArrow)", "#172027"));
+      });
+
+      model.forwardLinks.forEach(link => {
+        if (renderedForward.has(forwardLinkKey(link.from, link.to))) return;
+        const from = model.byId.get(link.from);
+        const to = model.byId.get(link.to);
+        if (!from || !to) return;
+        const points = flowsheetConnectorPoints(model, from, to);
+        const strokeWidth = sankeyWidth(from.totalOutputKg);
+        const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
+        forwardGroups.push(flowPathMarkup(points, strokeWidth, tooltip, "url(#fsArrow)", "#172027"));
+      });
+      const forwardPaths = forwardGroups.join("");
 
       let recycleIndex = 0;
       const recyclePaths = model.recycleLinks.map(link => {
@@ -2249,7 +2342,7 @@
       const titleBlockX = Math.max(620, model.width - 470);
 
       const svg = `
-        <svg class="flowsheet-svg" viewBox="0 0 ${model.width} ${drawingHeight}" xmlns="http://www.w3.org/2000/svg">
+        <svg class="flowsheet-svg" width="${model.width}" height="${drawingHeight}" viewBox="0 0 ${model.width} ${drawingHeight}" xmlns="http://www.w3.org/2000/svg">
           ${defs}
           <rect x="0" y="0" width="${model.width}" height="${drawingHeight}" fill="#ffffff"></rect>
           <rect x="18" y="18" width="${model.width - 36}" height="${drawingHeight - 36}" fill="none" stroke="#172027" stroke-width="1.2"></rect>
@@ -2427,7 +2520,7 @@
 
     function openFlowsheetModal() {
       $("flowsheetModal").hidden = false;
-      state.flowsheetMode = "editable";
+      state.flowsheetMode = "technical";
       renderFlowsheetModal();
     }
 
