@@ -4517,7 +4517,7 @@
           const warn = button.dataset.splitConfirmKinetics === "true"
             ? `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time, only raise throughput. `
             : "";
-          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`)) return;
+          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. Per-unit durations are kept until you edit or validate sized-equipment times. ${groupId} itself is removed. This can be undone.`)) return;
           splitGroupIntoParallelUnits(groupId, n);
         });
       });
@@ -4801,7 +4801,7 @@
 
     function bottleneckSplitPreviewText(baseDuration, n) {
       if (!Number.isFinite(baseDuration) || baseDuration <= 0 || !Number.isFinite(n) || n < 2) return "";
-      return `Each of the ${n} parallel units would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h as one unit).`;
+      return `Each unit keeps about ${formatNumber(baseDuration)} h unless you edit the sized-equipment duration; material load is split to 1/${n} per unit.`;
     }
 
     function bottleneckActionHtml(task) {
@@ -7354,8 +7354,8 @@
       const baseDuration = Number(nInput.dataset.splitBaseDuration);
       const groupId = state.pendingSplitGroupId || "";
       preview.textContent = Number.isFinite(baseDuration) && baseDuration > 0
-        ? `Each of the ${n} parallel units would run about ${formatNumber(baseDuration / n)} h (currently ${formatNumber(baseDuration)} h as one unit). Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`
-        : `No duration set yet, so time cannot be split proportionally. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow. ${groupId} itself is removed. This can be undone.`;
+        ? `Each of the ${n} parallel units keeps about ${formatNumber(baseDuration)} h until you edit the sized-equipment duration. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`
+        : `No duration is set yet. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow. ${groupId} itself is removed. This can be undone.`;
     }
 
     function closeSplitGroupModal() {
@@ -7375,20 +7375,24 @@
     function splitGroupIntoParallelUnits(groupId, n) {
       const group = groupModel(groupId);
       if (!group || !Number.isFinite(n) || n < 2) return;
-      pushUndo();
       const baseState = ensureGroup(groupId);
       const originalBlocks = group.blocks;
+      const proposedGroupIds = Array.from({ length: n }, (_, i) => `${groupId}-P${i + 1}`);
+      const proposedBlockIds = proposedGroupIds.flatMap((newGroupId, i) => originalBlocks.map(block => `${block.id}-P${i + 1}`));
+      const groupCollision = proposedGroupIds.some(id => state.groups[id] || state.blocks.some(block => block.groupId === id));
+      const blockCollision = proposedBlockIds.some(id => state.blocks.some(block => block.id === id));
+      if (groupCollision || blockCollision) {
+        alert(`Cannot split ${groupId}: one or more ${groupId}-P* groups already exist. Rename or remove the previous split before splitting this group again.`);
+        return;
+      }
+      pushUndo();
       const incoming = state.links.filter(link => resolvedEndpointId(link.to) === groupId);
       const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
       const otherLinks = state.links.filter(link => resolvedEndpointId(link.to) !== groupId && resolvedEndpointId(link.from) !== groupId);
       const newGroupIds = [];
-      const originalDurationH = parseDurationHoursValue(baseState.schedule.durationH);
-      const splitDurationText = Number.isFinite(originalDurationH) && originalDurationH > 0
-        ? formatNumber(originalDurationH / n)
-        : baseState.schedule.durationH;
 
       for (let i = 1; i <= n; i += 1) {
-        const newGroupId = `${groupId}-P${i}`;
+        const newGroupId = proposedGroupIds[i - 1];
         newGroupIds.push(newGroupId);
         const newGroup = ensureGroup(newGroupId, baseState.task);
         newGroup.selectedUnit = baseState.selectedUnit;
@@ -7396,14 +7400,14 @@
         newGroup.properties = JSON.parse(JSON.stringify(baseState.properties || {}));
         newGroup.schedule = {
           ...baseState.schedule,
-          durationH: splitDurationText,
+          durationH: baseState.schedule.durationH,
           parallelUnits: "1",
           // Only the first parallel unit counts toward the additive cycle-time sum; the rest
           // are marked as overlapping with it so N simultaneous units are not counted N times.
           canOverlap: i === 1 ? (baseState.schedule.canOverlap || "no") : "yes",
-          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId} to relieve its bottleneck; ${formatNumber(1 / n * 100)}% of the original flow and duration.`].filter(Boolean).join(" ")
+          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId}; ${formatNumber(1 / n * 100)}% of the original material flow. Per-unit duration is kept until a sized-equipment estimate is entered.`].filter(Boolean).join(" ")
         };
-        newGroup.conditionOverrides = {};
+        newGroup.conditionOverrides = JSON.parse(JSON.stringify(baseState.conditionOverrides || {}));
         newGroup.mfaOverrides = {};
         newGroup.openOverrideKey = "";
         newGroup.x = baseState.x;
@@ -7424,14 +7428,6 @@
               note: [stream.note, `1/${n} of ${block.id} flow (parallel unit ${i} of ${n}).`].filter(Boolean).join(" "),
               editing: false
             };
-          });
-          const additiveIds = additiveConditionIds();
-          Object.keys(clone.conditions || {}).forEach(conditionId => {
-            if (!additiveIds.has(conditionId)) return;
-            const raw = parseDurationHoursValue(clone.conditions[conditionId]);
-            if (Number.isFinite(raw) && raw > 0) {
-              clone.conditions[conditionId] = formatNumber(raw / n);
-            }
           });
           state.blocks.push(clone);
         });

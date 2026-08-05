@@ -266,7 +266,7 @@ APP_HTML = r"""<!doctype html>
     <button id="ctxStartConnection" class="primary">Start Arrow From This Group</button>
     <button id="ctxRemoveLinks">Remove Arrows For This Group</button>
     <div class="label" style="margin-top:10px">Scale-Up</div>
-    <button id="ctxSplitGroup" title="Split this group into N parallel units, each handling 1/N of its material flow and duration, wired in parallel between the same predecessor and successor">Split Into Parallel Units</button>
+    <button id="ctxSplitGroup" title="Split this group into N parallel units, each handling 1/N of its material flow while keeping declared durations until resized estimates are entered">Split Into Parallel Units</button>
   </div>
 
   <div id="streamMenu" class="context-menu" hidden>

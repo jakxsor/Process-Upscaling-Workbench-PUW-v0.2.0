@@ -52,11 +52,12 @@ http://127.0.0.1:8787
 
 ```text
 app.py            HTTP server and HTML shell
-pyflowsheet_renderer.py  Optional technical PFD renderer
+pyflowsheet_renderer.py  Legacy optional renderer endpoint
 static/app.js     Client-side tool logic
 static/style.css  UI styling
 workshop.md       Workshop notes
 ```
 
-The technical Flowsheet View uses `pyflowsheet`. If dependencies are missing,
-the browser still falls back to the built-in SVG renderer instead of crashing.
+The user-facing Flowsheet View uses the built-in editable SVG renderer. The
+`pyflowsheet` endpoint is retained only as a legacy experiment and is not shown
+as a main UI mode.

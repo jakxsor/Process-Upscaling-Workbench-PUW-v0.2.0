@@ -71,8 +71,9 @@ reports the missing data needed for quantitative correction.
 - Python packages listed in `upscaling_pipeline_tool/requirements.txt`.
 - A modern browser.
 
-`pyflowsheet` is used for the technical PFD-style Flowsheet View. If it is not
-installed, the app can still fall back to the built-in SVG renderer.
+The Flowsheet View uses the built-in editable SVG renderer. A legacy
+`pyflowsheet` endpoint is still present for experimentation, but it is not the
+main user-facing view.
 
 ## Quick Start
 
