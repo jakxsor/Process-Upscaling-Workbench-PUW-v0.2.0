@@ -218,6 +218,8 @@
     ];
     const scheduleScaleOptions = ["unknown", "kinetics-bound", "roughly constant", "increases with scale", "decreases with scale", "equipment dependent"];
     const scheduleOverlapOptions = ["no", "yes"];
+    const scaleTargetUnitOptions = ["kg/batch", "kg/day", "kg/year", "t/year"];
+    const capacityUnitOptions = ["", "kg/batch", "m3", "kg/h", "L", "m2"];
     const scheduleOperationClassOptions = [
       "auto",
       "heating_cooling",
@@ -384,6 +386,13 @@
         scheduleMarginPercent: "0",
         oeePercent: "80",
         parallelUnits: "1",
+        allowableCapacityUtilizationPercent: "85",
+        productKgPerBatch: "",
+        reactantsVolumeM3: "",
+        solventLoadingLPerKgProduct: "",
+        reactorWorkingFillPercent: "70",
+        productMolecularWeightGmol: "",
+        condensationWaterMolPerMol: "",
         yieldPercent: "100",
         recoveryPercent: "100",
         designMarginPercent: "0",
@@ -607,6 +616,8 @@
         durationH: "",
         parallelUnits: "1",
         canOverlap: "no",
+        capacityAmount: "",
+        capacityUnit: "",
         operationClass: "auto",
         scaleSensitivity: "unknown",
         dependency: "previous",
@@ -996,7 +1007,7 @@
       ];
       state.groups = {
         G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge from feed tanks (paper U1) plus heat to reflux; receives recovered cyclohexane loop CYHX" }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
-        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "21", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "5 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); kinetic bottleneck, cannot be relieved by parallelization" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
+        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value; kinetic bottleneck, cannot be relieved by parallelization within one unit" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
         G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
         G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
         G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "fixed-bed molecular-sieve column: not derivable from protocol phenomena, chosen by drying/adsorption heuristic", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection" }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
@@ -1014,8 +1025,8 @@
       ];
       state.scaleBasis = {
         targetProduct: "octocrylene",
-        targetAmount: "750000",
-        targetUnit: "kg/year",
+        targetAmount: "750",
+        targetUnit: "t/year",
         referenceBlockId: "B9",
         basisAmount: "3.0",
         basisUnit: "kg",
@@ -1026,6 +1037,13 @@
         batchDuration: "28",
         oeePercent: "80",
         parallelUnits: "1",
+        allowableCapacityUtilizationPercent: "85",
+        productKgPerBatch: "",
+        reactantsVolumeM3: "3.2",
+        solventLoadingLPerKgProduct: "2.5",
+        reactorWorkingFillPercent: "70",
+        productMolecularWeightGmol: "361.5",
+        condensationWaterMolPerMol: "1",
         yieldPercent: "90",
         recoveryPercent: "95",
         designMarginPercent: "10",
@@ -3410,6 +3428,13 @@
         batchDuration: "",
         oeePercent: "80",
         parallelUnits: "1",
+        allowableCapacityUtilizationPercent: "85",
+        productKgPerBatch: "",
+        reactantsVolumeM3: "",
+        solventLoadingLPerKgProduct: "",
+        reactorWorkingFillPercent: "70",
+        productMolecularWeightGmol: "",
+        condensationWaterMolPerMol: "",
         yieldPercent: "100",
         recoveryPercent: "100",
         designMarginPercent: "0",
@@ -3419,7 +3444,7 @@
 
     function ensureScaleBasis() {
       state.scaleBasis = { ...scaleBasisDefaults(), ...(state.scaleBasis || {}) };
-      if (!["kg/batch", "kg/day", "t/year"].includes(state.scaleBasis.targetUnit)) state.scaleBasis.targetUnit = "kg/batch";
+      if (!scaleTargetUnitOptions.includes(state.scaleBasis.targetUnit)) state.scaleBasis.targetUnit = "kg/batch";
       if (!["kg", "g", "t"].includes(state.scaleBasis.basisUnit)) state.scaleBasis.basisUnit = "kg";
       if (!["batch", "semi-batch", "continuous"].includes(state.scaleBasis.mode)) state.scaleBasis.mode = "batch";
       if (!["rough", "estimated", "validated"].includes(state.scaleBasis.confidence)) state.scaleBasis.confidence = "rough";
@@ -3436,11 +3461,12 @@
         if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0) return NaN;
         return target / batchesPerDay;
       }
-      if (basis.targetUnit === "t/year") {
+      if (basis.targetUnit === "kg/year" || basis.targetUnit === "t/year") {
+        const annualKg = basis.targetUnit === "t/year" ? target * 1000 : target;
         const effectiveBatches = effectiveBatchesPerYear(basis);
-        if (Number.isFinite(effectiveBatches) && effectiveBatches > 0) return (target * 1000) / effectiveBatches;
+        if (Number.isFinite(effectiveBatches) && effectiveBatches > 0) return annualKg / effectiveBatches;
         if (!Number.isFinite(batchesPerDay) || batchesPerDay <= 0 || !Number.isFinite(operatingDays) || operatingDays <= 0) return NaN;
-        return (target * 1000) / (batchesPerDay * operatingDays);
+        return annualKg / (batchesPerDay * operatingDays);
       }
       return NaN;
     }
@@ -3451,6 +3477,7 @@
       const batchesPerDay = parseStreamQuantity(basis.batchesPerDay);
       const perBatch = targetKgPerBatch(basis);
       if (basis.targetUnit === "t/year" && Number.isFinite(target)) return target * 1000;
+      if (basis.targetUnit === "kg/year" && Number.isFinite(target)) return target;
       if (basis.targetUnit === "kg/day" && Number.isFinite(target) && Number.isFinite(operatingDays)) return target * operatingDays;
       if (basis.targetUnit === "kg/batch" && Number.isFinite(perBatch)) {
         const effectiveBatches = effectiveBatchesPerYear(basis);
@@ -3484,20 +3511,34 @@
       return Number.isFinite(gantt.estimatedCycleTimeH) && gantt.estimatedCycleTimeH > 0 ? gantt.estimatedCycleTimeH : NaN;
     }
 
-    function scheduleModel(basis) {
+    function scheduleModel(basis, targetBatchOverride = NaN) {
+      const gantt = taskScheduleModel();
       const effectiveBatches = effectiveBatchesPerYear(basis);
-      const targetBatch = targetKgPerBatch(basis);
+      const targetBatch = Number.isFinite(targetBatchOverride) && targetBatchOverride > 0 ? targetBatchOverride : targetKgPerBatch(basis);
       const targetYear = targetKgPerYear(basis);
       const duration = effectiveBatchDurationH(basis);
       const oee = percentFactor(basis.oeePercent, 100);
       const parallel = parseStreamQuantity(basis.parallelUnits);
       const scheduleMargin = Math.max(0, parseStreamQuantity(basis.scheduleMarginPercent) || 0);
+      const plantCycleTime = gantt.plantCycleTimeH;
+      const conservativeBatches = Number.isFinite(duration) && duration > 0 && Number.isFinite(oee)
+        ? 8760 * oee / duration
+        : NaN;
+      const overlappedBatches = Number.isFinite(plantCycleTime) && plantCycleTime > 0 && Number.isFinite(oee)
+        ? 8760 * oee / plantCycleTime
+        : NaN;
       return {
         method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
         effectiveKgPerBatch: Number.isFinite(targetBatch) ? formatNumber(targetBatch) : "",
         annualCapacityKg: Number.isFinite(targetYear) ? formatNumber(targetYear) : "",
         batchDurationH: Number.isFinite(duration) ? formatNumber(duration) : "",
+        batchMakespanH: Number.isFinite(duration) ? formatNumber(duration) : "",
+        plantCycleTimeH: Number.isFinite(plantCycleTime) ? formatNumber(plantCycleTime) : "",
+        conservativeBatchesPerYear: Number.isFinite(conservativeBatches) ? formatNumber(conservativeBatches) : "",
+        overlappedBatchesPerYear: Number.isFinite(overlappedBatches) ? formatNumber(overlappedBatches) : "",
+        conservativeKgPerYear: Number.isFinite(conservativeBatches) && Number.isFinite(targetBatch) ? formatNumber(conservativeBatches * targetBatch) : "",
+        overlappedKgPerYear: Number.isFinite(overlappedBatches) && Number.isFinite(targetBatch) ? formatNumber(overlappedBatches * targetBatch) : "",
         oeePercent: Number.isFinite(oee) ? formatNumber(oee * 100) : "",
         parallelUnits: Number.isFinite(parallel) ? formatNumber(parallel) : "",
         scheduleMarginPercent: formatNumber(scheduleMargin)
@@ -3562,6 +3603,7 @@
         bottleneckGapH,
         bottleneckGapPercent,
         estimatedCycleTimeH,
+        plantCycleTimeH: maxEffective,
         batchesPerYear,
         ready: timed.length > 0,
         missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length
@@ -3599,6 +3641,8 @@
         durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
         parallelUnits: parallel,
         canOverlap: scheduleOverlapOptions.includes(schedule.canOverlap) ? schedule.canOverlap : "no",
+        capacityAmount: schedule.capacityAmount || "",
+        capacityUnit: capacityUnitOptions.includes(schedule.capacityUnit) ? schedule.capacityUnit : "",
         operationClass,
         operationProfile: profile,
         scaleSensitivity: sensitivity,
@@ -3749,7 +3793,10 @@
       const manualBasisKg = massToKg(basis.basisAmount, basis.basisUnit);
       const inferredBasisKg = reference ? massToKg(reference.stream.quantity, reference.stream.unit) : NaN;
       const basisKg = Number.isFinite(manualBasisKg) && manualBasisKg > 0 ? manualBasisKg : inferredBasisKg;
-      const targetBatchKg = targetKgPerBatch(basis);
+      const manualProductBatchKg = parseStreamQuantity(basis.productKgPerBatch);
+      const targetBatchKg = Number.isFinite(manualProductBatchKg) && manualProductBatchKg > 0
+        ? manualProductBatchKg
+        : targetKgPerBatch(basis);
       const productFactor = Number.isFinite(targetBatchKg) && Number.isFinite(basisKg) && basisKg > 0 ? targetBatchKg / basisKg : NaN;
       const yieldFactor = percentFactor(basis.yieldPercent, 100);
       const recoveryFactor = percentFactor(basis.recoveryPercent, 100);
@@ -3778,7 +3825,8 @@
           kgPerHour: Number.isFinite(targetKgPerHour(basis)) ? formatNumber(targetKgPerHour(basis)) : "",
           kgPerYear: Number.isFinite(targetKgPerYear(basis)) ? formatNumber(targetKgPerYear(basis)) : ""
         },
-        schedule: scheduleModel(basis),
+        schedule: scheduleModel(basis, targetBatchKg),
+        reactorSizing: reactorSizingModel(basis, targetBatchKg),
         factors: {
           productFactor: Number.isFinite(productFactor) ? formatNumber(productFactor) : "",
           upstreamFactor: Number.isFinite(upstreamFactor) ? formatNumber(upstreamFactor) : "",
@@ -3789,6 +3837,113 @@
         blocks,
         rows,
         ready: Number.isFinite(productFactor)
+      };
+    }
+
+    function reactorSizingModel(basis, targetBatchKg) {
+      const productBatchKg = Number.isFinite(targetBatchKg) && targetBatchKg > 0 ? targetBatchKg : NaN;
+      const reactantsVolumeM3 = parseStreamQuantity(basis.reactantsVolumeM3);
+      const solventLoadingLPerKg = parseStreamQuantity(basis.solventLoadingLPerKgProduct);
+      const workingFill = percentFactor(basis.reactorWorkingFillPercent, 70);
+      const mw = parseStreamQuantity(basis.productMolecularWeightGmol);
+      const waterStoich = parseStreamQuantity(basis.condensationWaterMolPerMol);
+      const solventVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(solventLoadingLPerKg) && solventLoadingLPerKg >= 0
+        ? productBatchKg * solventLoadingLPerKg / 1000
+        : NaN;
+      const totalChargeM3 = Number.isFinite(reactantsVolumeM3) && Number.isFinite(solventVolumeM3)
+        ? reactantsVolumeM3 + solventVolumeM3
+        : NaN;
+      const reactorVolumeM3 = Number.isFinite(totalChargeM3) && Number.isFinite(workingFill) && workingFill > 0
+        ? totalChargeM3 / workingFill
+        : NaN;
+      const generatedWaterKg = Number.isFinite(productBatchKg) && Number.isFinite(mw) && mw > 0 && Number.isFinite(waterStoich) && waterStoich > 0
+        ? productBatchKg * 18.015 * waterStoich / mw
+        : NaN;
+      const ready = Number.isFinite(reactorVolumeM3) || Number.isFinite(generatedWaterKg);
+      return {
+        productBatchKg: Number.isFinite(productBatchKg) ? formatNumber(productBatchKg) : "",
+        reactantsVolumeM3: Number.isFinite(reactantsVolumeM3) ? formatNumber(reactantsVolumeM3) : "",
+        solventLoadingLPerKgProduct: Number.isFinite(solventLoadingLPerKg) ? formatNumber(solventLoadingLPerKg) : "",
+        solventVolumeM3: Number.isFinite(solventVolumeM3) ? formatNumber(solventVolumeM3) : "",
+        totalChargeM3: Number.isFinite(totalChargeM3) ? formatNumber(totalChargeM3) : "",
+        workingFillPercent: Number.isFinite(workingFill) ? formatNumber(workingFill * 100) : "",
+        reactorVolumeM3: Number.isFinite(reactorVolumeM3) ? formatNumber(reactorVolumeM3) : "",
+        generatedWaterKg: Number.isFinite(generatedWaterKg) ? formatNumber(generatedWaterKg) : "",
+        ready,
+        missing: [
+          Number.isFinite(productBatchKg) ? "" : "product kg/batch",
+          Number.isFinite(reactantsVolumeM3) ? "" : "reactants volume",
+          Number.isFinite(solventLoadingLPerKg) ? "" : "solvent loading",
+          Number.isFinite(workingFill) ? "" : "working fill",
+          Number.isFinite(mw) ? "" : "product MW for stoichiometric water"
+        ].filter(Boolean)
+      };
+    }
+
+    function groupScaledLoadKg(scale, groupId) {
+      const groupRows = (scale.rows || []).filter(row => row.groupId === groupId);
+      const preferred = groupRows.filter(row => row.role === "input");
+      const fallback = groupRows.filter(row => row.role === "output");
+      const rows = preferred.length ? preferred : fallback;
+      const values = rows.map(row => massToKg(row.scaledQuantity, row.scaledUnit)).filter(value => Number.isFinite(value) && value > 0);
+      return values.length ? values.reduce((sum, value) => sum + value, 0) : NaN;
+    }
+
+    function groupCapacityActual(task, scale, reactorSizing) {
+      const capacityUnit = task.capacityUnit || "";
+      const loadKg = groupScaledLoadKg(scale, task.groupId);
+      if (capacityUnit === "kg/batch") return { value: loadKg, unit: "kg/batch", source: "scaled MFA load" };
+      if (capacityUnit === "kg/h") {
+        return Number.isFinite(loadKg) && Number.isFinite(task.effectiveTimeH) && task.effectiveTimeH > 0
+          ? { value: loadKg / task.effectiveTimeH, unit: "kg/h", source: "scaled MFA load / effective time" }
+          : { value: NaN, unit: "kg/h", source: "missing load or time" };
+      }
+      if (capacityUnit === "m3") {
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        return { value: charge, unit: "m3", source: "reactor sizing total charge" };
+      }
+      if (capacityUnit === "L") {
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        return { value: Number.isFinite(charge) ? charge * 1000 : NaN, unit: "L", source: "reactor sizing total charge" };
+      }
+      return { value: NaN, unit: capacityUnit, source: "capacity basis missing" };
+    }
+
+    function throughputDiagnosticsModel(scale, gantt = taskScheduleModel()) {
+      const reactorSizing = scale.reactorSizing || reactorSizingModel(scale.basis, parseStreamQuantity(scale.target.kgPerBatch));
+      const allowable = Math.max(1, parseStreamQuantity(scale.basis.allowableCapacityUtilizationPercent) || 85);
+      const plantCycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
+      const rows = (gantt.tasks || []).map(task => {
+        const capacity = parseStreamQuantity(task.capacityAmount);
+        const actual = groupCapacityActual(task, scale, reactorSizing);
+        const utilization = Number.isFinite(actual.value) && Number.isFinite(capacity) && capacity > 0
+          ? actual.value / capacity * 100
+          : NaN;
+        const timeScore = Number.isFinite(task.effectiveTimeH) && Number.isFinite(plantCycle) ? task.effectiveTimeH / plantCycle : NaN;
+        const combinedScore = Number.isFinite(timeScore) && Number.isFinite(utilization) ? timeScore * utilization / 100 : NaN;
+        return {
+          groupId: task.groupId,
+          task: task.task,
+          effectiveTimeH: task.effectiveTimeH,
+          timeScore,
+          capacityAmount: task.capacityAmount,
+          capacityUnit: task.capacityUnit,
+          actualValue: actual.value,
+          actualUnit: actual.unit,
+          actualSource: actual.source,
+          utilizationPercent: utilization,
+          combinedScore
+        };
+      });
+      const withUtilization = rows.filter(row => Number.isFinite(row.utilizationPercent));
+      const sizeBottleneck = withUtilization.slice().sort((a, b) => b.utilizationPercent - a.utilizationPercent)[0] || null;
+      const throughputBottleneck = rows.filter(row => Number.isFinite(row.combinedScore)).sort((a, b) => b.combinedScore - a.combinedScore)[0] || null;
+      return {
+        allowableCapacityUtilizationPercent: allowable,
+        timeBottleneck: gantt.bottleneck || gantt.bottleneckCandidate || null,
+        sizeBottleneck,
+        throughputBottleneck,
+        rows
       };
     }
 
@@ -4431,7 +4586,7 @@
           </label>
           <label>
             <div class="label">Basis</div>
-            <select data-scale-field="targetUnit">${optionHtml(["kg/batch", "kg/day", "t/year"], basis.targetUnit)}</select>
+            <select data-scale-field="targetUnit">${optionHtml(scaleTargetUnitOptions, basis.targetUnit)}</select>
           </label>
         </div>
       `;
@@ -4488,6 +4643,40 @@
             <label>
               <div class="label">Parallel units</div>
               <input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1">
+            </label>
+            <label>
+              <div class="label">Capacity limit, %</div>
+              <input data-scale-field="allowableCapacityUtilizationPercent" value="${escapeAttr(basis.allowableCapacityUtilizationPercent)}" inputmode="decimal" placeholder="85">
+            </label>
+          </div>
+        </div>
+
+        <div class="scale-section">
+          <div class="scale-section-title">Reactor sizing / stoichiometric checks</div>
+          <div class="scale-grid">
+            <label>
+              <div class="label">Product kg/batch override</div>
+              <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="auto">
+            </label>
+            <label>
+              <div class="label">Reactants volume, m3</div>
+              <input data-scale-field="reactantsVolumeM3" value="${escapeAttr(basis.reactantsVolumeM3)}" inputmode="decimal" placeholder="e.g. 3.2">
+            </label>
+            <label>
+              <div class="label">Solvent L/kg product</div>
+              <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 2.5">
+            </label>
+            <label>
+              <div class="label">Working fill, %</div>
+              <input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70">
+            </label>
+            <label>
+              <div class="label">Product MW, g/mol</div>
+              <input data-scale-field="productMolecularWeightGmol" value="${escapeAttr(basis.productMolecularWeightGmol)}" inputmode="decimal" placeholder="optional">
+            </label>
+            <label>
+              <div class="label">Water mol/mol product</div>
+              <input data-scale-field="condensationWaterMolPerMol" value="${escapeAttr(basis.condensationWaterMolPerMol)}" inputmode="decimal" placeholder="1">
             </label>
           </div>
         </div>
@@ -4580,6 +4769,7 @@
       const recycle = recycleSummary(model);
       const energy = energyBridgeModel(model);
       const gantt = taskScheduleModel();
+      const throughput = throughputDiagnosticsModel(model, gantt);
       const metrics = [
         ["Reference", reference],
         ["Target kg/batch", model.target.kgPerBatch || "missing schedule/basis"],
@@ -4603,11 +4793,26 @@
           </div>
 
           <div class="scale-metric">
+            <span class="label">Schedule scenarios</span>
+            ${scheduleScenariosHtml(model.schedule)}
+          </div>
+
+          <div class="scale-metric">
+            <span class="label">Reactor sizing / stoichiometric checks</span>
+            ${reactorSizingHtml(model.reactorSizing)}
+          </div>
+
+          <div class="scale-metric">
             <div class="scale-section-title">
               <span>Gantt / Bottleneck</span>
               <button data-load-schedule-example="octocrylene" title="Fill current groups with Octocrylene-like test durations">Example</button>
             </div>
             ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
+          </div>
+
+          <div class="scale-metric">
+            <span class="label">Bottleneck classification</span>
+            ${throughputDiagnosticsHtml(throughput)}
           </div>
 
           <div class="scale-metric">
@@ -4649,6 +4854,102 @@
             ${energy.length ? energyBridgeGroupsHtml(energy) : `<div class="mfa-empty">Assign thermal, mixing, pressure, or phase-change phenomena to generate energy bridge events.</div>`}
           </div>
         </div>
+      `;
+    }
+
+    function scheduleScenariosHtml(schedule) {
+      const row = (label, makespan, batches, kgYear, note) => `
+        <div class="scaled-flow-row">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(makespan || "missing")} h</span>
+          <span>${escapeHtml(batches || "missing")} batches/year</span>
+          <span>${escapeHtml(kgYear || "missing")} kg/year</span>
+          <span class="muted small">${escapeHtml(note)}</span>
+        </div>
+      `;
+      return `
+        <div class="mfa-empty" style="margin-bottom:8px">
+          Conservative uses batch makespan; overlapped uses plant cycle time = max(task time / parallel units).
+        </div>
+        ${row("Conservative single-train", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "batches do not start before the previous batch leaves the train")}
+        ${row("Overlapped train", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches can start at the limiting equipment cycle")}
+      `;
+    }
+
+    function reactorSizingHtml(sizing) {
+      if (!sizing || !sizing.ready) {
+        return `<div class="mfa-empty">Add product kg/batch, reactants volume, solvent loading, working fill, and product MW to reproduce reactor size and stoichiometric water checks.</div>`;
+      }
+      const rows = [
+        ["Product basis", sizing.productBatchKg ? `${sizing.productBatchKg} kg/batch` : "missing"],
+        ["Reactants volume", sizing.reactantsVolumeM3 ? `${sizing.reactantsVolumeM3} m3` : "missing"],
+        ["Solvent volume", sizing.solventVolumeM3 ? `${sizing.solventVolumeM3} m3` : "missing"],
+        ["Total charge", sizing.totalChargeM3 ? `${sizing.totalChargeM3} m3` : "missing"],
+        ["Working fill", sizing.workingFillPercent ? `${sizing.workingFillPercent}%` : "missing"],
+        ["Required reactor volume", sizing.reactorVolumeM3 ? `${sizing.reactorVolumeM3} m3` : "missing"],
+        ["Condensation water", sizing.generatedWaterKg ? `${sizing.generatedWaterKg} kg/batch` : "missing"]
+      ];
+      return `
+        <div class="scale-metric-grid">
+          ${rows.map(([label, value]) => `
+            <div class="scale-mini-metric">
+              <span class="label">${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+            </div>
+          `).join("")}
+        </div>
+        <div class="mfa-empty" style="margin-top:8px">
+          Reactor volume = (reactants volume + solvent L/kg product × product kg/batch / 1000) / working fill.
+          Water = product kg/batch × 18.015 / product MW × stoichiometric water coefficient.
+        </div>
+        ${sizing.missing?.length ? `<span class="muted small">Missing for full check: ${escapeHtml(sizing.missing.join(", "))}</span>` : ""}
+      `;
+    }
+
+    function throughputDiagnosticsHtml(model) {
+      const time = model.timeBottleneck;
+      const size = model.sizeBottleneck;
+      const throughput = model.throughputBottleneck;
+      const named = item => item ? `${item.groupId} - ${item.task || ""}` : "missing";
+      const value = (item, kind) => {
+        if (!item) return "missing";
+        if (kind === "time") return Number.isFinite(item.effectiveTimeH) ? `${formatNumber(item.effectiveTimeH)} h effective` : "missing";
+        if (kind === "size") return Number.isFinite(item.utilizationPercent) ? `${formatNumber(item.utilizationPercent)}% utilization` : "capacity data missing";
+        if (kind === "throughput") return Number.isFinite(item.combinedScore) ? `${formatNumber(item.combinedScore * 100)} score` : "capacity data missing";
+        return "";
+      };
+      const capacityRows = model.rows.filter(row => row.capacityAmount || row.capacityUnit);
+      return `
+        <div class="scale-metric-grid">
+          <div class="scale-mini-metric">
+            <span class="label">Time bottleneck</span>
+            <strong>${escapeHtml(named(time))}</strong>
+            <span class="muted small">${escapeHtml(value(time, "time"))}</span>
+          </div>
+          <div class="scale-mini-metric">
+            <span class="label">Size bottleneck</span>
+            <strong>${escapeHtml(named(size))}</strong>
+            <span class="muted small">${escapeHtml(value(size, "size"))}; limit ${escapeHtml(formatNumber(model.allowableCapacityUtilizationPercent))}%</span>
+          </div>
+          <div class="scale-mini-metric">
+            <span class="label">Throughput bottleneck</span>
+            <strong>${escapeHtml(named(throughput))}</strong>
+            <span class="muted small">${escapeHtml(value(throughput, "throughput"))}</span>
+          </div>
+        </div>
+        ${capacityRows.length ? `
+          <div class="scale-section">
+            <div class="scale-section-title">Capacity checks</div>
+            ${capacityRows.map(row => `
+              <div class="scaled-flow-row">
+                <strong>${escapeHtml(row.groupId)}</strong>
+                <span>${Number.isFinite(row.actualValue) ? `${formatNumber(row.actualValue)} ${escapeHtml(row.actualUnit)}` : "actual missing"}</span>
+                <span>${escapeHtml(row.capacityAmount || "capacity missing")} ${escapeHtml(row.capacityUnit || "")}</span>
+                <span>${Number.isFinite(row.utilizationPercent) ? `${formatNumber(row.utilizationPercent)}%` : "not calculated"}</span>
+              </div>
+            `).join("")}
+          </div>
+        ` : `<div class="mfa-empty">Add optional equipment capacity in Gantt rows to calculate size and throughput bottlenecks.</div>`}
       `;
     }
 
@@ -4824,8 +5125,12 @@
         </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
-            <span class="label">Cycle time</span>
+            <span class="label">Gantt makespan</span>
             <strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>
+          </div>
+          <div class="scale-mini-metric">
+            <span class="label">Plant cycle</span>
+            <strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong>
           </div>
           <div class="scale-mini-metric">
             <span class="label">Batches/year</span>
@@ -4935,6 +5240,8 @@
             <div class="gantt-controls">
               <input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours">
               <input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units">
+              <input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="capacity" title="Optional equipment capacity for size bottleneck checks">
+              <select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions, task.capacityUnit)}</select>
               <select data-schedule-field="operationClass" data-schedule-group="${escapeAttr(task.groupId)}" title="Operation class used for scale-behaviour evidence">${scheduleOperationClassOptionHtml(ensureGroup(task.groupId).schedule.operationClass || "auto")}</select>
               <select data-schedule-field="canOverlap" data-schedule-group="${escapeAttr(task.groupId)}" title="Can this task overlap the previous task?">${optionHtml(scheduleOverlapOptions, task.canOverlap)}</select>
             </div>
@@ -5058,11 +5365,11 @@
     function applyScheduleExample() {
       const groups = groupIdsInTextOrder().map(groupModel);
       const fallback = [
-        { durationH: "0.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", notes: "charge/pre-mix" },
-        { durationH: "20", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
-        { durationH: "2.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", notes: "aqueous/brine wash" },
-        { durationH: "1", operationClass: "drying", scaleSensitivity: "increases with scale", notes: "drying/contact step" },
-        { durationH: "4", operationClass: "heating_cooling", scaleSensitivity: "equipment dependent", notes: "solvent removal or final distillation" }
+        { durationH: "0.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", capacityAmount: "", capacityUnit: "", notes: "charge/pre-mix" },
+        { durationH: "20", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", capacityAmount: "15", capacityUnit: "m3", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
+        { durationH: "2.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", capacityAmount: "", capacityUnit: "", notes: "aqueous/brine wash" },
+        { durationH: "1", operationClass: "drying", scaleSensitivity: "increases with scale", capacityAmount: "", capacityUnit: "", notes: "drying/contact step" },
+        { durationH: "4", operationClass: "heating_cooling", scaleSensitivity: "equipment dependent", capacityAmount: "", capacityUnit: "", notes: "solvent removal or final distillation" }
       ];
       groups.forEach((group, index) => {
         const text = `${group.task} ${group.text} ${group.selectedUnit || ""}`.toLowerCase();
@@ -5078,6 +5385,8 @@
           durationH: preset.durationH,
           parallelUnits: "1",
           canOverlap: "no",
+          capacityAmount: preset.capacityAmount,
+          capacityUnit: preset.capacityUnit,
           operationClass: preset.operationClass,
           scaleSensitivity: preset.scaleSensitivity,
           notes: preset.notes
@@ -5089,6 +5398,12 @@
       state.scaleBasis.oeePercent = "80";
       state.scaleBasis.scheduleMarginPercent = "0";
       state.scaleBasis.batchDuration = "";
+      state.scaleBasis.allowableCapacityUtilizationPercent = "85";
+      state.scaleBasis.reactantsVolumeM3 = "3.2";
+      state.scaleBasis.solventLoadingLPerKgProduct = "2.5";
+      state.scaleBasis.reactorWorkingFillPercent = "70";
+      state.scaleBasis.productMolecularWeightGmol = "361.5";
+      state.scaleBasis.condensationWaterMolPerMol = "1";
       renderScaleBasisPanel();
       renderHeuristicsPanel();
       refreshReviewPanels();
@@ -5514,7 +5829,7 @@
       if (model.basis.mode !== "continuous" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
         issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires batches per day to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day."));
       }
-      if (model.basis.targetUnit === "t/year" && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
+      if (["kg/year", "t/year"].includes(model.basis.targetUnit) && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
         issues.push(ruleIssue("medium", "Duration/OEE schedule missing", "Annual production can be reconciled with case-study batch size only when batch duration, OEE, and parallel capacity are explicit.", "scale-up schedule", "Enter batch duration, OEE, and parallel units."));
       }
       if (state.blocks.length && groupIdsInTextOrder().length && gantt.missingDurationCount) {
@@ -8393,6 +8708,7 @@
       const scaleAssessment = scaleUpAssessmentModel(scale);
       const heuristicReview = heuristicReviewModel(scale);
       const ganttSchedule = taskScheduleModel();
+      const throughputDiagnostics = throughputDiagnosticsModel(scale, ganttSchedule);
       return {
         workflow: "source text -> annotated blocks -> material inputs/outputs/waste -> behavior presets -> phenomenon groups -> task/unit alternatives -> heuristic rule application -> scale-up basis -> scaled MFA -> Gantt bottleneck check",
         text: state.text,
@@ -8402,13 +8718,15 @@
           reference: scale.reference,
           target: scale.target,
           schedule: scale.schedule,
+          reactorSizing: scale.reactorSizing,
           factors: scale.factors,
           scaledMfa: scale.blocks,
           scaledRows: scale.rows,
           ready: scale.ready,
           assessment: scaleAssessment,
           heuristicReview,
-          ganttSchedule
+          ganttSchedule,
+          throughputDiagnostics
         },
         recycleSummary: recycle,
         energyBridge,

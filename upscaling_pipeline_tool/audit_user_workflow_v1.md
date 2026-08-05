@@ -91,11 +91,13 @@ Fixed now:
 - Kinetics-bound groups still show a warning, but the UI no longer blocks duration division.
 - Scale-Up summary has fewer repeated fields.
 - Bottlenecks are now thresholded: the longest task is only marked critical when it is at least 1 h and 15% above the next longest task; otherwise the schedule is shown as balanced.
+- Scale-Up now separates conservative batch makespan from overlapped plant cycle time, adds reactor sizing / stoichiometric water checks, and exposes optional capacity utilization for size and throughput bottleneck screening.
 
 Remaining issues:
 - The tool still needs to label split mode clearly on resulting Gantt rows.
 - The difference between "throughput split" and "time split" should be shown after splitting.
 - There is no one-click "undo split" except global undo.
+- Capacity bottleneck classification is only calculated when the user enters equipment capacity; this is intentional to avoid false precision.
 
 Recommended improvements:
 - Add split-mode labels on split groups.
