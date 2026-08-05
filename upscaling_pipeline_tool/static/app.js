@@ -1,4 +1,8 @@
     const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.`;
+    const bottleneckThresholds = {
+      minGapH: 1,
+      minGapPercent: 15
+    };
 
     const phenomenaOptions = [
       "M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LL)", "2phM(VS)", "2phM(LS)",
@@ -3516,8 +3520,23 @@
     function taskScheduleModel() {
       const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
       const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
-      const maxEffective = timed.length ? Math.max(...timed.map(task => task.effectiveTimeH)) : NaN;
-      const bottleneck = timed.find(task => Math.abs(task.effectiveTimeH - maxEffective) < 0.0001) || null;
+      const ranked = [...timed].sort((a, b) => b.effectiveTimeH - a.effectiveTimeH);
+      const maxEffective = ranked.length ? ranked[0].effectiveTimeH : NaN;
+      const secondEffective = ranked[1]?.effectiveTimeH ?? 0;
+      const bottleneckGapH = Number.isFinite(maxEffective) ? maxEffective - secondEffective : NaN;
+      const bottleneckGapPercent = Number.isFinite(maxEffective) && maxEffective > 0 ? bottleneckGapH / maxEffective * 100 : NaN;
+      const criticalBottleneck = ranked.length === 1
+        ? Number.isFinite(maxEffective) && maxEffective >= bottleneckThresholds.minGapH
+        : Number.isFinite(bottleneckGapH)
+          && bottleneckGapH >= bottleneckThresholds.minGapH
+          && Number.isFinite(bottleneckGapPercent)
+          && bottleneckGapPercent >= bottleneckThresholds.minGapPercent;
+      const bottleneck = criticalBottleneck ? ranked[0] : null;
+      const bottleneckStatus = timed.length
+        ? criticalBottleneck
+          ? "critical"
+          : "balanced"
+        : "missing";
       let cursor = 0;
       tasks.forEach(task => {
         task.startH = Number.isFinite(task.effectiveTimeH) ? cursor : NaN;
@@ -3538,6 +3557,10 @@
       return {
         tasks,
         bottleneck,
+        bottleneckCandidate: ranked[0] || null,
+        bottleneckStatus,
+        bottleneckGapH,
+        bottleneckGapPercent,
         estimatedCycleTimeH,
         batchesPerYear,
         ready: timed.length > 0,
@@ -4787,9 +4810,17 @@
     }
 
     function ganttPanelHtml(gantt) {
+      const bottleneckLabel = gantt.bottleneck
+        ? gantt.bottleneck.groupId
+        : gantt.bottleneckStatus === "balanced"
+          ? "balanced"
+          : "missing";
+      const gapText = Number.isFinite(gantt.bottleneckGapH) && Number.isFinite(gantt.bottleneckGapPercent)
+        ? `Gap to next task: ${formatNumber(gantt.bottleneckGapH)} h / ${formatNumber(gantt.bottleneckGapPercent)}%. Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}%.`
+        : `Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}% above the next longest task.`;
       return `
         <div class="mfa-empty" style="margin-bottom:8px">
-          Bottleneck = the task with the largest adjusted effective time. Adjusted time = input duration plus Gantt margin, divided by parallel units. The cycle time sums tasks that cannot overlap.
+          Critical bottleneck = largest effective task only when it is clearly above the next task. Adjusted time = input duration plus Gantt margin, divided by parallel units. ${escapeHtml(gapText)}
         </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
@@ -4802,12 +4833,24 @@
           </div>
           <div class="scale-mini-metric">
             <span class="label">Bottleneck</span>
-            <strong>${gantt.bottleneck ? escapeHtml(gantt.bottleneck.groupId) : "missing"}</strong>
+            <strong>${escapeHtml(bottleneckLabel)}</strong>
           </div>
         </div>
-        ${gantt.bottleneck ? bottleneckActionHtml(gantt.bottleneck) : ""}
+        ${gantt.bottleneck ? bottleneckActionHtml(gantt.bottleneck) : balancedGanttActionHtml(gantt)}
         <div class="scale-results">
           ${gantt.tasks.map(ganttRowHtml).join("")}
+        </div>
+      `;
+    }
+
+    function balancedGanttActionHtml(gantt) {
+      if (gantt.bottleneckStatus !== "balanced" || !gantt.bottleneckCandidate) return "";
+      return `
+        <div class="rule-card low" style="margin:8px 0">
+          <span class="severity-pill">balanced</span>
+          <strong>No critical bottleneck detected</strong>
+          <span>${escapeHtml(gantt.bottleneckCandidate.groupId)} is currently the longest task, but it is too close to the next task to flag as a critical bottleneck.</span>
+          <span class="muted small">Use this state as a rough balanced schedule. Split only if you have equipment/capacity evidence, not just because one bar is slightly longer.</span>
         </div>
       `;
     }
@@ -8137,7 +8180,7 @@
       } else if (missingDuration.length) {
         set(6, "partial", `${missingDuration.length} group${missingDuration.length === 1 ? "" : "s"} without duration for the Gantt.`);
       } else {
-        set(6, "done", "Scale basis and task durations defined. Review bottleneck in Scale-Up tab.");
+        set(6, "done", "Scale basis and task durations defined. Review schedule balance in Scale-Up tab.");
       }
 
       return statuses;

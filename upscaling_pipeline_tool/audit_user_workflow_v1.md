@@ -90,6 +90,7 @@ Fixed now:
 - Gantt split can divide task duration as a bottleneck-time screening estimate.
 - Kinetics-bound groups still show a warning, but the UI no longer blocks duration division.
 - Scale-Up summary has fewer repeated fields.
+- Bottlenecks are now thresholded: the longest task is only marked critical when it is at least 1 h and 15% above the next longest task; otherwise the schedule is shown as balanced.
 
 Remaining issues:
 - The tool still needs to label split mode clearly on resulting Gantt rows.
