@@ -2530,6 +2530,10 @@
       align-content: start;
     }
 
+    .flowsheet-host.fit-mode {
+      place-items: start stretch;
+    }
+
     .flowsheet-host.technical-mode {
       place-items: start center;
       align-content: start;
@@ -2544,6 +2548,11 @@
       border-radius: 8px;
       background: #fff;
       box-shadow: 0 10px 28px rgba(15, 23, 32, 0.08);
+    }
+
+    .flowsheet-host.fit-mode .flowsheet-svg {
+      width: 100%;
+      max-width: 100%;
     }
 
     .pyflowsheet-svg {

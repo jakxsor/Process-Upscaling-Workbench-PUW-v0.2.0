@@ -418,6 +418,7 @@
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
       flowsheetMode: "editable",
+      flowsheetFit: true,
       drag: null
     };
 
@@ -425,7 +426,7 @@
 
     const undoStack = [];
     let flowsheetRequestSeq = 0;
-    const flowsheetLayoutVersion = "editable-train-v5";
+    const flowsheetLayoutVersion = "editable-train-v6";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -1908,11 +1909,11 @@
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
       const layout = flowsheetAutoLayout(groupIds);
-      const boxW = 246;
+      const boxW = 224;
       const boxH = 184;
-      const stageGapX = 138;
+      const stageGapX = 82;
       const rowGapY = 286;
-      const originX = 330;
+      const originX = 286;
       const originY = 132;
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
@@ -1977,7 +1978,7 @@
       const recycleLaneCount = recycleLinks.length;
       const feedBox = groups.length ? {
         id: "feeds",
-        x: Math.max(34, minBoxLeft - 250),
+        x: Math.max(34, minBoxLeft - 228),
         y: groups[0].y + 22,
         w: 178,
         h: Math.max(118, Math.min(204, 54 + groups[0].inputStreams.slice(0, 4).length * 34))
@@ -1985,7 +1986,7 @@
       const lastGroup = groups[groups.length - 1];
       const productBox = lastGroup ? {
         id: "product",
-        x: maxBoxRight + 90,
+        x: maxBoxRight + 54,
         y: lastGroup.y + 36,
         w: 190,
         h: 92
@@ -2382,6 +2383,14 @@
       if (state.flowsheetMode === "technical" && !technical) state.flowsheetMode = "editable";
       if (editable) editable.classList.add("primary");
       if (technical) technical.classList.toggle("primary", state.flowsheetMode === "technical");
+      const fit = $("fitFlowsheetView");
+      if (fit) {
+        fit.classList.toggle("primary", state.flowsheetFit);
+        fit.textContent = state.flowsheetFit ? "Actual Size" : "Fit View";
+        fit.title = state.flowsheetFit
+          ? "Show the generated flowsheet at its actual SVG size"
+          : "Fit the generated flowsheet inside the modal for overview";
+      }
       $("resetFlowsheetLayout").disabled = false;
     }
 
@@ -2392,6 +2401,7 @@
       renderFlowsheetModeButtons();
       host.classList.toggle("technical-mode", state.flowsheetMode === "technical");
       host.classList.toggle("editable-mode", state.flowsheetMode !== "technical");
+      host.classList.toggle("fit-mode", state.flowsheetFit && state.flowsheetMode !== "technical");
       const result = buildFlowsheetSvg();
       if (state.flowsheetMode !== "technical") {
         host.innerHTML = result.empty
@@ -2488,6 +2498,7 @@
     function openFlowsheetModal() {
       $("flowsheetModal").hidden = false;
       state.flowsheetMode = "editable";
+      state.flowsheetFit = true;
       renderFlowsheetModal();
     }
 
@@ -8509,6 +8520,10 @@
       state.flowsheetMode = "editable";
       renderFlowsheetModal();
     });
+    $("fitFlowsheetView").addEventListener("click", () => {
+      state.flowsheetFit = !state.flowsheetFit;
+      renderFlowsheetModal();
+    });
     if ($("flowsheetTechnicalMode")) {
       $("flowsheetTechnicalMode").addEventListener("click", () => {
         state.flowsheetMode = "technical";
@@ -8524,6 +8539,7 @@
         delete groupState.flowsheetY;
         delete groupState.flowsheetLayoutVersion;
       });
+      state.flowsheetFit = true;
       renderFlowsheetModal();
     });
     $("flowsheetModal").addEventListener("click", event => {

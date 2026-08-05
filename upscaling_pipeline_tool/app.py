@@ -331,6 +331,7 @@ APP_HTML = r"""<!doctype html>
         <div class="row flowsheet-toolbar">
           <button id="flowsheetEditableMode" class="mini-button primary" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
           <span class="flowsheet-toolbar-divider"></span>
+          <button id="fitFlowsheetView" class="mini-button primary" title="Fit the generated flowsheet inside the modal for overview">Fit View</button>
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
           <span class="flowsheet-toolbar-divider"></span>
