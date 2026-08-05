@@ -4516,8 +4516,9 @@
           const groupId = input.dataset.splitN;
           const baseDuration = Number(input.dataset.splitBaseDuration);
           const preview = [...root.querySelectorAll("[data-split-preview]")].find(el => el.dataset.splitPreview === groupId);
-          if (preview) preview.textContent = bottleneckSplitPreviewText(baseDuration, n);
           const button = [...root.querySelectorAll("[data-split-bottleneck]")].find(el => el.dataset.splitBottleneck === groupId);
+          const divideDuration = button?.dataset.splitDivideDuration === "true";
+          if (preview) preview.textContent = bottleneckSplitPreviewText(baseDuration, n, divideDuration);
           if (button) button.dataset.splitCount = String(n);
         });
       });
@@ -4528,8 +4529,12 @@
           const warn = button.dataset.splitConfirmKinetics === "true"
             ? `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time, only raise throughput. `
             : "";
-          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. Per-unit durations are kept until you edit or validate sized-equipment times. ${groupId} itself is removed. This can be undone.`)) return;
-          splitGroupIntoParallelUnits(groupId, n);
+          const divideDuration = button.dataset.splitDivideDuration === "true";
+          const durationText = divideDuration
+            ? "The Gantt duration and time-like conditions are divided as a screening estimate."
+            : "Per-unit durations are kept until you edit or validate sized-equipment times.";
+          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${durationText} ${groupId} itself is removed. This can be undone.`)) return;
+          splitGroupIntoParallelUnits(groupId, n, { divideDuration });
         });
       });
     }
@@ -4810,8 +4815,9 @@
       `;
     }
 
-    function bottleneckSplitPreviewText(baseDuration, n) {
+    function bottleneckSplitPreviewText(baseDuration, n, divideDuration = false) {
       if (!Number.isFinite(baseDuration) || baseDuration <= 0 || !Number.isFinite(n) || n < 2) return "";
+      if (divideDuration) return `Screening estimate: first parallel lane counts about ${formatNumber(baseDuration / n)} h in the Gantt; each unit handles 1/${n} of material flow.`;
       return `Each unit keeps about ${formatNumber(baseDuration)} h unless you edit the sized-equipment duration; material load is split to 1/${n} per unit.`;
     }
 
@@ -4829,6 +4835,7 @@
           ? "Check equipment capacity, then test more parallel units or split the grouped task."
           : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
       const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
+      const splitDividesDuration = !isKineticsBound && ["increases with scale", "equipment dependent"].includes(task.scaleSensitivity);
       const canSplit = Number.isFinite(baseDuration);
       const pickerHtml = canSplit ? `
         <div class="bottleneck-split-picker">
@@ -4837,7 +4844,7 @@
             <input type="number" min="2" max="20" step="1" value="${defaultN}" data-split-n="${escapeAttr(task.groupId)}" data-split-base-duration="${baseDuration}">
             parallel units
           </label>
-          <span class="muted small" data-split-preview="${escapeAttr(task.groupId)}">${escapeHtml(bottleneckSplitPreviewText(baseDuration, defaultN))}</span>
+          <span class="muted small" data-split-preview="${escapeAttr(task.groupId)}">${escapeHtml(bottleneckSplitPreviewText(baseDuration, defaultN, splitDividesDuration))}</span>
         </div>
       ` : "";
       const splitButton = canSplit ? (
@@ -4845,12 +4852,12 @@
           <div class="bottleneck-split-warning">
             <span class="muted small">This stage is kinetics-bound: splitting it into parallel units does not shorten the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput. Do not use this to relieve the cycle-time bottleneck; see the paper's octocrylene case, where the kinetics-bound reactor "cannot be relieved by parallelization".</span>
             ${pickerHtml}
-            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="false" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
           </div>
         ` : `
           <div class="bottleneck-split-controls">
             ${pickerHtml}
-            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" class="primary">Split ${escapeHtml(task.groupId)}</button>
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="${splitDividesDuration ? "true" : "false"}" class="primary">Split ${escapeHtml(task.groupId)}</button>
           </div>
         `
       ) : "";
@@ -7344,6 +7351,10 @@
       const nInput = $("splitGroupN");
       nInput.value = String(suggestion);
       nInput.dataset.splitBaseDuration = Number.isFinite(baseDuration) ? String(baseDuration) : "";
+      const divideDuration = $("splitGroupDivideDuration");
+      const defaultDivideDuration = entry.scaleSensitivity !== "kinetics-bound" && ["increases with scale", "equipment dependent"].includes(entry.scaleSensitivity);
+      divideDuration.checked = defaultDivideDuration;
+      divideDuration.disabled = entry.scaleSensitivity === "kinetics-bound";
       const warning = $("splitGroupWarning");
       if (entry.scaleSensitivity === "kinetics-bound") {
         warning.hidden = false;
@@ -7364,8 +7375,9 @@
       if (!Number.isFinite(n) || n < 2) n = 2;
       const baseDuration = Number(nInput.dataset.splitBaseDuration);
       const groupId = state.pendingSplitGroupId || "";
+      const divideDuration = $("splitGroupDivideDuration")?.checked === true;
       preview.textContent = Number.isFinite(baseDuration) && baseDuration > 0
-        ? `Each of the ${n} parallel units keeps about ${formatNumber(baseDuration)} h until you edit the sized-equipment duration. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`
+        ? `${bottleneckSplitPreviewText(baseDuration, n, divideDuration)} Creates ${groupId}-P1..P${n}, wired in parallel between the same predecessor and successor. ${groupId} itself is removed. This can be undone.`
         : `No duration is set yet. Creates ${groupId}-P1..P${n}, each with 1/${n} of the material flow. ${groupId} itself is removed. This can be undone.`;
     }
 
@@ -7379,14 +7391,20 @@
       if (!groupId) return;
       let n = Math.round(Number($("splitGroupN").value));
       if (!Number.isFinite(n) || n < 2) n = 2;
+      const divideDuration = $("splitGroupDivideDuration")?.checked === true;
       closeSplitGroupModal();
-      splitGroupIntoParallelUnits(groupId, n);
+      splitGroupIntoParallelUnits(groupId, n, { divideDuration });
     }
 
-    function splitGroupIntoParallelUnits(groupId, n) {
+    function splitGroupIntoParallelUnits(groupId, n, options = {}) {
       const group = groupModel(groupId);
       if (!group || !Number.isFinite(n) || n < 2) return;
       const baseState = ensureGroup(groupId);
+      const divideDuration = Boolean(options.divideDuration);
+      const originalDurationH = parseDurationHoursValue(baseState.schedule.durationH);
+      const splitDurationText = divideDuration && Number.isFinite(originalDurationH) && originalDurationH > 0
+        ? formatNumber(originalDurationH / n)
+        : baseState.schedule.durationH;
       const originalBlocks = group.blocks;
       const proposedGroupIds = Array.from({ length: n }, (_, i) => `${groupId}-P${i + 1}`);
       const proposedBlockIds = proposedGroupIds.flatMap((newGroupId, i) => originalBlocks.map(block => `${block.id}-P${i + 1}`));
@@ -7411,12 +7429,12 @@
         newGroup.properties = JSON.parse(JSON.stringify(baseState.properties || {}));
         newGroup.schedule = {
           ...baseState.schedule,
-          durationH: baseState.schedule.durationH,
+          durationH: splitDurationText,
           parallelUnits: "1",
           // Only the first parallel unit counts toward the additive cycle-time sum; the rest
           // are marked as overlapping with it so N simultaneous units are not counted N times.
           canOverlap: i === 1 ? (baseState.schedule.canOverlap || "no") : "yes",
-          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId}; ${formatNumber(1 / n * 100)}% of the original material flow. Per-unit duration is kept until a sized-equipment estimate is entered.`].filter(Boolean).join(" ")
+          notes: [baseState.schedule.notes, `Parallel unit ${i}/${n}, split from ${groupId}; ${formatNumber(1 / n * 100)}% of the original material flow.${divideDuration ? " Gantt duration was divided as a screening estimate." : " Per-unit duration is kept until a sized-equipment estimate is entered."}`].filter(Boolean).join(" ")
         };
         newGroup.conditionOverrides = JSON.parse(JSON.stringify(baseState.conditionOverrides || {}));
         newGroup.mfaOverrides = {};
@@ -7440,6 +7458,14 @@
               editing: false
             };
           });
+          if (divideDuration) {
+            const additiveIds = additiveConditionIds();
+            Object.keys(clone.conditions || {}).forEach(conditionId => {
+              if (!additiveIds.has(conditionId)) return;
+              const raw = parseDurationHoursValue(clone.conditions[conditionId]);
+              if (Number.isFinite(raw) && raw > 0) clone.conditions[conditionId] = formatNumber(raw / n);
+            });
+          }
           state.blocks.push(clone);
         });
       }
@@ -7641,12 +7667,21 @@
 
     function showGroupMenu(x, y, groupId) {
       state.menuGroupId = groupId;
+      const blocks = blocksForGroup(groupId);
+      state.selectedGroupId = groupId;
+      state.selectedBlockId = null;
+      state.selectedIds = blocks.map(block => block.id);
+      state.focusEndpoint = groupId;
+      renderContextMenuOptions();
       hideBlockMenu();
       hideStreamMenu();
       hideTextSelectionMenu();
       const menu = $("groupMenu");
       menu.hidden = false;
       positionContextMenu(menu, x, y);
+      renderInspector();
+      renderStepFlowInspector();
+      renderExport();
     }
 
     function hideGroupMenu() {
@@ -7700,23 +7735,34 @@
       hideTextSelectionMenu();
     }
 
+    function streamOwner(streamId) {
+      const block = state.blocks.find(item => {
+        ensureBlockFlowFields(item);
+        return item.streams.some(stream => stream.id === streamId);
+      }) || null;
+      const stream = block?.streams.find(item => item.id === streamId) || null;
+      return { block, stream };
+    }
+
     function editStream(streamId) {
-      const block = selectedBlock();
-      if (!block) return;
-      const stream = block.streams.find(item => item.id === streamId);
-      if (!stream) return;
+      const { block, stream } = streamOwner(streamId);
+      if (!block || !stream) return;
+      state.selectedBlockId = block.id;
+      state.selectedGroupId = block.groupId || null;
+      state.selectedIds = [block.id];
       stream.editing = true;
       hideStreamMenu();
-      renderStepFlowInspector();
+      renderAll();
     }
 
     function deleteStream(streamId) {
-      const block = selectedBlock();
+      const { block } = streamOwner(streamId);
       if (!block) return;
       pushUndo();
       block.streams = block.streams.filter(stream => stream.id !== streamId);
       syncLegacyStreamLists(block);
       hideStreamMenu();
+      invalidateAiRefine();
       renderAll();
     }
 
@@ -8549,6 +8595,7 @@
     $("cancelSplitGroup").addEventListener("click", closeSplitGroupModal);
     $("confirmSplitGroup").addEventListener("click", confirmSplitGroupModal);
     $("splitGroupN").addEventListener("input", renderSplitGroupPreview);
+    $("splitGroupDivideDuration").addEventListener("change", renderSplitGroupPreview);
     $("splitGroupModal").addEventListener("click", event => {
       if (event.target === $("splitGroupModal")) closeSplitGroupModal();
     });
@@ -8691,6 +8738,15 @@
         event.preventDefault();
         undoLast();
       }
+    });
+    document.addEventListener("click", event => {
+      if (event.target.closest(".context-menu")) return;
+      const anyMenuOpen = !$("blockMenu").hidden || !$("groupMenu").hidden || !$("streamMenu").hidden || !$("textSelectionMenu").hidden;
+      if (!anyMenuOpen) return;
+      hideBlockMenu();
+      hideGroupMenu();
+      hideStreamMenu();
+      hideTextSelectionMenu();
     });
     document.addEventListener("mouseover", showHoverTip);
     document.addEventListener("mousemove", moveHoverTip);

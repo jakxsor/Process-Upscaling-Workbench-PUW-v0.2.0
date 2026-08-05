@@ -312,6 +312,10 @@ APP_HTML = r"""<!doctype html>
           <input type="number" min="2" max="20" step="1" id="splitGroupN" value="2">
           parallel units
         </label>
+        <label class="split-mode-row">
+          <input type="checkbox" id="splitGroupDivideDuration">
+          <span>Divide Gantt duration as a bottleneck-time screening estimate</span>
+        </label>
         <div id="splitGroupPreview" class="muted small"></div>
         <div class="row between" style="margin-top:8px">
           <button id="cancelSplitGroup">Cancel</button>
