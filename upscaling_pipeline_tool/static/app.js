@@ -417,7 +417,7 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetMode: "technical",
+      flowsheetMode: "editable",
       drag: null
     };
 
@@ -425,7 +425,7 @@
 
     const undoStack = [];
     let flowsheetRequestSeq = 0;
-    const flowsheetLayoutVersion = "process-train-v4";
+    const flowsheetLayoutVersion = "editable-train-v5";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -1897,43 +1897,6 @@
       return { stageById, rowById, rowByStage };
     }
 
-    function flowsheetPfdRole(group, index) {
-      const text = `${group?.id || ""} ${group?.task || ""} ${group?.selectedUnit || ""}`.toLowerCase();
-      if (/reactor|reaction|reflux/.test(text)) return "reactor";
-      if (/mixer.?settler|extract|wash|decanter|liquid.?liquid/.test(text)) return "extraction";
-      if (/dry|sieve|adsorb|bed/.test(text)) return "drying";
-      if (/evaporat|thin.?film|flash/.test(text)) return "evaporation";
-      if (/distill|short.?path|purification/.test(text)) return "distillation";
-      if (/exchanger|cool|heat|condenser|utility/.test(text)) return index === 0 ? "feed_prep" : "utility";
-      if (/wwt|waste|abatement|scrubber|neutraliz|carbon/.test(text)) return "waste_treatment";
-      if (/tank|vessel|feed|charge|storage/.test(text)) return index === 0 ? "feed_prep" : "storage";
-      return index === 0 ? "feed_prep" : "generic";
-    }
-
-    function flowsheetPfdPosition(group, index, roleCounts) {
-      const role = flowsheetPfdRole(group, index);
-      const slot = {
-        feed_prep: { x: 300, y: 210 },
-        reactor: { x: 620, y: 130 },
-        extraction: { x: 980, y: 150 },
-        drying: { x: 1320, y: 150 },
-        evaporation: { x: 1320, y: 430 },
-        distillation: { x: 970, y: 500 },
-        utility: { x: 720, y: 405 },
-        storage: { x: 300, y: 430 },
-        waste_treatment: { x: 1620, y: 500 },
-        generic: { x: 620, y: 520 }
-      }[role] || { x: 620, y: 520 };
-      const count = roleCounts.get(role) || 0;
-      roleCounts.set(role, count + 1);
-      const verticalRoles = new Set(["reactor", "extraction", "drying", "evaporation", "distillation", "utility", "generic"]);
-      return {
-        role,
-        x: slot.x + (verticalRoles.has(role) ? count * 34 : count * 220),
-        y: slot.y + (verticalRoles.has(role) ? count * 230 : count * 64)
-      };
-    }
-
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
       const header = `${fromBox.id} -> ${toBox.id}`;
       const massLine = Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch (from ${fromBox.id} outputs)` : "quantity not available";
@@ -1945,9 +1908,12 @@
     function buildFlowsheetModel() {
       const groupIds = groupIdsInTextOrder();
       const layout = flowsheetAutoLayout(groupIds);
-      const boxW = 230;
-      const boxH = 174;
-      const roleCounts = new Map();
+      const boxW = 246;
+      const boxH = 184;
+      const stageGapX = 138;
+      const rowGapY = 286;
+      const originX = 330;
+      const originY = 132;
       const groups = groupIds.map((groupId, index) => {
         const group = groupModel(groupId);
         const stored = ensureGroup(groupId);
@@ -1958,8 +1924,10 @@
         const tip = groupContentsTip(group);
         const stage = layout.stageById.get(groupId) ?? index;
         const stageRow = layout.rowById.get(groupId) || 0;
-        const pfd = flowsheetPfdPosition(group, index, roleCounts);
-        const auto = { x: pfd.x, y: pfd.y };
+        const auto = {
+          x: originX + stage * (boxW + stageGapX),
+          y: originY + stageRow * rowGapY
+        };
         const useStored = stored.flowsheetLayoutVersion === flowsheetLayoutVersion && Number.isFinite(stored.flowsheetX) && Number.isFinite(stored.flowsheetY);
         const x = useStored ? stored.flowsheetX : auto.x;
         const y = useStored ? stored.flowsheetY : auto.y;
@@ -1977,7 +1945,6 @@
           symbolCenterY: y + 62,
           stage,
           stageRow,
-          pfdRole: pfd.role,
           concurrent: stageRow > 0 || flowsheetCanOverlap(group),
           w: boxW,
           h: boxH,
@@ -2003,7 +1970,7 @@
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 34;
       const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
-      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 54)) : 210 + boxH;
+      const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 104)) : originY + boxH;
       const minBoxLeft = groups.length ? Math.min(...groups.map(item => item.x)) : 120;
       const maxBoxRight = groups.length ? Math.max(...groups.map(item => item.x + item.w)) : 900;
       const recycleLaneBaseY = maxBoxBottom + wasteAreaH + 54;
@@ -2019,7 +1986,7 @@
       const productBox = lastGroup ? {
         id: "product",
         x: maxBoxRight + 90,
-        y: lastGroup.pfdRole === "distillation" ? lastGroup.y + 40 : Math.max(250, lastGroup.y + 36),
+        y: lastGroup.y + 36,
         w: 190,
         h: 92
       } : null;
@@ -2293,7 +2260,7 @@
             const color = stream.kind === "waste" ? { line: "#965d00", marker: "url(#fsArrowOrange)" } : { line: "#657480", marker: "url(#fsArrowGrey)" };
             const leftSide = i % 2 === 1;
             const stubX = box.x + box.w * (leftSide ? 0.24 : 0.76);
-            const stubY = box.y + box.h + 34 + Math.floor(i / 2) * 42;
+            const stubY = box.y + box.h + 62 + Math.floor(i / 2) * 42;
             const labelX = stubX + (leftSide ? -18 : 18);
             const labelAnchor = leftSide ? "end" : "start";
             const label = `${stream.kind}: ${stream.name}`;
@@ -2412,10 +2379,10 @@
     function renderFlowsheetModeButtons() {
       const editable = $("flowsheetEditableMode");
       const technical = $("flowsheetTechnicalMode");
-      if (!editable || !technical) return;
-      editable.classList.toggle("primary", state.flowsheetMode === "editable");
-      technical.classList.toggle("primary", state.flowsheetMode === "technical");
-      $("resetFlowsheetLayout").disabled = state.flowsheetMode !== "editable";
+      if (state.flowsheetMode === "technical" && !technical) state.flowsheetMode = "editable";
+      if (editable) editable.classList.add("primary");
+      if (technical) technical.classList.toggle("primary", state.flowsheetMode === "technical");
+      $("resetFlowsheetLayout").disabled = false;
     }
 
     async function renderFlowsheetModal() {
@@ -2429,7 +2396,7 @@
       if (state.flowsheetMode !== "technical") {
         host.innerHTML = result.empty
           ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-          : `<div class="flowsheet-render-status ok">Editable board mode. Drag units, double-click unit labels, and hover arrows/units for details. Use Technical PFD only for a static export preview.</div>${result.svg}`;
+          : `<div class="flowsheet-render-status ok">Editable flowsheet board. Drag units, double-click unit labels, and hover arrows/units for details.</div>${result.svg}`;
         if (!result.empty) wireFlowsheetInteractions(host);
         if (!result.empty) requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
         return;
@@ -2520,7 +2487,7 @@
 
     function openFlowsheetModal() {
       $("flowsheetModal").hidden = false;
-      state.flowsheetMode = "technical";
+      state.flowsheetMode = "editable";
       renderFlowsheetModal();
     }
 
@@ -8546,10 +8513,12 @@
       state.flowsheetMode = "editable";
       renderFlowsheetModal();
     });
-    $("flowsheetTechnicalMode").addEventListener("click", () => {
-      state.flowsheetMode = "technical";
-      renderFlowsheetModal();
-    });
+    if ($("flowsheetTechnicalMode")) {
+      $("flowsheetTechnicalMode").addEventListener("click", () => {
+        state.flowsheetMode = "technical";
+        renderFlowsheetModal();
+      });
+    }
     $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
     $("resetFlowsheetLayout").addEventListener("click", () => {
       pushUndo();
@@ -8718,3 +8687,6 @@
     document.addEventListener("mouseup", dragEnd);
 
     loadBaseExampleProject();
+    if (window.location.hash === "#flowsheet") {
+      requestAnimationFrame(openFlowsheetModal);
+    }

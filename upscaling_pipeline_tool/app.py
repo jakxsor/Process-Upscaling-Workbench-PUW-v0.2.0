@@ -37,7 +37,7 @@ APP_HTML = r"""<!doctype html>
       <button id="openTutorial" title="Open a short guided tour of the main workflow">Tutorial</button>
       <button id="loadSample">Load Octocrylene Case</button>
       <button id="openScaleTop">Scale-Up</button>
-      <button id="openFlowsheet" title="Open a clean, read-only P&amp;ID-style diagram generated from the current groups and streams">Flowsheet View</button>
+      <button id="openFlowsheet" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
       <button id="exportJson">Export JSON</button>
     </div>
   </header>
@@ -330,7 +330,6 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div class="row flowsheet-toolbar">
           <button id="flowsheetEditableMode" class="mini-button primary" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
-          <button id="flowsheetTechnicalMode" class="mini-button" title="Static technical PFD preview generated from the current project data">Technical PFD</button>
           <span class="flowsheet-toolbar-divider"></span>
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
