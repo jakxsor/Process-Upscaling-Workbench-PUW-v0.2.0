@@ -256,6 +256,9 @@ APP_HTML = r"""<!doctype html>
     <button id="ctxAssignGroup" title="Add the selected block(s) to the task group chosen above, instead of creating a new one.">Assign To Selected Task Above</button>
     <button id="ctxRemoveFromGroup" title="Take this block out of its task group. It becomes an ungrouped draft block again; nothing about the block itself changes.">Remove From Task Group</button>
 
+    <div class="label" style="margin-top:10px">Scale-Up</div>
+    <button id="ctxSplitBlockGroup" title="Split the task group that contains this block into parallel units">Split This Task Group</button>
+
     <div class="label" style="margin-top:10px">Block Editing (Step 1) — changes the blocks themselves</div>
     <button id="ctxMergeBlocks" title="Fuse the selected adjacent blocks into a single block: their text is concatenated and their streams/phenomena/conditions are combined into one. The block count goes down — this cannot be split back automatically.">Merge Into One Block</button>
     <button id="ctxDeleteBlock" class="danger-button">Delete Block</button>

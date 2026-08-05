@@ -4560,12 +4560,9 @@
       const metrics = [
         ["Reference", reference],
         ["Target kg/batch", model.target.kgPerBatch || "missing schedule/basis"],
-        ["Target kg/h", model.target.kgPerHour || "missing operating hours"],
         ["Target kg/year", model.target.kgPerYear || "missing annual basis"],
-        ["Batches/year", model.schedule.effectiveBatchesPerYear || `${model.basis.batchesPerDay || "?"} x ${model.basis.operatingDays || "?"}`],
-        ["Schedule method", model.schedule.method],
-        ["Product factor", model.factors.productFactor || "not available"],
-        ["Upstream factor", model.factors.upstreamFactor || "not available"]
+        ["Scale factor", model.factors.productFactor || "not available"],
+        ["Confidence", model.basis.confidence || "rough"]
       ];
       const rowGroups = scaledRowsByRole(model);
       return `
@@ -4835,7 +4832,7 @@
           ? "Check equipment capacity, then test more parallel units or split the grouped task."
           : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
       const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
-      const splitDividesDuration = !isKineticsBound && ["increases with scale", "equipment dependent"].includes(task.scaleSensitivity);
+      const splitDividesDuration = true;
       const canSplit = Number.isFinite(baseDuration);
       const pickerHtml = canSplit ? `
         <div class="bottleneck-split-picker">
@@ -4850,9 +4847,9 @@
       const splitButton = canSplit ? (
         isKineticsBound ? `
           <div class="bottleneck-split-warning">
-            <span class="muted small">This stage is kinetics-bound: splitting it into parallel units does not shorten the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput. Do not use this to relieve the cycle-time bottleneck; see the paper's octocrylene case, where the kinetics-bound reactor "cannot be relieved by parallelization".</span>
+            <span class="muted small">This stage is kinetics-bound. The split can divide the Gantt time as a bottleneck-screening scenario, but treat that as a scheduling assumption, not validated kinetic scale-up.</span>
             ${pickerHtml}
-            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="false" data-split-confirm-kinetics="true" class="mini-button">Split anyway (for throughput, not cycle time)</button>
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="true" data-split-confirm-kinetics="true" class="mini-button">Split and divide Gantt time</button>
           </div>
         ` : `
           <div class="bottleneck-split-controls">
@@ -7352,13 +7349,12 @@
       nInput.value = String(suggestion);
       nInput.dataset.splitBaseDuration = Number.isFinite(baseDuration) ? String(baseDuration) : "";
       const divideDuration = $("splitGroupDivideDuration");
-      const defaultDivideDuration = entry.scaleSensitivity !== "kinetics-bound" && ["increases with scale", "equipment dependent"].includes(entry.scaleSensitivity);
-      divideDuration.checked = defaultDivideDuration;
-      divideDuration.disabled = entry.scaleSensitivity === "kinetics-bound";
+      divideDuration.checked = true;
+      divideDuration.disabled = false;
       const warning = $("splitGroupWarning");
       if (entry.scaleSensitivity === "kinetics-bound") {
         warning.hidden = false;
-        warning.textContent = `${groupId} is kinetics-bound: splitting will NOT reduce the per-batch reaction time (kinetics depend on time, not equipment size) — it only raises throughput.`;
+        warning.textContent = `${groupId} is kinetics-bound. Dividing its Gantt time is allowed here as a scheduling/screening scenario, but it is not a validated kinetic scale-up claim.`;
       } else {
         warning.hidden = true;
         warning.textContent = "";
@@ -7555,6 +7551,7 @@
       $("ctxMergeBlocks").disabled = state.selectedIds.length < 2;
       const menuBlock = state.blocks.find(item => item.id === state.menuBlockId);
       $("ctxRemoveFromGroup").disabled = !menuBlock?.groupId;
+      $("ctxSplitBlockGroup").disabled = !menuBlock?.groupId;
     }
 
     function linksForGroup(groupId) {
@@ -8677,6 +8674,12 @@
       const blockId = state.menuBlockId;
       hideBlockMenu();
       removeBlockFromGroup(blockId);
+    });
+    $("ctxSplitBlockGroup").addEventListener("click", () => {
+      const block = state.blocks.find(item => item.id === state.menuBlockId);
+      const groupId = block?.groupId;
+      hideBlockMenu();
+      if (groupId) openSplitGroupModal(groupId);
     });
     $("ctxMergeBlocks").addEventListener("click", () => {
       hideBlockMenu();
