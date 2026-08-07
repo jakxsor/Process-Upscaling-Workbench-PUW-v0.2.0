@@ -1585,6 +1585,14 @@
       display: none;
     }
 
+    #confirmModal {
+      /* Must out-stack every other .modal-backdrop (they all share z-index: 80), since
+         confirmModal/promptModal can be triggered from inside an already-open modal
+         (e.g. editing a unit label from the flowsheet modal) and DOM order alone would
+         otherwise put the later-opened flowsheet modal on top, making OK/Cancel unclickable. */
+      z-index: 950;
+    }
+
     .modal-panel {
       width: min(1360px, calc(100vw - 24px));
       max-height: calc(100vh - 24px);
@@ -2640,4 +2648,24 @@
 
     .split-group-panel {
       width: min(480px, calc(100vw - 24px));
+    }
+
+    .confirm-panel {
+      width: min(440px, calc(100vw - 24px));
+    }
+
+    .confirm-modal-message {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--ink);
+      white-space: pre-wrap;
+    }
+
+    .confirm-modal-prompt-row {
+      display: block;
+      margin-top: 10px;
+    }
+
+    .confirm-modal-prompt-row input {
+      width: 100%;
     }

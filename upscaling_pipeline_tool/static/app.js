@@ -1,4 +1,8 @@
     const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.`;
+    // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
+    // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
+    // of 0.05h) and a relative margin (avoids flagging trivial % differences on long processes) before
+    // it is called a "critical" bottleneck instead of a "balanced" schedule. Not currently user-adjustable.
     const bottleneckThresholds = {
       minGapH: 1,
       minGapPercent: 15
@@ -388,7 +392,7 @@
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
         productKgPerBatch: "",
-        reactantsVolumeM3: "",
+        reactantsLoadingLPerKgProduct: "",
         solventLoadingLPerKgProduct: "",
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "",
@@ -1007,7 +1011,7 @@
       ];
       state.groups = {
         G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge from feed tanks (paper U1) plus heat to reflux; receives recovered cyclohexane loop CYHX" }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
-        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value; kinetic bottleneck, cannot be relieved by parallelization within one unit" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
+        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value; kinetic bottleneck, cannot be relieved by parallelization within one unit. Reactor sizing check: scaling the B9 lab recipe (reagent+solvent masses converted to volume via component densities) to the target batch size at standard 70% working fill gives a calculated minimum of roughly 13 m3; adding a standard ~10% engineering design margin and rounding to the nearest standard vessel size lands on the 15 m3 unit reported in the paper. This is order-of-magnitude agreement from first-principles scaling, not an exact derivation — the lab recipe ratios and screening-level cycle time both carry their own uncertainty." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
         G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3" }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
         G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
         G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "fixed-bed molecular-sieve column: not derivable from protocol phenomena, chosen by drying/adsorption heuristic", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection" }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
@@ -1034,13 +1038,13 @@
         operatingDays: "250",
         hoursPerDay: "24",
         batchesPerDay: "1",
-        batchDuration: "28",
+        batchDuration: "",
         oeePercent: "80",
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
         productKgPerBatch: "",
-        reactantsVolumeM3: "3.2",
-        solventLoadingLPerKgProduct: "2.5",
+        reactantsLoadingLPerKgProduct: "1.273",
+        solventLoadingLPerKgProduct: "1.508",
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "361.5",
         condensationWaterMolPerMol: "1",
@@ -1319,8 +1323,8 @@
       return `<button class="phen-option tip ${active ? "active" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}</button>`;
     }
 
-    function loadTextView() {
-      if (state.blocks.length && !confirm("Loading the text view clears all current blocks, groups, and arrows. Continue?")) return;
+    async function loadTextView() {
+      if (state.blocks.length && !(await confirmModal("Loading the text view clears all current blocks, groups, and arrows. Continue?"))) return;
       pushUndo();
       state.text = $("sourceInput").value;
       state.blocks = [];
@@ -1352,8 +1356,8 @@
       return { start, end, source: "annotated" };
     }
 
-    function createBlockFromSelection() {
-      const offsets = selectionOffsets() || state.lastSelection || sourceInputSelection();
+    async function createBlockFromSelection() {
+      const offsets = selectionOffsets() || state.lastSelection || await sourceInputSelection();
       if (!offsets) {
         $("selectionInfo").textContent = "Select text in the loaded text view first, then create a block.";
         return;
@@ -1361,11 +1365,34 @@
       createBlock(offsets.start, offsets.end);
     }
 
-    function sourceInputSelection() {
+    // Read-only: returns the current raw-textarea selection as character offsets, with no
+    // side effects. Safe to call from passive tracking (rememberSelection, context menus) that
+    // fire on every mouseup/keyup and must never mutate project state on their own.
+    function sourceInputOffsets() {
       const source = $("sourceInput");
       if (document.activeElement !== source) return null;
       if (source.selectionStart === source.selectionEnd) return null;
+      return {
+        start: Math.min(source.selectionStart, source.selectionEnd),
+        end: Math.max(source.selectionStart, source.selectionEnd),
+        source: "source"
+      };
+    }
+
+    // Committing variant, used only where a selection is about to be turned into a block
+    // (createBlockFromSelection). If the raw text was edited since the blocks/groups were built,
+    // their character offsets no longer line up with it, so — same as loadTextView() — this asks
+    // for confirmation before clearing them, instead of doing it silently as a side effect of
+    // selecting text (previously this ran on every mouseup/keyup in the textarea, so editing a
+    // typo and then merely adjusting the selection with Shift+Arrow could wipe the whole project
+    // with no prompt and no way to tell what happened).
+    async function sourceInputSelection() {
+      const offsets = sourceInputOffsets();
+      if (!offsets) return null;
+      const source = $("sourceInput");
       if (state.text !== source.value) {
+        if (!(await confirmModal("The protocol text has been edited since these blocks were created. Creating a block here will reload the text view and clear all current blocks, groups, and arrows. Continue?"))) return null;
+        pushUndo();
         state.text = source.value;
         state.blocks = [];
         state.groups = {};
@@ -1375,15 +1402,11 @@
         state.selectedIds = [];
         state.aiRefine = null;
       }
-      return {
-        start: Math.min(source.selectionStart, source.selectionEnd),
-        end: Math.max(source.selectionStart, source.selectionEnd),
-        source: "source"
-      };
+      return offsets;
     }
 
     function rememberSelection() {
-      const offsets = selectionOffsets() || sourceInputSelection();
+      const offsets = selectionOffsets() || sourceInputOffsets();
       state.lastSelection = offsets;
       state.lastSelectionAt = offsets ? Date.now() : 0;
       $("selectionInfo").textContent = offsets
@@ -1394,7 +1417,7 @@
     function handleTextSelectionRightMouseDown(event) {
       if (event.button !== 2) return;
       if (event.target.closest?.("[data-block-id]")) return;
-      const offsets = selectionOffsets() || sourceInputSelection();
+      const offsets = selectionOffsets() || sourceInputOffsets();
       if (!offsets) return;
       event.preventDefault();
       state.lastSelection = offsets;
@@ -1406,7 +1429,7 @@
     function handleTextSelectionContextMenu(event) {
       if (event.target.closest?.("[data-block-id]")) return;
       const recentStored = state.lastSelection && Date.now() - state.lastSelectionAt < 2500 ? state.lastSelection : null;
-      const offsets = selectionOffsets() || sourceInputSelection() || recentStored;
+      const offsets = selectionOffsets() || sourceInputOffsets() || recentStored;
       if (!offsets) return;
       event.preventDefault();
       state.lastSelection = offsets;
@@ -1493,6 +1516,7 @@
         });
         span.addEventListener("contextmenu", event => {
           event.preventDefault();
+          event.stopPropagation();
           if (!state.selectedIds.includes(span.dataset.blockId)) selectBlock(span.dataset.blockId, event.shiftKey);
           showBlockMenu(event.clientX, event.clientY, span.dataset.blockId);
         });
@@ -1658,6 +1682,7 @@
         });
         box.addEventListener("contextmenu", event => {
           event.preventDefault();
+          event.stopPropagation();
           showGroupMenu(event.clientX, event.clientY, box.dataset.groupBox);
         });
         box.addEventListener("mousedown", event => {
@@ -2498,17 +2523,20 @@
               groupState.flowsheetX = drag.startX + dx;
               groupState.flowsheetY = drag.startY + dy;
               groupState.flowsheetLayoutVersion = flowsheetLayoutVersion;
+              drag = null;
+              renderFlowsheetModal();
+              return;
             }
+            unitGroup.removeAttribute("transform");
             drag = null;
-            renderFlowsheetModal();
           };
           document.addEventListener("mousemove", onMove);
           document.addEventListener("mouseup", onUp);
         });
-        unitGroup.addEventListener("dblclick", event => {
+        unitGroup.addEventListener("dblclick", async event => {
           event.preventDefault();
           const groupState = ensureGroup(groupId);
-          const nextLabel = prompt(`Edit the unit description shown for ${groupId}:`, groupState.selectedUnit || "");
+          const nextLabel = await promptModal(`Edit the unit description shown for ${groupId}:`, groupState.selectedUnit || "");
           if (nextLabel === null) return;
           groupState.selectedUnit = nextLabel.trim();
           renderFlowsheetModal();
@@ -2810,22 +2838,6 @@
 
     function oppositeSide(side) {
       return { right: "left", left: "right", bottom: "top", top: "bottom" }[side] || "left";
-    }
-
-    function horizontalRoute(start, startOut, endOut, end) {
-      const offsetsCross = (start.x <= end.x && startOut.x >= endOut.x) || (start.x >= end.x && startOut.x <= endOut.x);
-      if (offsetsCross && Math.abs(start.y - end.y) < 34) return [start, end];
-      const midX = (startOut.x + endOut.x) / 2;
-      if (Math.abs(startOut.y - endOut.y) < 12) return [start, startOut, endOut, end];
-      return [start, startOut, { x: midX, y: startOut.y }, { x: midX, y: endOut.y }, endOut, end];
-    }
-
-    function verticalRoute(start, startOut, endOut, end) {
-      const offsetsCross = (start.y <= end.y && startOut.y >= endOut.y) || (start.y >= end.y && startOut.y <= endOut.y);
-      if (offsetsCross && Math.abs(start.x - end.x) < 34) return [start, end];
-      const midY = (startOut.y + endOut.y) / 2;
-      if (Math.abs(startOut.x - endOut.x) < 12) return [start, startOut, endOut, end];
-      return [start, startOut, { x: startOut.x, y: midY }, { x: endOut.x, y: midY }, endOut, end];
     }
 
     function compactRoute(points) {
@@ -3399,14 +3411,6 @@
       return NaN;
     }
 
-    function kgToUnit(value, unit) {
-      if (!Number.isFinite(value)) return NaN;
-      if (unit === "kg") return value;
-      if (unit === "g") return value * 1000;
-      if (unit === "t") return value / 1000;
-      return NaN;
-    }
-
     function percentFactor(value, fallback = 100) {
       const parsed = parseStreamQuantity(value);
       const safe = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -3430,7 +3434,7 @@
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
         productKgPerBatch: "",
-        reactantsVolumeM3: "",
+        reactantsLoadingLPerKgProduct: "",
         solventLoadingLPerKgProduct: "",
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "",
@@ -3840,13 +3844,22 @@
       };
     }
 
+    // Returns the calculated MINIMUM working volume at the stated fill fraction, not an as-built
+    // vessel size: real reactor selection adds a design margin (commonly ~10%) on top of this
+    // figure and rounds up to the nearest standard manufacturer size.
     function reactorSizingModel(basis, targetBatchKg) {
       const productBatchKg = Number.isFinite(targetBatchKg) && targetBatchKg > 0 ? targetBatchKg : NaN;
-      const reactantsVolumeM3 = parseStreamQuantity(basis.reactantsVolumeM3);
+      // Both reactants and solvent are stored as L per kg product (recipe ratios, assumed scale-invariant),
+      // not as fixed m3 totals, so the charge volume scales automatically with the target batch size instead
+      // of silently going stale when the production target or cycle time changes.
+      const reactantsLoadingLPerKg = parseStreamQuantity(basis.reactantsLoadingLPerKgProduct);
       const solventLoadingLPerKg = parseStreamQuantity(basis.solventLoadingLPerKgProduct);
       const workingFill = percentFactor(basis.reactorWorkingFillPercent, 70);
       const mw = parseStreamQuantity(basis.productMolecularWeightGmol);
       const waterStoich = parseStreamQuantity(basis.condensationWaterMolPerMol);
+      const reactantsVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(reactantsLoadingLPerKg) && reactantsLoadingLPerKg >= 0
+        ? productBatchKg * reactantsLoadingLPerKg / 1000
+        : NaN;
       const solventVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(solventLoadingLPerKg) && solventLoadingLPerKg >= 0
         ? productBatchKg * solventLoadingLPerKg / 1000
         : NaN;
@@ -3862,6 +3875,7 @@
       const ready = Number.isFinite(reactorVolumeM3) || Number.isFinite(generatedWaterKg);
       return {
         productBatchKg: Number.isFinite(productBatchKg) ? formatNumber(productBatchKg) : "",
+        reactantsLoadingLPerKgProduct: Number.isFinite(reactantsLoadingLPerKg) ? formatNumber(reactantsLoadingLPerKg) : "",
         reactantsVolumeM3: Number.isFinite(reactantsVolumeM3) ? formatNumber(reactantsVolumeM3) : "",
         solventLoadingLPerKgProduct: Number.isFinite(solventLoadingLPerKg) ? formatNumber(solventLoadingLPerKg) : "",
         solventVolumeM3: Number.isFinite(solventVolumeM3) ? formatNumber(solventVolumeM3) : "",
@@ -3872,7 +3886,7 @@
         ready,
         missing: [
           Number.isFinite(productBatchKg) ? "" : "product kg/batch",
-          Number.isFinite(reactantsVolumeM3) ? "" : "reactants volume",
+          Number.isFinite(reactantsLoadingLPerKg) ? "" : "reactants loading",
           Number.isFinite(solventLoadingLPerKg) ? "" : "solvent loading",
           Number.isFinite(workingFill) ? "" : "working fill",
           Number.isFinite(mw) ? "" : "product MW for stoichiometric water"
@@ -4659,12 +4673,12 @@
               <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="auto">
             </label>
             <label>
-              <div class="label">Reactants volume, m3</div>
-              <input data-scale-field="reactantsVolumeM3" value="${escapeAttr(basis.reactantsVolumeM3)}" inputmode="decimal" placeholder="e.g. 3.2">
+              <div class="label">Reactants L/kg product</div>
+              <input data-scale-field="reactantsLoadingLPerKgProduct" value="${escapeAttr(basis.reactantsLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.27">
             </label>
             <label>
               <div class="label">Solvent L/kg product</div>
-              <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 2.5">
+              <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.51">
             </label>
             <label>
               <div class="label">Working fill, %</div>
@@ -4735,7 +4749,7 @@
         });
       });
       root.querySelectorAll("[data-split-bottleneck]").forEach(button => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
           const groupId = button.dataset.splitBottleneck;
           const n = Number(button.dataset.splitCount);
           const warn = button.dataset.splitConfirmKinetics === "true"
@@ -4745,7 +4759,8 @@
           const durationText = divideDuration
             ? "The Gantt duration and time-like conditions are divided as a screening estimate."
             : "Per-unit durations are kept until you edit or validate sized-equipment times.";
-          if (!confirm(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${durationText} ${groupId} itself is removed. This can be undone.`)) return;
+          const ok = await confirmModal(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${durationText} ${groupId} itself is removed. This can be undone.`);
+          if (!ok) return;
           splitGroupIntoParallelUnits(groupId, n, { divideDuration });
         });
       });
@@ -4899,8 +4914,9 @@
           `).join("")}
         </div>
         <div class="mfa-empty" style="margin-top:8px">
-          Reactor volume = (reactants volume + solvent L/kg product × product kg/batch / 1000) / working fill.
+          Reactor volume = ((reactants L/kg product + solvent L/kg product) × product kg/batch / 1000) / working fill. Both L/kg ratios come from the lab recipe and scale automatically with the target batch size — they are not fixed volumes.
           Water = product kg/batch × 18.015 / product MW × stoichiometric water coefficient.
+          This is the calculated minimum at standard working fill (70-80% is typical for stirred batch/semi-batch reactors); real vessel selection typically adds a design margin (commonly ~10%) and rounds up to the nearest standard manufacturer size, so the as-built reactor is usually somewhat larger than this figure.
         </div>
         ${sizing.missing?.length ? `<span class="muted small">Missing for full check: ${escapeHtml(sizing.missing.join(", "))}</span>` : ""}
       `;
@@ -5389,7 +5405,10 @@
           capacityUnit: preset.capacityUnit,
           operationClass: preset.operationClass,
           scaleSensitivity: preset.scaleSensitivity,
-          notes: preset.notes
+          // Flagged as a keyword-matched guess, not sourced data: without this prefix the note reads
+          // identically to the paper-cited notes in the real sample (e.g. G2's "(paper U2)" citations),
+          // and a user inspecting the export later has no way to tell an approximate fill from real data.
+          notes: `Example fill (approximate, keyword-matched, not sourced) — ${preset.notes}`
         };
       });
       ensureScaleBasis();
@@ -5399,8 +5418,8 @@
       state.scaleBasis.scheduleMarginPercent = "0";
       state.scaleBasis.batchDuration = "";
       state.scaleBasis.allowableCapacityUtilizationPercent = "85";
-      state.scaleBasis.reactantsVolumeM3 = "3.2";
-      state.scaleBasis.solventLoadingLPerKgProduct = "2.5";
+      state.scaleBasis.reactantsLoadingLPerKgProduct = "1.273";
+      state.scaleBasis.solventLoadingLPerKgProduct = "1.508";
       state.scaleBasis.reactorWorkingFillPercent = "70";
       state.scaleBasis.productMolecularWeightGmol = "361.5";
       state.scaleBasis.condensationWaterMolPerMol = "1";
@@ -5465,43 +5484,6 @@
           target: item.target || "process rule application",
           action: item.action
         }))) : `<div class="mfa-empty">No conflicts from selected local process checks.</div>`}
-      `;
-    }
-
-    function processActionTableHtml(conflicts) {
-      if (!conflicts.length) return "";
-      const rows = conflicts.slice(0, 14).map(processActionRowModel);
-      return `
-        <div class="process-action-table-wrap">
-          <div class="process-action-head">
-            <strong>Action Table</strong>
-            <span class="muted small">${rows.length} priority point${rows.length === 1 ? "" : "s"} to analyze in the process.</span>
-          </div>
-          <div class="muted small">Built deterministically from local rule checks, heuristic triggers, grouped MFA, phases, conditions, links, scale-up basis, and Gantt data. It is a triage table, not an automatic process edit.</div>
-          <table class="process-action-table">
-            <thead>
-              <tr>
-                <th>Priority</th>
-                <th>Point To Analyze</th>
-                <th>Process Area</th>
-                <th>Rule / Doubt</th>
-                <th>Act On</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(row => `
-                <tr>
-                  <td><span class="severity-pill">${escapeHtml(row.priority)}</span></td>
-                  <td><strong>${escapeHtml(row.point)}</strong><span>${escapeHtml(row.evidence)}</span></td>
-                  <td>${escapeHtml(row.area)}</td>
-                  <td>${escapeHtml(row.rule)}</td>
-                  <td>${escapeHtml(row.action)}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-          ${conflicts.length > rows.length ? `<div class="muted small">+${conflicts.length - rows.length} more lower-priority points in the cards below.</div>` : ""}
-        </div>
       `;
     }
 
@@ -5680,7 +5662,7 @@
       const reportStyle = $("aiReportStyle")?.value || "commentary_summary";
       const useWebReferences = $("aiUseWebReferences")?.checked !== false;
       const options = currentProcessRuleOptions();
-      renderExport();
+      writeExportNow();
       result.className = "external-ai-result mfa-empty";
       const keySource = apiKey ? "temporary popup key" : "server OPENAI_API_KEY if configured";
       result.textContent = useWebReferences
@@ -6818,6 +6800,7 @@
       root.querySelectorAll("[data-stream-label]").forEach(label => {
         label.addEventListener("contextmenu", event => {
           event.preventDefault();
+          event.stopPropagation();
           showStreamMenu(event.clientX, event.clientY, label.dataset.streamLabel);
         });
         label.addEventListener("dblclick", () => {
@@ -7221,34 +7204,6 @@
       return Array.from(byFamily.values()).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     }
 
-    function conditionPromptFamilyHtml(block, group) {
-      return `
-        <div class="condition-family">
-          <div class="condition-family-head">
-            <span>${escapeHtml(group.title)}</span>
-            <span class="pill">${group.items.length}</span>
-          </div>
-          <div class="condition-grid">
-            ${group.items.map(prompt => conditionEditCardHtml(block, prompt)).join("")}
-          </div>
-        </div>
-      `;
-    }
-
-    function conditionValueFamilyHtml(group) {
-      return `
-        <div class="condition-family">
-          <div class="condition-family-head">
-            <span>${escapeHtml(group.title)}</span>
-            <span class="pill">${group.items.length}</span>
-          </div>
-          <div class="condition-grid">
-            ${group.items.map(item => conditionLabelHtml(item)).join("")}
-          </div>
-        </div>
-      `;
-    }
-
     function conditionValuesForBlock(block, prompts = conditionPromptsForBlock(block)) {
       ensureBlockConditionFields(block);
       return prompts
@@ -7617,10 +7572,10 @@
       if (state.selectedGroupId === groupId) state.selectedGroupId = null;
     }
 
-    function deleteBlock(blockId) {
+    async function deleteBlock(blockId) {
       const block = state.blocks.find(item => item.id === blockId);
       if (!block) return;
-      if (!confirm(`Are you sure you want to delete block ${blockId}? Its streams, phenomena, and conditions will be removed too.`)) return;
+      if (!(await confirmModal(`Are you sure you want to delete block ${blockId}? Its streams, phenomena, and conditions will be removed too.`))) return;
       pushUndo();
       const groupId = block.groupId;
       state.blocks = state.blocks.filter(item => item.id !== blockId);
@@ -7693,6 +7648,74 @@
       state.selectedIds = [target.id];
       invalidateAiRefine();
       renderAll();
+    }
+
+    // Replacement for window.confirm()/window.prompt(): those silently return false/null in some
+    // embedding webviews (VS Code's included) instead of throwing, so callers relying on them fail
+    // with no visible error. These use the in-page #confirmModal instead, and are promise-based so
+    // call sites just `await` them.
+    let activeConfirmCancel = null;
+
+    function confirmModal(message, { okLabel = "OK", cancelLabel = "Cancel" } = {}) {
+      return new Promise(resolve => {
+        const modal = $("confirmModal");
+        const okBtn = $("confirmModalOk");
+        const cancelBtn = $("confirmModalCancel");
+        $("confirmModalMessage").textContent = message;
+        $("confirmModalPromptRow").hidden = true;
+        okBtn.textContent = okLabel;
+        cancelBtn.textContent = cancelLabel;
+        modal.hidden = false;
+        const cleanup = result => {
+          modal.hidden = true;
+          okBtn.removeEventListener("click", onOk);
+          cancelBtn.removeEventListener("click", onCancel);
+          modal.removeEventListener("mousedown", onBackdrop);
+          activeConfirmCancel = null;
+          resolve(result);
+        };
+        const onOk = () => cleanup(true);
+        const onCancel = () => cleanup(false);
+        const onBackdrop = event => { if (event.target === modal) cleanup(false); };
+        okBtn.addEventListener("click", onOk);
+        cancelBtn.addEventListener("click", onCancel);
+        modal.addEventListener("mousedown", onBackdrop);
+        activeConfirmCancel = onCancel;
+      });
+    }
+
+    function promptModal(message, defaultValue = "") {
+      return new Promise(resolve => {
+        const modal = $("confirmModal");
+        const okBtn = $("confirmModalOk");
+        const cancelBtn = $("confirmModalCancel");
+        const row = $("confirmModalPromptRow");
+        const input = $("confirmModalPromptInput");
+        $("confirmModalMessage").textContent = message;
+        row.hidden = false;
+        input.value = defaultValue;
+        okBtn.textContent = "OK";
+        cancelBtn.textContent = "Cancel";
+        modal.hidden = false;
+        input.focus();
+        input.select();
+        const cleanup = result => {
+          modal.hidden = true;
+          row.hidden = true;
+          okBtn.removeEventListener("click", onOk);
+          cancelBtn.removeEventListener("click", onCancel);
+          modal.removeEventListener("mousedown", onBackdrop);
+          activeConfirmCancel = null;
+          resolve(result);
+        };
+        const onOk = () => cleanup(input.value);
+        const onCancel = () => cleanup(null);
+        const onBackdrop = event => { if (event.target === modal) cleanup(null); };
+        okBtn.addEventListener("click", onOk);
+        cancelBtn.addEventListener("click", onCancel);
+        modal.addEventListener("mousedown", onBackdrop);
+        activeConfirmCancel = onCancel;
+      });
     }
 
     function openSplitGroupModal(groupId) {
@@ -8004,7 +8027,17 @@
       state.drag = null;
     }
 
+    // Some embedding webviews (VS Code's Electron webview included) can fire a synthetic "click" right
+    // after "contextmenu", which would otherwise hit the document-level outside-click handler below and
+    // close a menu the instant it opens. Every show*Menu() call stamps this, and the outside-click
+    // handler ignores clicks that land within the same short window instead of trusting event identity.
+    let lastMenuOpenAt = 0;
+    function markMenuJustOpened() {
+      lastMenuOpenAt = Date.now();
+    }
+
     function showBlockMenu(x, y, blockId) {
+      markMenuJustOpened();
       state.menuBlockId = blockId;
       renderContextMenuOptions();
       hideGroupMenu();
@@ -8021,6 +8054,7 @@
     }
 
     function showGroupMenu(x, y, groupId) {
+      markMenuJustOpened();
       state.menuGroupId = groupId;
       const blocks = blocksForGroup(groupId);
       state.selectedGroupId = groupId;
@@ -8045,6 +8079,7 @@
     }
 
     function showStreamMenu(x, y, streamId) {
+      markMenuJustOpened();
       state.menuStreamId = streamId;
       hideBlockMenu();
       hideGroupMenu();
@@ -8060,6 +8095,7 @@
     }
 
     function showTextSelectionMenu(x, y) {
+      markMenuJustOpened();
       hideBlockMenu();
       hideGroupMenu();
       hideStreamMenu();
@@ -8741,8 +8777,24 @@
       };
     }
 
-    function renderExport() {
+    let renderExportTimer = null;
+
+    // Writes the export JSON immediately, bypassing the debounce below. Use this (not renderExport)
+    // anywhere the fresh JSON is read back synchronously right after, e.g. before sending it to the
+    // external AI review endpoint — a debounced write there would send stale project data.
+    function writeExportNow() {
+      if (renderExportTimer) {
+        clearTimeout(renderExportTimer);
+        renderExportTimer = null;
+      }
       $("jsonOut").textContent = JSON.stringify(buildProjectExport(), null, 2);
+    }
+
+    // Debounced: called on every keystroke by the various update*Field handlers, so coalesce rapid
+    // typing into a single rebuild of the full project export instead of re-serializing on each key.
+    function renderExport() {
+      if (renderExportTimer) clearTimeout(renderExportTimer);
+      renderExportTimer = setTimeout(writeExportNow, 200);
     }
 
     function exportBlock(block) {
@@ -8850,8 +8902,8 @@
 
     $("behaviorSelect").innerHTML = Object.keys(behaviorPresets).map(name => `<option value="${name}">${name}</option>`).join("");
 
-    $("loadSample").addEventListener("click", () => {
-      if (state.blocks.length && !confirm("Load the octocrylene case? This replaces all current blocks, groups, and arrows.")) return;
+    $("loadSample").addEventListener("click", async () => {
+      if (state.blocks.length && !(await confirmModal("Load the octocrylene case? This replaces all current blocks, groups, and arrows."))) return;
       if (state.blocks.length) pushUndo();
       loadBaseExampleProject();
     });
@@ -8876,9 +8928,9 @@
     });
     $("createBlockSide").addEventListener("click", createBlockFromSelection);
     $("openScaleTop").addEventListener("click", openScalePanel);
-    $("clearProject").addEventListener("click", () => {
+    $("clearProject").addEventListener("click", async () => {
       if (!state.blocks.length) return;
-      if (!confirm("Clear all blocks, groups, and arrows? This cannot be undone with more than one step back.")) return;
+      if (!(await confirmModal("Clear all blocks, groups, and arrows? This cannot be undone with more than one step back."))) return;
       pushUndo();
       state.blocks = [];
       state.groups = {};
@@ -8894,7 +8946,7 @@
       state.aiRefine = null;
       renderAll();
     });
-    $("exportJson").addEventListener("click", renderExport);
+    $("exportJson").addEventListener("click", writeExportNow);
     document.querySelectorAll("[data-source-tab]").forEach(button => {
       button.addEventListener("click", () => setSourcePanelTab(button.dataset.sourceTab));
     });
@@ -9093,6 +9145,10 @@
           closeSplitGroupModal();
           return;
         }
+        if (!$("confirmModal").hidden && activeConfirmCancel) {
+          activeConfirmCancel();
+          return;
+        }
         closeFloatingActions();
         renderAll();
         return;
@@ -9107,6 +9163,7 @@
       if (event.target.closest(".context-menu")) return;
       const anyMenuOpen = !$("blockMenu").hidden || !$("groupMenu").hidden || !$("streamMenu").hidden || !$("textSelectionMenu").hidden;
       if (!anyMenuOpen) return;
+      if (Date.now() - lastMenuOpenAt < 250) return;
       hideBlockMenu();
       hideGroupMenu();
       hideStreamMenu();

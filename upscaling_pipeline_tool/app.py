@@ -328,6 +328,26 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
+  <div id="confirmModal" class="modal-backdrop" hidden>
+    <section class="modal-panel confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="confirmModalTitle">Confirm</h2>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="confirmModalMessage" class="confirm-modal-message"></div>
+        <label id="confirmModalPromptRow" class="confirm-modal-prompt-row" hidden>
+          <input type="text" id="confirmModalPromptInput">
+        </label>
+        <div class="row between" style="margin-top:12px">
+          <button id="confirmModalCancel">Cancel</button>
+          <button id="confirmModalOk" class="primary">OK</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <div id="flowsheetModal" class="modal-backdrop" hidden>
     <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">
       <div class="modal-head">
@@ -337,6 +357,7 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div class="row flowsheet-toolbar">
           <button id="flowsheetEditableMode" class="mini-button primary" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
+          <button id="flowsheetTechnicalMode" class="mini-button" title="Server-rendered technical PFD with formal equipment symbols (falls back to the editable board if unavailable)">Technical PFD</button>
           <span class="flowsheet-toolbar-divider"></span>
           <button id="fitFlowsheetView" class="mini-button primary" title="Fit the generated flowsheet inside the modal for overview">Fit View</button>
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
