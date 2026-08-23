@@ -629,12 +629,12 @@
       };
     }
 
-    function createBlock(start, end, options = {}) {
+    async function createBlock(start, end, options = {}) {
       if (start === end) return;
       const lo = Math.min(start, end);
       const hi = Math.max(start, end);
       if (state.blocks.some(block => rangesOverlap(lo, hi, block.start, block.end))) {
-        alert("Selection overlaps an existing block. Select unassigned text or use group actions.");
+        await alertModal("Selection overlaps an existing block. Select unassigned text or use group actions.");
         return;
       }
       const text = state.text.slice(lo, hi).replace(/\s+/g, " ").trim();
@@ -1362,7 +1362,7 @@
         $("selectionInfo").textContent = "Select text in the loaded text view first, then create a block.";
         return;
       }
-      createBlock(offsets.start, offsets.end);
+      await createBlock(offsets.start, offsets.end);
     }
 
     // Read-only: returns the current raw-textarea selection as character offsets, with no
@@ -4761,7 +4761,7 @@
             : "Per-unit durations are kept until you edit or validate sized-equipment times.";
           const ok = await confirmModal(`${warn}Split ${groupId} into ${n} parallel units? This creates ${n} new task groups (${groupId}-P1..P${n}), each with its own copy of every block in ${groupId} and 1/${n} of its material flow, wired in parallel between the same predecessor and successor. ${durationText} ${groupId} itself is removed. This can be undone.`);
           if (!ok) return;
-          splitGroupIntoParallelUnits(groupId, n, { divideDuration });
+          await splitGroupIntoParallelUnits(groupId, n, { divideDuration });
         });
       });
     }
@@ -6783,13 +6783,13 @@
         });
       });
       root.querySelectorAll("[data-save-stream]").forEach(button => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
           const current = selectedBlock();
           if (!current) return;
           const stream = current.streams.find(item => item.id === button.dataset.saveStream);
           if (!stream) return;
           if (!stream.phase || stream.phase === "unknown") {
-            alert("Select the Lutze phase category before saving this stream.");
+            await alertModal("Select the Lutze phase category before saving this stream.");
             return;
           }
           stream.editing = false;
@@ -7598,17 +7598,17 @@
       renderAll();
     }
 
-    function mergeSelectedBlocks() {
+    async function mergeSelectedBlocks() {
       const ids = state.selectedIds.filter(id => state.blocks.some(block => block.id === id));
       const blocks = blocksInOrder().filter(block => ids.includes(block.id));
       if (blocks.length < 2) {
-        alert("Shift-click at least two blocks, then merge.");
+        await alertModal("Shift-click at least two blocks, then merge.");
         return;
       }
       const lo = Math.min(...blocks.map(block => block.start));
       const hi = Math.max(...blocks.map(block => block.end));
       if (state.blocks.some(block => !ids.includes(block.id) && rangesOverlap(lo, hi, block.start, block.end))) {
-        alert("Cannot merge: another block lies between the selected blocks. Merge only adjacent blocks.");
+        await alertModal("Cannot merge: another block lies between the selected blocks. Merge only adjacent blocks.");
         return;
       }
       pushUndo();
@@ -7718,6 +7718,35 @@
       });
     }
 
+    // Replacement for window.alert() — same silent-no-op risk in some embedding webviews as
+    // confirm()/prompt() above. Reuses #confirmModal with Cancel hidden, since an alert only has
+    // one way out (acknowledge).
+    function alertModal(message) {
+      return new Promise(resolve => {
+        const modal = $("confirmModal");
+        const okBtn = $("confirmModalOk");
+        const cancelBtn = $("confirmModalCancel");
+        $("confirmModalMessage").textContent = message;
+        $("confirmModalPromptRow").hidden = true;
+        okBtn.textContent = "OK";
+        cancelBtn.hidden = true;
+        modal.hidden = false;
+        const cleanup = () => {
+          modal.hidden = true;
+          cancelBtn.hidden = false;
+          okBtn.removeEventListener("click", onOk);
+          modal.removeEventListener("mousedown", onBackdrop);
+          activeConfirmCancel = null;
+          resolve();
+        };
+        const onOk = () => cleanup();
+        const onBackdrop = event => { if (event.target === modal) cleanup(); };
+        okBtn.addEventListener("click", onOk);
+        modal.addEventListener("mousedown", onBackdrop);
+        activeConfirmCancel = onOk;
+      });
+    }
+
     function openSplitGroupModal(groupId) {
       const group = groupModel(groupId);
       if (!group) return;
@@ -7763,17 +7792,17 @@
       state.pendingSplitGroupId = null;
     }
 
-    function confirmSplitGroupModal() {
+    async function confirmSplitGroupModal() {
       const groupId = state.pendingSplitGroupId;
       if (!groupId) return;
       let n = Math.round(Number($("splitGroupN").value));
       if (!Number.isFinite(n) || n < 2) n = 2;
       const divideDuration = $("splitGroupDivideDuration")?.checked === true;
       closeSplitGroupModal();
-      splitGroupIntoParallelUnits(groupId, n, { divideDuration });
+      await splitGroupIntoParallelUnits(groupId, n, { divideDuration });
     }
 
-    function splitGroupIntoParallelUnits(groupId, n, options = {}) {
+    async function splitGroupIntoParallelUnits(groupId, n, options = {}) {
       const group = groupModel(groupId);
       if (!group || !Number.isFinite(n) || n < 2) return;
       const baseState = ensureGroup(groupId);
@@ -7788,7 +7817,7 @@
       const groupCollision = proposedGroupIds.some(id => state.groups[id] || state.blocks.some(block => block.groupId === id));
       const blockCollision = proposedBlockIds.some(id => state.blocks.some(block => block.id === id));
       if (groupCollision || blockCollision) {
-        alert(`Cannot split ${groupId}: one or more ${groupId}-P* groups already exist. Rename or remove the previous split before splitting this group again.`);
+        await alertModal(`Cannot split ${groupId}: one or more ${groupId}-P* groups already exist. Rename or remove the previous split before splitting this group again.`);
         return;
       }
       pushUndo();
@@ -8368,13 +8397,41 @@
 
     function closeTutorial() {
       $("tutorialOverlay").hidden = true;
+      if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
+      tutorialSettleFrame = null;
     }
 
     function renderTutorialStep() {
       const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
       const target = document.querySelector(step.target);
       if (target) target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-      requestAnimationFrame(() => positionTutorialStep(step));
+      positionTutorialStep(step);
+      watchTutorialScrollSettle(step);
+    }
+
+    // scrollIntoView({behavior:"smooth"}) has no completion event, and its duration varies with
+    // distance, so a single requestAnimationFrame after calling it (the previous approach) measured
+    // the target mid-scroll — the spotlight/card could land hundreds of px off from steps that
+    // needed to scroll far (e.g. the Inspector/Heuristics/Scale-Up steps). Keep repositioning every
+    // frame until the target's rect stops moving for a few consecutive frames, which tracks a scroll
+    // of any length without depending on a fixed delay or on 'scrollend' support.
+    let tutorialSettleFrame = null;
+    function watchTutorialScrollSettle(step) {
+      if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
+      let lastRect = null;
+      let stableFrames = 0;
+      const tick = () => {
+        if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
+        const target = document.querySelector(step.target);
+        const rect = target ? target.getBoundingClientRect() : null;
+        const unchanged = lastRect && rect && rect.top === lastRect.top && rect.left === lastRect.left;
+        stableFrames = unchanged ? stableFrames + 1 : 0;
+        lastRect = rect;
+        positionTutorialStep(step);
+        if (stableFrames >= 4) { tutorialSettleFrame = null; return; }
+        tutorialSettleFrame = requestAnimationFrame(tick);
+      };
+      tutorialSettleFrame = requestAnimationFrame(tick);
     }
 
     function positionTutorialStep(step) {
@@ -8966,6 +9023,10 @@
     });
     $("tutorialOverlay").addEventListener("click", event => {
       if (event.target === $("tutorialOverlay")) closeTutorial();
+    });
+    window.addEventListener("resize", () => {
+      if ($("tutorialOverlay").hidden) return;
+      positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]);
     });
     $("refineProject").addEventListener("click", runRuleChecks);
     $("refineProjectAi").addEventListener("click", openAiRefineModal);
