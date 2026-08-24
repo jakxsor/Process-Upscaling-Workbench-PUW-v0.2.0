@@ -3,3 +3,10 @@ __pycache__/
 .env
 .DS_Store
 saved_states/
+
+# Internal development notes, not part of the public paper-companion tree
+.github/copilot-instructions.md
+upscaling_pipeline_tool/audit_interactions_gantt.md
+upscaling_pipeline_tool/audit_user_workflow_v1.md
+upscaling_pipeline_tool/scale_up_engine_v2_notes.md
+upscaling_pipeline_tool/workshop.md

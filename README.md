@@ -3,6 +3,21 @@
 Local web app for turning a laboratory synthesis protocol into a traceable
 early-stage scale-up workflow.
 
+## About This Repository
+
+This repository implements the phenomena-based upscaling framework described
+in:
+
+> Majó, M., Sorani, J., Nowack, B., Hischier, R. "Generalized Scale-Up
+> Methodology for Chemicals and Materials in Prospective LCA." [journal,
+> status: in review]
+
+The built-in octocrylene example reproduces the case study in Section 3 and
+the Supplementary Information of that paper (nine unit operations, three
+recycle loops, ~15 m³ reactor, 750 t/yr target).
+
+If you use this tool in your work, please cite the paper above.
+
 The tool is designed to support a phenomena-based upscaling framework. It helps
 the user move from free text to blocks, phenomena, task groups, unit-operation
 alternatives, material-flow assumptions, heuristic checks, preliminary scale-up,
