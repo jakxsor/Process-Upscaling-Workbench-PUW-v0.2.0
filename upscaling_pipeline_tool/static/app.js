@@ -1981,12 +1981,32 @@
         });
       }
 
+      // A base id is a "confluence" node when it receives forward edges from more than one
+      // distinct upstream stage - e.g. a shared recovery/vent/WWT unit fed by several process
+      // stages. Its own stage number is usually unique (nothing else lands on that column), so
+      // the plain collision-based row bump below never fires for it and it stays on row 0 -
+      // same row as the main chain it actually cuts across. Force confluence nodes off row 0
+      // so their connectors get routed as cross-row (with obstacle-avoiding detours) instead of
+      // being drawn as a same-row straight line through the intervening boxes.
+      const incomingStagesByBase = new Map();
+      baseEdges.forEach(([fromBase, toBase]) => {
+        if (!incomingStagesByBase.has(toBase)) incomingStagesByBase.set(toBase, new Set());
+        incomingStagesByBase.get(toBase).add(stageByBase.get(fromBase));
+      });
+      const confluenceBases = new Set(
+        Array.from(incomingStagesByBase.entries())
+          .filter(([, stages]) => stages.size > 1)
+          .map(([base]) => base)
+      );
+
       const rowByStage = new Map();
       const rowById = new Map();
       const stageById = new Map();
       groupIds.forEach(groupId => {
-        const stage = stageByBase.get(flowsheetStageBaseId(groupId)) || 0;
-        const row = rowByStage.get(stage) || 0;
+        const baseId = flowsheetStageBaseId(groupId);
+        const stage = stageByBase.get(baseId) || 0;
+        const minRow = confluenceBases.has(baseId) ? 1 : 0;
+        const row = Math.max(minRow, rowByStage.get(stage) || 0);
         rowByStage.set(stage, row + 1);
         stageById.set(groupId, stage);
         rowById.set(groupId, row);
@@ -2330,7 +2350,11 @@
 
       const productMarkup = model.productBox && model.groups.length ? (() => {
         const box = model.productBox;
-        const last = model.groups[model.groups.length - 1];
+        // The group with the actual fate:"product" output stream, not just whichever group
+        // happens to be last in text order - upscaling additions appended after the real
+        // purification step (vent abatement, solvent recovery, WWT) would otherwise become
+        // "last" and the arrow would be drawn from the wrong unit with no product data.
+        const last = model.groups.find(group => group.isProduct) || model.groups[model.groups.length - 1];
         const start = flowsheetPort(last, box, 10);
         const end = flowsheetPort(box, last, 14);
         const midX = (start.x + end.x) / 2;
