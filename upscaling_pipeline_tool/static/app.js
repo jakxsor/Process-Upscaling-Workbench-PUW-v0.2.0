@@ -3523,7 +3523,7 @@
       state.scaleBasis = { ...scaleBasisDefaults(), ...(state.scaleBasis || {}) };
       if (!scaleTargetUnitOptions.includes(state.scaleBasis.targetUnit)) state.scaleBasis.targetUnit = "kg/batch";
       if (!["kg", "g", "t"].includes(state.scaleBasis.basisUnit)) state.scaleBasis.basisUnit = "kg";
-      if (!["batch", "semi-batch", "continuous"].includes(state.scaleBasis.mode)) state.scaleBasis.mode = "batch";
+      if (!["batch", "continuous"].includes(state.scaleBasis.mode)) state.scaleBasis.mode = "batch";
       if (!["rough", "estimated", "validated"].includes(state.scaleBasis.confidence)) state.scaleBasis.confidence = "rough";
       return state.scaleBasis;
     }
@@ -4698,20 +4698,21 @@
           </label>
         </div>
       `;
+      const fieldLabel = (text, tip) => `<div class="label tip" data-tip="${escapeAttr(tip)}">${escapeHtml(text)}</div>`;
       root.innerHTML = `
         <div class="scale-section">
           <div class="scale-section-title">Reference basis</div>
           <div class="scale-grid">
             <label class="scale-wide">
-              <div class="label">Reference output block</div>
+              ${fieldLabel("Reference output block", "Which existing block's output stream anchors the lab-scale recipe ratios (reactants/solvent per kg product). Leave on auto to use the block with a numeric product-like output.")}
               <select data-scale-field="referenceBlockId">${referenceOptions}</select>
             </label>
             <label>
-              <div class="label">Manual basis amount</div>
+              ${fieldLabel("Manual basis amount", "Override the reference block's own quantity for scaling ratios, without editing the block itself.")}
               <input data-scale-field="basisAmount" value="${escapeAttr(basis.basisAmount)}" inputmode="decimal" placeholder="optional">
             </label>
             <label>
-              <div class="label">Basis unit</div>
+              ${fieldLabel("Basis unit", "Unit for the manual basis amount above.")}
               <select data-scale-field="basisUnit">${optionHtml(["kg", "g", "t"], basis.basisUnit)}</select>
             </label>
           </div>
@@ -4721,39 +4722,39 @@
           <div class="scale-section-title">Operating schedule</div>
           <div class="scale-grid">
             <label>
-              <div class="label">Mode</div>
-              <select data-scale-field="mode">${optionHtml(["batch", "semi-batch", "continuous"], basis.mode)}</select>
+              ${fieldLabel("Mode", "Continuous processes skip the batches/day and batch-duration fields below.")}
+              <select data-scale-field="mode">${optionHtml(["batch", "continuous"], basis.mode)}</select>
             </label>
             <label>
-              <div class="label">Batches/day</div>
+              ${fieldLabel("Batches/day", "Fallback only: used to derive annual batches solely when no task duration/Gantt data exists yet. Once durations are entered below or in the Gantt panel, annual batches come from duration x OEE x parallel units instead and this field is ignored.")}
               <input data-scale-field="batchesPerDay" value="${escapeAttr(basis.batchesPerDay)}" inputmode="decimal" placeholder="1">
             </label>
             <label>
-              <div class="label">Days/year</div>
+              ${fieldLabel("Days/year", "Used with batches/day for the fallback method above, and to convert daily/annual targets to an hourly rate.")}
               <input data-scale-field="operatingDays" value="${escapeAttr(basis.operatingDays)}" inputmode="decimal" placeholder="250">
             </label>
             <label>
-              <div class="label">Hours/day</div>
+              ${fieldLabel("Hours/day", "Only used to display an hourly production rate; does not affect the batch or annual targets.")}
               <input data-scale-field="hoursPerDay" value="${escapeAttr(basis.hoursPerDay)}" inputmode="decimal" placeholder="16">
             </label>
             <label class="scale-wide">
-              <div class="label">Batch duration, h</div>
+              ${fieldLabel("Batch duration, h", "Manual override for the single-train batch cycle time. Leave blank to use the sum of task durations from the Gantt panel instead - this is the preferred, non-fallback path.")}
               <input data-scale-field="batchDuration" value="${escapeAttr(basis.batchDuration)}" inputmode="decimal" placeholder="optional">
             </label>
             <label>
-              <div class="label">Gantt margin, %</div>
+              ${fieldLabel("Gantt margin, %", "Safety margin added to every task duration before computing cycle time and bottlenecks (e.g. undocumented setup/changeover time).")}
               <input data-scale-field="scheduleMarginPercent" value="${escapeAttr(basis.scheduleMarginPercent)}" inputmode="decimal" placeholder="0">
             </label>
             <label>
-              <div class="label">OEE, %</div>
+              ${fieldLabel("OEE, %", "Overall Equipment Effectiveness: fraction of calendar time (8760 h/year) the plant is actually producing after downtime, changeovers, and maintenance. Drives annual batch count together with batch duration and parallel units. Not the same as the equipment fill limit below, which is about size, not time.")}
               <input data-scale-field="oeePercent" value="${escapeAttr(basis.oeePercent)}" inputmode="decimal" placeholder="80">
             </label>
             <label>
-              <div class="label">Parallel units</div>
+              ${fieldLabel("Parallel units", "Number of identical trains running the same schedule in parallel. Multiplies the annual batch count from the duration-based method.")}
               <input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1">
             </label>
             <label>
-              <div class="label">Capacity limit, %</div>
+              ${fieldLabel("Equipment fill limit, %", "How full a single piece of equipment (e.g. reactor working volume) is allowed to run - used only to flag over-capacity tasks in the Bottleneck classification below. Distinct from OEE above, which is about time availability, not fill level.")}
               <input data-scale-field="allowableCapacityUtilizationPercent" value="${escapeAttr(basis.allowableCapacityUtilizationPercent)}" inputmode="decimal" placeholder="85">
             </label>
           </div>
@@ -4763,27 +4764,27 @@
           <div class="scale-section-title">Reactor sizing / stoichiometric checks</div>
           <div class="scale-grid">
             <label>
-              <div class="label">Product kg/batch override</div>
+              ${fieldLabel("Product kg/batch override", "Overrides the batch size used only for the reactor-sizing check below. Does not change 'Target kg/batch' in Calculated basis, which is driven by the operating schedule instead - the two can disagree on purpose if you want to test a different reactor size.")}
               <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="auto">
             </label>
             <label>
-              <div class="label">Reactants L/kg product</div>
+              ${fieldLabel("Reactants L/kg product", "Volume of reactants charged per kg of product, from the lab recipe. Scales automatically with batch size.")}
               <input data-scale-field="reactantsLoadingLPerKgProduct" value="${escapeAttr(basis.reactantsLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.27">
             </label>
             <label>
-              <div class="label">Solvent L/kg product</div>
+              ${fieldLabel("Solvent L/kg product", "Volume of solvent charged per kg of product, from the lab recipe. Scales automatically with batch size.")}
               <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.51">
             </label>
             <label>
-              <div class="label">Working fill, %</div>
+              ${fieldLabel("Working fill, %", "Standard design fill fraction for the reactor (70-80% typical for stirred batch/semi-batch vessels), leaving headspace for reflux/agitation.")}
               <input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70">
             </label>
             <label>
-              <div class="label">Product MW, g/mol</div>
+              ${fieldLabel("Product MW, g/mol", "Product molecular weight, used only to estimate stoichiometric condensation water below.")}
               <input data-scale-field="productMolecularWeightGmol" value="${escapeAttr(basis.productMolecularWeightGmol)}" inputmode="decimal" placeholder="optional">
             </label>
             <label>
-              <div class="label">Water mol/mol product</div>
+              ${fieldLabel("Water mol/mol product", "Moles of water released per mole of product formed, from the reaction stoichiometry.")}
               <input data-scale-field="condensationWaterMolPerMol" value="${escapeAttr(basis.condensationWaterMolPerMol)}" inputmode="decimal" placeholder="1">
             </label>
           </div>
@@ -4793,19 +4794,19 @@
           <div class="scale-section-title">Corrections</div>
           <div class="scale-grid">
             <label>
-              <div class="label">Yield, %</div>
+              ${fieldLabel("Yield, %", "Reaction/process yield correction applied when scaling reference quantities.")}
               <input data-scale-field="yieldPercent" value="${escapeAttr(basis.yieldPercent)}" inputmode="decimal" placeholder="100">
             </label>
             <label>
-              <div class="label">Recovery, %</div>
+              ${fieldLabel("Recovery, %", "Downstream recovery correction (e.g. purification losses) applied when scaling reference quantities.")}
               <input data-scale-field="recoveryPercent" value="${escapeAttr(basis.recoveryPercent)}" inputmode="decimal" placeholder="100">
             </label>
             <label>
-              <div class="label">Design margin, %</div>
+              ${fieldLabel("Design margin, %", "Extra margin added on top of yield/recovery corrections for equipment/process uncertainty.")}
               <input data-scale-field="designMarginPercent" value="${escapeAttr(basis.designMarginPercent)}" inputmode="decimal" placeholder="0">
             </label>
             <label>
-              <div class="label">Confidence</div>
+              ${fieldLabel("Confidence", "How reliable the current scale-up numbers are, for your own tracking - rough (screening guess), estimated (some real data), or validated (measured/vendor-confirmed). Does not change any calculation.")}
               <select data-scale-field="confidence">${optionHtml(["rough", "estimated", "validated"], basis.confidence)}</select>
             </label>
           </div>
@@ -4883,8 +4884,7 @@
         ["Reference", reference],
         ["Target kg/batch", model.target.kgPerBatch || "missing schedule/basis"],
         ["Target kg/year", model.target.kgPerYear || "missing annual basis"],
-        ["Scale factor", model.factors.productFactor || "not available"],
-        ["Confidence", model.basis.confidence || "rough"]
+        ["Scale factor", model.factors.productFactor || "not available"]
       ];
       const rowGroups = scaledRowsByRole(model);
       return `
@@ -4914,7 +4914,7 @@
           <div class="scale-metric">
             <div class="scale-section-title">
               <span>Gantt / Bottleneck</span>
-              <button data-load-schedule-example="octocrylene" title="Fill current groups with Octocrylene-like test durations">Example</button>
+              <button data-load-schedule-example="octocrylene" title="Overwrites every group's duration/capacity/notes with generic keyword-matched example values. Asks for confirmation first; can be undone.">Fill Example Durations</button>
             </div>
             ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
           </div>
@@ -5473,7 +5473,9 @@
       state.aiRefine = null;
     }
 
-    function applyScheduleExample() {
+    async function applyScheduleExample() {
+      if (!(await confirmModal("Fill every task group's duration, capacity, and schedule notes with generic keyword-matched example values? This overwrites the current per-group schedule data (including anything sourced from a real case study) with approximate placeholders. This can be undone."))) return;
+      pushUndo();
       const groups = groupIdsInTextOrder().map(groupModel);
       const fallback = [
         { durationH: "0.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", capacityAmount: "", capacityUnit: "", notes: "charge/pre-mix" },
@@ -5903,8 +5905,8 @@
       if (!model.basis.targetProduct.trim()) {
         issues.push(ruleIssue("medium", "Target product missing", "Scale propagation is harder to audit without naming the product stream.", "scale-up basis", "Set the target product name."));
       }
-      if (model.basis.mode !== "continuous" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
-        issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires batches per day to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day."));
+      if (model.basis.mode !== "continuous" && model.schedule.method !== "duration_OEE_parallel_units" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
+        issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires either batches/day (fallback) or a batch duration with OEE and parallel units (preferred once Gantt data exists) to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day, or add task durations so the duration-based method can take over."));
       }
       if (["kg/year", "t/year"].includes(model.basis.targetUnit) && model.schedule.method !== "duration_OEE_parallel_units" && !gantt.ready) {
         issues.push(ruleIssue("medium", "Duration/OEE schedule missing", "Annual production can be reconciled with case-study batch size only when batch duration, OEE, and parallel capacity are explicit.", "scale-up schedule", "Enter batch duration, OEE, and parallel units."));
