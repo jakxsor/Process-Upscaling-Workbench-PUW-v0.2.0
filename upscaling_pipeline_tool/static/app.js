@@ -397,9 +397,6 @@
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "",
         condensationWaterMolPerMol: "",
-        yieldPercent: "100",
-        recoveryPercent: "100",
-        designMarginPercent: "0",
         confidence: "rough"
       },
       ruleChecks: [],
@@ -1097,9 +1094,6 @@
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "361.5",
         condensationWaterMolPerMol: "1",
-        yieldPercent: "90",
-        recoveryPercent: "95",
-        designMarginPercent: "10",
         confidence: "rough"
       };
       state.ruleChecks = [];
@@ -3512,9 +3506,6 @@
         reactorWorkingFillPercent: "70",
         productMolecularWeightGmol: "",
         condensationWaterMolPerMol: "",
-        yieldPercent: "100",
-        recoveryPercent: "100",
-        designMarginPercent: "0",
         confidence: "rough"
       };
     }
@@ -3812,7 +3803,7 @@
         missing.push("U/A if quantitative correction is needed");
       } else if (operationClass === "reaction_kinetic") {
         need("reaction time", Boolean(conditionMap.reaction_time || conditionMap.holding_time));
-        need("conversion/yield", Boolean(conditionMap.conversion_yield || ensureScaleBasis().yieldPercent));
+        need("conversion/yield", Boolean(conditionMap.conversion_yield));
         if (group.phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("))) need("mixing adequacy", Boolean(conditionMap.mixing_mode || conditionMap.agitation_note));
         if (group.phenomena.some(code => ["ES(H)", "ES(C)"].includes(code))) need("heat-removal/thermal control note", Boolean(conditionMap.thermal_mode || conditionMap.thermal_ramp));
       } else if (operationClass === "filtration") {
@@ -3875,10 +3866,7 @@
         ? manualProductBatchKg
         : targetKgPerBatch(basis);
       const productFactor = Number.isFinite(targetBatchKg) && Number.isFinite(basisKg) && basisKg > 0 ? targetBatchKg / basisKg : NaN;
-      const yieldFactor = percentFactor(basis.yieldPercent, 100);
-      const recoveryFactor = percentFactor(basis.recoveryPercent, 100);
-      const marginFactor = 1 + Math.max(0, parseStreamQuantity(basis.designMarginPercent) || 0) / 100;
-      const upstreamFactor = Number.isFinite(productFactor) ? productFactor * marginFactor / Math.max(0.0001, yieldFactor * recoveryFactor) : NaN;
+      const upstreamFactor = productFactor;
       const blocks = blocksInOrder().map(block => {
         ensureBlockFlowFields(block);
         return {
@@ -3906,10 +3894,7 @@
         reactorSizing: reactorSizingModel(basis, targetBatchKg),
         factors: {
           productFactor: Number.isFinite(productFactor) ? formatNumber(productFactor) : "",
-          upstreamFactor: Number.isFinite(upstreamFactor) ? formatNumber(upstreamFactor) : "",
-          yieldFactor: formatNumber(yieldFactor),
-          recoveryFactor: formatNumber(recoveryFactor),
-          marginFactor: formatNumber(marginFactor)
+          upstreamFactor: Number.isFinite(upstreamFactor) ? formatNumber(upstreamFactor) : ""
         },
         blocks,
         rows,
@@ -4699,6 +4684,7 @@
         </div>
       `;
       const fieldLabel = (text, tip) => `<div class="label tip" data-tip="${escapeAttr(tip)}">${escapeHtml(text)}</div>`;
+      const batchesPerDayInactive = model.schedule.method === "duration_OEE_parallel_units";
       root.innerHTML = `
         <div class="scale-section">
           <div class="scale-section-title">Reference basis</div>
@@ -4726,8 +4712,8 @@
               <select data-scale-field="mode">${optionHtml(["batch", "continuous"], basis.mode)}</select>
             </label>
             <label>
-              ${fieldLabel("Batches/day", "Fallback only: used to derive annual batches solely when no task duration/Gantt data exists yet. Once durations are entered below or in the Gantt panel, annual batches come from duration x OEE x parallel units instead and this field is ignored.")}
-              <input data-scale-field="batchesPerDay" value="${escapeAttr(basis.batchesPerDay)}" inputmode="decimal" placeholder="1">
+              ${fieldLabel("Batches/day", batchesPerDayInactive ? "Not used: annual batches are already coming from duration x OEE x parallel units below, so this fallback field has no effect. It re-enables automatically if that duration data is removed." : "Fallback only: used to derive annual batches solely when no task duration/Gantt data exists yet. Once durations are entered below or in the Gantt panel, annual batches come from duration x OEE x parallel units instead and this field is ignored.")}
+              <input data-scale-field="batchesPerDay" value="${escapeAttr(basis.batchesPerDay)}" inputmode="decimal" placeholder="1" ${batchesPerDayInactive ? "disabled" : ""}>
             </label>
             <label>
               ${fieldLabel("Days/year", "Used with batches/day for the fallback method above, and to convert daily/annual targets to an hourly rate.")}
@@ -4791,20 +4777,8 @@
         </div>
 
         <div class="scale-section">
-          <div class="scale-section-title">Corrections</div>
+          <div class="scale-section-title">Tracking</div>
           <div class="scale-grid">
-            <label>
-              ${fieldLabel("Yield, %", "Reaction/process yield correction applied when scaling reference quantities.")}
-              <input data-scale-field="yieldPercent" value="${escapeAttr(basis.yieldPercent)}" inputmode="decimal" placeholder="100">
-            </label>
-            <label>
-              ${fieldLabel("Recovery, %", "Downstream recovery correction (e.g. purification losses) applied when scaling reference quantities.")}
-              <input data-scale-field="recoveryPercent" value="${escapeAttr(basis.recoveryPercent)}" inputmode="decimal" placeholder="100">
-            </label>
-            <label>
-              ${fieldLabel("Design margin, %", "Extra margin added on top of yield/recovery corrections for equipment/process uncertainty.")}
-              <input data-scale-field="designMarginPercent" value="${escapeAttr(basis.designMarginPercent)}" inputmode="decimal" placeholder="0">
-            </label>
             <label>
               ${fieldLabel("Confidence", "How reliable the current scale-up numbers are, for your own tracking - rough (screening guess), estimated (some real data), or validated (measured/vendor-confirmed). Does not change any calculation.")}
               <select data-scale-field="confidence">${optionHtml(["rough", "estimated", "validated"], basis.confidence)}</select>
