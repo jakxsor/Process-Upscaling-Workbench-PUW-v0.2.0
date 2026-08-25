@@ -6,7 +6,7 @@ import json
 import os
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib import error, request
+from urllib import error, parse, request
 
 from .pyflowsheet_renderer import render_pyflowsheet_svg
 
@@ -25,6 +25,14 @@ APP_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Upscaling Block Annotator</title>
   <link rel="stylesheet" href="/style.css">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header>
@@ -33,10 +41,16 @@ APP_HTML = r"""<!doctype html>
       <div class="subtitle">Lab protocol to industrial flowsheet: blocks, phenomena, unit operations, network, heuristics, and scale-up schedule.</div>
     </div>
     <div class="row">
+      <button id="themeToggle" class="eye-button" title="Toggle dark/light theme">◐</button>
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
       <button id="openTutorial" title="Open a short guided tour of the main workflow">Tutorial</button>
-      <button id="loadSample">Load Octocrylene Case</button>
-      <button id="openScaleTop">Scale-Up</button>
+      <div class="header-dropdown">
+        <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
+        <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
+          <button id="loadSample" role="menuitem">Octocrylene Case</button>
+          <button id="loadMethylbenzeneCase" role="menuitem">Methylbenzene Case</button>
+        </div>
+      </div>
       <button id="openFlowsheet" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
       <button id="exportJson">Export JSON</button>
     </div>
@@ -74,33 +88,40 @@ APP_HTML = r"""<!doctype html>
               <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
             </div>
             <div class="board-control-section">
+              <div class="label">Step 1-3 Audit</div>
+              <div class="muted small">Block data, phenomena, task grouping, and unit-operation evidence.</div>
+              <div id="stepAuditPanel" class="step-audit-panel"></div>
+            </div>
+            <div class="board-control-section">
               <div class="label">Network</div>
               <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
               <div id="connectionStatus" class="connection-status"></div>
               <div id="linkSummary"></div>
               <div id="networkClosure" class="closure-strip"></div>
             </div>
-            <div class="board-control-section">
-              <div class="label">View</div>
-              <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact View</button>
-              <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset View</button>
-              <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center Selection</button>
-              <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit All</button>
-              <div class="board-zoom-row">
-                <button id="zoomOut">-</button>
-                <span id="zoomReadout" class="zoom-readout">100%</span>
-                <button id="zoomIn">+</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel workflow-panel">
       <div class="panel-head">
-        <h2>Blocks, Tasks & Network</h2>
-        <span class="muted small">Steps 1-4 — draft blocks, task groups, then arrows to close the network</span>
+        <div class="workflow-title-stack">
+          <h2>Blocks, Tasks & Network</h2>
+          <span class="muted small">Steps 1-4 — draft blocks, task groups, then arrows to close the network</span>
+        </div>
+        <div class="workflow-view-tools" aria-label="Board view controls">
+          <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
+          <button id="autoLayout" title="Rearrange task groups into a compact left-to-right grid without changing block/group content">Auto-Layout</button>
+          <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset</button>
+          <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center</button>
+          <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit</button>
+          <div class="workflow-zoom-row">
+            <button id="zoomOut" title="Zoom out">-</button>
+            <span id="zoomReadout" class="zoom-readout">100%</span>
+            <button id="zoomIn" title="Zoom in">+</button>
+          </div>
+        </div>
       </div>
       <div class="panel-body">
         <div id="groupFlow" class="group-flow"></div>
@@ -110,18 +131,47 @@ APP_HTML = r"""<!doctype html>
 
     <section class="panel" id="inspectorPanel">
       <div class="panel-head">
-        <div class="project-panel-title">
-          <h2>Project Panel</h2>
-        </div>
-        <button id="toggleInspector" class="eye-button" title="Show/hide inspector">◐</button>
-        <div class="panel-tabs" role="tablist" aria-label="Project panel views">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Inspector</button>
+        <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">◐</button>
+        <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Phenomena/Group</button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristics</button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up</button>
         </div>
       </div>
       <div class="panel-body stack">
         <div id="inspectPanelTab" class="tab-view stack">
+          <div class="card stack">
+            <div>
+              <div class="label">Selected Description</div>
+              <div id="selectedBlockInfo" class="muted">No block selected.</div>
+            </div>
+            <label>
+              <div class="label">Description Text</div>
+              <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
+            </label>
+            <label>
+              <div class="label">Details & Notes</div>
+              <textarea id="blockNotes" class="description-notes" placeholder="Add missing words, interpretation notes, assumptions, citations, or why this block was extended."></textarea>
+            </label>
+          </div>
+
+          <div class="card stack">
+            <label>
+              <div class="label">Behavior Preset</div>
+              <select id="behaviorSelect" class="behavior-select"></select>
+            </label>
+            <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
+            <div>
+              <div class="label">Phenomena On This Block</div>
+              <div id="phenomenaGrid" class="phen-grid"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="label">Export</div>
+            <pre id="jsonOut">{}</pre>
+          </div>
+
           <div class="card stack">
             <div class="row between">
               <div>
@@ -131,50 +181,6 @@ APP_HTML = r"""<!doctype html>
               <button id="toggleReadiness" class="mini-button">Details</button>
             </div>
             <div id="dataReadinessPanel" hidden></div>
-          </div>
-
-          <div class="card">
-            <div class="label">Selected Block</div>
-            <div id="selectedBlockInfo" class="muted">No block selected.</div>
-          </div>
-
-          <div class="card stack">
-            <label>
-              <div class="label">Behavior Preset</div>
-              <select id="behaviorSelect"></select>
-            </label>
-            <label>
-              <div class="label">Block Text</div>
-              <textarea id="blockText" style="min-height:78px"></textarea>
-            </label>
-            <div>
-              <div class="label">Phenomena On This Block</div>
-              <div id="phenomenaGrid" class="phen-grid"></div>
-            </div>
-          </div>
-
-          <div class="card stack">
-            <div>
-              <div class="label">Selected Group</div>
-              <div id="selectedGroupInfo" class="muted">No group selected.</div>
-            </div>
-            <label>
-              <div class="label">Task Assigned To Group</div>
-              <input id="groupTask" type="text" placeholder="reaction, washing, purification...">
-            </label>
-            <div>
-              <div class="label">Group Alternatives</div>
-              <div id="groupAlternatives" class="alt-grid"></div>
-            </div>
-            <div>
-              <div class="label">Separation Properties</div>
-              <div id="groupProperties" class="alt-grid"></div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="label">Export</div>
-            <pre id="jsonOut">{}</pre>
           </div>
         </div>
 
@@ -219,6 +225,7 @@ APP_HTML = r"""<!doctype html>
               <button id="refineProject" class="primary">Run Check</button>
             </div>
             <div id="scaleQuickPanel"></div>
+            <div class="muted small">Results (conflicts and missing data) appear under the Heuristics tab's Review Results.</div>
           </section>
 
           <div class="scale-scroll-body stack">
@@ -228,14 +235,6 @@ APP_HTML = r"""<!doctype html>
                 <div class="muted small">Schedule, correction factors, scaled MFA, recycle/fate, and energy bridge.</div>
               </div>
               <div id="scaleBasisPanel"></div>
-            </section>
-
-            <section class="card stack">
-              <div>
-                <div class="label">Review Results</div>
-                <div class="muted small">Rule-based checks for missing or inconsistent scale-up data.</div>
-              </div>
-              <div id="ruleCheckPanel" class="rule-results"></div>
             </section>
           </div>
         </div>
@@ -268,6 +267,7 @@ APP_HTML = r"""<!doctype html>
     <div class="label">Group Actions</div>
     <button id="ctxStartConnection" class="primary">Start Arrow From This Group</button>
     <button id="ctxRemoveLinks">Remove Arrows For This Group</button>
+    <button id="ctxAddManualBlockToGroup">Add Empty Block To This Task</button>
     <div class="label" style="margin-top:10px">Scale-Up</div>
     <button id="ctxSplitGroup" title="Split this group into N parallel units, each handling 1/N of its material flow while keeping declared durations until resized estimates are entered">Split Into Parallel Units</button>
   </div>
@@ -278,9 +278,23 @@ APP_HTML = r"""<!doctype html>
     <button id="ctxDeleteStream">Delete</button>
   </div>
 
+  <div id="pubchemResolveModal" class="modal-backdrop" hidden>
+    <section class="modal-card pubchem-resolve-panel" role="dialog" aria-modal="true" aria-labelledby="pubchemResolveTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="pubchemResolveTitle">Resolve PubChem Compound</h2>
+          <p id="pubchemResolveSubtitle">Search manually by compound name or CAS number.</p>
+        </div>
+        <button id="closePubchemResolve">Close</button>
+      </div>
+      <div id="pubchemResolveBody" class="modal-body"></div>
+    </section>
+  </div>
+
   <div id="textSelectionMenu" class="context-menu" hidden>
-    <div class="label">Text Selection</div>
+    <div class="label">Block Creation</div>
     <button id="ctxCreateBlockFromText" class="primary">Create Block From Selection</button>
+    <button id="ctxCreateManualBlock">New Empty Block</button>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
@@ -291,8 +305,10 @@ APP_HTML = r"""<!doctype html>
       <div class="tutorial-progress" id="tutorialProgress">1 / 7</div>
       <h2 id="tutorialTitle">Tutorial</h2>
       <p id="tutorialBody"></p>
+      <div id="tutorialDetail" class="tutorial-detail"></div>
       <div class="tutorial-actions">
         <button id="tutorialPrev" class="mini-button">Back</button>
+        <button id="tutorialDo" class="mini-button" hidden>Show</button>
         <button id="tutorialNext" class="primary">Next</button>
         <button id="tutorialSkip" class="mini-button">Close</button>
       </div>
@@ -370,6 +386,19 @@ APP_HTML = r"""<!doctype html>
       <div class="modal-body">
         <div id="flowsheetHost" class="flowsheet-host"></div>
       </div>
+    </section>
+  </div>
+
+  <div id="separationSimulatorModal" class="modal-backdrop" hidden>
+    <section class="modal-panel separation-simulator-panel" role="dialog" aria-modal="true" aria-labelledby="separationSimulatorTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Optional KB3.1 sandbox</div>
+          <h2 id="separationSimulatorTitle">Separation Simulator</h2>
+        </div>
+        <button id="closeSeparationSimulator" class="mini-button">Close</button>
+      </div>
+      <div id="separationSimulatorBody" class="modal-body"></div>
     </section>
   </div>
 
@@ -499,13 +528,15 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ("/api/refine", "/api/flowsheet"):
+        if self.path not in ("/api/refine", "/api/flowsheet", "/api/pubchem"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            if self.path == "/api/flowsheet":
+            if self.path == "/api/pubchem":
+                result = self._lookup_pubchem(payload)
+            elif self.path == "/api/flowsheet":
                 result = render_pyflowsheet_svg(payload.get("project", payload))
             else:
                 result = self._run_external_refine(payload)
@@ -520,6 +551,213 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _lookup_pubchem(self, payload):
+        mode = str(payload.get("mode", "lookup")).strip().lower()
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            return {"ok": False, "error": "Compound name missing."}
+        if len(name) > 160:
+            return {"ok": False, "error": "Compound name is too long for lookup."}
+        if mode == "search":
+            return self._search_pubchem_candidates(name)
+        encoded = parse.quote(name, safe="")
+        props = ",".join([
+            "MolecularFormula",
+            "MolecularWeight",
+            "CanonicalSMILES",
+            "IsomericSMILES",
+            "InChI",
+            "InChIKey",
+            "XLogP",
+            "ExactMass",
+            "TPSA",
+            "HBondDonorCount",
+            "HBondAcceptorCount",
+        ])
+        prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded}/property/{props}/JSON"
+        try:
+            prop_data = self._get_json(prop_url, timeout=20)
+        except error.HTTPError as exc:
+            return {
+                "ok": False,
+                "error": f"PubChem HTTP {exc.code}: no compound resolved for '{name}'.",
+                "suggestions": self._pubchem_autocomplete(name),
+            }
+        except (TimeoutError, socket.timeout):
+            return {"ok": False, "error": "PubChem lookup timed out."}
+        except error.URLError as exc:
+            return {"ok": False, "error": f"PubChem connection failed: {exc.reason}"}
+
+        rows = prop_data.get("PropertyTable", {}).get("Properties", [])
+        if not rows:
+            return {
+                "ok": False,
+                "error": f"No PubChem compound properties found for '{name}'.",
+                "suggestions": self._pubchem_autocomplete(name),
+            }
+        row = rows[0]
+        cid = row.get("CID")
+        experimental = {}
+        if cid:
+            view_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{cid}/JSON?heading=Experimental+Properties"
+            try:
+                view_data = self._get_json(view_url, timeout=20)
+                experimental = self._extract_pubchem_experimental_properties(view_data)
+            except Exception:
+                experimental = {}
+
+        mapped = self._map_pubchem_fields(row, experimental)
+        return {
+            "ok": True,
+            "source": "PubChem PUG-REST/PUG-View",
+            "query": name,
+            "cid": cid,
+            "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}" if cid else "",
+            "properties": row,
+            "experimental": experimental,
+            "mapped": mapped,
+            "warnings": [
+                "Basic molecular properties are structured PubChem fields.",
+                "Thermal/phase properties are best-effort PUG-View annotations and should be confirmed before design decisions.",
+            ],
+        }
+
+    def _search_pubchem_candidates(self, name):
+        suggestions = self._pubchem_autocomplete(name)
+        return {
+            "ok": True,
+            "query": name,
+            "suggestions": suggestions,
+            "message": f"{len(suggestions)} PubChem candidate name{'s' if len(suggestions) != 1 else ''} found.",
+        }
+
+    def _pubchem_autocomplete(self, name):
+        encoded = parse.quote(name, safe="")
+        suggestions = []
+        try:
+            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound/{encoded}/JSON?limit=12"
+            data = self._get_json(url, timeout=15)
+            compounds = data.get("dictionary_terms", {}).get("compound", [])
+            for item in compounds:
+                if isinstance(item, str):
+                    term = item
+                elif isinstance(item, dict):
+                    term = item.get("term") or item.get("name") or item.get("title") or ""
+                else:
+                    term = ""
+                term = str(term).strip()
+                if term and term.lower() not in {entry["name"].lower() for entry in suggestions}:
+                    suggestions.append({"name": term, "source": "PubChem autocomplete"})
+        except Exception:
+            suggestions = []
+
+        if suggestions:
+            return suggestions[:12]
+
+        try:
+            cid_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded}/cids/JSON?name_type=word"
+            cid_data = self._get_json(cid_url, timeout=15)
+            cids = (cid_data.get("IdentifierList", {}).get("CID", []) or [])[:8]
+            if not cids:
+                return []
+            cid_csv = ",".join(str(cid) for cid in cids)
+            prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_csv}/property/Title,MolecularFormula/JSON"
+            prop_data = self._get_json(prop_url, timeout=15)
+            rows = prop_data.get("PropertyTable", {}).get("Properties", []) or []
+            for row in rows:
+                title = str(row.get("Title") or "").strip()
+                cid = row.get("CID")
+                formula = str(row.get("MolecularFormula") or "").strip()
+                if title:
+                    suggestions.append({
+                        "name": title,
+                        "cid": cid,
+                        "formula": formula,
+                        "source": "PubChem word search",
+                    })
+        except Exception:
+            return suggestions[:12]
+        return suggestions[:12]
+
+    def _get_json(self, url, timeout):
+        req = request.Request(url, headers={"Accept": "application/json", "User-Agent": "upscaling-pipeline-tool/1.0"})
+        with request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def _extract_pubchem_experimental_properties(self, data):
+        wanted = {
+            "Melting Point": "melting_point",
+            "Boiling Point": "boiling_point",
+            "Vapor Pressure": "vapor_pressure",
+            "Solubility": "solubility",
+        }
+        found = {value: [] for value in wanted.values()}
+
+        def value_to_text(value):
+            if not isinstance(value, dict):
+                return ""
+            strings = value.get("StringWithMarkup")
+            if isinstance(strings, list):
+                parts = [item.get("String", "") for item in strings if isinstance(item, dict)]
+                text = " ".join(part for part in parts if part).strip()
+                if text:
+                    return text
+            number = value.get("Number")
+            unit = value.get("Unit")
+            if number is not None:
+                return f"{number} {unit or ''}".strip()
+            return ""
+
+        def visit(section):
+            if not isinstance(section, dict):
+                return
+            heading = section.get("TOCHeading", "")
+            key = wanted.get(heading)
+            if key:
+                for info in section.get("Information", []) or []:
+                    text = value_to_text(info.get("Value", {}))
+                    if text:
+                        found[key].append(text)
+            for child in section.get("Section", []) or []:
+                visit(child)
+
+        visit(data.get("Record", {}))
+        return {key: values[:5] for key, values in found.items() if values}
+
+    def _map_pubchem_fields(self, row, experimental):
+        mapped = {}
+        if row.get("MolecularWeight") is not None:
+            mapped["mw"] = str(row.get("MolecularWeight"))
+        for target, source_key in (("tm", "melting_point"), ("tb", "boiling_point"), ("pvap", "vapor_pressure")):
+            values = experimental.get(source_key) or []
+            for value in values:
+                converted = self._pubchem_numeric_property(value, target)
+                if converted:
+                    mapped[target] = converted
+                    break
+        return mapped
+
+    def _pubchem_numeric_property(self, text, target):
+        import re
+
+        match = re.search(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", str(text))
+        if not match:
+            return ""
+        value = float(match.group(0))
+        lower = str(text).lower()
+        if target in ("tm", "tb") and ("°c" in lower or "deg c" in lower or " c" in lower):
+            return f"{value + 273.15:.2f}"
+        if target in ("tm", "tb") and ("°f" in lower or "deg f" in lower or " f" in lower):
+            return f"{(value - 32) * 5 / 9 + 273.15:.2f}"
+        if target in ("tm", "tb"):
+            return ""
+        if target == "pvap":
+            if "mmhg" in lower:
+                return f"{value * 133.322:.3g}"
+            if "kpa" in lower:
+                return f"{value * 1000:.3g}"
+        return str(value)
 
     def _run_external_refine(self, payload):
         api_key = str(payload.get("apiKey", "")).strip() or os.environ.get("OPENAI_API_KEY", "").strip()

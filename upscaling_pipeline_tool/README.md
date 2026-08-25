@@ -12,12 +12,17 @@ The app supports a phenomena-based scale-up workflow from protocol text to:
 - quantified MFA inputs, outputs, waste, phases, and fates;
 - unit-operation alternatives;
 - heuristic-rule review;
-- property-based separation screening;
+- optional property-based separation screening;
 - production scale-up assumptions;
 - schematic Gantt bottleneck analysis with scale-behaviour evidence.
 
 It is intended for early-stage framework support and transparent screening, not
 for final equipment design.
+
+The property-based separation screen is an optional refinement layer. The current
+implementation provides a qualitative keep/weak/reject screen from entered
+properties and explicitly flags missing evidence. The `Binary-ratio` mode is
+reserved for a future component-level property matrix and threshold set.
 
 ## Run From Repository Root
 
