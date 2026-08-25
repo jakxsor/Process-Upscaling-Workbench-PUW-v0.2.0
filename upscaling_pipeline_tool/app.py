@@ -486,6 +486,8 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
+  <script src="/tutorial.js"></script>
+  <script src="/export.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
@@ -494,6 +496,8 @@ APP_HTML = r"""<!doctype html>
 STATIC_ROUTES = {
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
+    "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
+    "/export.js": ("export.js", "application/javascript; charset=utf-8"),
 }
 
 
