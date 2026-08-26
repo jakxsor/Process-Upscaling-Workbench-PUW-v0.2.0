@@ -4050,10 +4050,16 @@
 
     function heuristicReviewModel(scale = scaleModel()) {
       const ctx = heuristicContext(scale);
+      const groupIds = groupIdsInTextOrder();
+      // heuristicRuleGroupIds below needs every rule checked against every group's own context to
+      // report which groups trigger it - but that context (a text/phenomena scan of that group's
+      // blocks and streams) is the same for every rule, so it's built once per group here and reused,
+      // instead of being rebuilt from scratch for every (rule, group) pair.
+      const groupContexts = new Map(groupIds.map(groupId => [groupId, heuristicContext(scale, groupId)]));
       const triggered = heuristicRuleLibrary
-        .map(rule => heuristicRuleCard(rule, ctx))
-        .filter(Boolean)
-        .map(card => ({ ...card, groupIds: heuristicRuleGroupIds(card.id, scale) }))
+        .map(rule => ({ rule, card: heuristicRuleCard(rule, ctx) }))
+        .filter(item => item.card)
+        .map(({ rule, card }) => ({ ...card, groupIds: heuristicRuleGroupIds(rule, groupIds, groupContexts) }))
         .sort((a, b) =>
           severityRank(a.severity) - severityRank(b.severity)
           || a.id.localeCompare(b.id));
@@ -4077,13 +4083,8 @@
     // of where to actually act. A rule that only fires globally (its trigger comes from combining
     // evidence across groups, e.g. text mentioning "purge" in one group and "recycle" in another)
     // returns an empty list here and is shown as project-wide rather than mis-attributed to one group.
-    function heuristicRuleGroupIds(ruleId, scale) {
-      const rule = heuristicRuleLibrary.find(item => item.id === ruleId);
-      if (!rule) return [];
-      return groupIdsInTextOrder().filter(groupId => {
-        const localCtx = heuristicContext(scale, groupId);
-        return Boolean(heuristicRuleCard(rule, localCtx));
-      });
+    function heuristicRuleGroupIds(rule, groupIds, groupContexts) {
+      return groupIds.filter(groupId => Boolean(heuristicRuleCard(rule, groupContexts.get(groupId))));
     }
 
     // scopeGroupId narrows the evidence to one task group's own blocks/streams/conditions instead of
@@ -5887,14 +5888,13 @@
     function renderInspector() {
       const block = selectedBlock();
       const hasBlock = Boolean(block);
-      ["behaviorSelect", "blockText", "blockNotes"].forEach(id => $(id).disabled = !hasBlock);
+      ["behaviorSelect", "blockText"].forEach(id => $(id).disabled = !hasBlock);
       $("selectedBlockInfo").innerHTML = block
-        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span>${block.source === "manual" ? `<span class="pill">manual</span>` : ""}<div class="muted small">${block.source === "manual" ? "Manual block not linked to protocol text. Use it for emerged scale-up operations, inferred separators, compliance steps, or assumptions." : "Edit this text when the extracted selection is missing a word or needs clearer wording. Use notes for assumptions or interpretation."}</div>`
+        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span>${block.source === "manual" ? `<span class="pill">manual</span>` : ""}<div class="muted small">${block.source === "manual" ? "Manual block not linked to protocol text. Use it for emerged scale-up operations, inferred separators, compliance steps, or assumptions." : "Edit this text when the extracted selection is missing a word or needs clearer wording."}</div>`
         : "No block selected.";
       $("behaviorSelect").value = block?.behavior || "unassigned";
       renderBehaviorPresetHelp(block?.behavior || "unassigned");
       $("blockText").value = block?.text || "";
-      $("blockNotes").value = block?.notes || "";
       renderPhenomenaGrid(block);
 
       renderStepAuditPanel();
@@ -8194,7 +8194,10 @@
         }
         root.className = "step-flow-inspector empty";
         applyStepFlowEditorSize(root, false);
-        root.innerHTML = "Select a block to edit quantified MFA, or click Open Group on a group to see summed MFA, conditions, and unit alternatives.";
+        root.innerHTML = `
+          <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+          <div>Select a block to edit quantified MFA, or click Open Group on a group to see summed MFA, conditions, and unit alternatives.</div>
+        `;
         return;
       }
       ensureBlockFlowFields(block);
@@ -8206,6 +8209,7 @@
         <div class="step-flow-resize-handle" data-step-flow-resize title="Drag up or down to resize this editor over the flowchart"></div>
         <div class="step-flow-head">
           <div>
+            <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
             <div class="label">Step MFA Editor</div>
             <strong>${escapeHtml(block.id)}</strong>
             <span class="pill">${escapeHtml(block.behavior)}</span>
@@ -8315,6 +8319,7 @@
         <div class="step-flow-resize-handle" data-step-flow-resize title="Drag up or down to resize this editor over the flowchart"></div>
         <div class="step-flow-head">
           <div>
+            <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
             <div class="label">Group Aggregate View</div>
             <strong>${escapeHtml(group.id)}</strong>
             <span class="pill blue">${escapeHtml(group.task)}</span>
@@ -10866,14 +10871,6 @@
       invalidateAiRefine();
       renderGroupFlow();
       renderStepAuditPanel();
-      renderExport();
-    });
-    $("blockNotes").addEventListener("input", event => {
-      const block = selectedBlock();
-      if (!block) return;
-      block.notes = event.target.value;
-      invalidateAiRefine();
-      renderGroupFlow();
       renderExport();
     });
     $("groupTask")?.addEventListener("input", event => {
