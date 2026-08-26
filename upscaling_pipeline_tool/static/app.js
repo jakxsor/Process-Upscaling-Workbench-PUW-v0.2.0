@@ -2204,6 +2204,13 @@
         });
         button.addEventListener("mousedown", event => event.stopPropagation());
       });
+      root.querySelectorAll("[data-assign-task]").forEach(button => {
+        button.addEventListener("click", async event => {
+          event.stopPropagation();
+          await assignBlockToNewTask(button.dataset.assignTask);
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
+      });
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
@@ -2659,8 +2666,9 @@
       const hasNotes = Boolean(String(block.notes || "").trim());
       const bodyText = String(block.text || "").trim();
       const sourcePill = block.source === "manual" ? `<span class="pill">manual</span>` : "";
+      const needsTask = !block.groupId;
       return `
-        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
+        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
           <div class="row between">
             <strong>${block.id}</strong>
             <div class="row" style="gap:4px">
@@ -2673,6 +2681,7 @@
           <div>${block.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena</span>`}</div>
           ${flowCounts ? `<div style="margin-top:6px"><span class="pill blue">${escapeHtml(flowCounts)}</span></div>` : ""}
           ${conditionCount || hasNotes ? `<div style="margin-top:6px">${conditionCount ? `<span class="pill green">C:${conditionCount}</span>` : ""}${hasNotes ? `<span class="pill">notes</span>` : ""}</div>` : ""}
+          ${needsTask ? `<button class="assign-task-btn" data-assign-task="${escapeAttr(block.id)}" title="This block is not part of any task group yet">Assign to Task</button>` : ""}
         </article>
       `;
     }
@@ -9471,6 +9480,26 @@
       const task = behaviorPresets[block.behavior]?.task || "unassigned";
       ensureGroup(groupId, task);
       block.groupId = groupId;
+      state.selectedIds = [block.id];
+      state.selectedGroupId = groupId;
+      state.focusEndpoint = groupId;
+      renderAll();
+    }
+
+    // One-click path for a single draft (ungrouped) block, offered directly on its card (see the
+    // red "Assign to Task" button in blockCardHtml) instead of requiring shift-click + right-click +
+    // Combine Selected. Creates a new one-block task group, same as splitSelectedToNewGroup, but
+    // works from a block id directly so it doesn't depend on the block being selected first.
+    async function assignBlockToNewTask(blockId) {
+      const block = state.blocks.find(item => item.id === blockId);
+      if (!block || block.groupId) return;
+      if (!(await confirmModal("Convert this block into its own task group? You can rename the task or combine it with other blocks afterward."))) return;
+      pushUndo();
+      const groupId = nextGroupId();
+      const task = behaviorPresets[block.behavior]?.task || "unassigned";
+      ensureGroup(groupId, task);
+      block.groupId = groupId;
+      state.selectedBlockId = null;
       state.selectedIds = [block.id];
       state.selectedGroupId = groupId;
       state.focusEndpoint = groupId;
