@@ -206,10 +206,6 @@
       min-height: 112px;
     }
 
-    textarea.description-notes {
-      min-height: 72px;
-    }
-
     main {
       display: grid;
       grid-template-columns: minmax(230px, 270px) minmax(0, 1fr) minmax(260px, 300px);
@@ -311,6 +307,40 @@
       grid-template-columns: 1fr;
       align-content: center;
       gap: 7px;
+    }
+
+    .step-flag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 0 10px 0 3px;
+      margin: 3px 0;
+      border: 1px solid var(--blue);
+      border-radius: 999px;
+      background: var(--blue-soft);
+    }
+
+    .step-flag-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .step-flag-label {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
 
     .source-panel-tabs {
@@ -533,6 +563,14 @@
       min-height: 46px;
       padding: 6px 8px;
       align-items: center;
+    }
+
+    .board-step-flag {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 50;
+      box-shadow: 0 2px 8px rgba(23, 32, 39, 0.14);
     }
 
     .workflow-title-stack {

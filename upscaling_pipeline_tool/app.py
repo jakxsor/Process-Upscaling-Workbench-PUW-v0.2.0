@@ -62,7 +62,8 @@ APP_HTML = r"""<!doctype html>
     <section class="panel">
       <div class="panel-head source-panel-head">
         <div>
-          <h2>Workflow Input</h2>
+          <h2>Laboratory Protocol Description</h2>
+          <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
           <span class="muted small">Text first, board controls when needed</span>
         </div>
         <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
@@ -124,8 +125,14 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="panel-body">
+        <span class="step-flag board-step-flag tip" data-tip="Combine blocks into task groups and pick the industrial unit operation for each one, using the phenomena assigned in step 2.">
+          <span class="step-flag-num">3</span><span class="step-flag-label">Task Assignment</span>
+        </span>
         <div id="groupFlow" class="group-flow"></div>
-        <div id="stepFlowInspector" class="step-flow-inspector empty">Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
+        <div id="stepFlowInspector" class="step-flow-inspector empty">
+          <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+          <div>Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
+        </div>
       </div>
     </section>
 
@@ -149,15 +156,12 @@ APP_HTML = r"""<!doctype html>
               <div class="label">Description Text</div>
               <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
             </label>
-            <label>
-              <div class="label">Details & Notes</div>
-              <textarea id="blockNotes" class="description-notes" placeholder="Add missing words, interpretation notes, assumptions, citations, or why this block was extended."></textarea>
-            </label>
           </div>
 
           <div class="card stack">
+            <span class="step-flag"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span></span>
             <label>
-              <div class="label">Behavior Preset</div>
+              <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>
               <select id="behaviorSelect" class="behavior-select"></select>
             </label>
             <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
