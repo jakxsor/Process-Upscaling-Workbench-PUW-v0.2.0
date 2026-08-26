@@ -486,6 +486,8 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
+  <script src="/flowsheet.js"></script>
+  <script src="/pubchem.js"></script>
   <script src="/tutorial.js"></script>
   <script src="/export.js"></script>
   <script src="/app.js"></script>
@@ -498,6 +500,8 @@ STATIC_ROUTES = {
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
+    "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
+    "/pubchem.js": ("pubchem.js", "application/javascript; charset=utf-8"),
 }
 
 
