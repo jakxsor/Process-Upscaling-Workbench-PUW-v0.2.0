@@ -4199,6 +4199,25 @@
       main.heuristic-focused { grid-template-columns: 1fr; }
       .group-flow { max-height: none; min-height: 480px; }
       .text-surface { max-height: none; }
+      /* .step-flow-inspector.resizable is position:absolute + bottom:0 (and the group drawer
+         variant adds bottom:-260px on top of that), anchored against the wide desktop layout's
+         tall .panel-body. In the stacked single-column layout here it has nothing to size itself
+         against, so it floats past the end of the board section and overlaps whatever section
+         comes next in the page (#inspectorPanel) instead of pushing it down. Drop back into
+         normal flow so it just takes its own space in the stack, like every other section. */
+      .step-flow-inspector.resizable {
+        position: static;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        box-shadow: none;
+      }
+      .step-flow-inspector.group-aggregate-drawer {
+        bottom: auto;
+      }
+      .step-flow-resize-handle {
+        top: 0;
+      }
     }
 
     .workflow-stepper {
