@@ -2296,6 +2296,16 @@
         linear-gradient(rgba(15, 23, 32, 0.44), rgba(15, 23, 32, 0.52));
     }
 
+    #flowsheetModal,
+    #aiRefineModal,
+    #splitGroupModal {
+      /* Same reasoning as #separationSimulatorModal above: the base .modal-backdrop z-index (80)
+         is lower than the block/group drawer (.step-flow-inspector.resizable, z-index 180), so
+         without this override these modals rendered underneath the still-visible drawer instead
+         of over it. */
+      z-index: 920;
+    }
+
     #confirmModal {
       /* Must out-stack every other .modal-backdrop (they all share z-index: 80), since
          confirmModal/promptModal can be triggered from inside an already-open modal

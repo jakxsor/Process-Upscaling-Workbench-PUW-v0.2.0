@@ -949,11 +949,29 @@
     function phenomenaForBehaviorAndText(behavior, text) {
       const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
       const t = String(text || "").toLowerCase();
+      // Was "\\bcool|..." / "\\bheat|..." - a literal backslash before "cool"/"heat" that can
+      // never appear in plain text, so the bare imperative verb form ("Cool the mixture",
+      // "Heat to reflux" - extremely common protocol phrasing) never matched; only the other
+      // alternatives in each list (cooled/cooling, heated/heating, etc.) did.
       if (behavior === "heat/cool") {
-        const hasCooling = /\\bcool|cooled|cooling|quench|room temperature/.test(t);
-        const hasHeating = /\\bheat|heated|heating|reflux|boil|boiling|warm|evaporat|distill/.test(t);
+        const hasCooling = /\bcool|cooled|cooling|quench|room temperature/.test(t);
+        const hasHeating = /\bheat|heated|heating|reflux|boil|boiling|warm|evaporat|distill/.test(t);
         if (hasCooling && !hasHeating) return ["ES(C)"];
         if (hasHeating && !hasCooling) return ["ES(H)"];
+      }
+      // "Charge and mix" alone carries no thermal phenomenon, so a temperature stated in the same
+      // sentence (e.g. "Charge the reagents at 25 C") previously had no condition field to land in
+      // at all - not even to record that the charge happens at a controlled, non-ambient temperature.
+      // Add a thermal phenomenon only when the text actually mentions temperature, so a plain
+      // "Charge the reagents to the reactor" without any thermal detail doesn't get one for free.
+      if (behavior === "charge and mix") {
+        const hasCooling = /\bcool|cooled|cooling|chilled|chill|room temperature|ambient/.test(t);
+        const hasHeating = /\bheat|heated|heating|warm|warmed/.test(t);
+        const hasTemperatureValue = /\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*c\b|\d+(?:\.\d+)?\s*°?\s*c\b/i.test(text);
+        if (hasCooling || hasHeating || hasTemperatureValue) {
+          const thermal = hasCooling && !hasHeating ? "ES(C)" : "ES(H)";
+          return [...preset.phenomena, thermal];
+        }
       }
       return [...preset.phenomena];
     }
@@ -1834,17 +1852,35 @@
       renderAll();
     }
 
+    // Walks only the text that actually exists in state.text, skipping each highlighted block's
+    // own "B1"-style label and "x" delete button - both live inside the same <span> as the real
+    // block text (see renderAnnotatedText) but aren't part of state.text. The previous
+    // implementation used a plain Range spanning from the container start to the selection start
+    // and took its .toString().length as the offset; that counted the label/button text too, so
+    // every block already highlighted before the selection point added a few extra phantom
+    // characters, shifting the computed start/end later and later into the document - visibly, a
+    // selection landing a few characters short at the start and a few characters long at the end.
     function selectionOffsets() {
       const container = $("annotatedText");
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || selection.toString().trim() === "") return null;
       if (!container.contains(selection.anchorNode) || !container.contains(selection.focusNode)) return null;
       const range = selection.getRangeAt(0);
-      const pre = range.cloneRange();
-      pre.selectNodeContents(container);
-      pre.setEnd(range.startContainer, range.startOffset);
-      const start = pre.toString().length;
-      const end = start + range.toString().length;
+      const isDecoration = node => Boolean(node.parentElement?.closest(".annotated-block-label, .annotated-block-delete"));
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode: node => (isDecoration(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)
+      });
+      let offset = 0;
+      let start = null;
+      let end = null;
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node === range.startContainer) start = offset + range.startOffset;
+        if (node === range.endContainer) end = offset + range.endOffset;
+        offset += node.textContent.length;
+        if (start !== null && end !== null) break;
+      }
+      if (start === null || end === null) return null;
       return { start, end, source: "annotated" };
     }
 
