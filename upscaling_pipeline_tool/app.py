@@ -126,7 +126,7 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="panel-body">
-        <span class="step-flag board-step-flag tip" data-tip="Combine blocks into task groups and pick the industrial unit operation for each one, using the phenomena assigned in step 2.">
+        <span class="step-flag board-step-flag tip" data-tip="Convert blocks into task groups first. Unit-operation suggestions unlock after MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
           <span class="step-flag-num">3</span><span class="step-flag-label">Task Assignment</span>
         </span>
         <div id="groupFlow" class="group-flow"></div>

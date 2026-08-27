@@ -452,6 +452,7 @@
     const undoStack = [];
     let flowsheetRequestSeq = 0;
     let boardDragFrame = null;
+    let boardReflowDepth = 0;
     let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
@@ -537,7 +538,7 @@
           x: group.x,
           y: group.y,
           w: nodeWidth(blocks.length),
-          h: 380
+          h: state.measuredNodeHeights[id] || (state.boardCompact ? 200 : 380)
         });
       });
       state.links.forEach(link => {
@@ -1540,19 +1541,31 @@
     }
 
     function unitOperationCandidatesForGroup(group) {
-      if ((group.phenomena || []).length) return matchesForGroup(group);
+      if ((group.phenomena || []).length) return scoredUnitCandidates(matchesForGroup(group), group);
       const context = groupPhaseContext(group);
       return unitCatalog
         .map(unit => {
           const textScore = taskTextUnitScore(group, unit);
           const phaseScore = unitOperationFeedPhaseCompatible(unit, context) ? 1 : 0;
-          const score = textScore + phaseScore;
-          return { ...unit, overlap: [], sameTask: false, score, preliminary: true };
+          const conditionScore = unitConditionScore(group, unit);
+          const mfaScore = unitMfaTransitionScore(group, unit);
+          const score = textScore + phaseScore + conditionScore + mfaScore;
+          return { ...unit, overlap: [], sameTask: false, score, conditionScore, mfaScore, preliminary: true };
         })
         .filter(unit => unit.score > 0)
         .filter(unit => preliminaryUnitTaskCompatible(unit, group))
         .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    }
+
+    function scoredUnitCandidates(candidates, group) {
+      return candidates
+        .map(candidate => {
+          const conditionScore = unitConditionScore(group, candidate);
+          const mfaScore = unitMfaTransitionScore(group, candidate);
+          return { ...candidate, conditionScore, mfaScore, score: candidate.score + conditionScore + mfaScore };
+        })
+        .sort((a, b) => b.score - a.score || Number(b.sameTask) - Number(a.sameTask));
     }
 
     function taskTextUnitScore(group, unit) {
@@ -1581,6 +1594,35 @@
       if (/heat|warm|cool|reflux|temperature|thermal/.test(text) && !/distill|evaporat|recover/.test(text)) return unit.task === "thermal conditioning";
       if (/wash|extract|decan|distill|evaporat|solvent removal|recover|purif|strip|flash|crystall|precipitat|dry|vent|voc|emission|abatement/.test(text)) return unit.task === "separation" || unit.task === "thermal conditioning";
       return true;
+    }
+
+    function unitConditionScore(group, unit) {
+      const ids = new Set(aggregateGroupConditions(group).map(item => item.id));
+      const unitText = `${unit.task} ${unit.name}`.toLowerCase();
+      let score = 0;
+      if ((ids.has("reaction_time") || ids.has("conversion_yield")) && /react/.test(unitText)) score += 3;
+      if ((ids.has("target_temperature") || ids.has("holding_temperature") || ids.has("thermal_ramp")) && /thermal|heat|cool|reactor|reboiler|condenser|evapor|distill/.test(unitText)) score += 2;
+      if ((ids.has("phase_change_time") || ids.has("target_pressure")) && /evapor|distill|flash|stripping|condenser|reboiler/.test(unitText)) score += 3;
+      if ((ids.has("settling_time") || ids.has("separation_efficiency")) && /decanter|extraction|liquid-liquid|separation/.test(unitText)) score += 3;
+      if ((ids.has("contact_time") || ids.has("agitation_note")) && /mixer|extraction|reactor|drying|adsorption/.test(unitText)) score += 1;
+      if ((ids.has("solid_loading") || ids.has("cake_or_particle_note") || ids.has("solid_endpoint")) && /filter|crystall|dry|solid/.test(unitText)) score += 3;
+      return score;
+    }
+
+    function unitMfaTransitionScore(group, unit) {
+      const streams = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams.filter(stream => String(stream.name || "").trim());
+      });
+      const inputPhases = new Set(streams.filter(stream => stream.role === "input").map(stream => stream.phase).filter(Boolean));
+      const outputPhases = new Set(streams.filter(stream => stream.role !== "input").map(stream => stream.phase).filter(Boolean));
+      const unitText = `${unit.task} ${unit.name}`.toLowerCase();
+      let score = 0;
+      if (streams.some(stream => stream.role === "waste") && /separation|wastewater|decanter|distill|evapor|filter|dry/.test(unitText)) score += 1;
+      if (inputPhases.has("L") && (outputPhases.has("V") || outputPhases.has("VL")) && /evapor|distill|flash|stripping|vapor|condenser/.test(unitText)) score += 2;
+      if ((inputPhases.has("LL") || outputPhases.has("LL")) && /decanter|extraction|liquid-liquid/.test(unitText)) score += 2;
+      if ((inputPhases.has("LS") || outputPhases.has("LS") || outputPhases.has("S")) && /filter|crystall|dry|solid/.test(unitText)) score += 2;
+      return score;
     }
 
     function unitTaskCompatibleWithGroup(unit, group) {
@@ -1686,7 +1728,8 @@
     function groupUnitSuggestionGateHtml(group) {
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
-      const alternatives = groupState.unitSuggestionsExpanded ? unitOperationCandidatesForGroup(group).slice(0, 5) : [];
+      const showSuggestions = readiness.ready && groupState.unitSuggestionsExpanded;
+      const alternatives = showSuggestions ? unitOperationCandidatesForGroup(group).slice(0, 5) : [];
       const statusPill = (label, ok) => `<span class="pill ${ok ? "green" : "warn"}">${escapeHtml(label)}: ${ok ? "ready" : "needed"}</span>`;
       const helper = readiness.ready
         ? (readiness.lutzeReady
@@ -1703,10 +1746,14 @@
           <div class="muted small">${escapeHtml(helper)}</div>
           <div class="unit-suggest-actions">
             <button data-review-lutze="${escapeAttr(group.id)}" ${readiness.dataReady ? "" : "disabled"}>${readiness.lutzeReady ? "Review Lutze Again" : "Review Lutze Phenomena"}</button>
-            <button class="primary" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}>Suggest Unit Operation</button>
+            <button class="primary" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}>${groupState.unitSuggestionsExpanded ? "Update Suggestions" : "Suggest Unit Operation"}</button>
           </div>
-          ${groupState.unitSuggestionsExpanded ? `
+          ${showSuggestions ? `
             <div class="unit-suggest-results">
+              <div class="unit-suggest-result-head">
+                <strong>Suggested Unit Operations</strong>
+                <span class="muted small">${readiness.lutzeReady ? "task + MFA + conditions + Lutze" : "pre-Lutze: task + MFA + conditions"}</span>
+              </div>
               ${alternatives.length ? alternatives.map(candidate => `
                 <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
                   ${escapeHtml(candidate.name)}
@@ -1714,6 +1761,8 @@
                 </button>
               `).join("") : `<div class="mfa-empty">No unit operation candidate matches the current task and phase context yet.</div>`}
             </div>
+          ` : groupState.unitSuggestionsExpanded ? `
+            <div class="mfa-empty">Suggestions are hidden until task, MFA, phases, and conditions are complete again.</div>
           ` : ""}
         </div>
       `;
@@ -1721,10 +1770,20 @@
 
     function candidateFitMetaHtml(candidate) {
       if (candidate.preliminary) {
-        return `<span class="candidate-fit-meta">pre-Lutze suggestion; score ${candidate.score}; task/phase based</span>`;
+        const evidence = [
+          "task/phase",
+          candidate.conditionScore ? "conditions" : "",
+          candidate.mfaScore ? "MFA transition" : ""
+        ].filter(Boolean).join(" + ");
+        return `<span class="candidate-fit-meta">pre-Lutze suggestion; score ${candidate.score}; ${escapeHtml(evidence)}</span>`;
       }
       const overlap = candidate.overlap?.length ? candidate.overlap.join(", ") : "no direct overlap";
-      return `<span class="candidate-fit-meta">score ${candidate.score}; ${escapeHtml(overlap)}</span>`;
+      const evidence = [
+        overlap,
+        candidate.conditionScore ? `conditions +${candidate.conditionScore}` : "",
+        candidate.mfaScore ? `MFA +${candidate.mfaScore}` : ""
+      ].filter(Boolean).join("; ");
+      return `<span class="candidate-fit-meta">score ${candidate.score}; ${escapeHtml(evidence)}</span>`;
     }
 
     function selectionBasisStatus(group) {
@@ -1751,7 +1810,7 @@
     }
 
     function selectedUnitInCurrentRanking(group) {
-      return Boolean(group.selectedUnit && matchesForGroup(group).some(candidate => candidate.name === group.selectedUnit));
+      return Boolean(group.selectedUnit && unitOperationCandidatesForGroup(group).some(candidate => candidate.name === group.selectedUnit));
     }
 
     function selectedUnitSupportedByEvidence(group) {
@@ -2087,7 +2146,7 @@
       ` : "";
       const groupHtml = groupIds.map(groupId => {
         const group = groupModel(groupId);
-        const candidates = matchesForGroup(group).slice(0, 4);
+        const unitReadiness = groupUnitSuggestionReadiness(group);
         const active = state.selectedGroupId === group.id;
         const contextActive = !active && group.blocks.some(block => state.selectedIds.includes(block.id));
         const boxClasses = `group-box tip ${state.boardCompact ? "compact" : ""} ${active ? "active" : ""} ${contextActive ? "context-active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}`;
@@ -2136,13 +2195,10 @@
               ${groupMfaSummaryHtml(group)}
               ${groupConditionSummaryHtml(group)}
               ${state.showConnections && linksForGroup(group.id).length ? `<div class="group-connection-chips">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>` : ""}
-              <div class="label" style="margin-top:8px">Alternatives</div>
-              <div class="alt-grid">
-                ${candidates.length ? candidates.map(candidate => `
-                  <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${group.id}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-                    ${escapeHtml(candidate.name)}
-                  </button>
-                `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`}
+              <div class="group-unit-summary">
+                <div class="label">Unit Operation</div>
+                <strong>${escapeHtml(group.selectedUnit || "not selected")}</strong>
+                <span class="muted small">${unitReadiness.ready ? "Open Group, then Suggest Unit Operation." : `Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before suggestions.`}</span>
               </div>
             </div>
           </section>
@@ -2189,9 +2245,19 @@
         button.addEventListener("mousedown", event => event.stopPropagation());
       });
       root.querySelectorAll("[data-connect-handle]").forEach(handle => {
-        handle.addEventListener("mousedown", event => {
+        handle.addEventListener("pointerdown", event => {
           if (event.button !== 0) return;
+          event.stopImmediatePropagation();
           startConnectDrag(event, handle.dataset.connectHandle);
+        });
+        handle.addEventListener("mousedown", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+        });
+        handle.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
         });
       });
 
@@ -2210,7 +2276,7 @@
           showGroupMenu(event.clientX, event.clientY, box.dataset.groupBox);
         });
         box.addEventListener("mousedown", event => {
-          if (event.button !== 0 || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
+          if (event.button !== 0 || event.target.closest("[data-connect-handle]") || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
           startDrag(event, box.dataset.groupBox, "group");
         });
       });
@@ -2224,19 +2290,27 @@
       const draftBox = root.querySelector("[data-draft-box]");
       if (draftBox) {
         draftBox.addEventListener("mousedown", event => {
-          if (event.button !== 0 || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
+          if (event.button !== 0 || event.target.closest("[data-connect-handle]") || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
           startDrag(event, "draft", "draft");
         });
       }
 
       root.querySelectorAll("[data-unit]").forEach(button => {
         button.addEventListener("click", () => {
-          ensureGroup(button.dataset.unitGroup).selectedUnit = button.dataset.unit;
+          const group = groupModel(button.dataset.unitGroup);
+          if (!group || !groupUnitSuggestionReadiness(group).ready) return;
+          ensureGroup(group.id).selectedUnit = button.dataset.unit;
           renderAll();
         });
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
+      if (boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
+        boardReflowDepth += 1;
+        renderGroupFlow();
+        boardReflowDepth = 0;
+        return;
+      }
       revealFocusedEndpoint();
     }
 
@@ -2387,6 +2461,45 @@
       if (!changed) return;
       const svg = canvas.querySelector(".link-layer");
       if (svg) svg.outerHTML = renderLinksSvg(board);
+    }
+
+    // Detailed (non-compact) group boxes render their full content (block cards, phenomena,
+    // MFA/condition summaries, alternatives) and have no fixed height, unlike compact boxes -
+    // so a box can easily be taller than the fixed row gap used to place the row below it,
+    // making the two rows visually overlap ("attaccati"). Once real heights are known (from
+    // measureNodeHeightsAndRedrawLinks, called just before this), push any box down that a
+    // shorter fixed gap left overlapping a taller box directly above it in the same column.
+    function resolveGroupVerticalOverlaps() {
+      if (state.boardCompact) return false;
+      const ids = groupIdsInTextOrder();
+      if (ids.length < 2) return false;
+      const gap = 60;
+      const items = ids
+        .map(id => {
+          const group = ensureGroup(id);
+          return {
+            group,
+            x: group.x || 0,
+            w: nodeWidth(blocksForGroup(id).length),
+            h: state.measuredNodeHeights[id] || 380
+          };
+        })
+        .sort((a, b) => (a.group.y - b.group.y) || (a.x - b.x));
+      let changed = false;
+      for (let i = 0; i < items.length; i++) {
+        for (let j = 0; j < i; j++) {
+          const above = items[j];
+          const below = items[i];
+          const xOverlap = above.x < below.x + below.w && below.x < above.x + above.w;
+          if (!xOverlap) continue;
+          const requiredY = above.group.y + above.h + gap;
+          if (below.group.y < requiredY) {
+            below.group.y = requiredY;
+            changed = true;
+          }
+        }
+      }
+      return changed;
     }
 
     // placedSegments carries the already-drawn segments of every link rendered earlier in this
@@ -5683,7 +5796,7 @@
         const conditionAggregates = aggregateGroupConditions(group);
         const propertyPrompts = propertyPromptsForGroup(group);
         const propertyValues = propertyValuesForGroup(group);
-        if (propertyPrompts.length && matchesForGroup(group).length > 1 && !propertyValues.length) {
+        if (propertyPrompts.length && unitOperationCandidatesForGroup(group).length > 1 && !propertyValues.length) {
           issues.push(ruleIssue("low", "Optional property refinement available", "This group has multiple plausible alternatives; property data can improve ranking without being mandatory.", group.id, "Add properties only if you need to discriminate between alternatives."));
         }
         conditionAggregates
@@ -5971,7 +6084,7 @@
       const ungrouped = blocks.filter(block => !block.groupId);
       const missingTaskOrUnit = groups.filter(group => !group.task || group.task === "unassigned" || !group.selectedUnit);
       const incompatibleUnit = groups.filter(group => group.selectedUnit && !selectedUnitSupportedByEvidence(group));
-      const missingSelectionBasis = groups.filter(group => group.selectedUnit && matchesForGroup(group).length > 1 && !String(group.selectionBasis || "").trim());
+      const missingSelectionBasis = groups.filter(group => group.selectedUnit && unitOperationCandidatesForGroup(group).length > 1 && !String(group.selectionBasis || "").trim());
 
       const statusFor = issues => !blocks.length ? "todo" : issues.length ? "partial" : "done";
       return [
@@ -7001,23 +7114,41 @@
       const result = reactionBalanceModel(group, model);
       const balance = result.balance;
       const reactantOptions = ["auto", ...result.rows.filter(row => row.role === "reactant").map(row => row.id)];
+      const productRows = result.rows.filter(row => row.role === "product" || row.role === "coproduct");
+      const productOptions = ["auto", ...productRows.map(row => row.id)];
       return `
         <section class="modal-section">
           <div>
             <div class="label">Reaction Balance</div>
-            <div class="muted small">Light estimate only. It reuses the existing stream/substance quantities; add only conversion/yield, limiting reagent, MW, and stoichiometry when missing.</div>
+            <div class="muted small">Select the main product, add co-products if needed, then conversion/yield estimates unreacted residuals for waste or recovery handling.</div>
           </div>
           <div class="sep-balance-controls">
             <label><span class="label">Conversion / yield %</span><input data-reaction-balance-field="conversionPercent" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.conversionPercent)}" placeholder="auto from group, e.g. 90"></label>
             <label><span class="label">Basis</span><select data-reaction-balance-field="basis" data-sep-group="${escapeAttr(group.id)}">${optionHtml(["conversion", "yield", "assumption"], balance.basis)}</select></label>
             <label><span class="label">Limiting reagent</span><select data-reaction-balance-field="limiting" data-sep-group="${escapeAttr(group.id)}">${optionHtml(reactantOptions, balance.limiting || "auto")}</select></label>
+            <label><span class="label">Main product</span><select data-reaction-balance-field="mainProductId" data-sep-group="${escapeAttr(group.id)}">${reactionProductOptionHtml(productOptions, productRows, balance.mainProductId || "auto")}</select></label>
+          </div>
+          <div class="sep-balance-product-actions">
+            <button type="button" data-add-reaction-product="${escapeAttr(group.id)}">+ Add Main Product</button>
+            <button type="button" data-add-reaction-coproduct="${escapeAttr(group.id)}">+ Add Co-product</button>
+            <span class="muted small">${productRows.length ? `${productRows.length} product-like substance${productRows.length === 1 ? "" : "s"} available` : "No product selected yet; add one or sync from output streams."}</span>
           </div>
           <div class="sep-result-summary">
             <span><strong>${Number.isFinite(result.conversion) ? `${formatNumber(result.conversion * 100)}%` : "missing"}</strong> conversion/yield</span>
             <span><strong>${result.limiting ? escapeHtml(result.limiting.name) : "missing"}</strong> limiting reagent</span>
+            <span><strong>${result.mainProduct ? escapeHtml(result.mainProduct.name) : "missing"}</strong> main product</span>
             <span><strong>${result.status}</strong> balance status</span>
           </div>
           ${result.issues.length ? `<div class="sep-sim-status partial"><strong>Missing balance inputs</strong><span>${result.issues.map(escapeHtml).join(", ")}</span></div>` : ""}
+          ${result.residualRows.length ? `
+            <div class="sep-residual-box">
+              <div>
+                <strong>Unreacted residuals</strong>
+                <span class="muted small">${escapeHtml(formatResidualSummary(result))}</span>
+              </div>
+              <button type="button" class="primary-mini" data-apply-residual-waste="${escapeAttr(group.id)}">Apply as waste/recovery streams</button>
+            </div>
+          ` : ""}
           <div class="sep-balance-table">
             ${result.rows.map(row => `
               <div class="sep-balance-row">
@@ -7039,6 +7170,107 @@
 
     function formatReactionMass(value) {
       return Number.isFinite(value) ? `${formatNumber(value)} kg` : "missing";
+    }
+
+    function reactionProductOptionHtml(options, rows, selected) {
+      return options.map(value => {
+        const row = rows.find(item => item.id === value);
+        const label = value === "auto" ? "auto" : `${row?.name || value}${row?.role === "coproduct" ? " (co-product)" : ""}`;
+        return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+
+    function formatResidualSummary(result) {
+      const percent = Number.isFinite(result.conversion) ? formatNumber(Math.max(0, 100 - result.conversion * 100)) : "unknown";
+      const parts = result.residualRows
+        .slice(0, 3)
+        .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg)}`);
+      return `${percent}% unconverted basis; ${parts.join(", ")}${result.residualRows.length > 3 ? "..." : ""}`;
+    }
+
+    function addReactionProductSubstance(groupId, role) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      pushUndo();
+      const productName = role === "coproduct" ? "" : inferMainProductNameFromOutputs(groupModel(groupId)) || "";
+      const existing = productName
+        ? simulator.substances.find(item => item.name.trim().toLowerCase() === productName.trim().toLowerCase())
+        : null;
+      if (existing) {
+        existing.role = role;
+        existing.fate = "product";
+        if (role === "product") simulator.reactionBalance.mainProductId = existing.id;
+        simulator.tab = "balance";
+        invalidateAiRefine();
+        renderSeparationSimulatorModal();
+        renderExport();
+        return;
+      }
+      const substance = normalizeSeparationSubstance({
+        id: nextSeparationSubstanceId(simulator),
+        name: productName,
+        role,
+        fate: "product",
+        phase: inferMainProductPhaseFromOutputs(groupModel(groupId)) || "unknown",
+        unit: "kg",
+        source: productName ? "group output stream" : "manual reaction balance",
+        note: role === "coproduct" ? "Co-product added manually in reaction balance." : "Main product added from reaction balance."
+      }, simulator.substances.length);
+      simulator.substances.push(substance);
+      if (role === "product") simulator.reactionBalance.mainProductId = substance.id;
+      simulator.tab = "balance";
+      invalidateAiRefine();
+      renderSeparationSimulatorModal();
+      renderExport();
+    }
+
+    function inferMainProductNameFromOutputs(group) {
+      if (!group) return "";
+      const outputs = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams.filter(stream => stream.role === "output" && String(stream.name || "").trim());
+      });
+      const product = outputs.find(stream => /product|final|purified/i.test(`${stream.name} ${stream.fate} ${stream.timing}`)) || outputs[0];
+      return product?.name || "";
+    }
+
+    function inferMainProductPhaseFromOutputs(group) {
+      if (!group) return "";
+      const outputs = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams.filter(stream => stream.role === "output" && String(stream.phase || "").trim() && stream.phase !== "unknown");
+      });
+      return outputs[0]?.phase || "";
+    }
+
+    function applyReactionResidualWasteStreams(groupId) {
+      const group = groupModel(groupId);
+      if (!group?.blocks?.length) return;
+      const result = reactionBalanceModel(group);
+      if (!result.residualRows.length) return;
+      pushUndo();
+      const target = group.blocks[group.blocks.length - 1];
+      ensureBlockFlowFields(target);
+      result.residualRows.forEach(row => {
+        const name = `unreacted ${row.name}`;
+        const existing = target.streams.some(stream => stream.role === "waste" && stream.name.trim().toLowerCase() === name.toLowerCase());
+        if (existing) return;
+        const stream = createStream("waste", {
+          id: nextStreamId(target),
+          name,
+          quantity: formatNumber(row.finalMassKg),
+          unit: "kg",
+          phase: row.phase || "unknown",
+          status: "calculated",
+          timing: "waste purge",
+          fate: "waste",
+          scalingMode: "per batch",
+          note: `Auto-generated from reaction balance: ${Number.isFinite(result.conversion) ? formatNumber(result.conversion * 100) : "unknown"}% conversion/yield leaves residual ${row.name}. Treat as waste or recovery candidate.`
+        });
+        target.streams.push(stream);
+      });
+      syncLegacyStreamLists(target);
+      invalidateAiRefine();
+      renderAll();
     }
 
     function workupPlanHtml(group, model) {
@@ -7475,6 +7707,15 @@
         input.addEventListener("input", updateReactionBalanceField);
         input.addEventListener("change", updateReactionBalanceField);
         input.addEventListener("change", renderSeparationSimulatorModal);
+      });
+      root.querySelectorAll("[data-add-reaction-product]").forEach(button => {
+        button.addEventListener("click", () => addReactionProductSubstance(button.dataset.addReactionProduct, "product"));
+      });
+      root.querySelectorAll("[data-add-reaction-coproduct]").forEach(button => {
+        button.addEventListener("click", () => addReactionProductSubstance(button.dataset.addReactionCoproduct, "coproduct"));
+      });
+      root.querySelectorAll("[data-apply-residual-waste]").forEach(button => {
+        button.addEventListener("click", () => applyReactionResidualWasteStreams(button.dataset.applyResidualWaste));
       });
       root.querySelectorAll("[data-sep-apply-candidate]").forEach(button => {
         button.addEventListener("click", async () => {
@@ -8252,9 +8493,10 @@
       const mfa = aggregateGroupStreams(group);
       const conditions = aggregateGroupConditions(group);
       const separationModel = separationSimulatorModel(group);
+      const unitReadiness = groupUnitSuggestionReadiness(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
-      const alternatives = showPostReactionSupport
-        ? matchesForGroup(group).filter(candidate => candidate.task === "separation" || candidate.task.includes("separation")).slice(0, 4)
+      const alternatives = showPostReactionSupport && unitReadiness.ready
+        ? unitOperationCandidatesForGroup(group).filter(candidate => candidate.task === "separation" || candidate.task.includes("separation")).slice(0, 4)
         : [];
       const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
       const groupState = ensureGroup(group.id);
@@ -8343,15 +8585,17 @@
                   <span class="muted small">phenomena + phase filtered</span>
                 </div>
                 <div class="condition-body">
-                  ${proposalBasisHtml(group, alternatives)}
-                  <div class="alt-grid group-alt-grid">
-                    ${alternatives.length ? alternatives.map(candidate => `
-                      <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-                        ${escapeHtml(candidate.name)}
-                        ${candidateFitMetaHtml(candidate)}
-                      </button>
-                    `).join("") : `<span class="muted">No separation alternatives for current reaction data.</span>`}
-                  </div>
+                  ${unitReadiness.ready ? `
+                    ${proposalBasisHtml(group, alternatives)}
+                    <div class="alt-grid group-alt-grid">
+                      ${alternatives.length ? alternatives.map(candidate => `
+                        <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+                          ${escapeHtml(candidate.name)}
+                          ${candidateFitMetaHtml(candidate)}
+                        </button>
+                      `).join("") : `<span class="muted">No separation alternatives for current reaction data.</span>`}
+                    </div>
+                  ` : `<div class="mfa-empty">Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before selecting separation unit alternatives.</div>`}
                   ${selectionBasisHtml(group)}
                 </div>
               </div>
@@ -8418,6 +8662,12 @@
         button.addEventListener("click", async () => {
           const unit = button.dataset.unit;
           const groupId = button.dataset.unitGroup;
+          const group = groupModel(groupId);
+          const readiness = group ? groupUnitSuggestionReadiness(group) : null;
+          if (!readiness?.ready) {
+            await alertModal(`Complete ${readiness?.missing.join(", ") || "task data"} before selecting a unit operation.`);
+            return;
+          }
           if (!(await confirmModal(`Set the selected unit for ${groupId} to "${unit}"? This overrides the current unit choice.`))) return;
           pushUndo();
           ensureGroup(groupId).selectedUnit = unit;
@@ -8964,7 +9214,16 @@
         $("groupAlternatives").innerHTML = `<span class="muted">No group selected.</span>`;
         return;
       }
-      const candidates = matchesForGroup(group).slice(0, 6);
+      const readiness = groupUnitSuggestionReadiness(group);
+      if (!readiness.ready) {
+        $("groupAlternatives").innerHTML = `
+          <div class="mfa-empty">
+            Complete ${escapeHtml(readiness.missing.join(", ") || "task data")} before unit-operation suggestions.
+          </div>
+        `;
+        return;
+      }
+      const candidates = unitOperationCandidatesForGroup(group).slice(0, 6);
       const basisNote = group.selectedUnit && candidates.length > 1 ? `
         <div class="muted small" style="margin-top:6px">
           ${group.selectionBasis
@@ -8975,9 +9234,9 @@
       $("groupAlternatives").innerHTML = (candidates.length ? candidates.map(candidate => `
         <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
           ${escapeHtml(candidate.name)}
-          <span class="pill ${candidate.sameTask ? "blue" : "warn"}">${candidate.sameTask ? "same task" : "related"}</span>
+          <span class="pill ${candidate.preliminary ? "warn" : candidate.sameTask ? "blue" : "green"}">${candidate.preliminary ? "pre-Lutze" : candidate.sameTask ? "same task" : "Lutze fit"}</span>
         </button>
-      `).join("") : `<span class="muted">Assign phenomena to get alternatives.</span>`) + basisNote;
+      `).join("") : `<span class="muted">No candidates match the completed task data.</span>`) + basisNote;
       document.querySelectorAll("[data-inspector-unit]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
@@ -9556,14 +9815,16 @@
 
     function addConnection(from, to) {
       if (!from || !to) return;
-      if (resolvedEndpointId(from) === resolvedEndpointId(to)) {
+      const resolvedFrom = resolvedEndpointId(from);
+      const resolvedTo = resolvedEndpointId(to);
+      if (resolvedFrom === resolvedTo) {
         state.connectingFrom = null;
         renderAll();
         return;
       }
-      if (!state.links.some(link => link.from === from && link.to === to)) {
+      if (!state.links.some(link => resolvedEndpointId(link.from) === resolvedFrom && resolvedEndpointId(link.to) === resolvedTo)) {
         pushUndo();
-        state.links.push({ from, to });
+        state.links.push({ from: resolvedFrom, to: resolvedTo });
       }
       state.connectingFrom = null;
       renderAll();
@@ -9576,6 +9837,7 @@
     }
 
     function startDrag(event, id, kind) {
+      if (state.connectDrag || event.target?.closest?.("[data-connect-handle]")) return;
       const rect = $("groupFlow").getBoundingClientRect();
       const current = kind === "draft" ? state.draftPos : ensureGroup(id);
       state.drag = {
@@ -9677,18 +9939,35 @@
     function startConnectDrag(event, fromId) {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      state.drag = null;
+      if (boardDragFrame) {
+        cancelAnimationFrame(boardDragFrame);
+        boardDragFrame = null;
+      }
       const point = boardPointFromEvent(event);
-      state.connectDrag = { fromId, x: point.x, y: point.y };
+      state.connectDrag = {
+        fromId,
+        x: point.x,
+        y: point.y,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        moved: false
+      };
       state.connectingFrom = fromId;
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
       renderConnectDragPreview();
     }
 
     function connectDragMove(event) {
       if (!state.connectDrag) return;
       event.preventDefault();
+      event.stopPropagation();
       const point = boardPointFromEvent(event);
       state.connectDrag.x = point.x;
       state.connectDrag.y = point.y;
+      const movement = Math.abs(event.clientX - state.connectDrag.startClientX) + Math.abs(event.clientY - state.connectDrag.startClientY);
+      if (movement >= 4) state.connectDrag.moved = true;
       scheduleConnectDragRender();
     }
 
@@ -9730,17 +10009,29 @@
         connectDragFrame = null;
       }
       const fromId = state.connectDrag.fromId;
+      const moved = state.connectDrag.moved;
       state.connectDrag = null;
-      const target = document.elementFromPoint(event.clientX, event.clientY);
-      const groupBox = target?.closest("[data-group-box]");
-      const draftBlockCard = target?.closest("[data-draft-box] [data-block-card]");
-      const toId = groupBox?.dataset.groupBox || draftBlockCard?.dataset.blockCard || null;
+      const toId = connectTargetFromPoint(event.clientX, event.clientY, fromId);
       if (toId && toId !== fromId) {
         addConnection(fromId, toId);
+      } else if (!moved) {
+        state.connectingFrom = fromId;
+        renderGroupFlow();
       } else {
         state.connectingFrom = null;
         renderGroupFlow();
       }
+    }
+
+    function connectTargetFromPoint(clientX, clientY, fromId = "") {
+      const target = document.elementFromPoint(clientX, clientY);
+      const blockCard = target?.closest("[data-block-card]");
+      const groupBox = target?.closest("[data-group-box]");
+      const groupId = groupBox?.dataset.groupBox || "";
+      const blockId = blockCard?.dataset.blockCard || "";
+      if (blockId && resolvedEndpointId(blockId) !== resolvedEndpointId(fromId)) return blockId;
+      if (groupId && resolvedEndpointId(groupId) !== resolvedEndpointId(fromId)) return groupId;
+      return "";
     }
 
     // Some embedding webviews (VS Code's Electron webview included) can fire a synthetic "click" right
@@ -11118,6 +11409,9 @@
     document.addEventListener("mouseout", hideHoverTip);
     document.addEventListener("mousemove", dragMove);
     document.addEventListener("mouseup", dragEnd);
+    document.addEventListener("pointermove", connectDragMove);
+    document.addEventListener("pointerup", connectDragEnd);
+    document.addEventListener("pointercancel", connectDragEnd);
     document.addEventListener("mousemove", connectDragMove);
     document.addEventListener("mouseup", connectDragEnd);
 

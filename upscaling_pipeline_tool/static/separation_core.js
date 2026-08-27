@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
 
-  const substanceRoles = ["unknown", "reactant", "product", "byproduct", "solvent", "catalyst", "impurity", "auxiliary"];
+  const substanceRoles = ["unknown", "reactant", "product", "coproduct", "byproduct", "solvent", "catalyst", "impurity", "auxiliary"];
   const substanceFates = ["unknown", "recover", "product", "waste", "recycle", "vent", "intermediate", "keep with mixture"];
   const binaryInsightOptions = ["unknown", "no", "yes"];
   const thermalOptions = ["unknown", "low", "medium", "high"];
@@ -154,6 +154,7 @@
       conversionPercent: String(source.conversionPercent || ""),
       basis: ["conversion", "yield", "assumption"].includes(source.basis) ? source.basis : "conversion",
       limiting: String(source.limiting || "auto"),
+      mainProductId: String(source.mainProductId || "auto"),
       note: String(source.note || "")
     };
   }
@@ -375,13 +376,25 @@
       .map(row => ({ ...row, extentCapacity: row.initialMol / row.stoich }))
       .sort((a, b) => a.extentCapacity - b.extentCapacity)[0] || null;
     const extent = limiting && Number.isFinite(conversion) ? limiting.initialMol / limiting.stoich * conversion : NaN;
-    const balancedRows = rows.map(row => reactionMixtureRow(row, extent));
+    const mainProduct = mainProductRow(rows, balance);
+    const balancedRows = rows.map(row => reactionMixtureRow(row, extent, mainProduct));
+    const residualRows = balancedRows.filter(row => row.role === "reactant" && Number.isFinite(row.finalMassKg) && row.finalMassKg > 0.000001);
     const issues = [];
     if (!reactants.length) issues.push("reactant amounts with MW");
     if (!Number.isFinite(conversion)) issues.push("conversion/yield percent");
     if (!limiting) issues.push("limiting reagent");
-    if (!simulatorModel.substances.some(item => item.role === "product")) issues.push("main product role");
-    return { balance, conversion, limiting, extent, rows: balancedRows, issues, status: issues.length ? "partial" : "estimated" };
+    if (!mainProduct) issues.push("main product selection");
+    return { balance, conversion, limiting, extent, mainProduct, rows: balancedRows, residualRows, issues, status: issues.length ? "partial" : "estimated" };
+  }
+
+  function mainProductRow(rows, balance) {
+    const products = rows.filter(row => row.role === "product" || row.role === "coproduct");
+    if (!products.length) return null;
+    if (balance.mainProductId && balance.mainProductId !== "auto") {
+      const selected = products.find(row => row.id === balance.mainProductId || row.name === balance.mainProductId);
+      if (selected) return selected;
+    }
+    return products.find(row => row.role === "product") || products[0];
   }
 
   function reactionConversionFraction(group, balance) {
@@ -404,20 +417,20 @@
       else if (unit === "mol") initialMol = quantity;
       else if (unit === "kmol") initialMol = quantity * 1000;
     }
-    const defaultStoich = ["reactant", "product", "byproduct"].includes(item.role) ? 1 : 0;
+    const defaultStoich = ["reactant", "product", "coproduct", "byproduct"].includes(item.role) ? 1 : 0;
     const parsedStoich = numberFromText(item.stoichCoeff);
     return { ...item, mw, initialMol, stoich: Number.isFinite(parsedStoich) ? parsedStoich : defaultStoich, initialMassKg: massToKg(item.quantity, item.unit) };
   }
 
-  function reactionMixtureRow(row, extent) {
+  function reactionMixtureRow(row, extent, mainProduct = null) {
     let finalMol = row.initialMol;
     let basis = "passes through";
     if (row.role === "reactant" && Number.isFinite(extent) && row.stoich > 0) {
       finalMol = Number.isFinite(row.initialMol) ? Math.max(0, row.initialMol - extent * row.stoich) : NaN;
-      basis = "residual reactant estimate";
-    } else if ((row.role === "product" || row.role === "byproduct") && Number.isFinite(extent) && row.stoich > 0) {
+      basis = "unreacted residual: route to waste/recovery";
+    } else if ((row.role === "product" || row.role === "coproduct" || row.role === "byproduct") && Number.isFinite(extent) && row.stoich > 0) {
       finalMol = Number.isFinite(row.initialMol) && row.initialMol > 0 ? row.initialMol : extent * row.stoich;
-      basis = `${row.role} formed estimate`;
+      basis = row.id === mainProduct?.id ? "main product formed estimate" : `${row.role} formed estimate`;
     } else if (row.role === "solvent") {
       basis = "bulk solvent passthrough";
     } else if (row.role === "catalyst") {
@@ -433,6 +446,7 @@
     const suggestions = simulatorModel.suggestions.filter(item => item.ruleId !== "NO-KB3.1-MATCH");
     const product = rows.find(row => row.role === "product");
     const steps = [];
+    const coproducts = rows.filter(row => row.role === "coproduct");
     const byproducts = rows.filter(row => row.role === "byproduct" || /water|salt|gas/i.test(row.name));
     if (byproducts.length) steps.push(workupStep("Remove reaction byproduct / separate phase", byproducts, ["Dean-Stark trap", "Decanter", "Liquid-liquid split"], "Generated by reaction; remove early if it forms a separate phase or drives equilibrium."));
     const solvents = rows.filter(row => row.role === "solvent");
@@ -441,6 +455,7 @@
     if (residualReactants.length) steps.push(workupStep("Remove or recover residual reactants", residualReactants, matchingSuggestionUnits(suggestions, residualReactants, product, ["Distillation", "Liquid-liquid extraction", "Crystallization", "Membrane pervaporation"]), "Conversion below 100% leaves unreacted material; recover it before final product specification if feasible."));
     const catalysts = rows.filter(row => row.role === "catalyst");
     if (catalysts.length) steps.push(workupStep("Purge catalyst / inorganic additive", catalysts, ["Wash", "Adsorption", "Filtration"], "Catalysts and salts usually need a dedicated purge or wash."));
+    if (coproducts.length) steps.push(workupStep("Recover co-product stream", coproducts, matchingSuggestionUnits(suggestions, coproducts, product, ["Distillation", "Crystallization", "Liquid-liquid extraction", "Evaporation"]), "Co-products are product-like streams; keep them separate from waste if they have value or specification."));
     if (product) steps.push(workupStep("Final product polishing", [product], product.thermalSensitivity === "high" ? ["Short-path distillation", "Wiped-film evaporation", "Vacuum distillation"] : ["Distillation", "Crystallization", "Final evaporation"], product.thermalSensitivity === "high" ? "Product is heat-sensitive; prefer short residence time and reduced pressure." : "Final step targets product purity after bulk removals."));
     return { balance, steps };
   }
@@ -673,6 +688,7 @@
     separationMissingForPair,
     separationMissingForSuggestion,
     reactionBalanceModel,
+    mainProductRow,
     reactionConversionFraction,
     reactionBalanceRow,
     reactionMixtureRow,

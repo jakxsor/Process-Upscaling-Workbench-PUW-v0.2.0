@@ -78,6 +78,50 @@ assert(ruleIds.includes("SCREEN-THERMAL-SENSITIVE"), "heat-sensitive product sho
 assert(model.suggestions.some(item => item.units.includes("Evaporation")), "suggestions should include evaporation");
 assert(model.suggestions.some(item => item.units.includes("Short-path distillation")), "suggestions should include short-path distillation");
 
+state.blocks = [{
+  id: "B100",
+  start: 0,
+  end: 1,
+  groupId: "GR",
+  source: "manual",
+  text: "reaction balance test",
+  behavior: "reaction",
+  streams: [],
+  phenomena: ["R(L)"],
+  conditions: {},
+  conditionUnits: {}
+}];
+state.groups = {
+  GR: {
+    id: "GR",
+    task: "reaction",
+    selectedUnit: "",
+    schedule: scheduleDefaults(),
+    properties: {},
+    separationSimulator: {
+      tab: "balance",
+      substances: [
+        { id: "CS1", name: "reactant A", role: "reactant", phase: "L", fate: "recover", quantity: "1", unit: "kg", stoichCoeff: "1", mw: "100" },
+        { id: "CS2", name: "reactant B", role: "reactant", phase: "L", fate: "recover", quantity: "1", unit: "kg", stoichCoeff: "1", mw: "100" },
+        { id: "CS3", name: "main product", role: "product", phase: "L", fate: "product", quantity: "", unit: "kg", stoichCoeff: "1", mw: "200" }
+      ],
+      pairInsights: {},
+      reactionBalance: { conversionPercent: "95", basis: "conversion", limiting: "auto", mainProductId: "CS3", note: "" },
+      lookupSummary: {},
+      notes: ""
+    }
+  }
+};
+group = groupModel("GR");
+const balance = reactionBalanceModel(group);
+assert.strictEqual(balance.mainProduct.name, "main product", "reaction balance should use selected main product");
+assert(Math.abs(balance.residualRows.find(row => row.name === "reactant A").finalMassKg - 0.05) < 0.0001, "95% conversion should leave 5% reactant A residual");
+assert(Math.abs(balance.residualRows.find(row => row.name === "reactant B").finalMassKg - 0.05) < 0.0001, "95% conversion should leave 5% reactant B residual");
+applyReactionResidualWasteStreams("GR");
+const residualWaste = state.blocks[0].streams.filter(stream => stream.role === "waste" && stream.name.startsWith("unreacted "));
+assert.strictEqual(residualWaste.length, 2, "residual reactants should be written as waste/recovery streams");
+assert(residualWaste.every(stream => stream.status === "calculated"), "residual streams should be calculated");
+
 console.log("Separation simulator regression check passed.");
 `;
 
