@@ -1704,6 +1704,14 @@
       font-size: 11px;
     }
 
+    .mfa-section-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
     .mfa-rows {
       display: grid;
       gap: 5px;
@@ -1746,6 +1754,59 @@
       padding: 4px 5px;
       border-radius: 6px;
       font-size: 11px;
+    }
+
+    .stream-suggestion-rail {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 5px;
+      padding: 5px;
+      border: 1px solid #dce8ee;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .stream-suggestion-rail > span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .stream-suggestion-chip {
+      min-height: 22px;
+      max-width: 100%;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border-color: #cfdde5;
+      background: var(--panel);
+      color: var(--ink-2);
+      font-size: 10px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stream-suggestion-chip.input {
+      border-color: #cbdff0;
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .stream-suggestion-chip.output,
+    .stream-suggestion-chip.pass {
+      border-color: #cde8df;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .stream-suggestion-chip.waste {
+      border-color: #ead9be;
+      background: var(--orange-soft);
+      color: var(--orange);
     }
 
     .mfa-row .delete-stream {
@@ -1851,6 +1912,19 @@
       font-size: 11px;
       line-height: 1.25;
       overflow-wrap: anywhere;
+    }
+
+    .mfa-label-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+      margin-top: 2px;
+    }
+
+    .mfa-label-actions .mini-button {
+      min-height: 22px;
+      padding: 0 7px;
+      font-size: 10px;
     }
 
     .group-mfa {

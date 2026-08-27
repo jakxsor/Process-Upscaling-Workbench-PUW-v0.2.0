@@ -879,6 +879,8 @@
       .filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id))
       .flatMap(pair => binaryRouteVariants(groupId, pair).map(variant => {
         const split = pathwaySplitTargets(pair, variant, mainProduct);
+        const separatedIds = new Set(split.separated.map(item => item.id));
+        const retained = active.filter(item => !separatedIds.has(item.id));
         return {
           id: `${pair.key}::${variant.id}`,
           pairKey: pair.key,
@@ -887,7 +889,7 @@
           variant,
           unit: (variant.units || []).find(unit => unit !== "Review candidate unit") || "",
           separated: split.separated,
-          retained: split.retained
+          retained
         };
       }))
       .filter(option => option.separated.length)

@@ -478,6 +478,12 @@
     let flowsheetRequestSeq = 0;
     let boardDragFrame = null;
     let boardReflowDepth = 0;
+    // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
+    // Compact/Detailed toggle) - NOT on every render. It was previously unconditional, which meant
+    // finishing an ordinary manual drag (also just a renderGroupFlow() call) could immediately
+    // shove the box the user just placed far away from where they dropped it, if that position
+    // happened to overlap a taller box above it. Manual placement should never be overridden.
+    let pendingBoardReflow = false;
     let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
@@ -2369,11 +2375,14 @@
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
-      if (boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
-        boardReflowDepth += 1;
-        renderGroupFlow();
-        boardReflowDepth = 0;
-        return;
+      if (pendingBoardReflow) {
+        pendingBoardReflow = false;
+        if (boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
+          boardReflowDepth += 1;
+          renderGroupFlow();
+          boardReflowDepth = 0;
+          return;
+        }
       }
       revealFocusedEndpoint();
     }
@@ -8081,67 +8090,93 @@
       return separationCore.pathwaySplitTargets(pair, variant, mainProduct);
     }
 
-    function routeVariantOutputStreams(pair, variant, blockId, narrative = "", split = null) {
+    function expandedRouteSplit(pair, variant, components, mainProduct = null) {
+      const base = Array.isArray(components) && components.length ? components : [pair.a, pair.b];
+      const split = pathwaySplitTargets(pair, variant, mainProduct);
+      const separatedIds = new Set(split.separated.map(item => item.id));
+      return {
+        separated: split.separated,
+        retained: base.filter(item => !separatedIds.has(item.id))
+      };
+    }
+
+    function routeFeedNameForSplit(split, fallback = "mixture") {
+      const components = [...(split?.separated || []), ...(split?.retained || [])];
+      const names = components.map(item => item.name).filter(Boolean);
+      return names.length ? `${names.join(" / ")} mixture` : fallback;
+    }
+
+    function routeRetainedName(split) {
+      const names = (split?.retained || []).map(item => item.name).filter(Boolean);
+      if (!names.length) return "retained stream";
+      if (names.length === 1) return `${names[0]} retained stream`;
+      return `${names.join(" / ")} retained mixture`;
+    }
+
+    function routeQuantityForSubstances(substances) {
+      const rows = (substances || []).filter(item => String(item.quantity || "").trim());
+      if (!rows.length) return { quantity: "", unit: "" };
+      const units = new Set(rows.map(item => String(item.unit || "").trim()).filter(Boolean));
+      if (units.size === 1) {
+        const unit = Array.from(units)[0];
+        const values = rows.map(item => conversionNumber(item.quantity));
+        if (values.every(value => Number.isFinite(value))) {
+          return { quantity: formatNumber(values.reduce((sum, value) => sum + value, 0)), unit };
+        }
+      }
+      if (rows.length === 1) return { quantity: rows[0].quantity, unit: rows[0].unit || "" };
+      return { quantity: rows.map(item => `${item.quantity} ${item.unit || ""}`.trim()).join(" + "), unit: "" };
+    }
+
+    function routeOutletMeta(variant) {
       const title = String(variant.title || "").toLowerCase();
-      let first = split?.separated?.[0] || pair.a;
-      let second = split?.retained?.[0] || pair.b;
-      let firstLabel = "rich stream";
-      let secondLabel = "rich stream";
-      let firstPhase = "unknown";
-      let secondPhase = "unknown";
-
-      if (!split && /volatility|thermal|distill|evapor|flash|v-l/.test(title)) {
-        first = preferredVolatileComponent(pair);
-        second = first.id === pair.a.id ? pair.b : pair.a;
-      } else if (!split && /crystall/.test(title)) {
-        first = preferredSolidComponent(pair);
-        second = first.id === pair.a.id ? pair.b : pair.a;
-      } else if (!split && /affinity|size|membrane|selective/.test(title)) {
-        first = preferredLargeComponent(pair);
-        second = first.id === pair.a.id ? pair.b : pair.a;
-      }
-
       if (/volatility|thermal|distill|evapor|flash|v-l/.test(title)) {
-        firstLabel = "volatile recovery";
-        secondLabel = "heavier product-rich stream";
-        firstPhase = "vapor/liquid";
-        secondPhase = "liquid";
-      } else if (/crystall/.test(title)) {
-        firstLabel = "solid-rich cut";
-        secondLabel = "mother liquor";
-        firstPhase = "solid";
-        secondPhase = "liquid";
-      } else if (/affinity|size|membrane|selective/.test(title)) {
-        firstLabel = "retentate / retained cut";
-        secondLabel = "permeate / selective cut";
-        firstPhase = "unknown";
-        secondPhase = "unknown";
+        return { separatedLabel: "volatile recovery", retainedLabel: "heavier retained mixture", separatedPhase: "VL", retainedPhase: "L" };
       }
+      if (/crystall/.test(title)) return { separatedLabel: "solid-rich cut", retainedLabel: "mother liquor", separatedPhase: "S", retainedPhase: "L" };
+      if (/affinity|size|membrane|selective/.test(title)) return { separatedLabel: "selective cut", retainedLabel: "retained mixture", separatedPhase: "unknown", retainedPhase: "unknown" };
+      return { separatedLabel: "separated stream", retainedLabel: "retained mixture", separatedPhase: "unknown", retainedPhase: "unknown" };
+    }
 
-      return [
-        createStream("output", {
-          id: `${blockId}-S2`,
-          name: `${first.name} ${firstLabel}`,
-          phase: firstPhase,
+    function routeVariantOutputStreams(pair, variant, blockId, narrative = "", split = null) {
+      const resolvedSplit = split || expandedRouteSplit(pair, variant, [pair.a, pair.b], null);
+      const meta = routeOutletMeta(variant);
+      const streams = [];
+      resolvedSplit.separated.forEach((item, index) => {
+        streams.push(createStream("output", {
+          id: `${blockId}-S${index + 2}`,
+          name: `${item.name} ${meta.separatedLabel}`,
+          quantity: item.quantity || "",
+          unit: item.unit || "",
+          phase: meta.separatedPhase,
           status: "proposed",
-          fate: first.fate && first.fate !== "unknown" ? first.fate : "intermediate",
-          note: narrative || `Route variant output for ${first.name}; confirm recovery, purity, and destination.`
-        }),
-        createStream("output", {
-          id: `${blockId}-S3`,
-          name: `${second.name} ${secondLabel}`,
-          phase: secondPhase,
-          status: "proposed",
-          fate: second.fate && second.fate !== "unknown" ? second.fate : "intermediate",
-          note: narrative || `Route variant output for ${second.name}; confirm recovery, purity, and destination.`
-        })
-      ];
+          fate: item.fate && item.fate !== "unknown" ? item.fate : "intermediate",
+          note: narrative || `Route variant output for ${item.name}; confirm recovery, purity, and destination.`
+        }));
+      });
+      if (resolvedSplit.retained.length) {
+        const retainedQuantity = routeQuantityForSubstances(resolvedSplit.retained);
+        streams.push(
+          createStream("output", {
+            id: `${blockId}-S${streams.length + 2}`,
+            name: `${routeRetainedName(resolvedSplit)} ${meta.retainedLabel}`,
+            quantity: retainedQuantity.quantity,
+            unit: retainedQuantity.unit,
+            phase: meta.retainedPhase,
+            status: "proposed",
+            fate: resolvedSplit.retained.some(item => item.fate === "product") ? "product" : "intermediate",
+            note: narrative || `Retained mixture for the next separation step: ${resolvedSplit.retained.map(item => item.name).join(", ")}.`
+          })
+        );
+      }
+      return streams;
     }
 
     function insertSeparationRoute(groupId, pairKey, routeId) {
       const sourceGroup = groupModel(groupId);
       if (!sourceGroup) return;
       const model = separationSimulatorModel(sourceGroup);
+      const path = separationPathwayModel(sourceGroup, model);
       const pair = model.pairs.find(item => item.key === pairKey);
       if (!pair) return;
       const variant = binaryRouteVariants(groupId, pair).find(item => item.id === routeId);
@@ -8153,7 +8188,7 @@
       const selectedUnit = (variant.units || []).find(unit => unit !== "Review candidate unit") || "";
       const sourceState = ensureGroup(groupId);
       const newGroup = ensureGroup(newGroupId, "separation");
-      const split = pathwaySplitTargets(pair, variant, null);
+      const split = expandedRouteSplit(pair, variant, model.substances, path.mainProduct);
       const narrative = lutzeRouteNarrative(groupId, pair, variant, split);
       const downstream = state.links
         .filter(link => resolvedEndpointId(link.from) === groupId && state.groups[resolvedEndpointId(link.to)])
@@ -8193,7 +8228,7 @@
         streams: [
           createStream("input", {
             id: `${newBlockId}-S1`,
-            name: `${pair.a.name} / ${pair.b.name} mixture from ${groupId}`,
+            name: `${routeFeedNameForSplit(split)} from ${groupId}`,
             phase: "mixture",
             status: "proposed",
             fate: "intermediate",
@@ -8455,7 +8490,7 @@
           streams: [
             createStream("input", {
               id: `${newBlockId}-S1`,
-              name: `${pair.a.name} / ${pair.b.name} pathway feed from ${previousGroupId}`,
+              name: `${routeFeedNameForSplit(split)} pathway feed from ${previousGroupId}`,
               phase: "mixture",
               status: "proposed",
               fate: "intermediate",
@@ -9379,6 +9414,26 @@
           renderAll();
         });
       });
+      root.querySelectorAll("[data-copy-inputs-to-outputs]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
+          copyInputsToOutputs(selectedBlock());
+        });
+      });
+      root.querySelectorAll("[data-copy-input-stream-to-output]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          copyOneInputToOutput(selectedBlock(), button.dataset.copyInputStreamToOutput);
+        });
+      });
+      root.querySelectorAll("[data-apply-stream-suggestion]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          applyStreamSuggestion(button.dataset.applyStreamSuggestion, button.dataset);
+        });
+      });
       root.querySelectorAll("[data-remove-stream]").forEach(button => {
         button.addEventListener("click", () => {
           const current = selectedBlock();
@@ -9993,11 +10048,15 @@
     function streamSectionHtml(block, role) {
       const meta = streamRoles[role];
       const streams = block.streams.filter(stream => stream.role === role);
+      const canCopyInputs = role === "output" && block.streams.some(stream => stream.role === "input" && String(stream.name || "").trim());
       return `
         <section class="mfa-section role-${escapeAttr(role)}">
           <div class="mfa-section-head">
             <strong>${escapeHtml(meta.title)}</strong>
-            <button data-add-stream="${role}" title="Add ${escapeAttr(meta.title)} stream">${escapeHtml(meta.addLabel)}</button>
+            <div class="mfa-section-actions">
+              ${canCopyInputs ? `<button class="mini-button" data-copy-inputs-to-outputs="${escapeAttr(block.id)}" title="Copy input streams as output/intermediate streams when material passes through this step">Copy inputs</button>` : ""}
+              <button data-add-stream="${role}" title="Add ${escapeAttr(meta.title)} stream">${escapeHtml(meta.addLabel)}</button>
+            </div>
           </div>
           <div class="mfa-rows">
             ${streams.length ? streams.map(stream => streamRowHtml(stream, meta.placeholder, role, block)).join("") : `<div class="mfa-empty">${escapeHtml(meta.empty)}</div>`}
@@ -10007,7 +10066,7 @@
     }
 
     function streamRowHtml(stream, placeholder, role = stream.role, block = null) {
-      if (!stream.editing) return streamLabelHtml(stream);
+      if (!stream.editing) return streamLabelHtml(stream, block);
       const sid = escapeAttr(stream.id);
       const hasAdvanced = Boolean(stream.recoveryPercent || stream.purgePercent || stream.loopId || stream.destinationGroup || stream.makeupRequired || stream.accumulationRisk);
       const showConversionShortcut = streamNeedsConversionShortcut(stream, role, block);
@@ -10016,6 +10075,7 @@
           <label class="stream-field span-2">
             <span class="stream-field-label">Material / stream</span>
             <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}">
+            ${streamSuggestionRailHtml(block, stream, role)}
           </label>
           <label class="stream-field">
             <span class="stream-field-label">Amount</span>
@@ -10092,6 +10152,198 @@
       `;
     }
 
+    function streamSuggestionRailHtml(block, stream, role) {
+      const suggestions = streamSuggestionCandidates(block, role, stream);
+      if (!suggestions.length) return "";
+      return `
+        <div class="stream-suggestion-rail">
+          <span>From description</span>
+          ${suggestions.map(item => `
+            <button type="button" class="stream-suggestion-chip ${escapeAttr(item.tone || "")}"
+              data-apply-stream-suggestion="${escapeAttr(stream.id)}"
+              data-suggestion-name="${escapeAttr(item.name)}"
+              data-suggestion-quantity="${escapeAttr(item.quantity || "")}"
+              data-suggestion-unit="${escapeAttr(item.unit || "")}"
+              data-suggestion-phase="${escapeAttr(item.phase || "")}"
+              title="${escapeAttr(item.reason || "Use this stream name")}">
+              ${escapeHtml(item.name)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function streamSuggestionCandidates(block, role, stream = null) {
+      if (!block) return [];
+      const query = String(stream?.name || "").trim().toLowerCase();
+      const text = String(block.text || "");
+      const candidates = [];
+      materialMentionsFromText(text).forEach(item => {
+        candidates.push({
+          ...item,
+          tone: role === "input" ? "input" : "",
+          reason: item.quantity ? `Detected in source text: ${item.quantity} ${item.unit}` : "Detected in source text"
+        });
+      });
+      phraseSuggestionsFromText(text, role).forEach(name => {
+        candidates.push({ name, tone: role, reason: `Suggested ${role} phrase from block description` });
+      });
+      if (role === "output") {
+        (block.streams || [])
+          .filter(item => item.role === "input" && String(item.name || "").trim())
+          .forEach(item => candidates.push({
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            phase: item.phase,
+            tone: "pass",
+            reason: "Input stream copied as pass-through/intermediate output"
+          }));
+      }
+      const seen = new Set();
+      return candidates
+        .map(item => ({ ...item, name: normalizeSuggestionName(item.name) }))
+        .filter(item => item.name && (!query || item.name.toLowerCase().includes(query)))
+        .filter(item => {
+          const key = item.name.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, 5);
+    }
+
+    function materialMentionsFromText(text) {
+      const unitPattern = "(kg|g|t|mol|kmol|L|mL|m3|%)";
+      const results = [];
+      const regex = new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*${unitPattern}\\s+(?:of\\s+)?([^,.;]+?)(?=\\s+(?:and|to|into|in|with|at|under|for|from|as|until|using)\\b|[,.;]|$)`, "gi");
+      let match;
+      while ((match = regex.exec(text))) {
+        const raw = match[3]
+          .replace(/\b(?:catalyst|solvent|feed|solution|mixture)\b/gi, "")
+          .trim();
+        const name = cleanSubstanceName(raw) || raw;
+        if (name) results.push({ name, quantity: match[1].replace(",", "."), unit: match[2] });
+      }
+      return results;
+    }
+
+    function phraseSuggestionsFromText(text, role) {
+      const patterns = role === "input"
+        ? [/\b(?:charge|add|feed|combine)\s+([^.;]+?)(?=\s+(?:to|into|with|at|under)\b|[.;]|$)/gi]
+        : role === "output"
+          ? [/\b(?:form|forms|formed|produce|produces|produced|collect|collecting|recover|recovering|return|returning)\s+(?:the\s+|a\s+|an\s+)?([^.;,]+?)(?=\s+(?:at|as|to|from|for|with|under|and|in|of)\b|[,.;]|$)/gi]
+          : [/\b(?:discard|purge|vent|send|sending|dispose|remove)\s+(?:the\s+|a\s+|an\s+)?([^.;,]+?)(?=\s+(?:to|from|for|with|under|and|in|of)\b|[,.;]|$)/gi];
+      const names = [];
+      patterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(text))) {
+          const parts = match[1].split(/\s*,\s*|\s+\band\b\s+/i);
+          parts.forEach(part => {
+            const name = cleanSubstanceName(part) || part.trim();
+            if (name) names.push(name);
+          });
+        }
+      });
+      return names;
+    }
+
+    function normalizeSuggestionName(value) {
+      return String(value || "")
+        .replace(/^\d+(?:[.,]\d+)?\s*(?:kg|g|t|mol|kmol|L|mL|m3|%)\s+(?:of\s+)?/i, "")
+        .replace(/\b(?:of|the|a|an)\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function applyStreamSuggestion(streamId, dataset) {
+      const current = selectedBlock();
+      if (!current) return;
+      ensureBlockFlowFields(current);
+      const stream = current.streams.find(item => item.id === streamId);
+      if (!stream) return;
+      pushUndo();
+      stream.name = dataset.suggestionName || stream.name;
+      if (!String(stream.quantity || "").trim() && dataset.suggestionQuantity) stream.quantity = dataset.suggestionQuantity;
+      if ((!String(stream.unit || "").trim() || stream.unit === "kg") && dataset.suggestionUnit) stream.unit = dataset.suggestionUnit;
+      if ((!stream.phase || stream.phase === "unknown") && dataset.suggestionPhase) stream.phase = dataset.suggestionPhase;
+      if (!stream.status || stream.status === "missing") stream.status = "estimated";
+      syncLegacyStreamLists(current);
+      invalidateAiRefine();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
+    function copyInputsToOutputs(block) {
+      if (!block) return;
+      ensureBlockFlowFields(block);
+      const inputs = block.streams.filter(stream => stream.role === "input" && String(stream.name || "").trim());
+      if (!inputs.length) return;
+      pushUndo();
+      const existing = new Set(block.streams
+        .filter(stream => stream.role === "output")
+        .map(stream => cleanSubstanceName(stream.name).toLowerCase() || String(stream.name || "").trim().toLowerCase())
+        .filter(Boolean));
+      inputs.forEach(input => {
+        const key = cleanSubstanceName(input.name).toLowerCase() || String(input.name || "").trim().toLowerCase();
+        if (existing.has(key)) return;
+        block.streams.push(createStream("output", {
+          id: nextStreamId(block),
+          name: input.name,
+          quantity: input.quantity,
+          unit: input.unit,
+          phase: input.phase,
+          status: input.status === "reported" ? "reported" : "estimated",
+          timing: "in-process intermediate",
+          fate: "intermediate",
+          scalingMode: input.scalingMode === "per batch" ? "per batch" : "auto",
+          note: `Copied from input ${input.id || input.name}; use this for pass-through or same-material transformation steps.`
+        }));
+        existing.add(key);
+      });
+      syncLegacyStreamLists(block);
+      invalidateAiRefine();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
+    function copyOneInputToOutput(block, streamId) {
+      if (!block) return;
+      ensureBlockFlowFields(block);
+      const input = block.streams.find(stream => stream.id === streamId && stream.role === "input" && String(stream.name || "").trim());
+      if (!input) return;
+      const key = cleanSubstanceName(input.name).toLowerCase() || String(input.name || "").trim().toLowerCase();
+      const existing = block.streams.find(stream => {
+        if (stream.role !== "output") return false;
+        const outputKey = cleanSubstanceName(stream.name).toLowerCase() || String(stream.name || "").trim().toLowerCase();
+        return outputKey && outputKey === key;
+      });
+      pushUndo();
+      if (existing) {
+        existing.editing = true;
+        state.menuStreamId = existing.id;
+      } else {
+        const stream = createStream("output", {
+          id: nextStreamId(block),
+          name: input.name,
+          quantity: input.quantity,
+          unit: input.unit,
+          phase: input.phase,
+          status: input.status === "reported" ? "reported" : "estimated",
+          timing: "in-process intermediate",
+          fate: "intermediate",
+          scalingMode: input.scalingMode === "per batch" ? "per batch" : "auto",
+          note: `Copied from input ${input.id || input.name}; use this for pass-through or same-material transformation steps.`,
+          editing: true
+        });
+        block.streams.push(stream);
+      }
+      syncLegacyStreamLists(block);
+      invalidateAiRefine();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
     function streamNeedsConversionShortcut(stream, role, block) {
       if (!block || role === "input") return false;
       const hasReaction = (block.phenomena || []).some(code => code.startsWith("R(")) || Boolean(block.conditions?.conversion_yield);
@@ -10101,9 +10353,10 @@
       return !String(stream.quantity || "").trim() || !hasMassUnit;
     }
 
-    function streamLabelHtml(stream) {
+    function streamLabelHtml(stream, block = null) {
       const title = stream.name.trim() || "Untitled stream";
       const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
+      const canCopyToOutput = block && stream.role === "input" && String(stream.name || "").trim();
       return `
         <article class="mfa-label-card role-${escapeAttr(stream.role)}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
           <div class="mfa-label-top">
@@ -10119,6 +10372,7 @@
           </div>
           ${stream.recoveryPercent || stream.purgePercent || stream.loopId ? `<div class="mfa-label-meta">${stream.recoveryPercent ? `<span>recovery ${escapeHtml(stream.recoveryPercent)}%</span>` : ""}${stream.purgePercent ? `<span>purge ${escapeHtml(stream.purgePercent)}%</span>` : ""}${stream.loopId ? `<span>loop ${escapeHtml(stream.loopId)}</span>` : ""}</div>` : ""}
           ${stream.note.trim() ? `<div class="mfa-label-note">${escapeHtml(stream.note)}</div>` : ""}
+          ${canCopyToOutput ? `<div class="mfa-label-actions"><button type="button" class="mini-button" data-copy-input-stream-to-output="${escapeAttr(stream.id)}">Use as output</button></div>` : ""}
         </article>
       `;
     }
@@ -11189,6 +11443,7 @@
       });
       if (draftBlocks.length) state.draftPos = { x: 24, y: 90 };
       state.focusEndpoint = ids[0] || null;
+      pendingBoardReflow = true;
       renderAll();
       fitBoard();
     }
@@ -12180,6 +12435,7 @@
       state.boardCompact = !state.boardCompact;
       $("toggleCompact").textContent = state.boardCompact ? "Detailed" : "Compact";
       $("toggleCompact").classList.toggle("primary", state.boardCompact);
+      pendingBoardReflow = true;
       renderAll();
     });
     $("boardCenter").addEventListener("click", centerSelection);
