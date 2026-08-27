@@ -4,6 +4,7 @@
 const fs = require("fs");
 const assert = require("assert");
 
+const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const marker = "$(\"behaviorSelect\").innerHTML";
 source = source.slice(0, source.indexOf(marker));
@@ -38,7 +39,7 @@ globalThis.document = {
   querySelectorAll() { return []; }
 };
 renderAll = () => {};
-renderExport = () => {};
+var renderExport = () => {};
 
 loadBaseExampleProject();
 
@@ -52,6 +53,10 @@ assert(!postReactionSeparationSupportApplies(g3), "G3 cooling-only group should 
 const g2Root = fakeElement();
 renderGroupAggregateStepInspector(g2Root, g2);
 assert(g2Root.innerHTML.includes("Post-Reaction Separation Support"), "G2 drawer should render post-reaction separation support");
+assert(g2Root.innerHTML.includes("Show separation options"), "G2 drawer should keep separation support collapsed by default");
+
+ensureGroup("G2").separationSupportExpanded = true;
+renderGroupAggregateStepInspector(g2Root, g2);
 assert(g2Root.innerHTML.includes("Separation Simulator"), "G2 drawer should offer the separation simulator");
 
 const g3Root = fakeElement();
@@ -166,4 +171,4 @@ assert(state.links.some(link => link.from === "G3" && link.to === "G2"), "Insert
 console.log("Complete separation flow check passed.");
 `;
 
-eval(source);
+eval(`${core}\n${source}`);

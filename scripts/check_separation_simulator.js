@@ -1,6 +1,7 @@
 const fs = require("fs");
 const assert = require("assert");
 
+const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const marker = "$(\"behaviorSelect\").innerHTML";
 source = source.slice(0, source.indexOf(marker));
@@ -80,4 +81,4 @@ assert(model.suggestions.some(item => item.units.includes("Short-path distillati
 console.log("Separation simulator regression check passed.");
 `;
 
-eval(source);
+eval(`${core}\n${source}`);

@@ -1,4 +1,4 @@
-# Upscaling Pipeline Tool Package
+# Process Upscaling Workbench Package
 
 This folder contains the local Python web app used by the repository root
 launcher.

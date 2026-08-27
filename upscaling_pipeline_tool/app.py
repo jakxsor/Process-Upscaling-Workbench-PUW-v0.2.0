@@ -23,7 +23,7 @@ APP_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Upscaling Block Annotator</title>
+  <title>Process Upscaling Workbench</title>
   <link rel="stylesheet" href="/style.css">
   <script>
     (function () {
@@ -37,7 +37,7 @@ APP_HTML = r"""<!doctype html>
 <body>
   <header>
     <div>
-      <h1>Upscaling Block Annotator</h1>
+      <h1>Process Upscaling Workbench</h1>
       <div class="subtitle">Lab protocol to industrial flowsheet: blocks, phenomena, unit operations, network, heuristics, and scale-up schedule.</div>
     </div>
     <div class="row">
@@ -56,7 +56,7 @@ APP_HTML = r"""<!doctype html>
     </div>
   </header>
 
-  <nav id="workflowStepper" class="workflow-stepper" aria-label="Upscaling workflow steps"></nav>
+  <nav id="workflowStepper" class="workflow-stepper" aria-label="Process upscaling workflow steps"></nav>
 
   <main id="appMain">
     <section class="panel">
@@ -494,6 +494,7 @@ APP_HTML = r"""<!doctype html>
   <script src="/pubchem.js"></script>
   <script src="/tutorial.js"></script>
   <script src="/export.js"></script>
+  <script src="/separation_core.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
@@ -504,6 +505,7 @@ STATIC_ROUTES = {
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
+    "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
     "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
     "/pubchem.js": ("pubchem.js", "application/javascript; charset=utf-8"),
 }
@@ -925,13 +927,13 @@ class AppHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the upscaling block annotator.")
+    parser = argparse.ArgumentParser(description="Run the Process Upscaling Workbench.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
-    print(f"Upscaling Block Annotator running at http://{args.host}:{args.port}")
+    print(f"Process Upscaling Workbench running at http://{args.host}:{args.port}")
     print("Press Ctrl+C to stop.")
     server.serve_forever()
 

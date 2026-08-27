@@ -1,4 +1,4 @@
-# Upscaling Pipeline Tool
+# Process Upscaling Workbench
 
 Local web app for turning a laboratory synthesis protocol into a traceable
 early-stage scale-up workflow.
