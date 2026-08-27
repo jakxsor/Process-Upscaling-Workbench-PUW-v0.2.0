@@ -1769,6 +1769,25 @@
       font-size: 11px;
     }
 
+    .stream-conversion-shortcut {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid #cfe0ee;
+      border-radius: 7px;
+      background: var(--info-blue-soft);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .stream-conversion-shortcut .mini-button {
+      flex: 0 0 auto;
+    }
+
     .mfa-label-card {
       display: grid;
       gap: 5px;
@@ -2048,6 +2067,24 @@
 
     .conversion-open-button:hover {
       filter: brightness(0.97);
+    }
+
+    .conversion-quick-button {
+      min-height: 22px;
+      padding: 2px 8px;
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .conversion-quick-button:hover {
+      filter: brightness(0.97);
+      box-shadow: 0 0 0 2px rgba(0, 135, 115, 0.10);
     }
 
     .conversion-panel {
@@ -3003,6 +3040,20 @@
       min-height: 28px;
       padding: 4px 6px;
       font-size: 11px;
+    }
+
+    .sep-substance-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      align-items: center;
+    }
+
+    .sep-substance-tags .pill {
+      margin: 0;
+      min-height: 20px;
+      font-size: 10px;
+      font-weight: 800;
     }
 
     .sep-source-line {

@@ -167,6 +167,7 @@ assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4"
 assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");
 assert(Math.abs(conversionNumber(conversionProductStream(loadedReactionBlock).quantity) * 0.9 - 1.25) < 0.01, "Conversion popup should derive the 90% product amount from the theoretical product basis");
 assert(conditionPanelHtml(loadedReactionBlock).includes("condition-chip-button"), "Saved conversion should remain directly editable from the collapsed condition summary");
+assert(conversionQuickActionHtml(loadedReactionBlock).includes("Edit conversion 90%"), "Reaction block header should expose a direct Edit conversion action");
 updateConversionPercent(loadedReactionBlock, "75");
 assert.strictEqual(ensureGroup("G1").separationSimulator.reactionBalance.conversionPercent, "75", "Editing block conversion should sync the group reaction balance");
 updateConversionPercent(loadedReactionBlock, "90");
@@ -182,7 +183,20 @@ assert.strictEqual(generatedResiduals.length, 3, "Balance action should create o
 assert(generatedByproduct, "Balance action should create declared coproduct/byproduct streams");
 assert(generatedWaste, "Balance action should create the unassigned waste stream");
 assert(balancedModel.substances.some(item => item.name === "light ester byproduct" && item.role === "byproduct"), "Balance action should pass declared byproducts into Lutze substances");
-assert(Math.abs(conversionNumber(balancedModel.substances.find(item => item.name === "benzyl alcohol").quantity) - 0.1) < 0.001, "Lutze reactant quantity should update to the unreacted residual after balancing");
+const balancedBenzylAlcohol = balancedModel.substances.find(item => item.name === "benzyl alcohol");
+assert(Math.abs(conversionNumber(balancedBenzylAlcohol.quantity) - 0.1) < 0.001, "Lutze reactant quantity should update to the unreacted residual after balancing");
+assert.strictEqual(balancedBenzylAlcohol.residualOf, "benzyl alcohol", "Lutze should tag unreacted material as a residual of the canonical chemical");
+assert.strictEqual(balancedBenzylAlcohol.chemicalKey, "benzyl alcohol", "Residual substance should keep the canonical chemical key");
+assert(separationSubstanceRowHtml("G1", balancedBenzylAlcohol).includes("same properties as benzyl alcohol"), "Residual substance cards should show that chemical properties are shared");
+syncSeparationSimulatorSubstances(groupModel("G1"));
+assert(Math.abs(conversionNumber(ensureGroup("G1").separationSimulator.substances.find(item => item.name === "benzyl alcohol").quantity) - 0.1) < 0.001, "Sync should not sum initial feed mass with the post-conversion residual quantity");
+const duplicateResidual = normalizeSeparationSubstance({ id: "CSX", name: "unreacted benzyl alcohol", residualOf: "benzyl alcohol", chemicalKey: "benzyl alcohol", role: "reactant", fate: "recover" });
+ensureGroup("G1").separationSimulator.substances.push(duplicateResidual);
+balancedBenzylAlcohol.tb = "480";
+propagateSeparationChemicalProperties("G1", balancedBenzylAlcohol, "tb");
+assert.strictEqual(ensureGroup("G1").separationSimulator.substances.find(item => item.id === "CSX").tb, "480", "Editing a pure property should propagate to linked residual substances");
+const outputMissingMass = createStream("output", { id: "B1-SX", name: "test product", quantity: "", unit: "L", phase: "L", editing: true });
+assert(streamRowHtml(outputMissingMass, "product", "output", loadedReactionBlock).includes("Use conversion"), "Reaction outputs with missing/non-mass quantity should expose the conversion shortcut");
 assert.deepStrictEqual(loadedModel.substances.map(item => item.name), ["benzyl alcohol", "acetic anhydride", "triethylamine", "benzyl acetate"], "Top-level 3-reagent case should prefill simulator substances");
 assert(loadedVariants.some(item => item.graphPreview.includes("G1 -> V-L separator")), "Top-level 3-reagent case should preview a G1 graph variant");
 
@@ -193,6 +207,8 @@ assert(insertedGroup, "Inserting a route should create a new separator group");
 assert.strictEqual(insertedGroup.task.includes("Volatility route"), true, "Inserted group should retain the route title");
 assert.strictEqual(insertedGroup.selectedUnit.length > 0, true, "Inserted group should receive a candidate unit");
 assert(insertedGroup.blocks.some(block => block.text.includes("triethylamine / benzyl acetate")), "Inserted group should contain a proposed route block");
+assert(insertedGroup.blocks.some(block => block.text.includes("Rationale: Volatility route") && block.text.includes("Lutze/KB3.1 score")), "Inserted route block should include an automatic Lutze narrative with score");
+assert(insertedGroup.selectionBasis.includes("use") && insertedGroup.selectionBasis.includes("to separate"), "Inserted route selection basis should include the narrative rationale");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Inserted route should connect source group to separator");
 assert(state.links.some(link => link.from === "G3" && link.to === "G2"), "Inserted route should reconnect separator to previous downstream group");
 
@@ -218,6 +234,8 @@ applyPathwayToMainFlowsheet("G1");
 const pathwayInsertedGroup = groupModel("G3");
 assert(pathwayInsertedGroup, "Applying a pathway should create a separator group");
 assert(pathwayInsertedGroup.selectionBasis.includes("Lutze Reaction-Separation pathway"), "Applied pathway group should preserve provenance");
+assert(pathwayInsertedGroup.selectionBasis.includes("Separation step 1") && pathwayInsertedGroup.selectionBasis.includes("Lutze/KB3.1 score"), "Applied pathway group should include the automatic Lutze narrative");
+assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separate triethylamine from benzyl acetate")), "Applied pathway block should state what is separated and retained");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Applied pathway should connect source group to first separator");
 assert(groupModel("G4"), "Applying a 3-step pathway should create a second separator group");
 assert(groupModel("G5"), "Applying a 3-step pathway should create a third separator group");

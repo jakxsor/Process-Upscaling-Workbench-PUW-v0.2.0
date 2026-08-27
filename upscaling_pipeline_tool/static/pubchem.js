@@ -42,6 +42,9 @@
         }
         if (!options.skipUndo) pushUndo();
         applyPubChemLookup(substance, data);
+        if (typeof propagateSeparationChemicalProperties === "function") {
+          propagateSeparationChemicalProperties(groupId, substance);
+        }
         groupState.separationSimulator.lookupSummary = {
           status: "done",
           message: `${substance.name}: PubChem CID ${data.cid || "unknown"} applied. Thermal fields are annotations and need confirmation.`,
@@ -253,6 +256,10 @@
         pushUndo();
         if (options.rename) substance.name = clean;
         applyPubChemLookup(substance, data);
+        if (typeof applyChemicalKey === "function") applyChemicalKey(substance);
+        if (typeof propagateSeparationChemicalProperties === "function") {
+          propagateSeparationChemicalProperties(groupId, substance);
+        }
         if (!options.rename && !String(substance.note || "").includes(`Manual PubChem query "${clean}"`)) {
           substance.note = [substance.note, `Manual PubChem query "${clean}" used for property lookup.`].filter(Boolean).join(" | ");
         }
