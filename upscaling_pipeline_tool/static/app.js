@@ -1070,7 +1070,7 @@
             { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
             { role: "output", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
-          {},
+          { agitation_note: "stirred jacketed reactor" },
           {}
         ),
         makeBlock(
@@ -1080,7 +1080,7 @@
           "heat/cool",
           ["ES(H)", "M(L)"],
           [],
-          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux" },
+          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", agitation_note: "stirred mixture, heated to reflux" },
           { initial_temperature: "C", target_temperature: "C" }
         ),
         makeBlock(
@@ -1096,7 +1096,7 @@
             { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "route to vent abatement train (paper U7): condenser + activated carbon polishing (VOC compliance)" },
             { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
           ],
-          { reaction_time: "21", holding_temperature: "85", conversion_yield: "90" },
+          { reaction_time: "21", holding_temperature: "85", conversion_yield: "90", agitation_note: "refluxing stirred liquid", transfer_endpoint: "no further water separates in the Dean-Stark trap" },
           { reaction_time: "h", holding_temperature: "C", conversion_yield: "%" }
         ),
         makeBlock(
@@ -1160,7 +1160,7 @@
             { role: "output", name: "crude octocrylene", quantity: "3.50", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
             { role: "waste", name: "cyclohexane loss", quantity: "0.35", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "evaporator vent to abatement train (paper U7); make-up fresh cyclohexane required" }
           ],
-          { target_pressure: "150", phase_change_time: "2", phase_change_fraction: "90" },
+          { target_pressure: "150", phase_change_time: "2", phase_change_fraction: "90", transfer_endpoint: "cyclohexane evaporated to target (90% phase-change fraction)" },
           { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
         ),
         makeBlock(
@@ -1186,7 +1186,7 @@
             { role: "output", name: "recovered VOC (cyclohexane-rich, TSA)", quantity: "0.36", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, second loop: temperature-swing adsorption recovers cyclohexane from the U7 vent and returns it to U8 (the recovery column), not directly to U1; capture fraction assumed 90%, not quantified in the SI" },
             { role: "waste", name: "uncaptured VOC to atmosphere", quantity: "0.04", unit: "kg", phase: "V", status: "assumed", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", note: "residual emission after abatement; compliance limit dependent, assumed value" }
           ],
-          { capture_efficiency: "90", contact_time: "0.5" },
+          { capture_efficiency: "90", contact_time: "0.5", transfer_endpoint: "VOC captured to target (90% capture efficiency)" },
           { capture_efficiency: "%", contact_time: "h" }
         ),
         makeBlock(
@@ -1199,7 +1199,7 @@
             { role: "output", name: "purified cyclohexane", quantity: "3.73", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "98", scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "SI Step 4, first loop: 'A recovery efficiency of at least 98% is targeted'; column combines the U2 decanter purge (0.30 kg, B3) + U5 evaporator overhead (3.15 kg, B8) + U7 TSA return (0.36 kg, B10) = 3.81 kg feed x 98% before recycling to U1" },
             { role: "waste", name: "column bottoms / heavies", quantity: "0.08", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "minor heavies purge from the recovery-column reboiler (2% of the 3.81 kg combined feed)" }
           ],
-          { reflux_ratio: "2", column_stages: "8" },
+          { reflux_ratio: "2", column_stages: "8", agitation_note: "staged reflux in solvent-recovery column" },
           {}
         ),
         makeBlock(
@@ -1207,11 +1207,11 @@
           "Route the aqueous wash effluent and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.",
           "G9",
           "wastewater treatment",
-          ["M(L)", "R(L)"],
+          ["M(L)"],
           [
             { role: "output", name: "treated effluent", quantity: "2.34", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "combines organic-wash aqueous waste (B6) and condensation water (B3); neutralized before off-site WWT discharge" }
           ],
-          { neutralization_ph_target: "7", residence_time: "1" },
+          { neutralization_ph_target: "7", residence_time: "1", agitation_note: "neutralization tank, pH-controlled" },
           { residence_time: "h" }
         )
       ];
