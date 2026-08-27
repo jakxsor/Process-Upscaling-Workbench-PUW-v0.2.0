@@ -60,16 +60,19 @@ APP_HTML = r"""<!doctype html>
   <nav id="workflowStepper" class="workflow-stepper" aria-label="Process upscaling workflow steps"></nav>
 
   <main id="appMain">
-    <section class="panel">
+    <section class="panel" id="protocolPanel">
       <div class="panel-head source-panel-head">
-        <div>
-          <h2>Laboratory Protocol Description</h2>
-          <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
-          <span class="muted small">Text first, board controls when needed</span>
-        </div>
-        <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
-          <button class="source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
-          <button class="source-panel-tab" data-source-tab="board" role="tab">Board</button>
+        <button id="toggleProtocolPanel" class="eye-button" title="Show/hide protocol panel">◐</button>
+        <div class="source-panel-head-body">
+          <div>
+            <h2>Laboratory Protocol Description</h2>
+            <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
+            <span class="muted small">Text first, board controls when needed</span>
+          </div>
+          <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
+            <button class="source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
+            <button class="source-panel-tab" data-source-tab="board" role="tab">Board</button>
+          </div>
         </div>
       </div>
       <div class="panel-body stack">

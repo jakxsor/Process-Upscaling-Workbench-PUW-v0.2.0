@@ -11621,6 +11621,11 @@
       $("toggleInspector").textContent = $("appMain").classList.contains("inspector-collapsed") ? "◑" : "◐";
     }
 
+    function toggleProtocolPanel() {
+      $("appMain").classList.toggle("protocol-collapsed");
+      $("toggleProtocolPanel").textContent = $("appMain").classList.contains("protocol-collapsed") ? "◑" : "◐";
+    }
+
     function setSourcePanelTab(tab) {
       state.sourcePanelTab = tab === "board" ? "board" : "protocol";
       $("sourceProtocolTab").hidden = state.sourcePanelTab !== "protocol";
@@ -12443,6 +12448,7 @@
     $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
     $("zoomFit").addEventListener("click", fitBoard);
     $("toggleInspector").addEventListener("click", toggleInspector);
+    $("toggleProtocolPanel").addEventListener("click", toggleProtocolPanel);
     $("stepFlowInspector").addEventListener("pointerdown", startStepEditorResize);
     $("stepFlowInspector").addEventListener("mouseup", rememberStepFlowEditorHeight);
     $("stepFlowInspector").addEventListener("pointerup", rememberStepFlowEditorHeight);
