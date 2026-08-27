@@ -419,7 +419,7 @@
       showConnections: false,
       measuredNodeHeights: {},
       stepEditorHeight: 165,
-      groupStepEditorHeight: 430,
+      groupStepEditorHeight: 520,
       boardCompact: false,
       pendingSplitGroupId: null,
       sourcePanelTab: "protocol",
@@ -443,6 +443,7 @@
       menuGroupId: null,
       menuStreamId: null,
       connectingFrom: null,
+      connectDrag: null,
       lastSelection: null,
       lastSelectionAt: 0,
       zoom: 0.78,
@@ -458,6 +459,7 @@
     const undoStack = [];
     let flowsheetRequestSeq = 0;
     let boardDragFrame = null;
+    let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
     const flowsheetLayoutVersion = "editable-train-v6";
@@ -564,9 +566,9 @@
     }
 
     function groupDrawerBoardClearance() {
-      if (!selectedGroup()) return 0;
-      const drawerHeight = Number(state.groupStepEditorHeight || 430);
-      return Math.max(460, Math.min(920, drawerHeight + 260));
+      if (!selectedGroup() && !selectedBlock()?.groupId) return 0;
+      const drawerHeight = Number(state.groupStepEditorHeight || 520);
+      return Math.max(520, Math.min(1120, drawerHeight + 340));
     }
 
     function boardWithDrawerClearance(board = boardBounds()) {
@@ -1939,7 +1941,7 @@
         state.selectedBlockId = null;
         state.focusEndpoint = completeGroupId;
       } else {
-        state.selectedGroupId = null;
+        state.selectedGroupId = block.groupId && !additive ? block.groupId : null;
         state.focusEndpoint = block.groupId || block.id;
       }
       renderAll();
@@ -1995,6 +1997,7 @@
           const icon = flowsheetCategoryIcon[category] || "◼";
           return `
             <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+              <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
               <div class="group-head">
                 <div class="row">
                   <span class="compact-icon compact-icon-${category}">${icon}</span>
@@ -2012,6 +2015,7 @@
         }
         return `
           <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+            <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
             <div class="group-head">
               <div class="row">
                 <strong>${escapeHtml(group.id)}</strong>
@@ -2084,6 +2088,12 @@
           await assignBlockToNewTask(button.dataset.assignTask);
         });
         button.addEventListener("mousedown", event => event.stopPropagation());
+      });
+      root.querySelectorAll("[data-connect-handle]").forEach(handle => {
+        handle.addEventListener("mousedown", event => {
+          if (event.button !== 0) return;
+          startConnectDrag(event, handle.dataset.connectHandle);
+        });
       });
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
@@ -2592,7 +2602,8 @@
       const needsTask = !block.groupId;
       return `
         <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
-          <div class="row between">
+          ${needsTask ? `<span class="connect-handle" data-connect-handle="${escapeAttr(block.id)}" title="Drag to another block or group to connect them"></span>` : ""}
+          <div class="row between block-card-head">
             <strong>${block.id}</strong>
             <div class="row" style="gap:4px">
               ${sourcePill}
@@ -2604,7 +2615,7 @@
           <div>${block.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena</span>`}</div>
           ${flowCounts ? `<div style="margin-top:6px"><span class="pill blue">${escapeHtml(flowCounts)}</span></div>` : ""}
           ${conditionCount || hasNotes ? `<div style="margin-top:6px">${conditionCount ? `<span class="pill green">C:${conditionCount}</span>` : ""}${hasNotes ? `<span class="pill">notes</span>` : ""}</div>` : ""}
-          ${needsTask ? `<button class="assign-task-btn" data-assign-task="${escapeAttr(block.id)}" title="This block is not part of any task group yet">Assign to Task</button>` : ""}
+          ${needsTask ? `<button class="assign-task-btn" data-assign-task="${escapeAttr(block.id)}" title="Convert this block into its own task group">Convert to Task</button>` : ""}
         </article>
       `;
     }
@@ -7711,7 +7722,7 @@
 
     function stepEditorConfig(mode) {
       if (mode === "group") {
-        return { key: "groupStepEditorHeight", min: 300, fallback: 430 };
+        return { key: "groupStepEditorHeight", min: 320, fallback: 520 };
       }
       return { key: "stepEditorHeight", min: 115, fallback: 165 };
     }
@@ -7741,7 +7752,7 @@
     }
 
     function stepEditorMaxHeight(mode = "block") {
-      if (mode === "group") return Math.max(360, Math.min(780, window.innerHeight - 110));
+      if (mode === "group") return Math.max(420, Math.min(900, window.innerHeight - 70));
       return Math.max(180, Math.min(700, window.innerHeight - 220));
     }
 
@@ -7805,8 +7816,9 @@
       ensureBlockFlowFields(block);
       ensureBlockConditionFields(block);
       const counts = streamCounts(block);
+      const editorMode = block.groupId ? "group" : "block";
       root.className = "step-flow-inspector";
-      applyStepFlowEditorSize(root, true, "block");
+      applyStepFlowEditorSize(root, true, editorMode);
       root.innerHTML = `
         <div class="step-flow-resize-handle" data-step-flow-resize title="Drag up or down to resize this editor over the flowchart"></div>
         <div class="step-flow-head">
@@ -9080,7 +9092,7 @@
     }
 
     // One-click path for a single draft (ungrouped) block, offered directly on its card (see the
-    // red "Assign to Task" button in blockCardHtml) instead of requiring shift-click + right-click +
+    // red "Convert to Task" button in blockCardHtml) instead of requiring shift-click + right-click +
     // Combine Selected. Creates a new one-block task group, same as splitSelectedToNewGroup, but
     // works from a block id directly so it doesn't depend on the block being selected first.
     async function assignBlockToNewTask(blockId) {
@@ -9280,6 +9292,81 @@
       if (moved) renderGroupFlow();
     }
 
+    // Drag-to-connect: mousedown on a .connect-handle starts this instead of a box-move drag
+    // (see the handle's own mousedown binding, which stops propagation before startDrag's board
+    // listener sees it). Reuses state.connectingFrom for the "connecting" glow class and Escape/
+    // outside-click cleanup already wired up for the older click-to-connect flow (right-click a
+    // box -> Start Arrow -> click a target), so both ways of making a connection stay in sync and
+    // either can cancel the other.
+    function startConnectDrag(event, fromId) {
+      event.preventDefault();
+      event.stopPropagation();
+      const point = boardPointFromEvent(event);
+      state.connectDrag = { fromId, x: point.x, y: point.y };
+      state.connectingFrom = fromId;
+      renderConnectDragPreview();
+    }
+
+    function connectDragMove(event) {
+      if (!state.connectDrag) return;
+      event.preventDefault();
+      const point = boardPointFromEvent(event);
+      state.connectDrag.x = point.x;
+      state.connectDrag.y = point.y;
+      scheduleConnectDragRender();
+    }
+
+    function scheduleConnectDragRender() {
+      if (connectDragFrame) return;
+      connectDragFrame = requestAnimationFrame(() => {
+        connectDragFrame = null;
+        renderConnectDragPreview();
+      });
+    }
+
+    function renderConnectDragPreview() {
+      if (!state.connectDrag) return;
+      const svg = $("groupFlow")?.querySelector(".link-layer");
+      const fromRect = endpointRect(state.connectDrag.fromId);
+      if (!svg || !fromRect) return;
+      const start = rectCenter(fromRect);
+      let preview = svg.querySelector("#connectDragPreviewLine");
+      if (!preview) {
+        preview = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        preview.id = "connectDragPreviewLine";
+        preview.setAttribute("stroke", "var(--accent)");
+        preview.setAttribute("stroke-width", "2.4");
+        preview.setAttribute("stroke-dasharray", "6 5");
+        preview.setAttribute("stroke-linecap", "round");
+        preview.setAttribute("pointer-events", "none");
+        svg.appendChild(preview);
+      }
+      preview.setAttribute("x1", start.x);
+      preview.setAttribute("y1", start.y);
+      preview.setAttribute("x2", state.connectDrag.x);
+      preview.setAttribute("y2", state.connectDrag.y);
+    }
+
+    function connectDragEnd(event) {
+      if (!state.connectDrag) return;
+      if (connectDragFrame) {
+        cancelAnimationFrame(connectDragFrame);
+        connectDragFrame = null;
+      }
+      const fromId = state.connectDrag.fromId;
+      state.connectDrag = null;
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      const groupBox = target?.closest("[data-group-box]");
+      const draftBlockCard = target?.closest("[data-draft-box] [data-block-card]");
+      const toId = groupBox?.dataset.groupBox || draftBlockCard?.dataset.blockCard || null;
+      if (toId && toId !== fromId) {
+        addConnection(fromId, toId);
+      } else {
+        state.connectingFrom = null;
+        renderGroupFlow();
+      }
+    }
+
     // Some embedding webviews (VS Code's Electron webview included) can fire a synthetic "click" right
     // after "contextmenu", which would otherwise hit the document-level outside-click handler below and
     // close a menu the instant it opens. Every show*Menu() call stamps this, and the outside-click
@@ -9396,6 +9483,10 @@
 
     function closeFloatingActions() {
       state.connectingFrom = null;
+      if (state.connectDrag) {
+        state.connectDrag = null;
+        $("groupFlow")?.querySelector(".link-layer")?.querySelector("#connectDragPreviewLine")?.remove();
+      }
       hideBlockMenu();
       hideGroupMenu();
       hideStreamMenu();
@@ -9485,7 +9576,8 @@
       const viewLeft = flow.scrollLeft;
       const viewTop = flow.scrollTop;
       const viewRight = viewLeft + flow.clientWidth;
-      const drawerOverlap = selectedGroup() ? Math.min(flow.clientHeight * 0.62, Math.max(260, (state.groupStepEditorHeight || 430) + 12)) : 0;
+      const hasGroupDrawer = Boolean(selectedGroup() || selectedBlock()?.groupId);
+      const drawerOverlap = hasGroupDrawer ? Math.min(flow.clientHeight * 0.62, Math.max(260, (state.groupStepEditorHeight || 520) - 230)) : 0;
       const usableHeight = Math.max(220, flow.clientHeight - drawerOverlap);
       const viewBottom = viewTop + usableHeight;
       const visible = left >= viewLeft + padding
@@ -10635,6 +10727,8 @@
     document.addEventListener("mouseout", hideHoverTip);
     document.addEventListener("mousemove", dragMove);
     document.addEventListener("mouseup", dragEnd);
+    document.addEventListener("mousemove", connectDragMove);
+    document.addEventListener("mouseup", connectDragEnd);
 
     loadBaseExampleProject();
     if (window.location.hash === "#flowsheet") {

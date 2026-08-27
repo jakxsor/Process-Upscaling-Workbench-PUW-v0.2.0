@@ -6,8 +6,9 @@ import json
 import os
 import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib import error, parse, request
+from urllib import error, request
 
+from .pubchem_lookup import lookup_pubchem
 from .pyflowsheet_renderer import render_pyflowsheet_svg
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -491,6 +492,7 @@ APP_HTML = r"""<!doctype html>
   </div>
 
   <script src="/flowsheet.js"></script>
+  <script src="/pubchem_core.js"></script>
   <script src="/pubchem.js"></script>
   <script src="/tutorial.js"></script>
   <script src="/export.js"></script>
@@ -506,6 +508,7 @@ STATIC_ROUTES = {
     "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
+    "/pubchem_core.js": ("pubchem_core.js", "application/javascript; charset=utf-8"),
     "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
     "/pubchem.js": ("pubchem.js", "application/javascript; charset=utf-8"),
 }
@@ -567,211 +570,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _lookup_pubchem(self, payload):
-        mode = str(payload.get("mode", "lookup")).strip().lower()
-        name = str(payload.get("name", "")).strip()
-        if not name:
-            return {"ok": False, "error": "Compound name missing."}
-        if len(name) > 160:
-            return {"ok": False, "error": "Compound name is too long for lookup."}
-        if mode == "search":
-            return self._search_pubchem_candidates(name)
-        encoded = parse.quote(name, safe="")
-        props = ",".join([
-            "MolecularFormula",
-            "MolecularWeight",
-            "CanonicalSMILES",
-            "IsomericSMILES",
-            "InChI",
-            "InChIKey",
-            "XLogP",
-            "ExactMass",
-            "TPSA",
-            "HBondDonorCount",
-            "HBondAcceptorCount",
-        ])
-        prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded}/property/{props}/JSON"
-        try:
-            prop_data = self._get_json(prop_url, timeout=20)
-        except error.HTTPError as exc:
-            return {
-                "ok": False,
-                "error": f"PubChem HTTP {exc.code}: no compound resolved for '{name}'.",
-                "suggestions": self._pubchem_autocomplete(name),
-            }
-        except (TimeoutError, socket.timeout):
-            return {"ok": False, "error": "PubChem lookup timed out."}
-        except error.URLError as exc:
-            return {"ok": False, "error": f"PubChem connection failed: {exc.reason}"}
-
-        rows = prop_data.get("PropertyTable", {}).get("Properties", [])
-        if not rows:
-            return {
-                "ok": False,
-                "error": f"No PubChem compound properties found for '{name}'.",
-                "suggestions": self._pubchem_autocomplete(name),
-            }
-        row = rows[0]
-        cid = row.get("CID")
-        experimental = {}
-        if cid:
-            view_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/{cid}/JSON?heading=Experimental+Properties"
-            try:
-                view_data = self._get_json(view_url, timeout=20)
-                experimental = self._extract_pubchem_experimental_properties(view_data)
-            except Exception:
-                experimental = {}
-
-        mapped = self._map_pubchem_fields(row, experimental)
-        return {
-            "ok": True,
-            "source": "PubChem PUG-REST/PUG-View",
-            "query": name,
-            "cid": cid,
-            "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}" if cid else "",
-            "properties": row,
-            "experimental": experimental,
-            "mapped": mapped,
-            "warnings": [
-                "Basic molecular properties are structured PubChem fields.",
-                "Thermal/phase properties are best-effort PUG-View annotations and should be confirmed before design decisions.",
-            ],
-        }
-
-    def _search_pubchem_candidates(self, name):
-        suggestions = self._pubchem_autocomplete(name)
-        return {
-            "ok": True,
-            "query": name,
-            "suggestions": suggestions,
-            "message": f"{len(suggestions)} PubChem candidate name{'s' if len(suggestions) != 1 else ''} found.",
-        }
-
-    def _pubchem_autocomplete(self, name):
-        encoded = parse.quote(name, safe="")
-        suggestions = []
-        try:
-            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound/{encoded}/JSON?limit=12"
-            data = self._get_json(url, timeout=15)
-            compounds = data.get("dictionary_terms", {}).get("compound", [])
-            for item in compounds:
-                if isinstance(item, str):
-                    term = item
-                elif isinstance(item, dict):
-                    term = item.get("term") or item.get("name") or item.get("title") or ""
-                else:
-                    term = ""
-                term = str(term).strip()
-                if term and term.lower() not in {entry["name"].lower() for entry in suggestions}:
-                    suggestions.append({"name": term, "source": "PubChem autocomplete"})
-        except Exception:
-            suggestions = []
-
-        if suggestions:
-            return suggestions[:12]
-
-        try:
-            cid_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded}/cids/JSON?name_type=word"
-            cid_data = self._get_json(cid_url, timeout=15)
-            cids = (cid_data.get("IdentifierList", {}).get("CID", []) or [])[:8]
-            if not cids:
-                return []
-            cid_csv = ",".join(str(cid) for cid in cids)
-            prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_csv}/property/Title,MolecularFormula/JSON"
-            prop_data = self._get_json(prop_url, timeout=15)
-            rows = prop_data.get("PropertyTable", {}).get("Properties", []) or []
-            for row in rows:
-                title = str(row.get("Title") or "").strip()
-                cid = row.get("CID")
-                formula = str(row.get("MolecularFormula") or "").strip()
-                if title:
-                    suggestions.append({
-                        "name": title,
-                        "cid": cid,
-                        "formula": formula,
-                        "source": "PubChem word search",
-                    })
-        except Exception:
-            return suggestions[:12]
-        return suggestions[:12]
-
-    def _get_json(self, url, timeout):
-        req = request.Request(url, headers={"Accept": "application/json", "User-Agent": "upscaling-pipeline-tool/1.0"})
-        with request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-
-    def _extract_pubchem_experimental_properties(self, data):
-        wanted = {
-            "Melting Point": "melting_point",
-            "Boiling Point": "boiling_point",
-            "Vapor Pressure": "vapor_pressure",
-            "Solubility": "solubility",
-        }
-        found = {value: [] for value in wanted.values()}
-
-        def value_to_text(value):
-            if not isinstance(value, dict):
-                return ""
-            strings = value.get("StringWithMarkup")
-            if isinstance(strings, list):
-                parts = [item.get("String", "") for item in strings if isinstance(item, dict)]
-                text = " ".join(part for part in parts if part).strip()
-                if text:
-                    return text
-            number = value.get("Number")
-            unit = value.get("Unit")
-            if number is not None:
-                return f"{number} {unit or ''}".strip()
-            return ""
-
-        def visit(section):
-            if not isinstance(section, dict):
-                return
-            heading = section.get("TOCHeading", "")
-            key = wanted.get(heading)
-            if key:
-                for info in section.get("Information", []) or []:
-                    text = value_to_text(info.get("Value", {}))
-                    if text:
-                        found[key].append(text)
-            for child in section.get("Section", []) or []:
-                visit(child)
-
-        visit(data.get("Record", {}))
-        return {key: values[:5] for key, values in found.items() if values}
-
-    def _map_pubchem_fields(self, row, experimental):
-        mapped = {}
-        if row.get("MolecularWeight") is not None:
-            mapped["mw"] = str(row.get("MolecularWeight"))
-        for target, source_key in (("tm", "melting_point"), ("tb", "boiling_point"), ("pvap", "vapor_pressure")):
-            values = experimental.get(source_key) or []
-            for value in values:
-                converted = self._pubchem_numeric_property(value, target)
-                if converted:
-                    mapped[target] = converted
-                    break
-        return mapped
-
-    def _pubchem_numeric_property(self, text, target):
-        import re
-
-        match = re.search(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", str(text))
-        if not match:
-            return ""
-        value = float(match.group(0))
-        lower = str(text).lower()
-        if target in ("tm", "tb") and ("°c" in lower or "deg c" in lower or " c" in lower):
-            return f"{value + 273.15:.2f}"
-        if target in ("tm", "tb") and ("°f" in lower or "deg f" in lower or " f" in lower):
-            return f"{(value - 32) * 5 / 9 + 273.15:.2f}"
-        if target in ("tm", "tb"):
-            return ""
-        if target == "pvap":
-            if "mmhg" in lower:
-                return f"{value * 133.322:.3g}"
-            if "kpa" in lower:
-                return f"{value * 1000:.3g}"
-        return str(value)
+        return lookup_pubchem(payload)
 
     def _run_external_refine(self, payload):
         api_key = str(payload.get("apiKey", "")).strip() or os.environ.get("OPENAI_API_KEY", "").strip()

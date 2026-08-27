@@ -548,7 +548,7 @@
     }
 
     .group-flow.has-group-drawer {
-      scroll-padding-bottom: 46vh;
+      scroll-padding-bottom: 58vh;
     }
 
     .workflow-panel .panel-body {
@@ -627,6 +627,38 @@
       user-select: none;
       z-index: 20;
       cursor: pointer;
+    }
+
+    /* Drag-to-connect handle: sits on the right edge of a group box or a draft (not yet
+       task-assigned) block card. Hidden until the box is hovered so it doesn't clutter the board,
+       shown while a connection is being dragged from it (.connecting, reusing the class the old
+       click-to-connect flow already applies to state.connectingFrom) so it stays visible mid-drag
+       even though the cursor has left the box. */
+    .connect-handle {
+      position: absolute;
+      right: -9px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--panel);
+      box-shadow: 0 1px 3px rgba(23, 32, 39, 0.25);
+      cursor: crosshair;
+      opacity: 0;
+      transition: opacity 120ms ease, transform 120ms ease;
+      z-index: 30;
+    }
+
+    .group-box:hover .connect-handle,
+    .block-card:hover .connect-handle,
+    .connecting .connect-handle {
+      opacity: 1;
+    }
+
+    .connect-handle:hover {
+      transform: translateY(-50%) scale(1.3);
     }
 
     .group-box.active {
@@ -903,6 +935,10 @@
       cursor: pointer;
     }
 
+    .block-card-head {
+      padding-right: 22px;
+    }
+
     .block-card.selected {
       border-color: var(--blue);
       background: var(--blue-soft);
@@ -920,14 +956,24 @@
     }
 
     .block-card-delete {
+      position: absolute;
+      top: -7px;
+      right: -7px;
+      z-index: 6;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       min-height: 20px;
       min-width: 20px;
+      width: 20px;
+      height: 20px;
       padding: 0;
       line-height: 1;
       font-size: 11px;
       color: var(--red);
       background: var(--red-soft);
       border-color: #efc6c6;
+      border-radius: 999px;
       opacity: 0.55;
     }
 
@@ -1280,9 +1326,9 @@
     }
 
     .step-flow-inspector.group-aggregate-drawer {
-      bottom: -150px;
-      min-height: 300px;
-      max-height: min(780px, calc(100vh - 110px));
+      bottom: -260px;
+      min-height: 320px;
+      max-height: min(900px, calc(100vh - 70px));
       box-shadow: 0 -10px 28px rgba(23, 32, 39, 0.13);
     }
 
