@@ -411,7 +411,7 @@
       showConnections: false,
       measuredNodeHeights: {},
       stepEditorHeight: 165,
-      groupStepEditorHeight: 520,
+      groupStepEditorHeight: 400,
       boardCompact: false,
       pendingSplitGroupId: null,
       sourcePanelTab: "protocol",
@@ -7512,7 +7512,7 @@
               <article class="sep-route-card ${escapeAttr(variant.level)}">
                 <div class="sep-route-card-head">
                   <strong>${escapeHtml(variant.title)}</strong>
-                  <span class="pill ${variant.level === "supported" ? "green" : variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(variant.level)}</span>
+                  <span class="pill ${variant.level === "supported" ? "green" : variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(variant.level)} · ${escapeHtml(formatMathScore(variant.score))}</span>
                 </div>
                 <div class="sep-route-mini-flow" aria-label="Route preview">
                   <span>${escapeHtml(groupId)}</span>
@@ -7522,6 +7522,7 @@
                   <span>downstream</span>
                 </div>
                 <div class="sep-route-flow">${escapeHtml(variant.graphPreview)}</div>
+                ${binaryMathSummaryHtml(variant)}
                 <div class="predictor-missing">
                   ${variant.drivers.map(driver => `<span class="pill blue">${escapeHtml(driver)}</span>`).join("")}
                   ${variant.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}
@@ -7575,6 +7576,32 @@
 
     function routeVariantBehavior(variant) {
       return separationCore.routeVariantBehavior(variant);
+    }
+
+    function formatMathScore(score) {
+      const value = Number(score);
+      return Number.isFinite(value) && value > 0 ? `${Math.round(value)}/100` : "score pending";
+    }
+
+    function binaryMathSummaryHtml(variant) {
+      const comparisons = Array.isArray(variant.comparisons) ? variant.comparisons.filter(item => item && item.label).slice(0, 4) : [];
+      if (!comparisons.length) return "";
+      return `
+        <div class="binary-math-summary">
+          <span class="binary-math-score">${escapeHtml(formatMathScore(variant.score))}</span>
+          ${comparisons.map(comparison => `
+            <span class="binary-math-chip ${comparison.met ? "met" : "weak"}" title="${escapeAttr(comparison.basis || "binary comparison")}">
+              ${escapeHtml(comparison.label)} ${escapeHtml(formatMathValue(comparison.value))} ${escapeHtml(comparison.operator || ">=")} ${escapeHtml(formatMathValue(comparison.threshold))}
+            </span>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function formatMathValue(value) {
+      if (value === null || value === undefined || value === "" || Number.isNaN(value)) return "missing";
+      if (typeof value === "number") return formatRatio(value);
+      return String(value);
     }
 
     function separationPathwayModel(group, model = separationSimulatorModel(group)) {
@@ -7807,6 +7834,7 @@
         <div class="pathway-info-panel">
           <strong>${escapeHtml(selected.title || selected.unit || "Selected route")}</strong>
           <span class="muted small">Unit: ${escapeHtml(selected.unit || "not fixed")}</span>
+          <span class="muted small">Pair score: ${escapeHtml(formatMathScore(selected.score))}</span>
           <span class="muted small">Separates: ${escapeHtml(selected.separated.map(item => item.name).join(", ") || "pending")}</span>
           <span class="muted small">Retains: ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "pending")}</span>
           <div class="predictor-missing">
@@ -7822,7 +7850,7 @@
         <article class="pathway-option-card ${escapeAttr(option.variant.level)}">
           <div class="sep-route-card-head">
             <strong>${escapeHtml(option.unit || option.variant.title)}</strong>
-            <span class="pill ${option.variant.level === "supported" ? "green" : option.variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(option.variant.level)}</span>
+            <span class="pill ${option.variant.level === "supported" ? "green" : option.variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(option.variant.level)} · ${escapeHtml(formatMathScore(option.variant.score))}</span>
           </div>
           <div class="muted small">${escapeHtml(option.pairLabel)}</div>
           <div class="pathway-option-target">
@@ -7830,6 +7858,7 @@
             <span class="pill blue">retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
           </div>
           <div class="predictor-reason">${escapeHtml(option.variant.graphPreview)}</div>
+          ${binaryMathSummaryHtml(option.variant)}
           <div class="predictor-missing">
             ${option.variant.drivers.map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
             ${option.variant.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}
@@ -7857,6 +7886,7 @@
         retainedIds: option.retained.map(item => item.id),
         drivers: option.variant.drivers,
         missing: option.variant.missing,
+        score: option.variant.score,
         note: option.variant.graphPreview
       };
       simulator.pathway.steps.push(step);
@@ -8727,7 +8757,7 @@
 
     function stepEditorConfig(mode) {
       if (mode === "group") {
-        return { key: "groupStepEditorHeight", min: 320, fallback: 520 };
+        return { key: "groupStepEditorHeight", min: 320, fallback: 400 };
       }
       return { key: "stepEditorHeight", min: 115, fallback: 165 };
     }
