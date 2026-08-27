@@ -110,7 +110,6 @@ APP_HTML = r"""<!doctype html>
       <div class="panel-head">
         <div class="workflow-title-stack">
           <h2>Blocks, Tasks & Network</h2>
-          <span class="muted small">Combine the draft blocks below into task groups (shift-click blocks, then right-click → Combine Selected), then drag between the group handles to connect the network.</span>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
@@ -126,7 +125,7 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="panel-body">
-        <span class="step-flag board-step-flag tip" data-tip="Convert blocks into task groups first. Unit-operation suggestions unlock after MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
+        <span class="step-flag board-step-flag tip" data-tip="Shift-click draft blocks below, then right-click -> Combine Selected to form a task group; drag between group handles to connect them. Unit-operation suggestions unlock once MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
           <span class="step-flag-num">3</span><span class="step-flag-label">Task Assignment</span>
         </span>
         <div id="groupFlow" class="group-flow"></div>
