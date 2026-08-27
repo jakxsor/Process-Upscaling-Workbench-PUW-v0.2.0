@@ -219,6 +219,7 @@
       retainedIds: Array.isArray(step.retainedIds) ? step.retainedIds.map(String).filter(Boolean) : [],
       drivers: Array.isArray(step.drivers) ? step.drivers.map(String).filter(Boolean) : [],
       missing: Array.isArray(step.missing) ? step.missing.map(String).filter(Boolean) : [],
+      score: Number.isFinite(Number(step.score)) ? Number(step.score) : 0,
       note: String(step.note || "")
     })) : [];
     return {
@@ -323,19 +324,27 @@
   function separationSuggestionsForPair(pair) {
     const matched = kbRules
       .filter(rule => rule.test(pair))
-      .map(rule => ({
-        pairKey: pair.key,
-        pairLabel: `${pair.a.name} / ${pair.b.name}`,
-        ruleId: rule.id,
-        label: rule.label,
-        source: rule.source,
-        evidence: rule.evidence(pair),
-        pbb: rule.pbb,
-        units: rule.units,
-        level: rule.level,
-        note: rule.note,
-        missing: separationMissingForSuggestion(pair, rule)
-      }));
+      .map(rule => {
+        const missing = separationMissingForSuggestion(pair, rule);
+        const math = binaryMathForRule(pair, rule, missing);
+        return {
+          pairKey: pair.key,
+          pairLabel: `${pair.a.name} / ${pair.b.name}`,
+          ruleId: rule.id,
+          label: rule.label,
+          source: rule.source,
+          evidence: rule.evidence(pair),
+          pbb: rule.pbb,
+          units: rule.units,
+          level: rule.level,
+          note: rule.note,
+          missing,
+          score: math.score,
+          strength: math.strength,
+          comparisons: math.comparisons
+        };
+      })
+      .sort((a, b) => b.score - a.score || suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.label.localeCompare(b.label));
     if (matched.length) return matched.map(item => ({ ...item, level: item.missing.length ? "partial" : item.level }));
     return [{
       pairKey: pair.key,
@@ -348,8 +357,130 @@
       units: [],
       level: pairHasAnyData(pair) ? "hypothesis" : "blocked",
       note: "Add pure-component values or binary mixture insights before proposing a defendable separation route.",
-      missing: separationMissingForPair(pair)
+      missing: separationMissingForPair(pair),
+      score: 0,
+      strength: null,
+      comparisons: []
     }];
+  }
+
+  function binaryMathForRule(pair, rule, missing = []) {
+    const comparisons = binaryRuleComparisons(pair, rule.id);
+    const scored = comparisons.map(comparison => ({
+      ...comparison,
+      points: comparisonPoints(comparison),
+      strength: comparisonStrength(comparison)
+    }));
+    const score = Math.max(0, Math.min(100, Math.round(
+      scored.reduce((sum, item) => sum + item.points, 0) - missing.length * 4
+    )));
+    const strengths = scored.map(item => item.strength).filter(Number.isFinite);
+    return {
+      score,
+      strength: strengths.length ? Math.max(...strengths) : null,
+      comparisons: scored
+    };
+  }
+
+  function binaryRuleComparisons(pair, ruleId) {
+    const rows = [];
+    const ratio = (id, label, threshold, operator = ">=") => rows.push({
+      kind: "ratio",
+      id,
+      label,
+      value: pair.ratios[id],
+      threshold,
+      operator,
+      met: thresholdMet(pair.ratios[id], threshold, operator),
+      basis: "max(A,B)/min(A,B)"
+    });
+    const insight = (id, label, expected = "yes") => rows.push({
+      kind: "binary",
+      id,
+      label,
+      value: pair.insights[id],
+      threshold: expected,
+      operator: "=",
+      met: pair.insights[id] === expected,
+      basis: "binary mixture insight"
+    });
+    const thermal = () => rows.push({
+      kind: "binary",
+      id: "thermalSensitivity",
+      label: "High thermal sensitivity",
+      value: pair.components.some(component => component.thermalSensitivity === "high") ? "yes" : "no",
+      threshold: "yes",
+      operator: "=",
+      met: pair.components.some(component => component.thermalSensitivity === "high"),
+      basis: "component flag"
+    });
+
+    if (ruleId === "KB3.1-VL-BP-PVAP") {
+      ratio("tb", "Boiling point ratio", 1.23);
+      ratio("pvap", "Vapor pressure ratio", 10);
+    } else if (ruleId === "KB3.1-AZEO") {
+      insight("azeotrope", "Azeotrope");
+      ratio("pvap", "Vapor pressure ratio", 10);
+      ratio("solubilityParameter", "Solubility parameter ratio", 1.11);
+    } else if (ruleId === "KB3.1-PRESSURE-SENSITIVE-AZEO") {
+      insight("azeotrope", "Azeotrope");
+      insight("pressureSensitive", "Pressure-sensitive azeotrope");
+    } else if (ruleId === "KB3.1-LL-GAP") {
+      insight("miscibilityGap", "Miscibility gap");
+      ratio("solubilityParameter", "Solubility parameter ratio", 1.20);
+    } else if (ruleId === "KB3.1-LS-MELTING") {
+      ratio("tm", "Melting point ratio", 1.20);
+      insight("eutectic", "Eutectic");
+    } else if (ruleId === "KB3.1-MEMBRANE-SIZE") {
+      ratio("molecularDiameter", "Molecular diameter ratio", 2.00);
+      ratio("mw", "Molecular-weight ratio", 1.90);
+      ratio("molarVolume", "Molar-volume ratio", 1.02);
+      ratio("solubilityParameter", "Solubility parameter ratio", 1.20);
+    } else if (ruleId === "SCREEN-RVOL-LOW") {
+      const alpha = numberFromText(pair.insights.relativeVolatility);
+      rows.push({
+        kind: "ratio",
+        id: "relativeVolatility",
+        label: "Relative volatility",
+        value: Number.isFinite(alpha) ? alpha : null,
+        threshold: 1.05,
+        operator: "<=",
+        met: Number.isFinite(alpha) && alpha <= 1.05,
+        basis: "binary mixture insight"
+      });
+    } else if (ruleId === "SCREEN-THERMAL-SENSITIVE") {
+      thermal();
+      ratio("tb", "Boiling point ratio", 1.23);
+      ratio("pvap", "Vapor pressure ratio", 10);
+    }
+    return rows;
+  }
+
+  function thresholdMet(value, threshold, operator = ">=") {
+    if (!Number.isFinite(value) || !Number.isFinite(threshold)) return false;
+    if (operator === "<=") return value <= threshold;
+    return value >= threshold;
+  }
+
+  function comparisonStrength(comparison) {
+    if (comparison.kind === "binary") return comparison.met ? 1 : null;
+    const value = Number(comparison.value);
+    const threshold = Number(comparison.threshold);
+    if (!Number.isFinite(value) || !Number.isFinite(threshold) || threshold <= 0) return null;
+    if (comparison.operator === "<=") return value > 0 ? threshold / value : null;
+    return value / threshold;
+  }
+
+  function comparisonPoints(comparison) {
+    if (comparison.kind === "binary") {
+      if (comparison.value === "unknown" || comparison.value === "") return 0;
+      return comparison.met ? 35 : 0;
+    }
+    const strength = comparisonStrength(comparison);
+    if (!Number.isFinite(strength)) return 0;
+    if (strength >= 1) return Math.min(45, 25 + Math.round((strength - 1) * 20));
+    if (strength >= 0.85) return Math.round(strength * 12);
+    return 0;
   }
 
   function pairHasAnyData(pair) {
@@ -504,10 +635,14 @@
     if (volatility.length) {
       const volatile = preferredVolatileComponent(pair);
       const retained = volatile.id === pair.a.id ? pair.b : pair.a;
+      const math = routeMathSummary(volatility);
       variants.push({
         id: routeVariantId("Volatility route"),
         title: "Volatility route",
         level: strongestSuggestionLevel(volatility),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(volatility, ["Evaporation", "Distillation", "Flash vaporization", "Partial condensation / vaporization"]),
         pbb: uniqueFlat(volatility.map(item => item.pbb)),
         flowLabel: "V-L separator",
@@ -519,10 +654,14 @@
     const thermal = supportedBy("SCREEN-THERMAL-SENSITIVE");
     if (thermal.length) {
       const sensitive = pair.components.find(component => component.thermalSensitivity === "high") || pair.b;
+      const math = routeMathSummary(thermal);
       variants.push({
         id: routeVariantId("Gentle thermal route"),
         title: "Gentle thermal route",
         level: strongestSuggestionLevel(thermal),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(thermal, ["Short-path distillation", "Wiped-film evaporation", "Thin-film evaporation", "Vacuum distillation"]),
         pbb: uniqueFlat(thermal.map(item => item.pbb)),
         flowLabel: "gentle separator",
@@ -533,10 +672,14 @@
     }
     const liquid = supportedBy("KB3.1-LL-GAP");
     if (liquid.length) {
+      const math = routeMathSummary(liquid);
       variants.push({
         id: routeVariantId("Liquid-liquid split route"),
         title: "Liquid-liquid split route",
         level: strongestSuggestionLevel(liquid),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(liquid, ["Decanter", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(liquid.map(item => item.pbb)),
         flowLabel: "L-L separator",
@@ -548,10 +691,14 @@
     const solid = supportedBy("KB3.1-LS-MELTING");
     if (solid.length) {
       const crystallizing = preferredSolidComponent(pair);
+      const math = routeMathSummary(solid);
       variants.push({
         id: routeVariantId("Crystallization route"),
         title: "Crystallization route",
         level: strongestSuggestionLevel(solid),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(solid, ["Crystallization", "Melt crystallization"]),
         pbb: uniqueFlat(solid.map(item => item.pbb)),
         flowLabel: "crystallizer/filter",
@@ -563,10 +710,14 @@
     const affinity = supportedBy("KB3.1-MEMBRANE-SIZE");
     if (affinity.length) {
       const larger = preferredLargeComponent(pair);
+      const math = routeMathSummary(affinity);
       variants.push({
         id: routeVariantId("Affinity / size-selective route"),
         title: "Affinity / size-selective route",
         level: strongestSuggestionLevel(affinity),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(affinity, ["Membrane pervaporation", "Membrane vapor permeation", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(affinity.map(item => item.pbb)),
         flowLabel: "selective separator",
@@ -577,10 +728,14 @@
     }
     const weakDistillation = supportedBy("SCREEN-RVOL-LOW");
     if (weakDistillation.length) {
+      const math = routeMathSummary(weakDistillation);
       variants.push({
         id: routeVariantId("Avoid simple distillation route"),
         title: "Avoid simple distillation route",
         level: strongestSuggestionLevel(weakDistillation),
+        score: math.score,
+        strength: math.strength,
+        comparisons: math.comparisons,
         units: prioritizedUnits(weakDistillation, ["Extractive distillation", "Azeotropic distillation", "Membrane pervaporation", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(weakDistillation.map(item => item.pbb)),
         flowLabel: "assisted separator",
@@ -594,6 +749,9 @@
         id: routeVariantId("Hypothesis route pending"),
         title: "Hypothesis route pending",
         level: "hypothesis",
+        score: 0,
+        strength: null,
+        comparisons: [],
         units: ["Review candidate unit"],
         pbb: [],
         flowLabel: "review separator",
@@ -606,6 +764,16 @@
       });
     }
     return variants.slice(0, 5);
+  }
+
+  function routeMathSummary(suggestions) {
+    const comparisons = suggestions.flatMap(item => item.comparisons || []);
+    const strengths = suggestions.map(item => item.strength).filter(Number.isFinite);
+    return {
+      score: suggestions.length ? Math.max(...suggestions.map(item => Number(item.score) || 0)) : 0,
+      strength: strengths.length ? Math.max(...strengths) : null,
+      comparisons
+    };
   }
 
   function strongestSuggestionLevel(items) {
@@ -744,7 +912,8 @@
       && option.retained.some(item => item.id === mainId)
       && option.separated.some(item => item.id !== mainId);
     const roleRank = separatesReactantFromMain ? 0 : separatesNonProductFromMain ? 1 : 2;
-    return roleRank * 10 + suggestionLevelRank(option.variant.level);
+    const evidenceRank = (100 - (Number(option.variant.score) || 0)) / 100;
+    return roleRank * 10 + suggestionLevelRank(option.variant.level) + evidenceRank;
   }
 
   function pathwaySplitTargets(pair, variant, mainProduct) {
@@ -793,6 +962,11 @@
     numberFromText,
     formatRatio,
     separationSuggestionsForPair,
+    binaryMathForRule,
+    binaryRuleComparisons,
+    thresholdMet,
+    comparisonStrength,
+    comparisonPoints,
     pairHasAnyData,
     separationMissingForPair,
     separationMissingForSuggestion,
@@ -805,6 +979,7 @@
     matchingSuggestionUnits,
     workupStep,
     binaryRouteVariants,
+    routeMathSummary,
     strongestSuggestionLevel,
     suggestionLevelRank,
     prioritizedUnits,

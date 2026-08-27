@@ -202,10 +202,6 @@ APP_HTML = r"""<!doctype html>
 
           <div class="scale-scroll-body stack">
             <section class="card stack">
-              <div>
-                <div class="label">Triggered Rules</div>
-                <div class="muted small">Only rules involved in the current synthesis are shown here.</div>
-              </div>
               <div id="heuristicsPanel"></div>
             </section>
 

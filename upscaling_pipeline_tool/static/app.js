@@ -424,6 +424,10 @@
         scale: true
       },
       showAllHeuristicRules: false,
+      expandedHeuristicRuleIds: {},
+      expandedScaleSections: {},
+      expandedGanttRows: {},
+      scheduleScenarioView: "conservative",
       activeSeparationSimulatorGroupId: null,
       activeSeparationSimulatorMode: "full",
       activeConversionBlockId: null,
@@ -964,6 +968,7 @@
         role,
         name: values.name || "",
         quantity: values.quantity || "",
+        conversionBaseQuantity: values.conversionBaseQuantity || "",
         unit: values.unit || "kg",
         phase: values.phase || "unknown",
         status: values.status || "missing",
@@ -1270,7 +1275,7 @@
             { role: "input", name: "benzyl alcohol", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
             { role: "input", name: "acetic anhydride", quantity: "0.95", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
             { role: "input", name: "triethylamine", quantity: "1.10", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "benzyl acetate product-rich liquid", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch" }
+            { role: "output", name: "benzyl acetate", quantity: "1.39", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", note: "Theoretical product basis from limiting benzyl alcohol; conversion popup makes 90%, approx. 1.25 kg." }
           ],
           { conversion_yield: "90", target_temperature: "65", reaction_time: "3", mixing_mode: "stirred liquid phase" },
           { conversion_yield: "%", target_temperature: "C", reaction_time: "h" }
@@ -1291,6 +1296,13 @@
           { separation_efficiency: "%", target_temperature: "C" }
         )
       ];
+      const reactionBlock = state.blocks.find(block => block.id === "B1");
+      if (reactionBlock) {
+        reactionBlock.conversionDetail = {
+          productStreamId: "B1-S4",
+          byproducts: []
+        };
+      }
       state.groups = {
         G1: {
           id: "G1",
@@ -1359,6 +1371,7 @@
         role,
         name: String(stream?.name || stream?.material || ""),
         quantity: String(stream?.quantity || stream?.qty || ""),
+        conversionBaseQuantity: String(stream?.conversionBaseQuantity || ""),
         unit: streamUnits.includes(stream?.unit) ? stream.unit : "kg",
         phase: streamPhases.includes(stream?.phase) ? stream.phase : "unknown",
         status: streamDataStatuses.includes(stream?.status) ? stream.status : "missing",
@@ -4543,6 +4556,19 @@
       });
     }
 
+    function scaleSectionHtml(key, title, gridInnerHtml) {
+      const expanded = Boolean(state.expandedScaleSections[key]);
+      return `
+        <div class="scale-section ${expanded ? "expanded" : "collapsed"}">
+          <div class="scale-section-toggle-head" data-toggle-scale-section="${escapeAttr(key)}">
+            <span>${escapeHtml(title)}</span>
+            <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
+          </div>
+          ${expanded ? `<div class="scale-grid">${gridInnerHtml}</div>` : ""}
+        </div>
+      `;
+    }
+
     function renderScaleBasisPanel() {
       const quickRoot = $("scaleQuickPanel");
       const root = $("scaleBasisPanel");
@@ -4576,9 +4602,7 @@
       ];
       const batchesPerDayInactive = basis.scheduleMethod === "duration" || (basis.scheduleMethod === "auto" && model.schedule.method === "duration_OEE_parallel_units");
       root.innerHTML = `
-        <div class="scale-section">
-          <div class="scale-section-title">Reference basis</div>
-          <div class="scale-grid">
+        ${scaleSectionHtml("referenceBasis", "Reference basis", `
             <label class="scale-wide">
               ${fieldLabel("Reference output block", "Which existing block's output stream anchors the lab-scale recipe ratios (reactants/solvent per kg product). Leave on auto to use the block with a numeric product-like output.")}
               <select data-scale-field="referenceBlockId">${referenceOptions}</select>
@@ -4591,12 +4615,9 @@
               ${fieldLabel("Basis unit", "Unit for the manual basis amount above.")}
               <select data-scale-field="basisUnit">${optionHtml(["kg", "g", "t"], basis.basisUnit)}</select>
             </label>
-          </div>
-        </div>
+        `)}
 
-        <div class="scale-section">
-          <div class="scale-section-title">Operating schedule</div>
-          <div class="scale-grid">
+        ${scaleSectionHtml("operatingSchedule", "Operating schedule", `
             <label>
               ${fieldLabel("Mode", "Continuous processes skip the batches/day and batch-duration fields below.")}
               <select data-scale-field="mode">${optionHtml(["batch", "continuous"], basis.mode)}</select>
@@ -4637,12 +4658,9 @@
               ${fieldLabel("Equipment fill limit, %", "How full a single piece of equipment (e.g. reactor working volume) is allowed to run - used only to flag over-capacity tasks in the Bottleneck classification below. Distinct from OEE above, which is about time availability, not fill level.")}
               <input data-scale-field="allowableCapacityUtilizationPercent" value="${escapeAttr(basis.allowableCapacityUtilizationPercent)}" inputmode="decimal" placeholder="85">
             </label>
-          </div>
-        </div>
+        `)}
 
-        <div class="scale-section">
-          <div class="scale-section-title">Reactor sizing / stoichiometric checks</div>
-          <div class="scale-grid">
+        ${scaleSectionHtml("reactorSizing", "Reactor sizing / stoichiometric checks", `
             <label>
               ${fieldLabel("Product kg/batch override", "Overrides the batch size used only for the reactor-sizing check below. Does not change 'Target kg/batch' in Calculated basis, which is driven by the operating schedule instead - the two can disagree on purpose if you want to test a different reactor size.")}
               <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="auto">
@@ -4667,24 +4685,40 @@
               ${fieldLabel("Water mol/mol product", "Moles of water released per mole of product formed, from the reaction stoichiometry.")}
               <input data-scale-field="condensationWaterMolPerMol" value="${escapeAttr(basis.condensationWaterMolPerMol)}" inputmode="decimal" placeholder="1">
             </label>
-          </div>
-        </div>
+        `)}
 
-        <div class="scale-section">
-          <div class="scale-section-title">Tracking</div>
-          <div class="scale-grid">
+        ${scaleSectionHtml("tracking", "Tracking", `
             <label>
               ${fieldLabel("Confidence", "How reliable the current scale-up numbers are, for your own tracking - rough (screening guess), estimated (some real data), or validated (measured/vendor-confirmed). Does not change any calculation.")}
               <select data-scale-field="confidence">${optionHtml(["rough", "estimated", "validated"], basis.confidence)}</select>
             </label>
-          </div>
-        </div>
+        `)}
         ${scaleResultsHtml(model)}
       `;
       [quickRoot, root].forEach(container => {
         container.querySelectorAll("[data-scale-field]").forEach(field => {
           field.addEventListener("input", updateScaleField);
           field.addEventListener("change", rerenderScaleAfterEdit);
+        });
+      });
+      root.querySelectorAll("[data-toggle-scale-section]").forEach(head => {
+        head.addEventListener("click", () => {
+          const key = head.dataset.toggleScaleSection;
+          state.expandedScaleSections[key] = !state.expandedScaleSections[key];
+          renderScaleBasisPanel();
+        });
+      });
+      root.querySelectorAll("[data-schedule-scenario-view]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.scheduleScenarioView = button.dataset.scheduleScenarioView;
+          renderScaleBasisPanel();
+        });
+      });
+      root.querySelectorAll("[data-toggle-gantt-row]").forEach(head => {
+        head.addEventListener("click", () => {
+          const groupId = head.dataset.toggleGanttRow;
+          state.expandedGanttRows[groupId] = !state.expandedGanttRows[groupId];
+          renderScaleBasisPanel();
         });
       });
       root.querySelectorAll("[data-scale-focus-group]").forEach(button => {
@@ -4739,6 +4773,10 @@
       setInspectorTab("inspect");
       renderAll();
     }
+    function infoIconHtml(tip) {
+      return `<span class="info-icon tip" data-tip="${escapeAttr(tip)}">ⓘ</span>`;
+    }
+
     function scaleResultsHtml(model) {
       const reference = model.reference
         ? `${model.reference.blockId} / ${model.reference.streamName || model.reference.streamId}: ${model.reference.quantity} ${model.reference.unit}`
@@ -4770,18 +4808,18 @@
           </div>
 
           <div class="scale-metric">
-            <span class="label">Schedule scenarios</span>
+            <span class="label">Schedule scenarios${infoIconHtml("Conservative uses batch makespan (batches do not start before the previous batch leaves the train). Overlapped uses plant cycle time = max(task time / parallel units) - new batches can start at the limiting equipment cycle.")}</span>
             ${scheduleScenariosHtml(model.schedule)}
           </div>
 
           <div class="scale-metric">
-            <span class="label">Reactor sizing / stoichiometric checks</span>
+            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Reactor volume = ((reactants L/kg product + solvent L/kg product) x product kg/batch / 1000) / working fill. Both L/kg ratios come from the lab recipe and scale automatically with the target batch size - they are not fixed volumes. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. This is the calculated minimum at standard working fill (70-80% is typical for stirred batch/semi-batch reactors); real vessel selection typically adds a design margin (commonly ~10%) and rounds up to the nearest standard manufacturer size, so the as-built reactor is usually somewhat larger than this figure.")}</span>
             ${reactorSizingHtml(model.reactorSizing)}
           </div>
 
           <div class="scale-metric">
             <div class="scale-section-title">
-              <span>Gantt / Bottleneck</span>
+              <span>Gantt / Bottleneck${infoIconHtml("Critical bottleneck = largest effective task only when it is clearly above the next task. Adjusted time = input duration plus Gantt margin, divided by parallel units.")}</span>
               <button data-load-schedule-example="octocrylene" title="Overwrites every group's duration/capacity/notes with generic keyword-matched example values. Asks for confirmation first; can be undone.">Fill Example Durations</button>
             </div>
             ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
@@ -4844,12 +4882,16 @@
           <span class="muted small">${escapeHtml(note)}</span>
         </div>
       `;
+      const view = state.scheduleScenarioView === "overlapped" ? "overlapped" : "conservative";
+      const activeRow = view === "overlapped"
+        ? row("Overlapped train", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches can start at the limiting equipment cycle")
+        : row("Conservative single-train", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "batches do not start before the previous batch leaves the train");
       return `
-        <div class="mfa-empty" style="margin-bottom:8px">
-          Conservative uses batch makespan; overlapped uses plant cycle time = max(task time / parallel units).
+        <div class="schedule-scenario-toggle">
+          <button class="mini-button ${view === "conservative" ? "chosen" : ""}" data-schedule-scenario-view="conservative">Conservative</button>
+          <button class="mini-button ${view === "overlapped" ? "chosen" : ""}" data-schedule-scenario-view="overlapped">Overlapped</button>
         </div>
-        ${row("Conservative single-train", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "batches do not start before the previous batch leaves the train")}
-        ${row("Overlapped train", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches can start at the limiting equipment cycle")}
+        ${activeRow}
       `;
     }
 
@@ -4874,11 +4916,6 @@
               <strong>${escapeHtml(value)}</strong>
             </div>
           `).join("")}
-        </div>
-        <div class="mfa-empty" style="margin-top:8px">
-          Reactor volume = ((reactants L/kg product + solvent L/kg product) × product kg/batch / 1000) / working fill. Both L/kg ratios come from the lab recipe and scale automatically with the target batch size — they are not fixed volumes.
-          Water = product kg/batch × 18.015 / product MW × stoichiometric water coefficient.
-          This is the calculated minimum at standard working fill (70-80% is typical for stirred batch/semi-batch reactors); real vessel selection typically adds a design margin (commonly ~10%) and rounds up to the nearest standard manufacturer size, so the as-built reactor is usually somewhat larger than this figure.
         </div>
         ${sizing.missing?.length ? `<span class="muted small">Missing for full check: ${escapeHtml(sizing.missing.join(", "))}</span>` : ""}
       `;
@@ -4979,8 +5016,7 @@
           </div>
           <div class="scale-metric">
             <span class="label">Triggered Rule Cards</span>
-            ${heuristics.triggered.length ? heuristics.triggered.slice(0, 12).map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
-            ${heuristics.triggered.length > 12 ? `<span class="muted small">+${heuristics.triggered.length - 12} more heuristic cards in export</span>` : ""}
+            ${heuristics.triggered.length ? heuristics.triggered.map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
           </div>
           ${state.showAllHeuristicRules ? `
             <div class="scale-metric">
@@ -5007,6 +5043,13 @@
       root.querySelectorAll("[data-open-refine-modal]").forEach(button => {
         button.addEventListener("click", openAiRefineModal);
       });
+      root.querySelectorAll("[data-toggle-heuristic-card]").forEach(head => {
+        head.addEventListener("click", () => {
+          const ruleId = head.dataset.toggleHeuristicCard;
+          state.expandedHeuristicRuleIds[ruleId] = !state.expandedHeuristicRuleIds[ruleId];
+          renderHeuristicsPanel();
+        });
+      });
       root.querySelectorAll("[data-heuristic-decision]").forEach(button => {
         button.addEventListener("click", () => {
           const ruleId = button.dataset.heuristicRule;
@@ -5017,6 +5060,9 @@
             decision: existing.decision === decision ? "" : decision,
             decidedAt: new Date().toISOString()
           };
+          // Collapse the card back to a one-line summary once it has a decision, so the list
+          // stays scannable as rules get worked through - re-expand to change/add a note.
+          if (state.heuristicDecisions[ruleId].decision) state.expandedHeuristicRuleIds[ruleId] = false;
           renderHeuristicsPanel();
           renderWorkflowStepper();
         });
@@ -5097,9 +5143,7 @@
         ? `Gap to next task: ${formatNumber(gantt.bottleneckGapH)} h / ${formatNumber(gantt.bottleneckGapPercent)}%. Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}%.`
         : `Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}% above the next longest task.`;
       return `
-        <div class="mfa-empty" style="margin-bottom:8px">
-          Critical bottleneck = largest effective task only when it is clearly above the next task. Adjusted time = input duration plus Gantt margin, divided by parallel units. ${escapeHtml(gapText)}
-        </div>
+        <div class="muted small" style="margin-bottom:8px">${escapeHtml(gapText)}</div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
             <span class="label">Gantt makespan</span>
@@ -5205,31 +5249,39 @@
       const scaleNote = missing.length
         ? `Needs: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "..." : ""}`
         : "Core screening data present";
+      const expanded = Boolean(state.expandedGanttRows[task.groupId]);
       return `
-        <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""}">
-          <div class="gantt-task-meta">
-            <strong>${escapeHtml(task.groupId)} - ${escapeHtml(task.task)}</strong>
-            <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
-            <span class="muted small">${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
-            ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
-          </div>
-          <div>
-            <div class="gantt-bar-track" title="${escapeAttr(effective)}">
-              <div class="gantt-bar" style="width:${task.widthPercent}%"></div>
+        <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""} ${expanded ? "expanded" : "collapsed"}">
+          <div class="gantt-row-head" data-toggle-gantt-row="${escapeAttr(task.groupId)}">
+            <div class="gantt-task-meta">
+              <strong>${escapeHtml(task.groupId)} - ${escapeHtml(task.task)}</strong>
+              <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
+              <span class="muted small">${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
+              ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
             </div>
-            <div class="gantt-controls">
-              <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours"></label>
-              <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
-              <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
-              <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
-              <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
-            </div>
-            <div class="gantt-scale-note">
-              <strong>${escapeHtml(profile.label)}</strong>
-              <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
-              <span class="muted small">${escapeHtml(scaleNote)}</span>
+            <div class="gantt-row-bar-col">
+              <div class="gantt-bar-track" title="${escapeAttr(effective)}">
+                <div class="gantt-bar" style="width:${task.widthPercent}%"></div>
+              </div>
+              <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
             </div>
           </div>
+          ${expanded ? `
+            <div>
+              <div class="gantt-controls">
+                <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours"></label>
+                <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
+                <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
+                <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
+                <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
+              </div>
+              <div class="gantt-scale-note">
+                <strong>${escapeHtml(profile.label)}</strong>
+                <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
+                <span class="muted small">${escapeHtml(scaleNote)}</span>
+              </div>
+            </div>
+          ` : ""}
         </div>
       `;
     }
@@ -5237,24 +5289,34 @@
     function heuristicCardHtml(item) {
       const decision = state.heuristicDecisions?.[item.id] || {};
       const chosen = decision.decision || "";
+      const expanded = Boolean(state.expandedHeuristicRuleIds[item.id]);
+      const appliesTo = item.groupIds?.length ? `Applies to: ${item.groupIds.join(", ")}` : "Applies to: whole process";
       const decisionButton = (value, label) => `
         <button class="mini-button heuristic-decision-button ${chosen === value ? "chosen" : ""}" data-heuristic-decision="${escapeAttr(value)}" data-heuristic-rule="${escapeAttr(item.id)}">${label}</button>
       `;
       return `
-        <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""}">
-          <span class="severity-pill">${escapeHtml(item.severity)}</span>
-          <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
-          <span>${escapeHtml(item.recommendation)}</span>
-          <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
-          <span class="pill ${item.groupIds?.length ? "blue" : "warn"}" title="${item.groupIds?.length ? "Task group(s) whose own evidence independently triggers this rule" : "Only triggers from evidence combined across groups; no single group to point to"}">${item.groupIds?.length ? `Applies to: ${escapeHtml(item.groupIds.join(", "))}` : "Applies to: whole process"}</span>
-          <div class="heuristic-decision-row">
-            ${decisionButton("accepted", "Accept")}
-            ${decisionButton("rejected", "Reject")}
-            ${decisionButton("overridden", "Override")}
-            <input type="text" class="heuristic-decision-note" data-heuristic-note="${escapeAttr(item.id)}"
-              placeholder="why / what was done instead" value="${escapeAttr(decision.note || "")}">
+        <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""} ${expanded ? "expanded" : "collapsed"}">
+          <div class="rule-card-head" data-toggle-heuristic-card="${escapeAttr(item.id)}">
+            <span class="severity-pill">${escapeHtml(item.severity)}</span>
+            <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
+            <span class="muted small rule-card-applies">${escapeHtml(appliesTo)}</span>
+            ${chosen
+              ? `<span class="pill ${chosen === "accepted" ? "green" : chosen === "rejected" ? "warn" : "blue"}">${escapeHtml(chosen)}</span>`
+              : `<span class="pill warn">undecided</span>`}
+            <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
           </div>
-          ${chosen ? `<span class="muted small">Decision: ${escapeHtml(chosen)}${decision.note ? ` — ${escapeHtml(decision.note)}` : ""}</span>` : `<span class="muted small heuristic-undecided">Undecided — record accept/reject/override for traceability.</span>`}
+          ${expanded ? `
+            <span>${escapeHtml(item.recommendation)}</span>
+            <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
+            <div class="heuristic-decision-row">
+              ${decisionButton("accepted", "Accept")}
+              ${decisionButton("rejected", "Reject")}
+              ${decisionButton("overridden", "Override")}
+              <input type="text" class="heuristic-decision-note" data-heuristic-note="${escapeAttr(item.id)}"
+                placeholder="why / what was done instead" value="${escapeAttr(decision.note || "")}">
+            </div>
+            ${chosen ? `<span class="muted small">Decision: ${escapeHtml(chosen)}${decision.note ? ` — ${escapeHtml(decision.note)}` : ""}</span>` : `<span class="muted small heuristic-undecided">Undecided — record accept/reject/override for traceability.</span>`}
+          ` : ""}
         </div>
       `;
     }
@@ -6412,6 +6474,8 @@
         block.conversionDetail = { productStreamId: "", byproducts: [] };
       }
       if (!Array.isArray(block.conversionDetail.byproducts)) block.conversionDetail.byproducts = [];
+      block.conversionDetail.productBasisQuantity = String(block.conversionDetail.productBasisQuantity || "");
+      block.conversionDetail.lastGeneratedSummary = String(block.conversionDetail.lastGeneratedSummary || "");
       return block.conversionDetail;
     }
 
@@ -6426,6 +6490,229 @@
       return outputs.find(stream => stream.id === detail.productStreamId)
         || outputs.find(stream => stream.fate === "product")
         || outputs[0];
+    }
+
+    function conversionProductBasisQuantity(block, product) {
+      const detail = ensureConversionDetail(block);
+      const saved = conversionNumber(detail.productBasisQuantity);
+      if (saved > 0) return saved;
+      const streamBasis = conversionNumber(product?.conversionBaseQuantity);
+      if (streamBasis > 0) return streamBasis;
+      return conversionNumber(product?.quantity);
+    }
+
+    function conversionCalculationModel(block) {
+      ensureBlockConditionFields(block);
+      const detail = ensureConversionDetail(block);
+      const percent = Math.max(0, Math.min(100, conversionNumber(block.conditions.conversion_yield || "95")));
+      const leftoverPercent = 100 - percent;
+      const reactants = conversionReactantStreams(block);
+      const outputs = (block.streams || []).filter(stream => stream.role === "output");
+      const product = conversionProductStream(block);
+      let pooledLeftover = 0;
+      const reactantRows = reactants.map(stream => {
+        const qty = conversionNumber(stream.quantity);
+        const used = qty * percent / 100;
+        const leftover = qty * leftoverPercent / 100;
+        pooledLeftover += leftover;
+        return { stream, qty, used, leftover };
+      });
+      const productQty = product ? conversionProductBasisQuantity(block, product) : 0;
+      const productMade = productQty * percent / 100;
+      const productShortfall = productQty * leftoverPercent / 100;
+      const byproductTotalPercent = detail.byproducts.reduce((sum, bp) => sum + conversionNumber(bp.percent), 0);
+      const byproductRows = detail.byproducts.map(bp => ({ ...bp, mass: pooledLeftover * (conversionNumber(bp.percent) / 100) }));
+      const wastePercent = Math.max(0, 100 - byproductTotalPercent);
+      const wasteMass = pooledLeftover * (wastePercent / 100);
+      const fallbackUnit = product?.unit || reactants[0]?.unit || "kg";
+      return {
+        detail,
+        percent,
+        leftoverPercent,
+        reactants,
+        outputs,
+        product,
+        reactantRows,
+        productQty,
+        productMade,
+        productShortfall,
+        pooledLeftover,
+        byproductTotalPercent,
+        byproductRows,
+        wastePercent,
+        wasteMass,
+        fallbackUnit
+      };
+    }
+
+    function syncGroupReactionBalanceFromConversionBlock(block) {
+      if (!block?.groupId) return;
+      const groupState = ensureGroup(block.groupId);
+      const simulator = groupState.separationSimulator;
+      simulator.reactionBalance = normalizeReactionBalance(simulator.reactionBalance);
+      const conversion = String(block.conditions?.conversion_yield || "").trim();
+      if (conversion) simulator.reactionBalance.conversionPercent = conversion;
+      simulator.reactionBalance.basis = simulator.reactionBalance.basis || "conversion";
+      const product = conversionProductStream(block);
+      if (product?.name) {
+        const productName = cleanSubstanceName(product.name).toLowerCase();
+        const matchingSubstance = simulator.substances.find(item => cleanSubstanceName(item.name).toLowerCase() === productName);
+        if (matchingSubstance) simulator.reactionBalance.mainProductId = matchingSubstance.id;
+      }
+    }
+
+    function addConversionProductOutput(block) {
+      ensureBlockFlowFields(block);
+      const stream = createStream("output", {
+        id: nextStreamId(block),
+        name: inferMainProductNameFromOutputs(groupModel(block.groupId)) || "main product",
+        quantity: "",
+        unit: "kg",
+        phase: "L",
+        status: "estimated",
+        timing: "in-process intermediate",
+        fate: "product",
+        scalingMode: "per batch",
+        note: "Added from Conversion popup as selectable main product basis."
+      });
+      block.streams.push(stream);
+      ensureConversionDetail(block).productStreamId = stream.id;
+      syncLegacyStreamLists(block);
+      return stream;
+    }
+
+    function conversionGeneratedStreamId(block, suffix) {
+      return `${block.id}-CB-${suffix}`.replace(/[^A-Za-z0-9_-]/g, "-");
+    }
+
+    function upsertConversionStream(block, role, id, values) {
+      ensureBlockFlowFields(block);
+      let stream = block.streams.find(item => item.id === id);
+      if (!stream) {
+        stream = createStream(role, { id, ...values });
+        block.streams.push(stream);
+      } else {
+        Object.assign(stream, createStream(role, { ...stream, ...values, id }));
+      }
+      return stream;
+    }
+
+    function upsertSeparationSubstanceForConversion(groupId, stream, role, fate, sourceBlockId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      const name = cleanSubstanceName(stream.name);
+      if (!name) return null;
+      const key = name.toLowerCase();
+      let substance = simulator.substances.find(item => cleanSubstanceName(item.name).toLowerCase() === key);
+      if (!substance) {
+        substance = normalizeSeparationSubstance({
+          id: nextSeparationSubstanceId(simulator),
+          name,
+          role,
+          fate,
+          phase: stream.phase || "unknown",
+          quantity: stream.quantity || "",
+          unit: stream.unit || "",
+          source: `${sourceBlockId}/${stream.id}`,
+          note: stream.note || ""
+        }, simulator.substances.length);
+        simulator.substances.push(substance);
+      } else {
+        substance.role = role || substance.role;
+        substance.fate = fate || substance.fate;
+        substance.phase = stream.phase && stream.phase !== "unknown" ? stream.phase : substance.phase;
+        substance.quantity = stream.quantity || substance.quantity;
+        substance.unit = stream.unit || substance.unit;
+        substance.source = mergeSubstanceText(substance.source, `${sourceBlockId}/${stream.id}`, "");
+        if (stream.note && !String(substance.note || "").includes(stream.note)) {
+          substance.note = [substance.note, stream.note].filter(Boolean).join(" | ");
+        }
+      }
+      return substance;
+    }
+
+    function applyConversionBalanceStreams(block) {
+      if (!block) return;
+      const calc = conversionCalculationModel(block);
+      if (!calc.reactantRows.length && !calc.product) return;
+      pushUndo();
+      if (calc.product) {
+        const basis = calc.productQty || conversionNumber(calc.product.quantity);
+        calc.detail.productBasisQuantity = String(basis || "");
+        calc.product.conversionBaseQuantity = String(basis || "");
+        calc.product.quantity = formatNumber(calc.productMade);
+        calc.product.status = "calculated";
+        calc.product.fate = "product";
+        calc.product.note = [
+          calc.product.note,
+          `Balanced from conversion popup: ${formatNumber(calc.percent)}% of ${formatNumber(basis)} ${calc.product.unit || "kg"} product basis gives ${formatNumber(calc.productMade)} ${calc.product.unit || "kg"}.`
+        ].filter(Boolean).join(" ");
+        if (block.groupId) {
+          const productSubstance = upsertSeparationSubstanceForConversion(block.groupId, calc.product, "product", "product", block.id);
+          const simulator = ensureGroup(block.groupId).separationSimulator;
+          if (productSubstance) simulator.reactionBalance.mainProductId = productSubstance.id;
+        }
+      }
+      calc.reactantRows.forEach(row => {
+        if (!(row.leftover > 0)) return;
+        const sourceName = cleanSubstanceName(row.stream.name) || row.stream.name || "reactant";
+        const stream = upsertConversionStream(block, "waste", conversionGeneratedStreamId(block, `unreacted-${sourceName}`), {
+          name: `unreacted ${sourceName}`,
+          quantity: formatNumber(row.leftover),
+          unit: row.stream.unit || "kg",
+          phase: row.stream.phase || "unknown",
+          status: "calculated",
+          timing: "waste purge",
+          fate: "purge",
+          scalingMode: "per batch",
+          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted; treat as recovery or waste candidate before Lutze separation.`
+        });
+        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, "reactant", "recover", block.id);
+      });
+      calc.byproductRows.forEach((row, index) => {
+        const name = String(row.name || "").trim();
+        if (!name || !(row.mass > 0)) return;
+        const stream = upsertConversionStream(block, "output", conversionGeneratedStreamId(block, `byproduct-${index + 1}`), {
+          name,
+          quantity: formatNumber(row.mass),
+          unit: calc.fallbackUnit,
+          phase: "unknown",
+          status: "calculated",
+          timing: "in-process intermediate",
+          fate: "intermediate",
+          scalingMode: "per batch",
+          note: `Auto-generated by Conversion balance as coproduct/byproduct: ${formatNumber(conversionNumber(row.percent))}% of the unconverted reagent pool.`
+        });
+        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, "byproduct", "recover", block.id);
+      });
+      if (calc.wasteMass > 0) {
+        upsertConversionStream(block, "waste", conversionGeneratedStreamId(block, "unassigned-waste"), {
+          name: "unassigned reaction waste",
+          quantity: formatNumber(calc.wasteMass),
+          unit: calc.fallbackUnit,
+          phase: "unknown",
+          status: "calculated",
+          timing: "waste purge",
+          fate: "purge",
+          scalingMode: "per batch",
+          note: `Auto-generated by Conversion balance from unassigned residual pool: ${formatNumber(calc.wastePercent)}% of ${formatNumber(calc.pooledLeftover)} ${calc.fallbackUnit}.`
+        });
+      }
+      if (block.groupId) {
+        syncGroupReactionBalanceFromConversionBlock(block);
+        ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
+      }
+      syncLegacyStreamLists(block);
+      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover > 0).length} residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} coproduct/byproduct stream(s), ${calc.wasteMass > 0 ? "1" : "0"} waste stream.`;
+      invalidateAiRefine();
+      renderConversionModal();
+      renderStepFlowInspector();
+      if (typeof flowsheetUnitCategory === "function") {
+        renderGroupFlow();
+        renderStepAuditPanel();
+      } else {
+        renderAll();
+      }
+      renderExport();
     }
 
     function conversionNumber(value) {
@@ -6456,6 +6743,7 @@
       ensureBlockConditionFields(block);
       block.conditions.conversion_yield = String(clamped);
       block.conditionUnits.conversion_yield = "%";
+      syncGroupReactionBalanceFromConversionBlock(block);
       invalidateAiRefine();
       renderConversionModal();
       renderStepFlowInspector();
@@ -6499,31 +6787,8 @@
         return;
       }
       ensureBlockConditionFields(block);
-      const detail = ensureConversionDetail(block);
-      const percent = Math.max(0, Math.min(100, conversionNumber(block.conditions.conversion_yield || "95")));
-      const leftoverPercent = 100 - percent;
-      const reactants = conversionReactantStreams(block);
-      const outputs = (block.streams || []).filter(stream => stream.role === "output");
-      const product = conversionProductStream(block);
-
-      let pooledLeftover = 0;
-      const reactantRows = reactants.map(stream => {
-        const qty = conversionNumber(stream.quantity);
-        const used = qty * percent / 100;
-        const leftover = qty * leftoverPercent / 100;
-        pooledLeftover += leftover;
-        return { stream, qty, used, leftover };
-      });
-      const productQty = product ? conversionNumber(product.quantity) : 0;
-      const productMade = productQty * percent / 100;
-      const productShortfall = productQty * leftoverPercent / 100;
-      if (product) pooledLeftover += productShortfall;
-
-      const byproductTotalPercent = detail.byproducts.reduce((sum, bp) => sum + conversionNumber(bp.percent), 0);
-      const byproductRows = detail.byproducts.map(bp => ({ ...bp, mass: pooledLeftover * (conversionNumber(bp.percent) / 100) }));
-      const wastePercent = Math.max(0, 100 - byproductTotalPercent);
-      const wasteMass = pooledLeftover * (wastePercent / 100);
-      const fallbackUnit = product?.unit || reactants[0]?.unit || "kg";
+      const calc = conversionCalculationModel(block);
+      const { detail, percent, leftoverPercent, reactants, outputs, product, reactantRows, productQty, productMade, productShortfall, pooledLeftover, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
 
       body.innerHTML = `
         <div class="conversion-modal-body">
@@ -6547,11 +6812,14 @@
           <div class="conversion-section">
             <div class="conversion-section-head">
               <span>Product</span>
-              ${outputs.length > 1 ? `
+              <div class="conversion-product-tools">
+              ${outputs.length ? `
                 <select id="conversionProductSelect">
                   ${outputs.map(stream => `<option value="${escapeAttr(stream.id)}" ${product && stream.id === product.id ? "selected" : ""}>${escapeHtml(stream.name || stream.id)}</option>`).join("")}
                 </select>
               ` : ""}
+                <button type="button" class="mini-button" id="addConversionProduct">+ Product</button>
+              </div>
             </div>
             ${product
               ? conversionStreamRowHtml(product.name || "(unnamed output)", productQty, productMade, productShortfall, product.unit, "made")
@@ -6586,7 +6854,8 @@
           </div>
 
           <div class="row between" style="margin-top:12px">
-            <span class="muted small">Changes save automatically.</span>
+            <span class="muted small">${escapeHtml(detail.lastGeneratedSummary || "Changes save automatically. Press Balance & Create Streams to write residuals into MFA and Lutze.")}</span>
+            <button class="primary" id="conversionApplyBalance" ${reactants.length || product ? "" : "disabled"}>Balance &amp; Create Streams</button>
             <button class="primary" id="conversionModalDone">Done</button>
           </div>
         </div>
@@ -6595,9 +6864,26 @@
       $("conversionPercentSlider")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
       $("conversionPercentNumber")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
       $("conversionProductSelect")?.addEventListener("change", event => {
-        ensureConversionDetail(block).productStreamId = event.target.value;
+        const detail = ensureConversionDetail(block);
+        detail.productStreamId = event.target.value;
+        (block.streams || []).forEach(stream => {
+          if (stream.id === detail.productStreamId) {
+            stream.fate = "product";
+            if (!stream.status || stream.status === "missing") stream.status = "estimated";
+          }
+        });
+        syncLegacyStreamLists(block);
+        syncGroupReactionBalanceFromConversionBlock(block);
         invalidateAiRefine();
         renderConversionModal();
+      });
+      $("addConversionProduct")?.addEventListener("click", () => {
+        addConversionProductOutput(block);
+        syncGroupReactionBalanceFromConversionBlock(block);
+        invalidateAiRefine();
+        renderConversionModal();
+        renderStepFlowInspector();
+        renderExport();
       });
       body.querySelectorAll("[data-conversion-byproduct-name]").forEach(input => {
         input.addEventListener("input", event => {
@@ -6626,6 +6912,9 @@
         ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", percent: "0" });
         invalidateAiRefine();
         renderConversionModal();
+      });
+      $("conversionApplyBalance")?.addEventListener("click", () => {
+        applyConversionBalanceStreams(block);
       });
       $("conversionModalDone")?.addEventListener("click", () => {
         closeConversionModal();
@@ -6850,7 +7139,7 @@
       if (raw.includes("water")) return "water";
       return String(value || "")
         .replace(/\([^)]*\)/g, "")
-        .replace(/\b(crude|purified|recovered|condensed|vapor|rich|loss|purge|mixture|condensate|final|reactor|decanter|to vent)\b/gi, "")
+        .replace(/\b(crude|purified|recovered|condensed|unreacted|residual|vapor|rich|loss|purge|mixture|condensate|final|reactor|decanter|to vent)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim();
     }
@@ -8867,6 +9156,7 @@
             <span class="pill blue">I:${counts.input}</span>
             <span class="pill">O:${counts.output}</span>
             <span class="pill warn">W:${counts.waste}</span>
+            ${conversionQuickActionHtml(block)}
             <span>material balance basis: per selected block</span>
           </div>
         </div>
@@ -8928,7 +9218,8 @@
         field.addEventListener("change", updateStreamField);
       });
       root.querySelectorAll("[data-open-condition-family]").forEach(section => {
-        section.addEventListener("click", () => {
+        section.addEventListener("click", event => {
+          if (event.target.closest("[data-open-conversion-modal], button, input, select, textarea")) return;
           const current = selectedBlock();
           if (!current) return;
           current.openConditionFamily = section.dataset.openConditionFamily;
@@ -9229,7 +9520,7 @@
                   </div>
                   ${savedCount ? `
                     <div class="condition-chip-row">
-                      ${saved.items.map(item => `<span class="condition-chip"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}</span>`).join("")}
+                      ${saved.items.map(item => conditionCollapsedChipHtml(block, item)).join("")}
                     </div>
                   ` : ""}
                 </div>
@@ -9238,6 +9529,25 @@
           </div>
         </section>
       `;
+    }
+
+    function conversionQuickActionHtml(block) {
+      const hasReaction = (block.phenomena || []).some(code => code.startsWith("R(")) || Boolean(block.conditions?.conversion_yield);
+      if (!hasReaction) return "";
+      const value = String(block.conditions?.conversion_yield || "").trim();
+      const label = value ? `Edit conversion ${value}%` : "Set conversion";
+      return `<button type="button" class="conversion-quick-button" data-open-conversion-modal="${escapeAttr(block.id)}">${escapeHtml(label)}</button>`;
+    }
+
+    function conditionCollapsedChipHtml(block, item) {
+      if (item.kind === "conversion") {
+        return `
+          <button type="button" class="condition-chip condition-chip-button" data-open-conversion-modal="${escapeAttr(block.id)}" title="Edit conversion, product, byproducts, and residual waste split">
+            <strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}
+          </button>
+        `;
+      }
+      return `<span class="condition-chip"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}</span>`;
     }
 
     function conditionPromptsForBlock(block) {

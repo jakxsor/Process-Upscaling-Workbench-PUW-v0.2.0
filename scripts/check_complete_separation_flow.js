@@ -150,15 +150,39 @@ assert.deepStrictEqual(tripleModel.substances.map(item => item.name), ["benzyl a
 assert.strictEqual(tripleBalance.mainProduct.name, "benzyl acetate", "3-reagent demo should select benzyl acetate as main product");
 assert(Math.abs(tripleBalance.conversion - 0.9) < 0.0001, "3-reagent demo should use 90% yield/conversion basis");
 assert.strictEqual(tripleBalance.residualRows.length, 3, "3-reagent demo should estimate three residual reactant streams");
+assert.strictEqual(tripleModel.pairs.length, 6, "4 substances should produce 6 pairwise binary comparisons");
 assert.strictEqual(productPairs.length, 3, "3-reagent demo should create three product/reagent binary pairs");
+assert(tripleModel.suggestions.some(item => item.pairLabel.includes("triethylamine") && item.pairLabel.includes("benzyl acetate") && item.score >= 60), "Triethylamine/product pair should receive a numeric KB3.1 score");
 assert(tripleUnits.has("Evaporation") || tripleUnits.has("Distillation") || tripleUnits.has("Liquid-liquid extraction"), "3-reagent demo should suggest separation assets");
 
 loadTripleReactantExampleProject();
 const loadedGroup = groupModel("G1");
+const loadedReactionBlock = state.blocks.find(block => block.id === "B1");
 const loadedModel = separationSimulatorModel(loadedGroup);
 const loadedPair = loadedModel.pairs.find(pair => [pair.a.name, pair.b.name].includes("triethylamine") && [pair.a.name, pair.b.name].includes("benzyl acetate"));
 const loadedVariants = binaryRouteVariants("G1", loadedPair);
 assert.strictEqual(state.text.includes("benzyl acetate"), true, "Top-level 3-reagent case should load source text");
+assert.strictEqual(conversionReactantStreams(loadedReactionBlock).length, 3, "Top-level 3-reagent case should expose three selectable conversion reagents");
+assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4", "Top-level 3-reagent case should preselect the product in Conversion");
+assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");
+assert(Math.abs(conversionNumber(conversionProductStream(loadedReactionBlock).quantity) * 0.9 - 1.25) < 0.01, "Conversion popup should derive the 90% product amount from the theoretical product basis");
+assert(conditionPanelHtml(loadedReactionBlock).includes("condition-chip-button"), "Saved conversion should remain directly editable from the collapsed condition summary");
+updateConversionPercent(loadedReactionBlock, "75");
+assert.strictEqual(ensureGroup("G1").separationSimulator.reactionBalance.conversionPercent, "75", "Editing block conversion should sync the group reaction balance");
+updateConversionPercent(loadedReactionBlock, "90");
+ensureConversionDetail(loadedReactionBlock).byproducts = [{ id: "bp-test", name: "light ester byproduct", percent: "20" }];
+applyConversionBalanceStreams(loadedReactionBlock);
+const balancedProduct = conversionProductStream(loadedReactionBlock);
+const generatedResiduals = loadedReactionBlock.streams.filter(stream => stream.role === "waste" && stream.name.startsWith("unreacted "));
+const generatedByproduct = loadedReactionBlock.streams.find(stream => stream.role === "output" && stream.name === "light ester byproduct");
+const generatedWaste = loadedReactionBlock.streams.find(stream => stream.role === "waste" && stream.name === "unassigned reaction waste");
+const balancedModel = separationSimulatorModel(groupModel("G1"));
+assert(Math.abs(conversionNumber(balancedProduct.quantity) - 1.25) < 0.01, "Balance action should write the formed product amount into the output stream");
+assert.strictEqual(generatedResiduals.length, 3, "Balance action should create one residual stream for each unreacted reagent");
+assert(generatedByproduct, "Balance action should create declared coproduct/byproduct streams");
+assert(generatedWaste, "Balance action should create the unassigned waste stream");
+assert(balancedModel.substances.some(item => item.name === "light ester byproduct" && item.role === "byproduct"), "Balance action should pass declared byproducts into Lutze substances");
+assert(Math.abs(conversionNumber(balancedModel.substances.find(item => item.name === "benzyl alcohol").quantity) - 0.1) < 0.001, "Lutze reactant quantity should update to the unreacted residual after balancing");
 assert.deepStrictEqual(loadedModel.substances.map(item => item.name), ["benzyl alcohol", "acetic anhydride", "triethylamine", "benzyl acetate"], "Top-level 3-reagent case should prefill simulator substances");
 assert(loadedVariants.some(item => item.graphPreview.includes("G1 -> V-L separator")), "Top-level 3-reagent case should preview a G1 graph variant");
 
@@ -177,6 +201,7 @@ const pathwayGroup = groupModel("G1");
 let pathwayModel = separationSimulatorModel(pathwayGroup);
 let pathwayStart = separationPathwayModel(pathwayGroup, pathwayModel);
 assert(pathwayStart.nextOptions.length > 0, "Pathway sandbox should expose a first route option");
+assert(pathwayStart.nextOptions[0].separated.some(component => component.name === "triethylamine"), "Pathway should rank the strongest product/reactant binary separation first");
 ["triethylamine", "acetic anhydride", "benzyl alcohol"].forEach((name, index) => {
   const option = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup)).nextOptions
     .find(item => item.separated.some(component => component.name === name));
