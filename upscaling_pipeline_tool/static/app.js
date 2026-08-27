@@ -1682,8 +1682,8 @@
       const phases = Array.from(context.effectiveRaw || []);
       return `
         <div class="proposal-basis">
-          <span><strong>Ranking</strong> phenomena overlap + same-task boost</span>
-          <span><strong>Filters</strong> task class, Lutze phase compatibility, feed phase</span>
+          <span><strong>Ranking</strong> task class + MFA phase transition + conditions</span>
+          <span><strong>Refinement</strong> Lutze phenomena and phase compatibility, when reviewed</span>
           <span><strong>Group phases</strong> ${escapeHtml(phases.length ? phases.join(", ") : "unknown")}</span>
           <span><strong>Candidates</strong> ${alternatives.length}</span>
         </div>
@@ -1735,7 +1735,7 @@
         ? (readiness.lutzeReady
           ? "Ready to suggest unit operations from task, MFA/phase context, conditions, and Lutze phenomena."
           : "Ready for a preliminary unit-operation suggestion from task, MFA/phase context, and conditions. Review Lutze next to strengthen the choice.")
-        : `Complete ${readiness.missing.join(", ")} before unit-operation suggestions are reliable.`;
+        : `Locked until you complete ${readiness.missing.join(", ")}. The suggestion uses the completed input/output or waste streams, stream phases, and operating conditions.`;
       return `
         <div class="unit-suggest-gate ${readiness.ready ? "ready" : readiness.dataReady ? "review" : "blocked"}">
           <div class="unit-suggest-status">
@@ -1751,7 +1751,7 @@
           ${showSuggestions ? `
             <div class="unit-suggest-results">
               <div class="unit-suggest-result-head">
-                <strong>Suggested Unit Operations</strong>
+                <strong>Data-Based Unit Operation Suggestions</strong>
                 <span class="muted small">${readiness.lutzeReady ? "task + MFA + conditions + Lutze" : "pre-Lutze: task + MFA + conditions"}</span>
               </div>
               ${alternatives.length ? alternatives.map(candidate => `
@@ -9218,7 +9218,7 @@
       if (!readiness.ready) {
         $("groupAlternatives").innerHTML = `
           <div class="mfa-empty">
-            Complete ${escapeHtml(readiness.missing.join(", ") || "task data")} before unit-operation suggestions.
+            Unit-operation suggestions are locked until ${escapeHtml(readiness.missing.join(", ") || "task data")} are complete.
           </div>
         `;
         return;
@@ -9231,12 +9231,18 @@
             : `Multiple candidates fit — open the group aggregate view above to record why ${escapeHtml(group.selectedUnit)} was chosen.`}
         </div>
       ` : "";
-      $("groupAlternatives").innerHTML = (candidates.length ? candidates.map(candidate => `
-        <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-          ${escapeHtml(candidate.name)}
-          <span class="pill ${candidate.preliminary ? "warn" : candidate.sameTask ? "blue" : "green"}">${candidate.preliminary ? "pre-Lutze" : candidate.sameTask ? "same task" : "Lutze fit"}</span>
-        </button>
-      `).join("") : `<span class="muted">No candidates match the completed task data.</span>`) + basisNote;
+      $("groupAlternatives").innerHTML = `
+        <div class="unit-suggest-result-head">
+          <strong>Data-Based Unit Operation Suggestions</strong>
+          <span class="muted small">${readiness.lutzeReady ? "after Lutze review" : "pre-Lutze"}</span>
+        </div>
+        ${candidates.length ? candidates.map(candidate => `
+          <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+            ${escapeHtml(candidate.name)}
+            <span class="pill ${candidate.preliminary ? "warn" : candidate.sameTask ? "blue" : "green"}">${candidate.preliminary ? "pre-Lutze" : candidate.sameTask ? "same task" : "Lutze fit"}</span>
+          </button>
+        `).join("") : `<span class="muted">No candidates match the completed task data.</span>`}
+      ` + basisNote;
       document.querySelectorAll("[data-inspector-unit]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
@@ -10663,8 +10669,8 @@
           groups.length ? groups.every(group => group.task && group.task !== "unassigned") : false,
           "Name the task of every group (reaction, washing, purification...)."),
         item("Candidate unit operations (>= 1 per task)", "critical",
-          groups.length ? groups.every(group => group.selectedUnit || matchesForGroup(group).length) : false,
-          "Each Step 3 task needs at least one candidate unit operation from the knowledge base.")
+          groups.length ? groups.every(group => group.selectedUnit || (groupUnitSuggestionReadiness(group).ready && unitOperationCandidatesForGroup(group).length)) : false,
+          "Complete task MFA, phases, and conditions before accepting candidate unit operations.")
       ];
 
       const categories = [

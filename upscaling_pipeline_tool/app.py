@@ -52,7 +52,7 @@ APP_HTML = r"""<!doctype html>
           <button id="loadMethylbenzeneCase" role="menuitem">Methylbenzene Case</button>
         </div>
       </div>
-      <button id="openFlowsheet" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
+      <button id="openFlowsheet" class="flowsheet-view-button" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
       <button id="exportJson">Export JSON</button>
     </div>
   </header>
@@ -110,7 +110,7 @@ APP_HTML = r"""<!doctype html>
       <div class="panel-head">
         <div class="workflow-title-stack">
           <h2>Blocks, Tasks & Network</h2>
-          <span class="muted small">Steps 1-4 — draft blocks, task groups, then arrows to close the network</span>
+          <span class="muted small">Combine the draft blocks below into task groups (shift-click blocks, then right-click → Combine Selected), then drag between the group handles to connect the network.</span>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
@@ -141,9 +141,9 @@ APP_HTML = r"""<!doctype html>
       <div class="panel-head">
         <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">◐</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab">Phenomena/Group</button>
-          <button class="panel-tab" data-inspector-tab="heuristics" role="tab">Heuristics</button>
-          <button class="panel-tab" data-inspector-tab="scale" role="tab">Scale-Up</button>
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-4: Blocks, Phenomena, Unit Ops, Network"><span class="panel-tab-step">1-4</span><span class="panel-tab-label">Phenomena/Group</span></button>
+          <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-step">5</span><span class="panel-tab-label">Heuristics</span></button>
+          <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-step">6</span><span class="panel-tab-label">Scale-Up</span></button>
         </div>
       </div>
       <div class="panel-body stack">

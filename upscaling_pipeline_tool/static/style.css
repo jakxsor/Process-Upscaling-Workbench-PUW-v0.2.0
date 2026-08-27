@@ -134,6 +134,17 @@
       background: var(--accent);
     }
 
+    button.flowsheet-view-button {
+      color: #fff;
+      border-color: var(--blue);
+      background: var(--blue);
+      font-weight: 800;
+    }
+
+    button.flowsheet-view-button:hover {
+      filter: brightness(1.08);
+    }
+
     .mini-button {
       min-height: 24px;
       padding: 0 7px;
@@ -567,8 +578,8 @@
 
     .board-step-flag {
       position: absolute;
-      top: -16px;
-      left: 14px;
+      top: -28px;
+      left: 18px;
       z-index: 50;
       box-shadow: 0 2px 8px rgba(23, 32, 39, 0.14);
     }
@@ -1034,6 +1045,21 @@
       border-top: 1px solid var(--line);
     }
 
+    .group-unit-summary {
+      display: grid;
+      gap: 3px;
+      margin-top: 8px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .group-unit-summary strong {
+      color: var(--ink);
+      font-size: 12px;
+    }
+
     .alt-grid {
       display: grid;
       gap: 7px;
@@ -1205,6 +1231,10 @@
     }
 
     .panel-tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
       min-height: 28px;
       border: 0;
       color: var(--ink-3);
@@ -1213,16 +1243,39 @@
       flex: 1 1 auto;
       min-width: 0;
       padding: 0 4px;
+      font-size: 11px;
+    }
+
+    .panel-tab-step {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      min-width: 15px;
+      height: 15px;
+      padding: 0 3px;
+      border-radius: 999px;
+      background: rgba(46, 69, 85, 0.14);
+      color: inherit;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .panel-tab-label {
+      min-width: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      font-size: 11px;
     }
 
     .panel-tab.active {
       color: #fff;
       background: var(--blue);
       box-shadow: 0 1px 2px rgba(23, 32, 39, 0.12);
+    }
+
+    .panel-tab.active .panel-tab-step {
+      background: rgba(255, 255, 255, 0.3);
     }
 
     .panel-tab[data-inspector-tab="scale"].active {
@@ -1511,6 +1564,14 @@
       gap: 6px;
       padding-top: 7px;
       border-top: 1px solid var(--line);
+    }
+
+    .unit-suggest-result-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
     }
 
     .group-phenomena-strip {
