@@ -197,12 +197,34 @@
   function normalizeSeparationSimulator(value, streamPhases = []) {
     const base = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     return {
-      tab: ["balance", "substances", "binary", "workup", "suggestions"].includes(base.tab) ? base.tab : "balance",
+      tab: ["balance", "substances", "binary", "workup", "pathway", "suggestions"].includes(base.tab) ? base.tab : "balance",
       substances: Array.isArray(base.substances) ? base.substances.map((item, index) => normalizeSeparationSubstance(item, index, streamPhases)) : [],
       pairInsights: base.pairInsights && typeof base.pairInsights === "object" && !Array.isArray(base.pairInsights) ? base.pairInsights : {},
       reactionBalance: normalizeReactionBalance(base.reactionBalance),
+      pathway: normalizeSeparationPathway(base.pathway),
       lookupSummary: normalizeLookupSummary(base.lookupSummary),
       notes: String(base.notes || "")
+    };
+  }
+
+  function normalizeSeparationPathway(value) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const steps = Array.isArray(source.steps) ? source.steps.map((step, index) => ({
+      id: String(step.id || `PW${index + 1}`),
+      pairKey: String(step.pairKey || ""),
+      routeId: String(step.routeId || ""),
+      title: String(step.title || ""),
+      unit: String(step.unit || ""),
+      separatedIds: Array.isArray(step.separatedIds) ? step.separatedIds.map(String).filter(Boolean) : [],
+      retainedIds: Array.isArray(step.retainedIds) ? step.retainedIds.map(String).filter(Boolean) : [],
+      drivers: Array.isArray(step.drivers) ? step.drivers.map(String).filter(Boolean) : [],
+      missing: Array.isArray(step.missing) ? step.missing.map(String).filter(Boolean) : [],
+      note: String(step.note || "")
+    })) : [];
+    return {
+      steps,
+      selectedStepId: String(source.selectedStepId || (steps.length ? steps[steps.length - 1].id : "") || ""),
+      appliedAt: String(source.appliedAt || "")
     };
   }
 
@@ -664,6 +686,92 @@
     return "separation";
   }
 
+  function separationPathwayModel(groupInput, simulatorModel, balanceSource, pathwaySource) {
+    const group = groupInput && typeof groupInput === "object" ? groupInput : { id: String(groupInput || ""), blocks: [] };
+    const groupId = group.id || String(groupInput || "");
+    const pathway = normalizeSeparationPathway(pathwaySource);
+    const balance = reactionBalanceModel(group, simulatorModel, balanceSource);
+    const mainProduct = balance.mainProduct || mainProductRow(simulatorModel.substances.map(item => reactionBalanceRow(item)), balance.balance);
+    const allById = new Map(simulatorModel.substances.map(item => [item.id, item]));
+    const resolvedIds = new Set();
+    const steps = pathway.steps.map(step => {
+      step.separatedIds.forEach(id => resolvedIds.add(id));
+      return {
+        ...step,
+        separated: step.separatedIds.map(id => allById.get(id)).filter(Boolean),
+        retained: step.retainedIds.map(id => allById.get(id)).filter(Boolean)
+      };
+    });
+    const active = simulatorModel.substances.filter(item => !resolvedIds.has(item.id));
+    const activeIds = new Set(active.map(item => item.id));
+    const nextOptions = simulatorModel.pairs
+      .filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id))
+      .flatMap(pair => binaryRouteVariants(groupId, pair).map(variant => {
+        const split = pathwaySplitTargets(pair, variant, mainProduct);
+        return {
+          id: `${pair.key}::${variant.id}`,
+          pairKey: pair.key,
+          routeId: variant.id,
+          pairLabel: `${pair.a.name} / ${pair.b.name}`,
+          variant,
+          unit: (variant.units || []).find(unit => unit !== "Review candidate unit") || "",
+          separated: split.separated,
+          retained: split.retained
+        };
+      }))
+      .filter(option => option.separated.length)
+      .sort((a, b) => pathwayOptionRank(a, mainProduct) - pathwayOptionRank(b, mainProduct) || a.pairLabel.localeCompare(b.pairLabel))
+      .slice(0, 8);
+    return {
+      groupId,
+      pathway,
+      balance,
+      mainProduct,
+      steps,
+      active,
+      resolved: simulatorModel.substances.filter(item => resolvedIds.has(item.id)),
+      nextOptions,
+      complete: active.length <= 1 || nextOptions.length === 0
+    };
+  }
+
+  function pathwayOptionRank(option, mainProduct) {
+    const mainId = mainProduct?.id || "";
+    const separatesReactantFromMain = mainId
+      && option.retained.some(item => item.id === mainId)
+      && option.separated.some(item => item.role === "reactant");
+    const separatesNonProductFromMain = mainId
+      && option.retained.some(item => item.id === mainId)
+      && option.separated.some(item => item.id !== mainId);
+    const roleRank = separatesReactantFromMain ? 0 : separatesNonProductFromMain ? 1 : 2;
+    return roleRank * 10 + suggestionLevelRank(option.variant.level);
+  }
+
+  function pathwaySplitTargets(pair, variant, mainProduct) {
+    const mainId = mainProduct?.id || "";
+    let separated = [];
+    let retained = [];
+    if (mainId && pair.a.id === mainId) {
+      separated = [pair.b];
+      retained = [pair.a];
+    } else if (mainId && pair.b.id === mainId) {
+      separated = [pair.a];
+      retained = [pair.b];
+    } else {
+      const title = String(variant.title || "").toLowerCase();
+      let first = pair.a;
+      if (/volatility|thermal|distill|evapor|flash|v-l/.test(title)) first = preferredVolatileComponent(pair);
+      else if (/crystall/.test(title)) first = preferredSolidComponent(pair);
+      else if (/affinity|size|membrane|selective/.test(title)) first = preferredLargeComponent(pair);
+      separated = [first];
+      retained = [first.id === pair.a.id ? pair.b : pair.a];
+    }
+    return {
+      separated,
+      retained
+    };
+  }
+
   root.ProcessUpscalingSeparationCore = {
     substanceRoles,
     substanceFates,
@@ -675,6 +783,7 @@
     normalizeReactionBalance,
     normalizeSeparationSubstance,
     normalizeSeparationSimulator,
+    normalizeSeparationPathway,
     nextSeparationSubstanceId,
     separationSimulatorModel,
     separationSimulatorReadiness,
@@ -705,6 +814,9 @@
     preferredLargeComponent,
     routeVariantId,
     routeVariantPhenomena,
-    routeVariantBehavior
+    routeVariantBehavior,
+    separationPathwayModel,
+    pathwayOptionRank,
+    pathwaySplitTargets
   };
 })(globalThis);

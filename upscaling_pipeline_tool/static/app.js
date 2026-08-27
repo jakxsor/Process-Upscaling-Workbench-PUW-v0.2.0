@@ -425,6 +425,7 @@
       },
       showAllHeuristicRules: false,
       activeSeparationSimulatorGroupId: null,
+      activeSeparationSimulatorMode: "full",
       activeConversionBlockId: null,
       activeInspectorTab: "inspect",
       selectedBlockId: null,
@@ -507,9 +508,11 @@
       if (button) button.disabled = !undoStack.length;
     }
 
-    function nodeWidth(blockCount) {
-      if (state.boardCompact) return 240;
-      return Math.max(430, 92 + Math.max(1, blockCount) * 194);
+    function nodeWidth(blockCount, kind = "group") {
+      const count = Math.max(1, blockCount);
+      if (state.boardCompact && kind !== "draft") return 240;
+      if (kind === "draft") return Math.max(430, 78 + count * 258);
+      return Math.max(560, 92 + count * 194);
     }
 
     const flowsheetCategoryIcon = {
@@ -527,7 +530,7 @@
         boxes.push({
           x: state.draftPos.x,
           y: state.draftPos.y,
-          w: nodeWidth(draftBlocks.length),
+          w: nodeWidth(draftBlocks.length, "draft"),
           h: 300
         });
       }
@@ -1232,8 +1235,8 @@
       });
     }
 
-    function loadMethylbenzeneExampleProject() {
-      const text = "Charge 1.00 kg of methylbenzene to a stirred reactor and oxidize it to benzaldehyde at 90 percent yield. After reaction, recover residual methylbenzene by distillation, leaving benzaldehyde as the product-rich liquid.";
+    function loadTripleReactantExampleProject() {
+      const text = "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 C for 3 h to form benzyl acetate at 90 percent yield. After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
       const makeBlock = (id, phrase, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}) => {
         const start = text.indexOf(phrase);
         return {
@@ -1259,39 +1262,42 @@
       state.blocks = [
         makeBlock(
           "B1",
-          "Charge 1.00 kg of methylbenzene to a stirred reactor and oxidize it to benzaldehyde at 90 percent yield.",
+          "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 C for 3 h to form benzyl acetate at 90 percent yield.",
           "G1",
           "reaction",
           ["R(L)", "M(L)", "ES(H)"],
           [
-            { role: "input", name: "methylbenzene", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "benzaldehyde", quantity: "0.90", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch" },
-            { role: "output", name: "residual methylbenzene", quantity: "0.10", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch" }
+            { role: "input", name: "benzyl alcohol", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "acetic anhydride", quantity: "0.95", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "input", name: "triethylamine", quantity: "1.10", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
+            { role: "output", name: "benzyl acetate product-rich liquid", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch" }
           ],
-          { conversion_yield: "90", holding_temperature: "80" },
-          { conversion_yield: "%", holding_temperature: "C" }
+          { conversion_yield: "90", target_temperature: "65", reaction_time: "3", mixing_mode: "stirred liquid phase" },
+          { conversion_yield: "%", target_temperature: "C", reaction_time: "h" }
         ),
         makeBlock(
           "B2",
-          "After reaction, recover residual methylbenzene by distillation, leaving benzaldehyde as the product-rich liquid.",
+          "After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.",
           "G2",
           "distillation purification",
           ["PT(VL)", "PS(VL)", "ES(H)"],
           [
-            { role: "output", name: "recovered methylbenzene", quantity: "0.10", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1" },
-            { role: "output", name: "benzaldehyde product-rich liquid", quantity: "0.90", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" }
+            { role: "output", name: "recovered triethylamine", quantity: "0.26", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1" },
+            { role: "output", name: "recovered acetic anhydride", quantity: "0.10", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch", destinationGroup: "G1" },
+            { role: "output", name: "benzyl alcohol residue", quantity: "0.10", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "recover", scalingMode: "per batch" },
+            { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" }
           ],
-          { separation_efficiency: "90", transfer_endpoint: "benzaldehyde product-rich liquid" },
-          { separation_efficiency: "%" }
+          { separation_efficiency: "90", transfer_endpoint: "benzyl acetate product", target_temperature: "80" },
+          { separation_efficiency: "%", target_temperature: "C" }
         )
       ];
       state.groups = {
         G1: {
           id: "G1",
-          task: "methylbenzene reaction at 90 percent yield",
+          task: "three-reactant benzyl acetate reaction at 90 percent yield",
           selectedUnit: "Batch / semi-batch reactor",
-          selectionBasis: "secondary demo: reaction group used to test residual reactant handling and downstream separation route variants",
-          schedule: { ...scheduleDefaults(), durationH: "4", scaleSensitivity: "kinetics-bound", notes: "demo only" },
+          selectionBasis: "secondary demo: reaction group used to test multi-reactant residual handling and sequential Lutze separation pathways",
+          schedule: { ...scheduleDefaults(), durationH: "3", scaleSensitivity: "kinetics-bound", notes: "demo only; verify stoichiometry before design use" },
           properties: {},
           propertiesEditing: false,
           x: 620,
@@ -1299,10 +1305,10 @@
         },
         G2: {
           id: "G2",
-          task: "residual methylbenzene recovery",
+          task: "sequential residual reagent recovery",
           selectedUnit: "Distillation",
-          selectionBasis: "secondary demo: V-L separation of volatile methylbenzene from benzaldehyde product-rich liquid",
-          schedule: { ...scheduleDefaults(), durationH: "1.5", scaleSensitivity: "equipment dependent", notes: "demo only" },
+          selectionBasis: "secondary demo: staged recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from benzyl acetate",
+          schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "demo only" },
           properties: {},
           propertiesEditing: false,
           x: 1180,
@@ -1312,11 +1318,11 @@
       state.links = [{ from: "G1", to: "G2" }, { from: "G2", to: "G1" }];
       state.scaleBasis = {
         ...state.scaleBasis,
-        targetProduct: "benzaldehyde",
-        targetAmount: "0.90",
+        targetProduct: "benzyl acetate",
+        targetAmount: "1.25",
         targetUnit: "kg/batch",
         referenceBlockId: "B2",
-        basisAmount: "0.90",
+        basisAmount: "1.25",
         basisUnit: "kg",
         mode: "batch"
       };
@@ -1335,11 +1341,15 @@
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = "G1";
       state.activeInspectorTab = "inspect";
-      loadMethylbenzeneSeparationDemo("G1");
+      loadTripleReactantSeparationDemo("G1");
       renderAll();
       requestAnimationFrame(() => {
         centerSelection();
       });
+    }
+
+    function loadMethylbenzeneExampleProject() {
+      loadTripleReactantExampleProject();
     }
 
     function normalizeStream(stream) {
@@ -2130,7 +2140,7 @@
       const boardClearance = groupDrawerBoardClearance();
       const displayBoard = boardWithDrawerClearance(board);
       const draftHtml = draftBlocks.length ? `
-        <section class="group-box draft" style="left:${state.draftPos.x}px; top:${state.draftPos.y}px; width:${nodeWidth(draftBlocks.length)}px" data-draft-box="true">
+        <section class="group-box draft" style="left:${state.draftPos.x}px; top:${state.draftPos.y}px; width:${nodeWidth(draftBlocks.length, "draft")}px" data-draft-box="true">
           <div class="group-head">
             <div class="row">
               <strong>Draft Blocks</strong>
@@ -3576,7 +3586,16 @@
         missingScaleData,
         dependency: schedule.dependency || "previous",
         notes: schedule.notes || "",
-        effectiveTimeH: Number.isFinite(adjustedDurationH) ? adjustedDurationH / parallel : NaN,
+        // Kinetics-bound stages (reaction phenomena, or a heat/cool holding step manually flagged
+        // as reaction-controlled) never divide by parallel units: for an ideal, well-mixed,
+        // constant-volume batch, conversion vs. time is independent of reactor volume/geometry, so
+        // running N parallel reactors raises throughput but does not shorten any single reaction's
+        // time. Only surface/catalyst-limited or electrochemical reactions are the exception, and
+        // those are out of scope here - flag them via Operation Class instead. Non-kinetics stages
+        // (heat transfer, separation, equipment-limited) keep the existing 1/parallel scaling.
+        effectiveTimeH: Number.isFinite(adjustedDurationH)
+          ? (sensitivity === "kinetics-bound" ? adjustedDurationH : adjustedDurationH / parallel)
+          : NaN,
         phenomena: group.phenomena
       };
     }
@@ -5132,13 +5151,13 @@
       const baseDuration = Number.isFinite(task.adjustedDurationH) && task.adjustedDurationH > 0 ? task.adjustedDurationH : NaN;
       const baseParallel = Number.isFinite(task.parallelUnits) && task.parallelUnits > 0 ? task.parallelUnits : 1;
       const defaultN = Math.max(2, Math.ceil(baseParallel + 1));
-      const recommendation = task.scaleSensitivity === "kinetics-bound"
-        ? "Use parallel reactors or process intensification; larger equipment alone may not reduce this time."
+      const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
+      const recommendation = isKineticsBound
+        ? "Reaction time is set by kinetics, not reactor size or count: for an ideal, well-mixed, constant-volume batch, conversion vs. time is independent of scale, so parallel/larger reactors add throughput, not speed. Change the chemistry (temperature, catalyst, concentration) or operating mode to actually shorten this stage."
         : task.scaleSensitivity === "increases with scale" || task.scaleSensitivity === "equipment dependent"
           ? "Check equipment capacity, then test more parallel units or split the grouped task."
           : "Test one more parallel unit, or mark overlap only if the operation can physically run in parallel with the previous one.";
-      const isKineticsBound = task.scaleSensitivity === "kinetics-bound";
-      const splitDividesDuration = true;
+      const splitDividesDuration = !isKineticsBound;
       const canSplit = Number.isFinite(baseDuration);
       const pickerHtml = canSplit ? `
         <div class="bottleneck-split-picker">
@@ -5153,9 +5172,9 @@
       const splitButton = canSplit ? (
         isKineticsBound ? `
           <div class="bottleneck-split-warning">
-            <span class="muted small">This stage is kinetics-bound. The split can divide the Gantt time as a bottleneck-screening scenario, but treat that as a scheduling assumption, not validated kinetic scale-up.</span>
+            <span class="muted small">Kinetics-bound: reaction time is kept fixed here and won't be divided. Splitting still adds throughput (1/${defaultN} material per unit) if more capacity is what you need.</span>
             ${pickerHtml}
-            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="true" data-split-confirm-kinetics="true" class="mini-button">Split and divide Gantt time</button>
+            <button data-split-bottleneck="${escapeAttr(task.groupId)}" data-split-count="${defaultN}" data-split-divide-duration="false" class="mini-button">Split for throughput only</button>
           </div>
         ` : `
           <div class="bottleneck-split-controls">
@@ -5203,6 +5222,7 @@
               <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
               <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
               <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
+              <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
             </div>
             <div class="gantt-scale-note">
               <strong>${escapeHtml(profile.label)}</strong>
@@ -6364,28 +6384,25 @@
       });
     }
 
-    function separationSimulatorLaunchHtml(group) {
-      const model = separationSimulatorModel(group);
-      const hasData = model.substances.length >= 2;
-      const supported = model.suggestions.filter(item => item.level === "supported").length;
+    function lutzeReactionSeparationLaunchHtml(group, model = separationSimulatorModel(group)) {
+      const path = separationPathwayModel(group, model);
+      const balance = path.balance;
+      const missing = [];
+      if (model.substances.length < 2) missing.push("substances");
+      if (!balance.mainProduct) missing.push("main product");
+      if (!Number.isFinite(balance.conversion)) missing.push("conversion/yield");
+      if (!path.nextOptions.length) missing.push("property/binary evidence");
+      const status = missing.length ? `Needs ${missing.join(", ")}` : `${path.nextOptions.length} route move${path.nextOptions.length === 1 ? "" : "s"} ready`;
       return `
-        <section class="predictor-card separation-launch-card">
+        <section class="predictor-card lutze-launch-card">
           <div class="predictor-head">
             <div>
-              <div class="label">Separation Simulator</div>
-              <div class="muted small">Optional A1.1 + KB3.1 sandbox. Edit substances, calculate binary ratios, then inspect possible separation phenomena.</div>
+              <div class="label">Lutze Reaction-Separation</div>
+              <div class="muted small">Open a draft pathway canvas for substance-separation moves. The main flowchart changes only when you apply the pathway.</div>
             </div>
-            <span class="pill ${hasData ? "blue" : "warn"}">${hasData ? `${model.pairs.length} binary pairs` : "needs substances"}</span>
+            <span class="pill ${missing.length ? "warn" : "green"}">${escapeHtml(status)}</span>
           </div>
-          <div class="predictor-summary-grid">
-            <span><strong>Substances</strong>${model.substances.length}</span>
-            <span><strong>Suggestions</strong>${model.suggestions.length}</span>
-            <span><strong>Supported</strong>${supported}</span>
-          </div>
-          <div class="row between">
-            <span class="muted small">This does not change the flowchart unless you apply a candidate manually.</span>
-            <button class="primary" data-open-separation-simulator="${escapeAttr(group.id)}">Open Simulator</button>
-          </div>
+          <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">Simulate Lutze Substance Separation</button>
         </section>
       `;
     }
@@ -6621,7 +6638,22 @@
       if (!group) return;
       syncSeparationSimulatorSubstances(group);
       state.activeSeparationSimulatorGroupId = groupId;
+      state.activeSeparationSimulatorMode = "full";
       ensureGroup(groupId).separationSimulator.tab = ensureGroup(groupId).separationSimulator.tab || "balance";
+      const modal = $("separationSimulatorModal");
+      if (!modal) return;
+      document.body.classList.add("separation-simulator-open");
+      modal.hidden = false;
+      renderSeparationSimulatorModal();
+    }
+
+    function openLutzeReactionSeparation(groupId) {
+      const group = groupModel(groupId);
+      if (!group) return;
+      syncSeparationSimulatorSubstances(group);
+      state.activeSeparationSimulatorGroupId = groupId;
+      state.activeSeparationSimulatorMode = "pathway";
+      ensureGroup(groupId).separationSimulator.tab = "pathway";
       const modal = $("separationSimulatorModal");
       if (!modal) return;
       document.body.classList.add("separation-simulator-open");
@@ -6634,6 +6666,7 @@
       if (modal) modal.hidden = true;
       document.body.classList.remove("separation-simulator-open");
       state.activeSeparationSimulatorGroupId = null;
+      state.activeSeparationSimulatorMode = "full";
     }
 
     function renderSeparationSimulatorModal() {
@@ -6649,13 +6682,26 @@
       const simulator = groupState.separationSimulator;
       const model = separationSimulatorModel(group);
       const readiness = separationSimulatorReadiness(model);
-      const tabs = [
-        ["balance", "1. Reaction Balance"],
-        ["substances", "2. Substances"],
-        ["binary", "3. Binary Screening"],
-        ["workup", "4. Workup Plan"],
-        ["suggestions", "5. Suggestions"]
-      ];
+      const pathwayMode = state.activeSeparationSimulatorMode === "pathway";
+      const title = $("separationSimulatorTitle");
+      const eyebrow = $("separationSimulatorEyebrow");
+      if (title) title.textContent = pathwayMode ? "Lutze Reaction-Separation" : "Separation Simulator";
+      if (eyebrow) eyebrow.textContent = pathwayMode ? "Substance pathway simulation" : "Optional KB3.1 sandbox";
+      const tabs = pathwayMode
+        ? [
+          ["pathway", "1. Simulation"],
+          ["substances", "2. Substances"],
+          ["binary", "3. Binary Data"],
+          ["balance", "4. Balance"]
+        ]
+        : [
+          ["balance", "1. Reaction Balance"],
+          ["substances", "2. Substances"],
+          ["binary", "3. Binary Screening"],
+          ["workup", "4. Workup Plan"],
+          ["pathway", "5. Pathway Sandbox"],
+          ["suggestions", "6. Suggestions"]
+        ];
       body.innerHTML = `
         <div class="sep-sim-topline">
           <div>
@@ -6678,10 +6724,11 @@
           ${tabs.map(([id, label]) => `<button class="sep-sim-tab ${simulator.tab === id ? "active" : ""}" data-sep-sim-tab="${id}">${label}</button>`).join("")}
         </div>
         ${simulator.tab === "balance" ? reactionBalanceHtml(group, model)
-          : simulator.tab === "substances" ? separationSubstancesHtml(group, model)
-            : simulator.tab === "binary" ? separationBinaryHtml(group, model)
-              : simulator.tab === "workup" ? workupPlanHtml(group, model)
-                : separationSuggestionsHtml(group, model)}
+            : simulator.tab === "substances" ? separationSubstancesHtml(group, model)
+              : simulator.tab === "binary" ? separationBinaryHtml(group, model)
+                : simulator.tab === "workup" ? workupPlanHtml(group, model)
+                  : simulator.tab === "pathway" ? separationPathwayHtml(group, model)
+                    : separationSuggestionsHtml(group, model)}
       `;
       bindSeparationSimulatorControls(body, group.id);
     }
@@ -6912,7 +6959,7 @@
               <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync From Streams</button>
               <button data-pubchem-autofill="${escapeAttr(group.id)}" title="Fetch basic PubChem properties for all named substances">Autofill PubChem</button>
               <button data-load-sep-demo="${escapeAttr(group.id)}" title="Replace simulator input with a two-component cyclohexane/octocrylene demo">Load Simple Demo</button>
-              <button data-load-methylbenzene-demo="${escapeAttr(group.id)}" title="Load a second two-component methylbenzene/benzaldehyde 90% yield demo">Methylbenzene Demo</button>
+              <button data-load-methylbenzene-demo="${escapeAttr(group.id)}" title="Load a four-component reaction-separation demo with three residual reagents">3-Reagent Demo</button>
               <button class="primary" data-add-sep-substance="${escapeAttr(group.id)}">Add Substance</button>
             </div>
             <div class="sep-lookup-summary ${escapeAttr(lookup.status)}">
@@ -6985,89 +7032,167 @@
       simulator.notes = "Simple demo loaded: volatile cyclohexane separated from heavy heat-sensitive octocrylene.";
     }
 
-    function loadMethylbenzeneSeparationDemo(groupId) {
+    function loadTripleReactantSeparationDemo(groupId) {
       const simulator = ensureGroup(groupId).separationSimulator;
       simulator.substances = [
         normalizeSeparationSubstance({
           id: "CS1",
-          name: "methylbenzene",
+          name: "benzyl alcohol",
           role: "reactant",
           phase: "L",
           fate: "recover",
           quantity: "1.00",
           unit: "kg",
           stoichCoeff: "1",
-          source: "secondary demo",
-          pubchemCid: "1140",
-          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/1140",
-          molecularFormula: "C7H8",
-          canonicalSmiles: "CC1=CC=CC=C1",
-          xlogp: "2.7",
-          exactMass: "92.0626",
-          propertySource: "demo values consistent with PubChem-style fields",
+          source: "3-reagent demo",
+          pubchemCid: "244",
+          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/244",
+          molecularFormula: "C7H8O",
+          canonicalSmiles: "C1=CC=C(C=C1)CO",
+          xlogp: "1.1",
+          exactMass: "108.0575",
+          propertySource: "demo values for method testing",
           thermalSensitivity: "low",
-          mw: "92.14",
-          tb: "383.75",
-          tm: "178.15",
-          pvap: "3800",
-          solubilityParameter: "18.2",
-          molarVolume: "106.8",
-          molecularDiameter: "0.58",
-          kineticDiameter: "0.58",
-          note: "Secondary demo: residual methylbenzene/toluene after 90% yield; volatile component to recover."
+          mw: "108.14",
+          tb: "478.15",
+          tm: "258.15",
+          pvap: "13",
+          solubilityParameter: "24.8",
+          molarVolume: "103.8",
+          molecularDiameter: "0.62",
+          kineticDiameter: "0.62",
+          note: "Residual benzyl alcohol after 90% yield; close-boiling/affinity-sensitive recovery candidate."
         }),
         normalizeSeparationSubstance({
           id: "CS2",
-          name: "benzaldehyde",
+          name: "acetic anhydride",
+          role: "reactant",
+          phase: "L",
+          fate: "recover",
+          quantity: "0.95",
+          unit: "kg",
+          stoichCoeff: "1",
+          source: "3-reagent demo",
+          pubchemCid: "7918",
+          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/7918",
+          molecularFormula: "C4H6O3",
+          canonicalSmiles: "CC(=O)OC(=O)C",
+          xlogp: "-0.3",
+          exactMass: "102.0317",
+          propertySource: "demo values for method testing",
+          thermalSensitivity: "medium",
+          mw: "102.09",
+          tb: "412.95",
+          tm: "200.15",
+          pvap: "520",
+          solubilityParameter: "20.3",
+          molarVolume: "94.5",
+          molecularDiameter: "0.54",
+          kineticDiameter: "0.54",
+          note: "Residual acylating reagent; more volatile than product and recover/purge candidate."
+        }),
+        normalizeSeparationSubstance({
+          id: "CS3",
+          name: "triethylamine",
+          role: "reactant",
+          phase: "L",
+          fate: "recover",
+          quantity: "1.10",
+          unit: "kg",
+          stoichCoeff: "1",
+          source: "3-reagent demo",
+          pubchemCid: "8471",
+          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/8471",
+          molecularFormula: "C6H15N",
+          canonicalSmiles: "CCN(CC)CC",
+          xlogp: "1.4",
+          exactMass: "101.1204",
+          propertySource: "demo values for method testing",
+          thermalSensitivity: "low",
+          mw: "101.19",
+          tb: "362.25",
+          tm: "158.35",
+          pvap: "7200",
+          solubilityParameter: "18.7",
+          molarVolume: "139.0",
+          molecularDiameter: "0.68",
+          kineticDiameter: "0.68",
+          note: "Volatile base/reagent residue; should be proposed early for recovery."
+        }),
+        normalizeSeparationSubstance({
+          id: "CS4",
+          name: "benzyl acetate",
           role: "product",
           phase: "L",
           fate: "product",
-          quantity: "0.90",
+          quantity: "",
           unit: "kg",
           stoichCoeff: "1",
-          source: "secondary demo",
-          pubchemCid: "240",
-          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/240",
-          molecularFormula: "C7H6O",
-          canonicalSmiles: "C1=CC=C(C=C1)C=O",
-          xlogp: "1.5",
-          exactMass: "106.0419",
-          propertySource: "demo values consistent with PubChem-style fields",
+          source: "3-reagent demo",
+          pubchemCid: "8785",
+          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/8785",
+          molecularFormula: "C9H10O2",
+          canonicalSmiles: "CC(=O)OCC1=CC=CC=C1",
+          xlogp: "1.96",
+          exactMass: "150.0681",
+          propertySource: "demo values for method testing",
           thermalSensitivity: "medium",
-          mw: "106.12",
-          tb: "451.95",
-          tm: "247.15",
-          pvap: "127",
-          solubilityParameter: "20.2",
-          molarVolume: "101.5",
-          molecularDiameter: "0.62",
-          kineticDiameter: "0.62",
-          note: "Secondary demo: product stream from a simplified 90% yield reaction."
+          mw: "150.18",
+          tb: "485.95",
+          tm: "221.15",
+          pvap: "20",
+          solubilityParameter: "19.1",
+          molarVolume: "148.0",
+          molecularDiameter: "0.72",
+          kineticDiameter: "0.72",
+          note: "Main product. Product mass is calculated from limiting reagent and conversion/yield."
         })
       ];
       simulator.reactionBalance = normalizeReactionBalance({
         conversionPercent: "90",
         basis: "yield",
         limiting: "CS1",
-        note: "Secondary demo only: simplified methylbenzene -> benzaldehyde yield basis with oxygen/side-products omitted."
+        mainProductId: "CS4",
+        note: "Three-reagent demo for pathway testing: benzyl acetate product formed from limiting benzyl alcohol; residual reagents are separated sequentially."
       });
       simulator.pairInsights = {
-        [separationPairKey("CS1", "CS2")]: {
-          relativeVolatility: "8",
+        [separationPairKey("CS1", "CS4")]: {
+          relativeVolatility: "1.4",
           azeotrope: "no",
           pressureSensitive: "no",
           miscibilityGap: "no",
           eutectic: "no",
-          note: "Secondary demo: methylbenzene is the more volatile recoverable component; benzaldehyde remains product-rich."
+          note: "Benzyl alcohol/product is a close-boiling residue pair; affinity or careful polishing may be needed."
+        },
+        [separationPairKey("CS2", "CS4")]: {
+          relativeVolatility: "6",
+          azeotrope: "no",
+          pressureSensitive: "no",
+          miscibilityGap: "no",
+          eutectic: "no",
+          note: "Acetic anhydride is more volatile than benzyl acetate."
+        },
+        [separationPairKey("CS3", "CS4")]: {
+          relativeVolatility: "25",
+          azeotrope: "no",
+          pressureSensitive: "no",
+          miscibilityGap: "no",
+          eutectic: "no",
+          note: "Triethylamine is the most volatile residual reagent and should usually be recovered early."
         }
       };
       simulator.lookupSummary = normalizeLookupSummary({
         status: "done",
-        message: "Loaded secondary methylbenzene/benzaldehyde demo with 90% yield and complete properties.",
+        message: "Loaded three-reagent reaction-separation demo with product and residual reagent properties.",
         lastUpdated: new Date().toISOString()
       });
-      simulator.tab = "binary";
-      simulator.notes = "Secondary demo loaded: methylbenzene/benzaldehyde two-component separation with 90% yield basis.";
+      simulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
+      simulator.tab = "pathway";
+      simulator.notes = "Three-reagent demo loaded: residual triethylamine, acetic anhydride, and benzyl alcohol separated from benzyl acetate.";
+    }
+
+    function loadMethylbenzeneSeparationDemo(groupId) {
+      loadTripleReactantSeparationDemo(groupId);
     }
 
     function separationSubstanceRowHtml(groupId, substance) {
@@ -7139,6 +7264,7 @@
             <span><strong>${result.mainProduct ? escapeHtml(result.mainProduct.name) : "missing"}</strong> main product</span>
             <span><strong>${result.status}</strong> balance status</span>
           </div>
+          ${reactionBalanceRecognitionHtml(result)}
           ${result.issues.length ? `<div class="sep-sim-status partial"><strong>Missing balance inputs</strong><span>${result.issues.map(escapeHtml).join(", ")}</span></div>` : ""}
           ${result.residualRows.length ? `
             <div class="sep-residual-box">
@@ -7186,6 +7312,45 @@
         .slice(0, 3)
         .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg)}`);
       return `${percent}% unconverted basis; ${parts.join(", ")}${result.residualRows.length > 3 ? "..." : ""}`;
+    }
+
+    function reactionBalanceRecognitionHtml(result) {
+      const mainProductRows = result.mainProduct ? [result.mainProduct] : [];
+      const coproductRows = result.rows.filter(row => row.role === "coproduct");
+      const byproductRows = result.rows.filter(row => row.role === "byproduct");
+      const reactantRows = result.rows.filter(row => row.role === "reactant");
+      return `
+        <div class="sep-recognition-grid">
+          ${reactionBalanceRecognitionColumnHtml("Main Product", mainProductRows, "product", "selected product basis")}
+          ${reactionBalanceRecognitionColumnHtml("Co-products / Byproducts", [...coproductRows, ...byproductRows], "byproduct", "formed or removed separately")}
+          ${reactionBalanceRecognitionColumnHtml("Reactants", reactantRows, "reactant", "unconverted fraction can become waste/recovery")}
+        </div>
+      `;
+    }
+
+    function reactionBalanceRecognitionColumnHtml(title, rows, tone, empty) {
+      return `
+        <div class="sep-recognition-column ${escapeAttr(tone)}">
+          <div class="sep-recognition-title">${escapeHtml(title)}</div>
+          ${rows.length ? rows.map(row => reactionBalanceRecognitionItemHtml(row)).join("") : `<div class="muted small">${escapeHtml(empty)}</div>`}
+        </div>
+      `;
+    }
+
+    function reactionBalanceRecognitionItemHtml(row) {
+      const isResidual = row.role === "reactant" && Number.isFinite(row.finalMassKg) && row.finalMassKg > 0.000001;
+      const amount = isResidual
+        ? `${formatReactionMass(row.finalMassKg)} unreacted`
+        : `${formatReactionMass(row.finalMassKg)} final`;
+      return `
+        <div class="sep-recognition-item role-${escapeAttr(row.role)}">
+          <div>
+            <strong>${escapeHtml(row.name || "unnamed substance")}</strong>
+            <span class="muted small">${escapeHtml(row.role)} · ${escapeHtml(row.basis)}</span>
+          </div>
+          <span class="pill ${isResidual ? "warn" : row.role === "product" || row.role === "coproduct" ? "green" : "blue"}">${escapeHtml(amount)}</span>
+        </div>
+      `;
     }
 
     function addReactionProductSubstance(groupId, role) {
@@ -7412,6 +7577,14 @@
       return separationCore.routeVariantBehavior(variant);
     }
 
+    function separationPathwayModel(group, model = separationSimulatorModel(group)) {
+      return separationCore.separationPathwayModel(group, model, ensureGroup(group.id).separationSimulator.reactionBalance, ensureGroup(group.id).separationSimulator.pathway);
+    }
+
+    function pathwaySplitTargets(pair, variant, mainProduct) {
+      return separationCore.pathwaySplitTargets(pair, variant, mainProduct);
+    }
+
     function routeVariantOutputStreams(pair, variant, blockId) {
       const title = String(variant.title || "").toLowerCase();
       let first = pair.a;
@@ -7545,6 +7718,253 @@
       state.selectedIds = [];
       state.focusEndpoint = newGroupId;
       state.activeInspectorTab = "scale";
+      closeSeparationSimulator();
+      invalidateAiRefine();
+      renderAll();
+    }
+
+    function separationPathwayHtml(group, model) {
+      const path = separationPathwayModel(group, model);
+      const readiness = separationSimulatorReadiness(model);
+      return `
+        <section class="modal-section pathway-sandbox">
+          <div class="pathway-head">
+            <div>
+              <div class="label">Lutze Reaction-Separation Sandbox</div>
+              <div class="muted small">Draft alternative separation pathways from the post-reaction mixture. The main flowsheet changes only after Apply Pathway.</div>
+            </div>
+            <div class="sep-unit-actions">
+              <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync Substances</button>
+              <button data-pubchem-autofill="${escapeAttr(group.id)}">Fetch PubChem</button>
+              <button data-sep-sim-tab="binary">Binary Data</button>
+              <button data-pathway-undo="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Undo Last</button>
+              <button data-pathway-reset="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Reset</button>
+              <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Apply Pathway to Main Flowsheet</button>
+            </div>
+          </div>
+          <div class="sep-sim-status ${escapeAttr(readiness.status)}">
+            <strong>${escapeHtml(path.mainProduct ? `Main product: ${path.mainProduct.name}` : "Main product not selected")}</strong>
+            <span>${escapeHtml(path.active.length ? `${path.active.length} component${path.active.length === 1 ? "" : "s"} remain in the draft mixture.` : "No active mixture components remain.")}</span>
+          </div>
+          <div class="pathway-balance-strip">
+            ${reactionBalanceRecognitionHtml(path.balance)}
+          </div>
+          <div class="pathway-layout">
+            <div class="pathway-canvas-panel">
+              <div class="pathway-canvas">
+                ${pathwayCanvasHtml(group, path)}
+              </div>
+              ${pathwaySelectedStepHtml(path)}
+            </div>
+            <div class="pathway-options-panel">
+              <div class="condition-family-head">
+                <span>Next Separation Moves</span>
+                <span class="pill">${path.nextOptions.length}</span>
+              </div>
+              ${path.nextOptions.length ? path.nextOptions.map(option => pathwayOptionCardHtml(group.id, option)).join("") : `
+                <div class="mfa-empty">
+                  ${path.active.length <= 1 ? "Pathway is reduced to one main stream. Apply it or reset to test another route." : "No route can be drawn yet. Sync substances, fetch PubChem properties, then complete binary data for azeotrope/miscibility where needed."}
+                </div>
+              `}
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function pathwayCanvasHtml(group, path) {
+      return `
+        <div class="pathway-node source">
+          <span class="pill blue">${escapeHtml(group.id)}</span>
+          <strong>Post-reaction mixture</strong>
+          <span class="muted small">${path.balance.status === "estimated" ? "reaction balance estimated" : "complete balance inputs first"}</span>
+        </div>
+        ${path.steps.map((step, index) => `
+          <div class="pathway-arrow">-></div>
+          <button class="pathway-node separator ${path.pathway.selectedStepId === step.id ? "selected" : ""}" data-pathway-select-step="${escapeAttr(step.id)}" data-sep-group="${escapeAttr(group.id)}">
+            <span class="pill">${index + 1}</span>
+            <strong>${escapeHtml(step.unit || step.title || "separation route")}</strong>
+            <span class="muted small">${escapeHtml(step.title || "KB3.1 route")} · ${escapeHtml(step.separated.map(item => item.name).join(", ") || "target pending")}</span>
+          </button>
+          <div class="pathway-outlet">
+            ${step.separated.map(item => `<span class="pill green">${escapeHtml(item.name)} separated</span>`).join("") || `<span class="pill warn">separation target pending</span>`}
+          </div>
+        `).join("")}
+        <div class="pathway-arrow">-></div>
+        <div class="pathway-node residue">
+          <strong>${path.active.length <= 1 ? "Final active stream" : "Remaining mixture"}</strong>
+          <span class="muted small">${path.active.map(item => item.name).join(", ") || "empty"}</span>
+        </div>
+      `;
+    }
+
+    function pathwaySelectedStepHtml(path) {
+      const selected = path.steps.find(step => step.id === path.pathway.selectedStepId) || path.steps[path.steps.length - 1];
+      if (!selected) {
+        return `<div class="pathway-info-panel"><strong>No route tried yet</strong><span class="muted small">Choose a next separation move to draw an alternative pathway.</span></div>`;
+      }
+      return `
+        <div class="pathway-info-panel">
+          <strong>${escapeHtml(selected.title || selected.unit || "Selected route")}</strong>
+          <span class="muted small">Unit: ${escapeHtml(selected.unit || "not fixed")}</span>
+          <span class="muted small">Separates: ${escapeHtml(selected.separated.map(item => item.name).join(", ") || "pending")}</span>
+          <span class="muted small">Retains: ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "pending")}</span>
+          <div class="predictor-missing">
+            ${selected.drivers.map(line => `<span class="pill green">${escapeHtml(line)}</span>`).join("")}
+            ${selected.missing.map(line => `<span class="pill warn">${escapeHtml(line)}</span>`).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function pathwayOptionCardHtml(groupId, option) {
+      return `
+        <article class="pathway-option-card ${escapeAttr(option.variant.level)}">
+          <div class="sep-route-card-head">
+            <strong>${escapeHtml(option.unit || option.variant.title)}</strong>
+            <span class="pill ${option.variant.level === "supported" ? "green" : option.variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(option.variant.level)}</span>
+          </div>
+          <div class="muted small">${escapeHtml(option.pairLabel)}</div>
+          <div class="pathway-option-target">
+            <span class="pill green">separate ${escapeHtml(option.separated.map(item => item.name).join(", "))}</span>
+            <span class="pill blue">retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
+          </div>
+          <div class="predictor-reason">${escapeHtml(option.variant.graphPreview)}</div>
+          <div class="predictor-missing">
+            ${option.variant.drivers.map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
+            ${option.variant.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}
+          </div>
+          <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">Try This Route</button>
+        </article>
+      `;
+    }
+
+    function tryPathwayRoute(groupId, optionId) {
+      const group = groupModel(groupId);
+      if (!group) return;
+      const path = separationPathwayModel(group);
+      const option = path.nextOptions.find(item => item.id === optionId);
+      if (!option) return;
+      pushUndo();
+      const simulator = ensureGroup(groupId).separationSimulator;
+      const step = {
+        id: `PW${Date.now().toString(36)}${path.pathway.steps.length + 1}`,
+        pairKey: option.pairKey,
+        routeId: option.routeId,
+        title: option.variant.title,
+        unit: option.unit,
+        separatedIds: option.separated.map(item => item.id),
+        retainedIds: option.retained.map(item => item.id),
+        drivers: option.variant.drivers,
+        missing: option.variant.missing,
+        note: option.variant.graphPreview
+      };
+      simulator.pathway.steps.push(step);
+      simulator.pathway.selectedStepId = step.id;
+      simulator.tab = "pathway";
+      renderSeparationSimulatorModal();
+      renderExport();
+    }
+
+    function undoPathwayRoute(groupId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      if (!simulator.pathway.steps.length) return;
+      pushUndo();
+      simulator.pathway.steps.pop();
+      simulator.pathway.selectedStepId = simulator.pathway.steps.length ? simulator.pathway.steps[simulator.pathway.steps.length - 1].id : "";
+      simulator.tab = "pathway";
+      renderSeparationSimulatorModal();
+      renderExport();
+    }
+
+    function resetPathway(groupId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      if (!simulator.pathway.steps.length) return;
+      pushUndo();
+      simulator.pathway.steps = [];
+      simulator.pathway.selectedStepId = "";
+      simulator.pathway.appliedAt = "";
+      simulator.tab = "pathway";
+      renderSeparationSimulatorModal();
+      renderExport();
+    }
+
+    function selectPathwayStep(groupId, stepId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      simulator.pathway.selectedStepId = stepId;
+      renderSeparationSimulatorModal();
+    }
+
+    function applyPathwayToMainFlowsheet(groupId) {
+      const sourceGroup = groupModel(groupId);
+      if (!sourceGroup) return;
+      const model = separationSimulatorModel(sourceGroup);
+      const path = separationPathwayModel(sourceGroup, model);
+      if (!path.steps.length) return;
+      pushUndo();
+      const sourceState = ensureGroup(groupId);
+      const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
+      state.links = state.links.filter(link => resolvedEndpointId(link.from) !== groupId);
+      let previousGroupId = groupId;
+      let lastGroupId = groupId;
+      path.steps.forEach((step, index) => {
+        const pair = model.pairs.find(item => item.key === step.pairKey);
+        if (!pair) return;
+        const variant = binaryRouteVariants(groupId, pair).find(item => item.id === step.routeId);
+        if (!variant) return;
+        const newGroupId = nextGroupId();
+        const newBlockId = nextBlockId();
+        const newGroup = ensureGroup(newGroupId, "separation");
+        newGroup.task = `${step.title || variant.title}: ${pair.a.name} / ${pair.b.name}`;
+        newGroup.selectedUnit = step.unit || (variant.units || []).find(unit => unit !== "Review candidate unit") || "";
+        newGroup.selectionBasis = [
+          `Applied from Lutze Reaction-Separation pathway for ${sourceGroup.id}.`,
+          step.drivers.length ? `Drivers: ${step.drivers.join("; ")}.` : "",
+          step.missing.length ? `Missing checks: ${step.missing.join("; ")}.` : "No high-priority missing checks recorded in the pathway."
+        ].filter(Boolean).join(" ");
+        newGroup.schedule = { ...scheduleDefaults(), notes: `Draft pathway separator ${index + 1}; verify equipment sizing and mass split before scale-up.` };
+        newGroup.properties = {};
+        newGroup.x = Number.isFinite(sourceState.x) ? sourceState.x + 560 * (index + 1) : 1080 + 560 * index;
+        newGroup.y = Number.isFinite(sourceState.y) ? sourceState.y + 260 + 40 * index : 420 + 40 * index;
+        state.blocks.push({
+          id: newBlockId,
+          groupId: newGroupId,
+          start: state.text.length,
+          end: state.text.length,
+          text: `Applied pathway step ${index + 1}: ${step.title || variant.title} for ${pair.a.name} / ${pair.b.name}. ${step.note || variant.graphPreview}`,
+          behavior: routeVariantBehavior(variant),
+          phenomena: routeVariantPhenomena(variant),
+          phase: "",
+          endpoint: "",
+          conditions: {},
+          conditionUnits: {},
+          conditionsEditing: false,
+          streams: [
+            createStream("input", {
+              id: `${newBlockId}-S1`,
+              name: `${pair.a.name} / ${pair.b.name} pathway feed from ${previousGroupId}`,
+              phase: "mixture",
+              status: "proposed",
+              fate: "intermediate",
+              note: "Generated from Lutze Reaction-Separation pathway sandbox."
+            }),
+            ...routeVariantOutputStreams(pair, variant, newBlockId)
+          ]
+        });
+        state.links.push({ from: previousGroupId, to: newGroupId });
+        previousGroupId = newGroupId;
+        lastGroupId = newGroupId;
+      });
+      outgoing.forEach(link => {
+        const to = resolvedEndpointId(link.to);
+        if (to && to !== lastGroupId) state.links.push({ from: lastGroupId, to: link.to });
+      });
+      state.links = state.links.filter((link, index, links) => links.findIndex(item => item.from === link.from && item.to === link.to) === index);
+      ensureGroup(groupId).separationSimulator.pathway.appliedAt = new Date().toISOString();
+      state.selectedGroupId = lastGroupId;
+      state.selectedBlockId = null;
+      state.selectedIds = [];
+      state.focusEndpoint = lastGroupId;
       closeSeparationSimulator();
       invalidateAiRefine();
       renderAll();
@@ -7716,6 +8136,25 @@
       });
       root.querySelectorAll("[data-apply-residual-waste]").forEach(button => {
         button.addEventListener("click", () => applyReactionResidualWasteStreams(button.dataset.applyResidualWaste));
+      });
+      root.querySelectorAll("[data-pathway-try-option]").forEach(button => {
+        button.addEventListener("click", () => tryPathwayRoute(button.dataset.sepGroup, button.dataset.pathwayTryOption));
+      });
+      root.querySelectorAll("[data-pathway-undo]").forEach(button => {
+        button.addEventListener("click", () => undoPathwayRoute(button.dataset.pathwayUndo));
+      });
+      root.querySelectorAll("[data-pathway-reset]").forEach(button => {
+        button.addEventListener("click", () => resetPathway(button.dataset.pathwayReset));
+      });
+      root.querySelectorAll("[data-pathway-select-step]").forEach(button => {
+        button.addEventListener("click", () => selectPathwayStep(button.dataset.sepGroup, button.dataset.pathwaySelectStep));
+      });
+      root.querySelectorAll("[data-pathway-apply]").forEach(button => {
+        button.addEventListener("click", async () => {
+          const groupId = button.dataset.pathwayApply;
+          if (!(await confirmModal(`Apply this Lutze Reaction-Separation pathway after ${groupId}? This creates new separator groups in the main flowsheet.`))) return;
+          applyPathwayToMainFlowsheet(groupId);
+        });
       });
       root.querySelectorAll("[data-sep-apply-candidate]").forEach(button => {
         button.addEventListener("click", async () => {
@@ -8493,13 +8932,8 @@
       const mfa = aggregateGroupStreams(group);
       const conditions = aggregateGroupConditions(group);
       const separationModel = separationSimulatorModel(group);
-      const unitReadiness = groupUnitSuggestionReadiness(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
-      const alternatives = showPostReactionSupport && unitReadiness.ready
-        ? unitOperationCandidatesForGroup(group).filter(candidate => candidate.task === "separation" || candidate.task.includes("separation")).slice(0, 4)
-        : [];
       const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
-      const groupState = ensureGroup(group.id);
       root.className = "step-flow-inspector";
       applyStepFlowEditorSize(root, true, "group");
       root.innerHTML = `
@@ -8573,43 +9007,11 @@
           ${showPostReactionSupport ? `
             <div class="group-drawer-section-label post-reaction-support-label">
               <div>
-                <strong>Post-Reaction Separation Support</strong>
-                <span>Optional: candidate separation units, and the property-based simulator. Shown only when a reaction group also has separable substances or separation phenomena.</span>
+                <strong>Lutze Reaction-Separation</strong>
+                <span>Run the substance-separation sandbox only when you want to test post-reaction pathway variants.</span>
               </div>
-              <button class="mini-button" data-toggle-separation-support="${escapeAttr(group.id)}">${groupState.separationSupportExpanded ? "Hide" : "Show"} separation options</button>
             </div>
-            ${groupState.separationSupportExpanded ? `
-              <div class="condition-panel group-drawer-panel">
-                <div class="condition-head">
-                  <strong>Separation Alternatives</strong>
-                  <span class="muted small">phenomena + phase filtered</span>
-                </div>
-                <div class="condition-body">
-                  ${unitReadiness.ready ? `
-                    ${proposalBasisHtml(group, alternatives)}
-                    <div class="alt-grid group-alt-grid">
-                      ${alternatives.length ? alternatives.map(candidate => `
-                        <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-                          ${escapeHtml(candidate.name)}
-                          ${candidateFitMetaHtml(candidate)}
-                        </button>
-                      `).join("") : `<span class="muted">No separation alternatives for current reaction data.</span>`}
-                    </div>
-                  ` : `<div class="mfa-empty">Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before selecting separation unit alternatives.</div>`}
-                  ${selectionBasisHtml(group)}
-                </div>
-              </div>
-              <div class="condition-panel group-drawer-panel">
-                <div class="condition-head">
-                  <strong>Separation Properties</strong>
-                  <span class="muted small">optional simulator + property screen</span>
-                </div>
-                <div class="condition-body">
-                  ${separationSimulatorLaunchHtml(group)}
-                  ${groupPropertiesPanelHtml(group)}
-                </div>
-              </div>
-            ` : ""}
+            ${lutzeReactionSeparationLaunchHtml(group, separationModel)}
           ` : ""}
         </div>
       `;
@@ -8651,13 +9053,6 @@
       root.querySelectorAll("[data-open-block-from-group]").forEach(button => {
         button.addEventListener("click", () => selectBlock(button.dataset.openBlockFromGroup, false));
       });
-      root.querySelectorAll("[data-toggle-separation-support]").forEach(button => {
-        button.addEventListener("click", () => {
-          const target = ensureGroup(button.dataset.toggleSeparationSupport);
-          target.separationSupportExpanded = !target.separationSupportExpanded;
-          renderStepFlowInspector();
-        });
-      });
       root.querySelectorAll("[data-unit]").forEach(button => {
         button.addEventListener("click", async () => {
           const unit = button.dataset.unit;
@@ -8680,8 +9075,8 @@
           renderExport();
         });
       });
-      root.querySelectorAll("[data-open-separation-simulator]").forEach(button => {
-        button.addEventListener("click", () => openSeparationSimulator(button.dataset.openSeparationSimulator));
+      root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
+        button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
       });
       bindGroupPropertiesControls(root, group.id);
       root.querySelectorAll("[data-edit-group-conditions]").forEach(button => {
@@ -9175,6 +9570,13 @@
       return values.map(value => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
     }
 
+    function scaleSensitivityOptionHtml(selected) {
+      return scheduleScaleOptions.map(value => {
+        const label = value === "unknown" ? "Auto (inferred from phenomena)" : value;
+        return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+      }).join("");
+    }
+
     function scheduleOperationClassOptionHtml(selected) {
       return scheduleOperationClassOptions.map(value => {
         const label = value === "auto" ? "Auto" : operationScaleProfile(value).label;
@@ -9554,13 +9956,15 @@
       nInput.value = String(suggestion);
       nInput.dataset.splitBaseDuration = Number.isFinite(baseDuration) ? String(baseDuration) : "";
       const divideDuration = $("splitGroupDivideDuration");
-      divideDuration.checked = true;
-      divideDuration.disabled = false;
       const warning = $("splitGroupWarning");
       if (entry.scaleSensitivity === "kinetics-bound") {
+        divideDuration.checked = false;
+        divideDuration.disabled = true;
         warning.hidden = false;
-        warning.textContent = `${groupId} is kinetics-bound. Dividing its Gantt time is allowed here as a scheduling/screening scenario, but it is not a validated kinetic scale-up claim.`;
+        warning.textContent = `${groupId} is kinetics-bound: for an ideal, well-mixed, constant-volume batch, conversion vs. time doesn't depend on reactor volume, so parallel reactors add throughput, not speed. Its Gantt time is kept at the single-unit value and won't be divided. If this stage is the bottleneck, change the chemistry or operating mode instead.`;
       } else {
+        divideDuration.checked = true;
+        divideDuration.disabled = false;
         warning.hidden = true;
         warning.textContent = "";
       }
@@ -9601,7 +10005,11 @@
       const group = groupModel(groupId);
       if (!group || !Number.isFinite(n) || n < 2) return;
       const baseState = ensureGroup(groupId);
-      const divideDuration = Boolean(options.divideDuration);
+      const baseEntry = taskScheduleEntry(group, 0);
+      // Reaction time doesn't shrink with parallel reactors (see the effectiveTimeH note above),
+      // so never bake a divided duration into the split-off copies of a kinetics-bound group, even
+      // if divideDuration was requested.
+      const divideDuration = Boolean(options.divideDuration) && baseEntry.scaleSensitivity !== "kinetics-bound";
       const originalDurationH = parseDurationHoursValue(baseState.schedule.durationH);
       const splitDurationText = divideDuration && Number.isFinite(originalDurationH) && originalDurationH > 0
         ? formatNumber(originalDurationH / n)
@@ -10376,7 +10784,7 @@
       const ids = groupIdsInTextOrder();
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
       const boxes = [];
-      if (draftBlocks.length) boxes.push({ x: state.draftPos.x, y: state.draftPos.y, w: nodeWidth(draftBlocks.length), h: 300 });
+      if (draftBlocks.length) boxes.push({ x: state.draftPos.x, y: state.draftPos.y, w: nodeWidth(draftBlocks.length, "draft"), h: 300 });
       ids.forEach(id => {
         const group = ensureGroup(id);
         boxes.push({ x: group.x, y: group.y, w: nodeWidth(blocksForGroup(id).length), h: 340 });
@@ -11064,9 +11472,9 @@
     });
     $("loadMethylbenzeneCase")?.addEventListener("click", async () => {
       closeLoadExampleMenu();
-      if (state.blocks.length && !(await confirmModal("Load the methylbenzene case? This replaces all current blocks, groups, and arrows."))) return;
+      if (state.blocks.length && !(await confirmModal("Load the 3-reagent reaction-separation case? This replaces all current blocks, groups, and arrows."))) return;
       if (state.blocks.length) pushUndo();
-      loadMethylbenzeneExampleProject();
+      loadTripleReactantExampleProject();
     });
     function currentTheme() {
       const saved = document.documentElement.getAttribute("data-theme");

@@ -49,7 +49,7 @@ APP_HTML = r"""<!doctype html>
         <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
         <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
           <button id="loadSample" role="menuitem">Octocrylene Case</button>
-          <button id="loadMethylbenzeneCase" role="menuitem">Methylbenzene Case</button>
+          <button id="loadMethylbenzeneCase" role="menuitem">3-Reagent Case</button>
         </div>
       </div>
       <button id="openFlowsheet" class="flowsheet-view-button" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
@@ -410,7 +410,7 @@ APP_HTML = r"""<!doctype html>
     <section class="modal-panel separation-simulator-panel" role="dialog" aria-modal="true" aria-labelledby="separationSimulatorTitle">
       <div class="modal-head">
         <div>
-          <div class="label">Optional KB3.1 sandbox</div>
+          <div id="separationSimulatorEyebrow" class="label">Optional KB3.1 sandbox</div>
           <h2 id="separationSimulatorTitle">Separation Simulator</h2>
         </div>
         <button id="closeSeparationSimulator" class="mini-button">Close</button>

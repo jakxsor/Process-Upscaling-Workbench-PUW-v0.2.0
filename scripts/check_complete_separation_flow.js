@@ -52,17 +52,19 @@ assert(!postReactionSeparationSupportApplies(g3), "G3 cooling-only group should 
 
 const g2Root = fakeElement();
 renderGroupAggregateStepInspector(g2Root, g2);
-assert(g2Root.innerHTML.includes("Post-Reaction Separation Support"), "G2 drawer should render post-reaction separation support");
-assert(g2Root.innerHTML.includes("Show separation options"), "G2 drawer should keep separation support collapsed by default");
+assert(g2Root.innerHTML.includes("Lutze Reaction-Separation"), "G2 drawer should render the focused Lutze reaction-separation entry point");
+assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 drawer should offer one focused Lutze simulation button");
+assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");
 
 ensureGroup("G2").separationSupportExpanded = true;
 renderGroupAggregateStepInspector(g2Root, g2);
-assert(g2Root.innerHTML.includes("Separation Simulator"), "G2 drawer should offer the separation simulator");
+assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 drawer should keep the focused Lutze simulation button");
+assert(!g2Root.innerHTML.includes("Optional Property-Based Separation Screen"), "G2 drawer should not render the property screen");
 
 const g3Root = fakeElement();
 renderGroupAggregateStepInspector(g3Root, g3);
 assert(!g3Root.innerHTML.includes("Post-Reaction Separation Support"), "G3 drawer should not render separation support");
-assert(!g3Root.innerHTML.includes("Separation Simulator"), "G3 drawer should not offer the separation simulator");
+assert(!g3Root.innerHTML.includes("Lutze Reaction-Separation"), "G3 drawer should not offer the Lutze reaction-separation simulator");
 
 const simulator = ensureGroup("G2").separationSimulator;
 const propertySet = {
@@ -134,39 +136,69 @@ assert(demoVariants.some(item => item.title === "Volatility route"), "Binary scr
 assert(demoVariants.some(item => item.graphPreview.includes("V-L separator")), "Route variant should preview a graph change");
 assert(demoVariants.some(item => item.units.includes("Evaporation") || item.units.includes("Distillation")), "Route variant should include applicable unit assets");
 
-loadMethylbenzeneSeparationDemo("G2");
-const methylState = ensureGroup("G2").separationSimulator;
-const methylModel = separationSimulatorModel(g2);
-const methylBalance = reactionBalanceModel(g2, methylModel);
-const methylVariants = binaryRouteVariants("G2", methylModel.pairs[0]);
-const methylUnits = new Set(methylModel.suggestions
+loadTripleReactantSeparationDemo("G2");
+const tripleState = ensureGroup("G2").separationSimulator;
+const tripleModel = separationSimulatorModel(g2);
+const tripleBalance = reactionBalanceModel(g2, tripleModel);
+const productPairs = tripleModel.pairs.filter(pair => [pair.a.name, pair.b.name].includes("benzyl acetate"));
+const tripleUnits = new Set(tripleModel.suggestions
   .filter(item => item.ruleId !== "NO-KB3.1-MATCH")
   .flatMap(item => item.units));
 
-assert.strictEqual(methylState.tab, "binary", "Methylbenzene demo should open on Binary Screening");
-assert.deepStrictEqual(methylModel.substances.map(item => item.name), ["methylbenzene", "benzaldehyde"], "Methylbenzene demo should stay separate from octocrylene demo");
-assert(Math.abs(methylBalance.conversion - 0.9) < 0.0001, "Methylbenzene demo should use 90% yield/conversion basis");
-assert(methylUnits.has("Evaporation") || methylUnits.has("Distillation"), "Methylbenzene demo should suggest standard V-L separation");
-assert(methylVariants.some(item => item.title === "Volatility route"), "Methylbenzene demo should expose a volatility route variant");
-assert(methylVariants.some(item => item.graphPreview.includes("methylbenzene leaves as volatile/recovery stream")), "Methylbenzene route should preview recovery of volatile methylbenzene");
+assert.strictEqual(tripleState.tab, "pathway", "3-reagent demo should open on Pathway Sandbox");
+assert.deepStrictEqual(tripleModel.substances.map(item => item.name), ["benzyl alcohol", "acetic anhydride", "triethylamine", "benzyl acetate"], "3-reagent demo should keep three residual reagents plus product");
+assert.strictEqual(tripleBalance.mainProduct.name, "benzyl acetate", "3-reagent demo should select benzyl acetate as main product");
+assert(Math.abs(tripleBalance.conversion - 0.9) < 0.0001, "3-reagent demo should use 90% yield/conversion basis");
+assert.strictEqual(tripleBalance.residualRows.length, 3, "3-reagent demo should estimate three residual reactant streams");
+assert.strictEqual(productPairs.length, 3, "3-reagent demo should create three product/reagent binary pairs");
+assert(tripleUnits.has("Evaporation") || tripleUnits.has("Distillation") || tripleUnits.has("Liquid-liquid extraction"), "3-reagent demo should suggest separation assets");
 
-loadMethylbenzeneExampleProject();
+loadTripleReactantExampleProject();
 const loadedGroup = groupModel("G1");
 const loadedModel = separationSimulatorModel(loadedGroup);
-const loadedVariants = binaryRouteVariants("G1", loadedModel.pairs[0]);
-assert.strictEqual(state.text.includes("methylbenzene"), true, "Top-level methylbenzene case should load source text");
-assert.deepStrictEqual(loadedModel.substances.map(item => item.name), ["methylbenzene", "benzaldehyde"], "Top-level methylbenzene case should prefill simulator substances");
-assert(loadedVariants.some(item => item.graphPreview.includes("G1 -> V-L separator")), "Top-level methylbenzene case should preview a G1 graph variant");
+const loadedPair = loadedModel.pairs.find(pair => [pair.a.name, pair.b.name].includes("triethylamine") && [pair.a.name, pair.b.name].includes("benzyl acetate"));
+const loadedVariants = binaryRouteVariants("G1", loadedPair);
+assert.strictEqual(state.text.includes("benzyl acetate"), true, "Top-level 3-reagent case should load source text");
+assert.deepStrictEqual(loadedModel.substances.map(item => item.name), ["benzyl alcohol", "acetic anhydride", "triethylamine", "benzyl acetate"], "Top-level 3-reagent case should prefill simulator substances");
+assert(loadedVariants.some(item => item.graphPreview.includes("G1 -> V-L separator")), "Top-level 3-reagent case should preview a G1 graph variant");
 
 const volatilityRoute = loadedVariants.find(item => item.title === "Volatility route");
-insertSeparationRoute("G1", loadedModel.pairs[0].key, volatilityRoute.id);
+insertSeparationRoute("G1", loadedPair.key, volatilityRoute.id);
 const insertedGroup = groupModel("G3");
 assert(insertedGroup, "Inserting a route should create a new separator group");
 assert.strictEqual(insertedGroup.task.includes("Volatility route"), true, "Inserted group should retain the route title");
 assert.strictEqual(insertedGroup.selectedUnit.length > 0, true, "Inserted group should receive a candidate unit");
-assert(insertedGroup.blocks.some(block => block.text.includes("methylbenzene / benzaldehyde")), "Inserted group should contain a proposed route block");
+assert(insertedGroup.blocks.some(block => block.text.includes("triethylamine / benzyl acetate")), "Inserted group should contain a proposed route block");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Inserted route should connect source group to separator");
 assert(state.links.some(link => link.from === "G3" && link.to === "G2"), "Inserted route should reconnect separator to previous downstream group");
+
+loadTripleReactantExampleProject();
+const pathwayGroup = groupModel("G1");
+let pathwayModel = separationSimulatorModel(pathwayGroup);
+let pathwayStart = separationPathwayModel(pathwayGroup, pathwayModel);
+assert(pathwayStart.nextOptions.length > 0, "Pathway sandbox should expose a first route option");
+["triethylamine", "acetic anhydride", "benzyl alcohol"].forEach((name, index) => {
+  const option = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup)).nextOptions
+    .find(item => item.separated.some(component => component.name === name));
+  assert(option, "Pathway sandbox should expose a route to separate " + name);
+  tryPathwayRoute("G1", option.id);
+  const afterStep = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup));
+  assert.strictEqual(afterStep.steps.length, index + 1, "Trying route " + (index + 1) + " should add one draft step");
+});
+const pathwayAfterTry = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup));
+assert.strictEqual(pathwayAfterTry.steps.length, 3, "Pathway sandbox should support three sequential separations");
+assert.deepStrictEqual(pathwayAfterTry.active.map(item => item.name), ["benzyl acetate"], "After three routes only the product should remain active");
+assert(separationPathwayHtml(pathwayGroup, separationSimulatorModel(pathwayGroup)).includes("Lutze Reaction-Separation Sandbox"), "Pathway tab should render the sandbox");
+applyPathwayToMainFlowsheet("G1");
+const pathwayInsertedGroup = groupModel("G3");
+assert(pathwayInsertedGroup, "Applying a pathway should create a separator group");
+assert(pathwayInsertedGroup.selectionBasis.includes("Lutze Reaction-Separation pathway"), "Applied pathway group should preserve provenance");
+assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Applied pathway should connect source group to first separator");
+assert(groupModel("G4"), "Applying a 3-step pathway should create a second separator group");
+assert(groupModel("G5"), "Applying a 3-step pathway should create a third separator group");
+assert(state.links.some(link => link.from === "G3" && link.to === "G4"), "Applied pathway should connect first and second separators");
+assert(state.links.some(link => link.from === "G4" && link.to === "G5"), "Applied pathway should connect second and third separators");
+assert(state.links.some(link => link.from === "G5" && link.to === "G2"), "Applied pathway should reconnect final separator to downstream group");
 
 console.log("Complete separation flow check passed.");
 `;

@@ -946,6 +946,10 @@
       cursor: pointer;
     }
 
+    .group-box.draft .block-card {
+      flex: 0 0 230px;
+    }
+
     .block-card-head {
       padding-right: 22px;
     }
@@ -3129,6 +3133,11 @@
       min-height: 420px;
     }
 
+    .pathway-balance-strip {
+      display: grid;
+      gap: 8px;
+    }
+
     .pathway-canvas-panel,
     .pathway-options-panel {
       display: grid;
@@ -3223,6 +3232,19 @@
       display: flex;
       flex-wrap: wrap;
       gap: 5px;
+    }
+
+    .lutze-launch-card {
+      gap: 9px;
+      border-color: #b9d8c2;
+      background: #f8fcf9;
+    }
+
+    .lutze-launch-button {
+      width: 100%;
+      min-height: 36px;
+      justify-content: center;
+      font-size: 13px;
     }
 
     .sep-balance-table {
