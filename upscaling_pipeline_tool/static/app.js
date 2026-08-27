@@ -319,25 +319,17 @@
       { id: "target_temperature", label: "Target / final temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "85-90", unit: "C", kind: "number" },
       { id: "holding_time", label: "Holding time", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
       { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "C", kind: "number" },
-      { id: "thermal_ramp", label: "Thermal ramp / control", phenomena: ["ES(H)", "ES(C)"], placeholder: "slow heat-up, controlled cooling, quench rate...", kind: "text" },
-      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger..." },
-      { id: "thermal_endpoint", label: "Thermal endpoint", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "reach reflux, cool to RT, solvent removed..." },
+      { id: "thermal_ramp", label: "Ramp / cooling time", phenomena: ["ES(H)", "ES(C)"], placeholder: "0.5", unit: "h", kind: "number", hint: "How long it takes to ramp up to the target/heating temperature, or to cool down toward the holding/final temperature." },
+      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", disabled: true, hint: "Not wired into scaling calculations yet - placeholder for a future heating/cooling equipment model." },
       { id: "initial_pressure", label: "Initial pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "1", units: ["atm", "bar", "mbar"], defaultUnit: "atm", kind: "number" },
       { id: "target_pressure", label: "Target / final pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "50", units: ["mbar", "bar", "atm"], defaultUnit: "mbar", kind: "number" },
-      { id: "pressure_control", label: "Pressure control", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "vacuum ramp, condenser pressure, vent control..." },
-      { id: "vapor_handling", label: "Vapor handling", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "condenser, Dean-Stark, vent, carbon polish..." },
-      { id: "mixing_mode", label: "Mixing mode", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "stirred tank, high shear, inline mixer..." },
       { id: "mixing_time", label: "Mixing time", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "0.5", unit: "h", kind: "number" },
       { id: "agitation_speed", label: "Agitation speed", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "300", unit: "rpm", kind: "number", hint: "Literature ranges: lab stirred vessels ~200-1000 rpm; pilot/industrial tanks ~30-150 rpm (large impellers keep similar tip speed at much lower rpm); high-shear/rotor-stator ~1000-3000 rpm; anchor/helical ribbon on viscous fluids ~5-50 rpm." },
-      { id: "mixing_intensity", label: "Mixing intensity / regime", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "gentle, vigorous, suspension, dispersion..." },
-      { id: "addition_mode", label: "Addition mode", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "batch charge, semi-batch dosing, controlled feed..." },
-      { id: "addition_time", label: "Addition / dosing time", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "1", unit: "h", kind: "number", hint: "How long you spend adding/dosing this stream into the vessel (e.g. dropwise over 1 h) - distinct from mixing time (how long you keep stirring after) and reaction time (how long the reaction runs)." },
       { id: "contact_time", label: "Phase contact time", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "0.25", unit: "h", kind: "number" },
       { id: "contact_device", label: "Contact device / geometry", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "impeller, packed bed, static mixer, spray..." },
       { id: "agitation_note", label: "Agitation / mass-transfer note", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)", "PC(LL)", "PC(LS)", "PC(VL)", "PC(VS)"], placeholder: "avoid emulsion, suspend solids, improve contact..." },
       { id: "reaction_time", label: "Reaction time", phenomena: ["R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
-      { id: "conversion_yield", label: "Conversion / yield", phenomena: ["R(L)", "R(V)"], placeholder: "95", unit: "%", kind: "number" },
-      { id: "reaction_endpoint", label: "Reaction endpoint", phenomena: ["R(L)", "R(V)"], placeholder: "water removed, GC conversion, color change..." },
+      { id: "conversion_yield", label: "Conversion / yield", phenomena: ["R(L)", "R(V)"], placeholder: "95", unit: "%", kind: "conversion" },
       { id: "phase_ratio", label: "Phase ratio", phenomena: ["PT(LL)", "PS(LL)", "2phM(LL)", "PC(LL)"], placeholder: "organic:aqueous ratio, wash volume..." },
       { id: "transfer_endpoint", label: "Transfer / equilibrium endpoint", phenomena: ["PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "PT(MVL)", "PT(MLL)", "PT(MVV)"], placeholder: "equilibrium reached, water removed, crystals formed..." },
       { id: "phase_change_time", label: "Phase-change time", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)", "PT(VL)", "PT(LS)", "PT(VS)"], placeholder: "1", unit: "h", kind: "number" },
@@ -433,6 +425,7 @@
       },
       showAllHeuristicRules: false,
       activeSeparationSimulatorGroupId: null,
+      activeConversionBlockId: null,
       activeInspectorTab: "inspect",
       selectedBlockId: null,
       selectedGroupId: null,
@@ -737,9 +730,7 @@
       }
       if (options.endpoint) {
         block.endpoint = options.endpoint;
-        if (phenomena.some(code => code.startsWith("ES("))) block.conditions.thermal_endpoint = block.conditions.thermal_endpoint || options.endpoint;
-        else if (phenomena.some(code => code.startsWith("R("))) block.conditions.reaction_endpoint = block.conditions.reaction_endpoint || options.endpoint;
-        else if (phenomena.some(code => code.startsWith("PT("))) block.conditions.transfer_endpoint = block.conditions.transfer_endpoint || options.endpoint;
+        if (phenomena.some(code => code.startsWith("PT("))) block.conditions.transfer_endpoint = block.conditions.transfer_endpoint || options.endpoint;
       }
       state.blocks.push(block);
       state.selectedBlockId = block.id;
@@ -821,21 +812,11 @@
       const conditions = {};
       const units = {};
       const hasThermal = phenomena.some(code => ["ES(H)", "ES(C)", "PT(VL)"].includes(code));
-      const hasPressure = phenomena.some(code => ["PT(VL)", "PS(VL)", "PC(VL)"].includes(code));
       const temperatureMatch = text.match(/(\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*C|\d+(?:\.\d+)?\s*°?\s*C)/i);
       if (hasThermal && temperatureMatch) {
         conditions.target_temperature = temperatureMatch[1].replace(/°?\s*C/ig, "").replace(/\s+/g, " ").trim();
         units.target_temperature = "C";
       }
-      if (hasThermal && t.includes("room temperature")) conditions.thermal_endpoint = conditions.thermal_endpoint || "cool/reach room temperature";
-      if (hasThermal && t.includes("reflux")) {
-        conditions.thermal_endpoint = "reach reflux";
-      }
-      if (hasThermal && (t.includes("cool") || t.includes("cooled"))) {
-        conditions.thermal_ramp = "cooling step";
-      }
-      if (hasPressure && t.includes("vacuum")) conditions.pressure_control = "vacuum operation";
-      if (hasPressure && t.includes("dean-stark")) conditions.vapor_handling = "Dean-Stark water removal";
       const hasMixing = phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("));
       const hasSeparation = phenomena.some(code => code.startsWith("PS("));
       const hasReaction = phenomena.some(code => code.startsWith("R("));
@@ -1033,8 +1014,8 @@
             { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
             { role: "output", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
-          { mixing_mode: "stirred jacketed reactor", addition_mode: "batch charge", addition_time: "0.5" },
-          { addition_time: "h" }
+          {},
+          {}
         ),
         makeBlock(
           "B2",
@@ -1043,7 +1024,7 @@
           "heat/cool",
           ["ES(H)", "M(L)"],
           [],
-          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", thermal_endpoint: "stable reflux at 85 C" },
+          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux" },
           { initial_temperature: "C", target_temperature: "C" }
         ),
         makeBlock(
@@ -1059,7 +1040,7 @@
             { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "route to vent abatement train (paper U7): condenser + activated carbon polishing (VOC compliance)" },
             { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
           ],
-          { reaction_time: "21", holding_temperature: "85", mixing_mode: "refluxing stirred liquid", conversion_yield: "90", reaction_endpoint: "no further water separates in the trap" },
+          { reaction_time: "21", holding_temperature: "85", conversion_yield: "90" },
           { reaction_time: "h", holding_temperature: "C", conversion_yield: "%" }
         ),
         makeBlock(
@@ -1069,7 +1050,7 @@
           "heat/cool",
           ["ES(C)"],
           [],
-          { initial_temperature: "85", target_temperature: "40", thermal_ramp: "controlled cooling before work-up", thermal_endpoint: "40 C" },
+          { initial_temperature: "85", target_temperature: "40" },
           { initial_temperature: "C", target_temperature: "C" }
         ),
         makeBlock(
@@ -1082,7 +1063,7 @@
             { role: "input", name: "wash water", quantity: "2.0", unit: "kg", phase: "L", status: "reported", timing: "later addition", fate: "fresh input", scalingMode: "per batch" },
             { role: "output", name: "washed two-phase mixture", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
-          { mixing_mode: "two-stage counter-current mixer-settler", mixing_time: "0.5", settling_time: "0.5", phase_ratio: "organic:aqueous approx. 7.2:2.0" },
+          { mixing_time: "0.5", settling_time: "0.5", phase_ratio: "organic:aqueous approx. 7.2:2.0" },
           { mixing_time: "h", settling_time: "h" }
         ),
         makeBlock(
@@ -1123,7 +1104,7 @@
             { role: "output", name: "crude octocrylene", quantity: "3.50", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
             { role: "waste", name: "cyclohexane loss", quantity: "0.35", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "evaporator vent to abatement train (paper U7); make-up fresh cyclohexane required" }
           ],
-          { target_pressure: "150", pressure_control: "vacuum thin-film evaporation", vapor_handling: "condenser before vacuum system, vent to abatement", phase_change_time: "2", phase_change_fraction: "90" },
+          { target_pressure: "150", phase_change_time: "2", phase_change_fraction: "90" },
           { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
         ),
         makeBlock(
@@ -1286,7 +1267,7 @@
             { role: "output", name: "benzaldehyde", quantity: "0.90", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch" },
             { role: "output", name: "residual methylbenzene", quantity: "0.10", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch" }
           ],
-          { conversion_yield: "90", reaction_endpoint: "90 percent yield basis", holding_temperature: "80" },
+          { conversion_yield: "90", holding_temperature: "80" },
           { conversion_yield: "%", holding_temperature: "C" }
         ),
         makeBlock(
@@ -1558,6 +1539,50 @@
         .sort((a, b) => b.score - a.score || Number(b.sameTask) - Number(a.sameTask));
     }
 
+    function unitOperationCandidatesForGroup(group) {
+      if ((group.phenomena || []).length) return matchesForGroup(group);
+      const context = groupPhaseContext(group);
+      return unitCatalog
+        .map(unit => {
+          const textScore = taskTextUnitScore(group, unit);
+          const phaseScore = unitOperationFeedPhaseCompatible(unit, context) ? 1 : 0;
+          const score = textScore + phaseScore;
+          return { ...unit, overlap: [], sameTask: false, score, preliminary: true };
+        })
+        .filter(unit => unit.score > 0)
+        .filter(unit => preliminaryUnitTaskCompatible(unit, group))
+        .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
+        .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    }
+
+    function taskTextUnitScore(group, unit) {
+      const text = `${group.task || ""} ${group.text || ""}`.toLowerCase();
+      const add = (pattern, task, names = []) => {
+        if (!pattern.test(text)) return 0;
+        return unit.task === task || names.some(name => unit.name.toLowerCase().includes(name)) ? 6 : 0;
+      };
+      return Math.max(
+        add(/react|synth|condensation|knoevenagel|conversion/, "reaction"),
+        add(/heat|warm|cool|reflux|temperature|thermal/, "thermal conditioning"),
+        add(/wash|extract|decan|phase split|aqueous|organic/, "separation", ["extraction", "decanter"]),
+        add(/distill|evaporat|solvent removal|recover|purif|strip|flash/, "separation", ["distillation", "evaporation", "flash", "stripping"]),
+        add(/crystall|precipitat/, "separation", ["crystallization"]),
+        add(/dry|moisture|molecular sieve|desiccant/, "separation", ["drying"]),
+        add(/wastewater|effluent|neutral/, "wastewater treatment"),
+        add(/vent|voc|emission|abatement|condenser|adsorption|carbon/, "separation", ["condensation", "absorption"])
+      );
+    }
+
+    function preliminaryUnitTaskCompatible(unit, group) {
+      const text = `${group.task || ""} ${group.text || ""}`.toLowerCase();
+      if (/wastewater|effluent|neutral/.test(text)) return unit.task === "wastewater treatment" || unit.task === "separation";
+      if (/react|synth|condensation|knoevenagel|conversion/.test(text)) return unit.task.startsWith("reaction") || unit.task === "thermal conditioning";
+      if (/feed|charge|prepar|dosing|mix/.test(text)) return unit.task === "reaction preparation" || unit.task === "thermal conditioning";
+      if (/heat|warm|cool|reflux|temperature|thermal/.test(text) && !/distill|evaporat|recover/.test(text)) return unit.task === "thermal conditioning";
+      if (/wash|extract|decan|distill|evaporat|solvent removal|recover|purif|strip|flash|crystall|precipitat|dry|vent|voc|emission|abatement/.test(text)) return unit.task === "separation" || unit.task === "thermal conditioning";
+      return true;
+    }
+
     function unitTaskCompatibleWithGroup(unit, group) {
       const phen = new Set(group.phenomena || []);
       const taskText = String(group.task || "").toLowerCase();
@@ -1623,7 +1648,81 @@
       `;
     }
 
+    function groupUnitSuggestionReadiness(group) {
+      const streams = group.blocks.flatMap(block => {
+        ensureBlockFlowFields(block);
+        return block.streams
+          .filter(stream => String(stream.name || "").trim())
+          .map(stream => ({ ...stream, blockId: block.id }));
+      });
+      const roleCount = role => streams.filter(stream => stream.role === role).length;
+      const materialStreams = streams.filter(stream => ["input", "output", "waste"].includes(stream.role));
+      const missingPhaseCount = materialStreams.filter(stream => !stream.phase || stream.phase === "unknown").length;
+      const taskReady = Boolean(group.task && group.task !== "unassigned");
+      const mfaReady = roleCount("input") > 0 && (roleCount("output") > 0 || roleCount("waste") > 0);
+      const phaseReady = materialStreams.length > 0 && missingPhaseCount === 0;
+      const conditionsReady = aggregateGroupConditions(group).length > 0;
+      const lutzeReady = group.phenomena.length > 0;
+      const missing = [];
+      if (!taskReady) missing.push("task definition");
+      if (!mfaReady) missing.push("input + output/waste streams");
+      if (!phaseReady) missing.push("stream phase labels");
+      if (!conditionsReady) missing.push("conditions");
+      const dataReady = taskReady && mfaReady && phaseReady && conditionsReady;
+      return {
+        taskReady,
+        mfaReady,
+        phaseReady,
+        conditionsReady,
+        lutzeReady,
+        dataReady,
+        ready: dataReady,
+        missing,
+        missingPhaseCount,
+        streamCount: materialStreams.length
+      };
+    }
+
+    function groupUnitSuggestionGateHtml(group) {
+      const readiness = groupUnitSuggestionReadiness(group);
+      const groupState = ensureGroup(group.id);
+      const alternatives = groupState.unitSuggestionsExpanded ? unitOperationCandidatesForGroup(group).slice(0, 5) : [];
+      const statusPill = (label, ok) => `<span class="pill ${ok ? "green" : "warn"}">${escapeHtml(label)}: ${ok ? "ready" : "needed"}</span>`;
+      const helper = readiness.ready
+        ? (readiness.lutzeReady
+          ? "Ready to suggest unit operations from task, MFA/phase context, conditions, and Lutze phenomena."
+          : "Ready for a preliminary unit-operation suggestion from task, MFA/phase context, and conditions. Review Lutze next to strengthen the choice.")
+        : `Complete ${readiness.missing.join(", ")} before unit-operation suggestions are reliable.`;
+      return `
+        <div class="unit-suggest-gate ${readiness.ready ? "ready" : readiness.dataReady ? "review" : "blocked"}">
+          <div class="unit-suggest-status">
+            ${statusPill("MFA", readiness.mfaReady && readiness.phaseReady)}
+            ${statusPill("Conditions", readiness.conditionsReady)}
+            <span class="pill ${readiness.lutzeReady ? "green" : "blue"}">Lutze: ${readiness.lutzeReady ? "reviewed" : "next step"}</span>
+          </div>
+          <div class="muted small">${escapeHtml(helper)}</div>
+          <div class="unit-suggest-actions">
+            <button data-review-lutze="${escapeAttr(group.id)}" ${readiness.dataReady ? "" : "disabled"}>${readiness.lutzeReady ? "Review Lutze Again" : "Review Lutze Phenomena"}</button>
+            <button class="primary" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}>Suggest Unit Operation</button>
+          </div>
+          ${groupState.unitSuggestionsExpanded ? `
+            <div class="unit-suggest-results">
+              ${alternatives.length ? alternatives.map(candidate => `
+                <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+                  ${escapeHtml(candidate.name)}
+                  ${candidateFitMetaHtml(candidate)}
+                </button>
+              `).join("") : `<div class="mfa-empty">No unit operation candidate matches the current task and phase context yet.</div>`}
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }
+
     function candidateFitMetaHtml(candidate) {
+      if (candidate.preliminary) {
+        return `<span class="candidate-fit-meta">pre-Lutze suggestion; score ${candidate.score}; task/phase based</span>`;
+      }
       const overlap = candidate.overlap?.length ? candidate.overlap.join(", ") : "no direct overlap";
       return `<span class="candidate-fit-meta">score ${candidate.score}; ${escapeHtml(overlap)}</span>`;
     }
@@ -2988,7 +3087,7 @@
       return new Set([
         "holding_time",
         "mixing_time",
-        "addition_time",
+        "thermal_ramp",
         "contact_time",
         "reaction_time",
         "phase_change_time",
@@ -3452,12 +3551,12 @@
         need("mass basis", hasStreams);
         need("Cp", propertyHasValue(group, "heat_capacity"));
         need("initial/final T", Number.isFinite(thermal.initialTemperature) && Number.isFinite(thermal.targetTemperature));
-        need("heat-transfer device / utility", Boolean(conditionMap.thermal_mode || conditionMap.vapor_handling));
+        need("heat-transfer device / utility", Boolean(conditionMap.thermal_mode));
         missing.push("U/A if quantitative correction is needed");
       } else if (operationClass === "reaction_kinetic") {
         need("reaction time", Boolean(conditionMap.reaction_time || conditionMap.holding_time));
         need("conversion/yield", Boolean(conditionMap.conversion_yield));
-        if (group.phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("))) need("mixing adequacy", Boolean(conditionMap.mixing_mode || conditionMap.agitation_note));
+        if (group.phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("))) need("mixing adequacy", Boolean(conditionMap.mixing_time || conditionMap.agitation_speed || conditionMap.agitation_note));
         if (group.phenomena.some(code => ["ES(H)", "ES(C)"].includes(code))) need("heat-removal/thermal control note", Boolean(conditionMap.thermal_mode || conditionMap.thermal_ramp));
       } else if (operationClass === "filtration") {
         need("solid loading", Boolean(conditionMap.solid_loading));
@@ -3894,7 +3993,7 @@
         if (group.task.toLowerCase().includes("dry") || (phenomena.has("PC(LS)") && phenomena.has("ES(H)"))) {
           events.push(energyEvent("drying", group, conditionMap, massBasis, rows, ["water/solvent loading", "latent heat", "drying endpoint"]));
         }
-        if (conditionMap.target_pressure || conditionMap.pressure_control || conditionMap.vapor_handling) {
+        if (conditionMap.target_pressure) {
           events.push(energyEvent("vacuum / pressure control", group, conditionMap, massBasis, rows, ["vacuum level profile", "non-condensable load"]));
         }
         const hasMixingPhenomena = [...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("));
@@ -3926,7 +4025,7 @@
         if ([...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("))) {
           const missing = [];
           if (!conditions.mixing_time) missing.push("mixing time");
-          if (!conditions.mixing_mode) missing.push("mixing mode/geometry");
+          if (!conditions.agitation_speed) missing.push("agitation speed");
           const needsPhysicalProps = mixingPhysicalPropertiesNeeded(group);
           if (needsPhysicalProps && !properties.has("viscosity")) missing.push("viscosity");
           if (needsPhysicalProps && !properties.has("density")) missing.push("density");
@@ -3950,7 +4049,7 @@
         }
         if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
           const missing = [];
-          if (!conditions.target_pressure && !conditions.pressure_control) missing.push("pressure/vacuum basis");
+          if (!conditions.target_pressure) missing.push("pressure/vacuum basis");
           if (!properties.has("boiling_point")) missing.push("boiling point");
           if (!properties.has("vapor_pressure")) missing.push("vapor pressure");
           if (!properties.has("degradation_temperature")) missing.push("degradation temperature");
@@ -4065,7 +4164,7 @@
       const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
       const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
       const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
-      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure" || item.id === "pressure_control");
+      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
       const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
       const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText) || properties.has("hazard_note");
@@ -4257,7 +4356,7 @@
       const targetTemperature = conditionMap.target_temperature?.display || conditionMap.holding_temperature?.display || "";
       if ((type === "heating" || type === "cooling") && !targetTemperature) missing.push("target temperature");
       const duration = conditionMap.holding_time?.display || conditionMap.reaction_time?.display || conditionMap.mixing_time?.display || conditionMap.phase_change_time?.display || conditionMap.settling_time?.display || "";
-      const pressure = conditionMap.target_pressure?.display || conditionMap.initial_pressure?.display || conditionMap.pressure_control?.display || "";
+      const pressure = conditionMap.target_pressure?.display || conditionMap.initial_pressure?.display || "";
       return {
         groupId: group.id,
         task: group.task,
@@ -6178,6 +6277,232 @@
       `;
     }
 
+    function ensureConversionDetail(block) {
+      if (!block.conversionDetail || typeof block.conversionDetail !== "object" || Array.isArray(block.conversionDetail)) {
+        block.conversionDetail = { productStreamId: "", byproducts: [] };
+      }
+      if (!Array.isArray(block.conversionDetail.byproducts)) block.conversionDetail.byproducts = [];
+      return block.conversionDetail;
+    }
+
+    function conversionReactantStreams(block) {
+      return (block.streams || []).filter(stream => stream.role === "input");
+    }
+
+    function conversionProductStream(block) {
+      const detail = ensureConversionDetail(block);
+      const outputs = (block.streams || []).filter(stream => stream.role === "output");
+      if (!outputs.length) return null;
+      return outputs.find(stream => stream.id === detail.productStreamId)
+        || outputs.find(stream => stream.fate === "product")
+        || outputs[0];
+    }
+
+    function conversionNumber(value) {
+      const n = parseFloat(String(value == null ? "" : value).replace(",", "."));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function openConversionModal(blockId) {
+      const block = state.blocks.find(item => item.id === blockId);
+      if (!block) return;
+      ensureBlockConditionFields(block);
+      ensureConversionDetail(block);
+      state.activeConversionBlockId = blockId;
+      const modal = $("conversionModal");
+      if (!modal) return;
+      modal.hidden = false;
+      renderConversionModal();
+    }
+
+    function closeConversionModal() {
+      const modal = $("conversionModal");
+      if (modal) modal.hidden = true;
+      state.activeConversionBlockId = null;
+    }
+
+    function updateConversionPercent(block, rawValue) {
+      const clamped = Math.max(0, Math.min(100, conversionNumber(rawValue)));
+      ensureBlockConditionFields(block);
+      block.conditions.conversion_yield = String(clamped);
+      block.conditionUnits.conversion_yield = "%";
+      invalidateAiRefine();
+      renderConversionModal();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
+    function byproductColor(index) {
+      const palette = ["#7c9cff", "#f2b84b", "#4bc9a8", "#e07a9e", "#9b8bf4"];
+      return palette[index % palette.length];
+    }
+
+    function conversionStreamRowHtml(name, total, usedOrMade, leftover, unit, usedLabel) {
+      const basis = total || (usedOrMade + leftover) || 1;
+      const usedPct = basis ? Math.min(100, Math.max(0, (usedOrMade / basis) * 100)) : 0;
+      const label = usedLabel === "made" ? "Made" : "Used";
+      return `
+        <div class="conversion-stream-row">
+          <div class="conversion-stream-row-head">
+            <strong>${escapeHtml(name)}</strong>
+            <span class="muted small">${total ? total.toFixed(2) : "0"} ${escapeHtml(unit || "kg")} total</span>
+          </div>
+          <div class="conversion-bar">
+            <span class="conversion-bar-seg used" style="width:${usedPct}%" title="${label}: ${usedOrMade.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
+            <span class="conversion-bar-seg leftover" style="width:${100 - usedPct}%" title="Leftover: ${leftover.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
+          </div>
+          <div class="conversion-stream-row-numbers muted small">
+            <span>${label}: ${usedOrMade.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
+            <span>Leftover: ${leftover.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderConversionModal() {
+      const modal = $("conversionModal");
+      const body = $("conversionModalBody");
+      if (!modal || modal.hidden || !body) return;
+      const block = state.blocks.find(item => item.id === state.activeConversionBlockId);
+      if (!block) {
+        body.innerHTML = `<div class="mfa-empty">No block selected.</div>`;
+        return;
+      }
+      ensureBlockConditionFields(block);
+      const detail = ensureConversionDetail(block);
+      const percent = Math.max(0, Math.min(100, conversionNumber(block.conditions.conversion_yield || "95")));
+      const leftoverPercent = 100 - percent;
+      const reactants = conversionReactantStreams(block);
+      const outputs = (block.streams || []).filter(stream => stream.role === "output");
+      const product = conversionProductStream(block);
+
+      let pooledLeftover = 0;
+      const reactantRows = reactants.map(stream => {
+        const qty = conversionNumber(stream.quantity);
+        const used = qty * percent / 100;
+        const leftover = qty * leftoverPercent / 100;
+        pooledLeftover += leftover;
+        return { stream, qty, used, leftover };
+      });
+      const productQty = product ? conversionNumber(product.quantity) : 0;
+      const productMade = productQty * percent / 100;
+      const productShortfall = productQty * leftoverPercent / 100;
+      if (product) pooledLeftover += productShortfall;
+
+      const byproductTotalPercent = detail.byproducts.reduce((sum, bp) => sum + conversionNumber(bp.percent), 0);
+      const byproductRows = detail.byproducts.map(bp => ({ ...bp, mass: pooledLeftover * (conversionNumber(bp.percent) / 100) }));
+      const wastePercent = Math.max(0, 100 - byproductTotalPercent);
+      const wasteMass = pooledLeftover * (wastePercent / 100);
+      const fallbackUnit = product?.unit || reactants[0]?.unit || "kg";
+
+      body.innerHTML = `
+        <div class="conversion-modal-body">
+          <div class="conversion-percent-row">
+            <label>
+              Conversion
+              <div class="conversion-percent-controls">
+                <input type="range" min="0" max="100" step="1" id="conversionPercentSlider" value="${percent}">
+                <input type="number" min="0" max="100" step="1" id="conversionPercentNumber" value="${percent}">
+                <span class="unit-badge">%</span>
+              </div>
+            </label>
+            <div class="muted small">At ${percent}% conversion, ${percent}% of every reagent below reacts and ${percent}% of the product basis is made — the remaining ${leftoverPercent}% shows up as waste or byproducts.</div>
+          </div>
+
+          <div class="conversion-section">
+            <div class="conversion-section-head">Reagents${!reactants.length ? ` <span class="muted small">(no input streams on this block yet — add them in MFA/streams)</span>` : ""}</div>
+            ${reactantRows.map(row => conversionStreamRowHtml(row.stream.name || "(unnamed input)", row.qty, row.used, row.leftover, row.stream.unit, "used")).join("")}
+          </div>
+
+          <div class="conversion-section">
+            <div class="conversion-section-head">
+              <span>Product</span>
+              ${outputs.length > 1 ? `
+                <select id="conversionProductSelect">
+                  ${outputs.map(stream => `<option value="${escapeAttr(stream.id)}" ${product && stream.id === product.id ? "selected" : ""}>${escapeHtml(stream.name || stream.id)}</option>`).join("")}
+                </select>
+              ` : ""}
+            </div>
+            ${product
+              ? conversionStreamRowHtml(product.name || "(unnamed output)", productQty, productMade, productShortfall, product.unit, "made")
+              : `<div class="muted small">No output stream to treat as the product yet — add one in MFA/streams.</div>`}
+          </div>
+
+          <div class="conversion-section">
+            <div class="conversion-section-head">Waste / byproducts <span class="muted small">(split of the unconverted ${leftoverPercent}%, ${pooledLeftover.toFixed(2)} ${escapeHtml(fallbackUnit)})</span></div>
+            <div class="conversion-summary-bar">
+              ${byproductRows.map((row, i) => `<span class="conversion-bar-seg byproduct" style="width:${pooledLeftover ? (row.mass / pooledLeftover * 100) : 0}%; background:${byproductColor(i)}" title="${escapeAttr(row.name || "byproduct")}: ${row.mass.toFixed(2)} ${escapeAttr(fallbackUnit)}"></span>`).join("")}
+              <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Waste: ${wasteMass.toFixed(2)} ${escapeAttr(fallbackUnit)}"></span>
+            </div>
+            <div class="conversion-byproduct-rows">
+              ${detail.byproducts.map((bp, i) => `
+                <div class="conversion-byproduct-row">
+                  <span class="conversion-byproduct-swatch" style="background:${byproductColor(i)}"></span>
+                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="byproduct name">
+                  <input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}">
+                  <span class="unit-badge">% of leftover</span>
+                  <span class="conversion-byproduct-mass muted small">${byproductRows[i].mass.toFixed(2)} ${escapeHtml(fallbackUnit)}</span>
+                  <button type="button" class="mini-button" data-remove-conversion-byproduct="${i}">Remove</button>
+                </div>
+              `).join("")}
+              <div class="conversion-byproduct-row conversion-byproduct-row-waste">
+                <span class="conversion-byproduct-swatch waste"></span>
+                <span class="muted small">Unassigned waste</span>
+                <span class="muted small">${wastePercent}% of leftover</span>
+                <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(fallbackUnit)}</span>
+              </div>
+            </div>
+            <button type="button" class="mini-button" id="addConversionByproduct">+ Add byproduct</button>
+          </div>
+
+          <div class="row between" style="margin-top:12px">
+            <span class="muted small">Changes save automatically.</span>
+            <button class="primary" id="conversionModalDone">Done</button>
+          </div>
+        </div>
+      `;
+
+      $("conversionPercentSlider")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
+      $("conversionPercentNumber")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
+      $("conversionProductSelect")?.addEventListener("change", event => {
+        ensureConversionDetail(block).productStreamId = event.target.value;
+        invalidateAiRefine();
+        renderConversionModal();
+      });
+      body.querySelectorAll("[data-conversion-byproduct-name]").forEach(input => {
+        input.addEventListener("input", event => {
+          const i = Number(event.target.dataset.conversionByproductName);
+          ensureConversionDetail(block).byproducts[i].name = event.target.value;
+          invalidateAiRefine();
+        });
+      });
+      body.querySelectorAll("[data-conversion-byproduct-percent]").forEach(input => {
+        input.addEventListener("input", event => {
+          const i = Number(event.target.dataset.conversionByproductPercent);
+          ensureConversionDetail(block).byproducts[i].percent = event.target.value;
+          invalidateAiRefine();
+          renderConversionModal();
+        });
+      });
+      body.querySelectorAll("[data-remove-conversion-byproduct]").forEach(button => {
+        button.addEventListener("click", () => {
+          const i = Number(button.dataset.removeConversionByproduct);
+          ensureConversionDetail(block).byproducts.splice(i, 1);
+          invalidateAiRefine();
+          renderConversionModal();
+        });
+      });
+      $("addConversionByproduct")?.addEventListener("click", () => {
+        ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", percent: "0" });
+        invalidateAiRefine();
+        renderConversionModal();
+      });
+      $("conversionModalDone")?.addEventListener("click", () => {
+        closeConversionModal();
+        renderAll();
+      });
+    }
+
     function openSeparationSimulator(groupId) {
       const group = groupModel(groupId);
       if (!group) return;
@@ -7520,7 +7845,7 @@
       const text = `${group.task || ""} ${group.text || ""} ${group.selectedUnit || ""}`.toLowerCase();
       if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
         return [...phen].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))
-          || Boolean(conditions.target_pressure || conditions.pressure_control || conditions.vapor_handling)
+          || Boolean(conditions.target_pressure)
           || /vacuum|evapor|distill|solvent|volatile|reflux|conden/.test(text);
       }
       if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
@@ -7547,7 +7872,7 @@
         return mixingPhysicalPropertiesNeeded(group) || [...phen].some(code => ["2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)", "PS(LL)", "PS(LS)"].includes(code));
       }
       if (prompt.id === "hazard_note") {
-        return Boolean(conditions.target_pressure || conditions.pressure_control || conditions.vapor_handling)
+        return Boolean(conditions.target_pressure)
           || [...phen].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)", "PCh(L->V)"].includes(code))
           || /hazard|flamm|toxic|corrosive|vacuum|vent|waste|purge/.test(text);
       }
@@ -7915,6 +8240,12 @@
       root.querySelectorAll("[data-condition-unit]").forEach(field => {
         field.addEventListener("change", updateConditionUnit);
       });
+      root.querySelectorAll("[data-open-conversion-modal]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.stopPropagation();
+          openConversionModal(button.dataset.openConversionModal);
+        });
+      });
     }
 
     function renderGroupAggregateStepInspector(root, group) {
@@ -7957,6 +8288,7 @@
                 <div class="label">Task Assigned To Group</div>
                 <input data-group-task-aggregate="${escapeAttr(group.id)}" value="${escapeAttr(group.task)}" placeholder="reaction, washing, purification...">
               </label>
+              ${groupUnitSuggestionGateHtml(group)}
             </div>
           </div>
           <div class="condition-panel group-drawer-panel compact">
@@ -8046,6 +8378,31 @@
           renderExport();
         });
         input.addEventListener("change", renderAll);
+      });
+      root.querySelectorAll("[data-review-lutze]").forEach(button => {
+        button.addEventListener("click", () => {
+          const group = groupModel(button.dataset.reviewLutze);
+          if (!group) return;
+          const target = group.blocks.find(block => !(block.phenomena || []).length) || group.blocks[0];
+          if (target) {
+            state.selectedBlockId = target.id;
+            state.selectedGroupId = group.id;
+            state.selectedIds = [target.id];
+          } else {
+            state.selectedBlockId = null;
+            state.selectedGroupId = group.id;
+            state.selectedIds = [];
+          }
+          setInspectorTab("inspect");
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-suggest-unit-operation]").forEach(button => {
+        button.addEventListener("click", () => {
+          const target = ensureGroup(button.dataset.suggestUnitOperation);
+          target.unitSuggestionsExpanded = true;
+          renderStepFlowInspector();
+        });
       });
       root.querySelectorAll("[data-open-block-from-group]").forEach(button => {
         button.addEventListener("click", () => selectBlock(button.dataset.openBlockFromGroup, false));
@@ -8224,22 +8581,14 @@
         "holding_temperature",
         "thermal_ramp",
         "thermal_mode",
-        "thermal_endpoint",
         "initial_pressure",
         "target_pressure",
-        "pressure_control",
-        "vapor_handling",
-        "mixing_mode",
         "mixing_time",
         "agitation_speed",
-        "mixing_intensity",
-        "addition_mode",
-        "addition_time",
         "contact_time",
         "contact_device",
         "reaction_time",
         "conversion_yield",
-        "reaction_endpoint",
         "phase_ratio",
         "transfer_endpoint",
         "phase_change_time",
@@ -8305,16 +8654,16 @@
     }
 
     function conditionFamilyForPrompt(prompt) {
-      if (["mixing_mode", "mixing_time", "agitation_speed", "mixing_intensity", "addition_mode", "addition_time"].includes(prompt.id)) {
+      if (["mixing_time", "agitation_speed"].includes(prompt.id)) {
         return { id: "mixing", title: "Mixing / Addition" };
       }
-      if (["initial_temperature", "target_temperature", "holding_time", "holding_temperature", "thermal_ramp", "thermal_mode", "thermal_endpoint"].includes(prompt.id)) {
+      if (["initial_temperature", "target_temperature", "holding_time", "holding_temperature", "thermal_ramp", "thermal_mode"].includes(prompt.id)) {
         return { id: "thermal", title: "Thermal / Holding" };
       }
-      if (["initial_pressure", "target_pressure", "pressure_control", "vapor_handling"].includes(prompt.id)) {
+      if (["initial_pressure", "target_pressure"].includes(prompt.id)) {
         return { id: "pressure", title: "Pressure / Vapor Handling" };
       }
-      if (["reaction_time", "conversion_yield", "reaction_endpoint"].includes(prompt.id)) {
+      if (["reaction_time", "conversion_yield"].includes(prompt.id)) {
         return { id: "reaction", title: "Reaction" };
       }
       if (["contact_time", "contact_device", "agitation_note", "transfer_endpoint", "phase_change_time", "phase_change_fraction"].includes(prompt.id)) {
@@ -8371,6 +8720,33 @@
     function conditionEditCardHtml(block, prompt) {
       const value = block.conditions[prompt.id] || "";
       const unit = block.conditionUnits[prompt.id] || defaultConditionUnit(prompt);
+      if (prompt.kind === "conversion") {
+        const detail = block.conversionDetail;
+        const summary = value
+          ? `Conversion: ${escapeHtml(value)}%${detail?.byproducts?.length ? ` · ${detail.byproducts.length} byproduct${detail.byproducts.length > 1 ? "s" : ""}` : ""}`
+          : "Set conversion...";
+        return `
+          <label class="condition-edit-card">
+            <div class="label">${escapeHtml(prompt.label)}</div>
+            <div class="condition-input-row">
+              <button type="button" class="conversion-open-button" data-open-conversion-modal="${escapeAttr(block.id)}">${summary}</button>
+            </div>
+            <div class="muted small condition-hint">Opens a popup to split reagents/product between converted, waste, and byproducts.</div>
+          </label>
+        `;
+      }
+      if (prompt.disabled) {
+        return `
+          <label class="condition-edit-card condition-edit-card-disabled">
+            <div class="label">${escapeHtml(prompt.label)} <span class="pill">coming soon</span></div>
+            <div class="condition-input-row">
+              <input value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" disabled title="${escapeAttr(prompt.hint || "")}">
+              ${conditionUnitControlHtml(prompt, unit)}
+            </div>
+            ${prompt.hint ? `<div class="muted small condition-hint">${escapeHtml(prompt.hint)}</div>` : ""}
+          </label>
+        `;
+      }
       return `
         <label class="condition-edit-card">
           <div class="label">${escapeHtml(prompt.label)}</div>
@@ -9920,7 +10296,7 @@
       const blocksWith = predicate => blocks.filter(predicate);
       const phen = block => block.phenomena || [];
       const conditionText = block => Object.values(block.conditions || {}).map(value => String(value || "")).join(" ");
-      const hasAnyTimeEvidence = block => hasCondition(block, ["holding_time", "mixing_time", "addition_time", "contact_time", "reaction_time", "phase_change_time", "settling_time", "residence_time"]);
+      const hasAnyTimeEvidence = block => hasCondition(block, ["holding_time", "mixing_time", "thermal_ramp", "contact_time", "reaction_time", "phase_change_time", "settling_time", "residence_time"]);
 
       const reactionBlocks = blocksWith(block => phen(block).some(code => code.startsWith("R(")));
       const thermalBlocks = blocksWith(block => phen(block).some(code => code === "ES(H)" || code === "ES(C)"));
@@ -9960,13 +10336,13 @@
           thermalBlocks.length ? thermalBlocks.every(block => hasCondition(block, ["target_temperature", "holding_temperature", "initial_temperature"])) : blocks.length > 0,
           "Blocks with heating/cooling need a temperature value or range."),
         item("Pressure (if relevant)", "optional",
-          pressureBlocks.length ? pressureBlocks.every(block => hasCondition(block, ["target_pressure", "initial_pressure", "pressure_control"])) : true,
+          pressureBlocks.length ? pressureBlocks.every(block => hasCondition(block, ["target_pressure", "initial_pressure"])) : true,
           "Vacuum, distillation, evaporation, flash, or pressure-changing blocks should record pressure or pressure-control evidence."),
         item("Time evidence in protocol blocks", "important",
           blocks.length ? blocks.some(hasAnyTimeEvidence) : false,
           "Record protocol-level time evidence where it exists; Gantt durations are checked separately in Scale-Up."),
         item("Agitation / mixing", "important",
-          mixingBlocks.length ? mixingBlocks.every(block => hasCondition(block, ["mixing_time", "mixing_intensity", "mixing_mode", "agitation_speed", "agitation_note"])) : blocks.length > 0,
+          mixingBlocks.length ? mixingBlocks.every(block => hasCondition(block, ["mixing_time", "agitation_speed", "agitation_note"])) : blocks.length > 0,
           "Blocks with mixing phenomena need a qualitative mixing descriptor.")
       ];
 
@@ -9978,8 +10354,14 @@
           blocks.length ? blocks.every(blockHasAssignedPurpose) : false,
           "Give every block a behavior preset that states its purpose."),
         item("Endpoints (observable cues)", "important",
-          blocks.length ? blocks.every(block => hasCondition(block, ["thermal_endpoint", "reaction_endpoint", "transfer_endpoint"]) || !phen(block).some(code => code.startsWith("R(") || code.startsWith("PT("))) : false,
-          "Reaction/transfer blocks should record an observable completion cue."),
+          blocks.length ? blocks.every(block => {
+            const codes = phen(block);
+            const needsReactionEvidence = codes.some(code => code.startsWith("R("));
+            const needsTransferEvidence = codes.some(code => code.startsWith("PT("));
+            if (!needsReactionEvidence && !needsTransferEvidence) return true;
+            return (!needsReactionEvidence || hasCondition(block, ["conversion_yield"])) && (!needsTransferEvidence || hasCondition(block, ["transfer_endpoint"]));
+          }) : false,
+          "Reaction blocks should record conversion/yield; transfer blocks should record an observable completion cue."),
         item("Dominant phenomena per step (>= 1-2 per block)", "critical",
           blocks.length ? blocks.every(block => phen(block).length >= 1) : false,
           "Assign at least one phenomenon per block (paper Table 3)."),
@@ -10474,6 +10856,10 @@
     $("openFlowsheet").addEventListener("click", openFlowsheetModal);
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
     $("closeSeparationSimulator")?.addEventListener("click", closeSeparationSimulator);
+    $("closeConversionModal")?.addEventListener("click", () => { closeConversionModal(); renderAll(); });
+    $("conversionModal")?.addEventListener("click", event => {
+      if (event.target === $("conversionModal")) { closeConversionModal(); renderAll(); }
+    });
     $("flowsheetEditableMode").addEventListener("click", () => {
       state.flowsheetMode = "editable";
       renderFlowsheetModal();
@@ -10688,6 +11074,11 @@
         }
         if (!$("separationSimulatorModal").hidden) {
           closeSeparationSimulator();
+          return;
+        }
+        if (!$("conversionModal").hidden) {
+          closeConversionModal();
+          renderAll();
           return;
         }
         if (!$("flowsheetModal").hidden) {

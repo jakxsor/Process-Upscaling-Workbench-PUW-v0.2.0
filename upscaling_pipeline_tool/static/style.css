@@ -1471,6 +1471,45 @@
       padding: 6px 7px;
     }
 
+    .unit-suggest-gate {
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .unit-suggest-gate.ready {
+      border-color: #b9d8c2;
+      background: #f6fbf7;
+    }
+
+    .unit-suggest-gate.review {
+      border-color: #d8c58d;
+      background: #fffaf0;
+    }
+
+    .unit-suggest-status,
+    .unit-suggest-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .unit-suggest-actions {
+      justify-content: flex-end;
+    }
+
+    .unit-suggest-results {
+      display: grid;
+      gap: 6px;
+      padding-top: 7px;
+      border-top: 1px solid var(--line);
+    }
+
     .group-phenomena-strip {
       display: flex;
       gap: 4px;
@@ -1892,6 +1931,184 @@
       background: var(--info-blue-soft);
       font-size: 11px;
       font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .condition-edit-card-disabled {
+      opacity: 0.62;
+    }
+
+    .condition-edit-card-disabled input {
+      cursor: not-allowed;
+    }
+
+    .condition-edit-card-disabled .label .pill {
+      margin-left: 6px;
+      font-size: 9px;
+      padding: 2px 6px;
+      background: var(--info-blue-soft);
+      color: var(--ink-3);
+      border: 1px solid var(--line);
+    }
+
+    .conversion-open-button {
+      width: 100%;
+      min-height: 29px;
+      padding: 5px 10px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .conversion-open-button:hover {
+      filter: brightness(0.97);
+    }
+
+    .conversion-panel {
+      width: min(680px, calc(100vw - 24px));
+    }
+
+    .conversion-modal-body {
+      display: grid;
+      gap: 16px;
+    }
+
+    .conversion-percent-row label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 12px;
+      color: var(--ink-2);
+      text-transform: uppercase;
+    }
+
+    .conversion-percent-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .conversion-percent-controls input[type="range"] {
+      flex: 1;
+    }
+
+    .conversion-percent-controls input[type="number"] {
+      width: 64px;
+      min-height: 29px;
+      padding: 5px 6px;
+      font-size: 12px;
+    }
+
+    .conversion-section {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .conversion-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 900;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+
+    .conversion-stream-row {
+      display: grid;
+      gap: 4px;
+      padding: 6px 0;
+    }
+
+    .conversion-stream-row + .conversion-stream-row {
+      border-top: 1px solid var(--line);
+    }
+
+    .conversion-stream-row-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .conversion-bar,
+    .conversion-summary-bar {
+      display: flex;
+      height: 10px;
+      border-radius: 5px;
+      overflow: hidden;
+      background: var(--line);
+    }
+
+    .conversion-bar-seg {
+      height: 100%;
+      transition: width 120ms ease;
+    }
+
+    .conversion-bar-seg.used {
+      background: var(--accent);
+    }
+
+    .conversion-bar-seg.leftover {
+      background: var(--orange);
+    }
+
+    .conversion-bar-seg.waste {
+      background: var(--muted);
+    }
+
+    .conversion-stream-row-numbers {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .conversion-byproduct-rows {
+      display: grid;
+      gap: 6px;
+    }
+
+    .conversion-byproduct-row {
+      display: grid;
+      grid-template-columns: 12px minmax(0, 1.4fr) 64px auto minmax(60px, auto) auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .conversion-byproduct-row-waste {
+      grid-template-columns: 12px 1fr auto auto;
+      color: var(--ink-3);
+    }
+
+    .conversion-byproduct-row input {
+      min-height: 27px;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+
+    .conversion-byproduct-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .conversion-byproduct-swatch.waste {
+      background: var(--muted);
+    }
+
+    .conversion-byproduct-mass {
       white-space: nowrap;
     }
 
@@ -2344,7 +2561,8 @@
 
     #flowsheetModal,
     #aiRefineModal,
-    #splitGroupModal {
+    #splitGroupModal,
+    #conversionModal {
       /* Same reasoning as #separationSimulatorModal above: the base .modal-backdrop z-index (80)
          is lower than the block/group drawer (.step-flow-inspector.resizable, z-index 180), so
          without this override these modals rendered underneath the still-visible drawer instead

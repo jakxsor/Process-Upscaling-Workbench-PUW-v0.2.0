@@ -394,6 +394,19 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
+  <div id="conversionModal" class="modal-backdrop" hidden>
+    <section class="modal-panel conversion-panel" role="dialog" aria-modal="true" aria-labelledby="conversionModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Reaction mass split</div>
+          <h2 id="conversionModalTitle">Conversion</h2>
+        </div>
+        <button id="closeConversionModal" class="mini-button">Close</button>
+      </div>
+      <div id="conversionModalBody" class="modal-body"></div>
+    </section>
+  </div>
+
   <div id="separationSimulatorModal" class="modal-backdrop" hidden>
     <section class="modal-panel separation-simulator-panel" role="dialog" aria-modal="true" aria-labelledby="separationSimulatorTitle">
       <div class="modal-head">
