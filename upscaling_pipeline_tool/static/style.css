@@ -4194,7 +4194,9 @@
     }
 
     @media (max-width: 1240px) {
-      main { grid-template-columns: 1fr; }
+      main,
+      main.scale-focused,
+      main.heuristic-focused { grid-template-columns: 1fr; }
       .group-flow { max-height: none; min-height: 480px; }
       .text-surface { max-height: none; }
     }
