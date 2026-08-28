@@ -168,10 +168,7 @@ APP_HTML = r"""<!doctype html>
               <select id="behaviorSelect" class="behavior-select"></select>
             </label>
             <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
-            <div>
-              <div class="label">Phenomena On This Block</div>
-              <div id="phenomenaGrid" class="phen-grid"></div>
-            </div>
+            <div id="phenomenaGridSection"></div>
           </div>
 
           <div class="card">

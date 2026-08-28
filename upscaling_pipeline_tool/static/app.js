@@ -447,6 +447,7 @@
       expandedHeuristicRuleIds: {},
       expandedScaleSections: {},
       expandedGanttRows: {},
+      phenomenaGridExpanded: false,
       scheduleScenarioView: "conservative",
       activeSeparationSimulatorGroupId: null,
       activeSeparationSimulatorMode: "full",
@@ -7968,14 +7969,15 @@
                   <span>downstream</span>
                 </div>
                 <div class="sep-route-flow">${escapeHtml(variant.graphPreview)}</div>
+                ${pbbTranslationSummaryHtml(variant)}
                 ${binaryMathSummaryHtml(variant)}
                 <div class="predictor-missing">
                   ${variant.drivers.map(driver => `<span class="pill blue">${escapeHtml(driver)}</span>`).join("")}
                   ${variant.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}
                 </div>
                 <div class="sep-unit-actions">
-                  ${variant.units.map(unit => `<button data-sep-apply-candidate="${escapeAttr(unit)}" data-sep-group="${escapeAttr(groupId)}">${escapeHtml(unit)}</button>`).join("")}
-                  <button class="primary-mini" data-sep-insert-route="${escapeAttr(variant.id)}" data-sep-route-pair="${escapeAttr(pair.key)}" data-sep-group="${escapeAttr(groupId)}">Insert route</button>
+                  ${variant.units.map(unit => `<button data-sep-apply-candidate="${escapeAttr(unit)}" data-sep-group="${escapeAttr(groupId)}" ${variant.selectable === false ? "disabled" : ""}>${escapeHtml(unit)}</button>`).join("")}
+                  <button class="primary-mini" data-sep-insert-route="${escapeAttr(variant.id)}" data-sep-route-pair="${escapeAttr(pair.key)}" data-sep-group="${escapeAttr(groupId)}" ${variant.selectable === false ? "disabled" : ""}>Insert route</button>
                 </div>
               </article>
             `).join("") : `<div class="mfa-empty">Add BP/Pvap, MW/size, miscibility, or affinity data to preview alternative graph routes.</div>`}
@@ -8040,6 +8042,29 @@
               ${escapeHtml(comparison.label)} ${escapeHtml(formatMathValue(comparison.value))} ${escapeHtml(comparison.operator || ">=")} ${escapeHtml(formatMathValue(comparison.threshold))}
             </span>
           `).join("")}
+        </div>
+      `;
+    }
+
+    function pbbTranslationSummaryHtml(item) {
+      const pbbs = Array.isArray(item.pbb) && item.pbb.length ? item.pbb : Array.isArray(item.principlePbbs) ? item.principlePbbs : [];
+      const units = Array.isArray(item.unitCandidates) ? item.unitCandidates.slice(0, 4) : [];
+      if (!pbbs.length && !units.length && !item.possibleOutletPhase && !item.agentAdded) return "";
+      return `
+        <div class="sep-paper-chain">
+          <div>
+            <span class="label">KB3.1 PBBs</span>
+            <span>${pbbs.length ? pbbs.map(code => `<span class="pill blue">${escapeHtml(code)}</span>`).join("") : `<span class="pill warn">PBB pending</span>`}</span>
+          </div>
+          <div>
+            <span class="label">KB3.2 Units</span>
+            <span>${units.length ? units.map(candidate => `<span class="pill green" title="${escapeAttr([candidate.source, candidate.feedPhase ? `feed ${candidate.feedPhase}` : "", candidate.outletPhase ? `outlet ${candidate.outletPhase}` : ""].filter(Boolean).join("; "))}">${escapeHtml(candidate.name)}</span>`).join("") : `<span class="pill warn">translation pending</span>`}</span>
+          </div>
+          <div>
+            ${item.possibleOutletPhase ? `<span class="pill">outlet ${escapeHtml(item.possibleOutletPhase)}</span>` : ""}
+            ${item.agentAdded ? `<span class="pill">agent ${escapeHtml(item.agentAdded)}</span>` : ""}
+            ${item.translationBasis ? `<span class="pill">${escapeHtml(item.translationBasis)}</span>` : ""}
+          </div>
         </div>
       `;
     }
@@ -8278,16 +8303,14 @@
               <button data-sep-sim-tab="binary">Binary Data</button>
               <button data-pathway-undo="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Undo Last</button>
               <button data-pathway-reset="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Reset</button>
-              <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Apply Pathway to Main Flowsheet</button>
+              <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.steps.length && path.editIndex < 0 ? "" : "disabled"}>Apply Pathway to Main Flowsheet</button>
             </div>
           </div>
           <div class="sep-sim-status ${escapeAttr(readiness.status)}">
             <strong>${escapeHtml(path.mainProduct ? `Main product: ${path.mainProduct.name}` : "Main product not selected")}</strong>
             <span>${escapeHtml(path.active.length ? `${path.active.length} component${path.active.length === 1 ? "" : "s"} remain in the draft mixture.` : "No active mixture components remain.")}</span>
           </div>
-          <div class="pathway-balance-strip">
-            ${reactionBalanceRecognitionHtml(path.balance)}
-          </div>
+          ${pathwayRouteReferenceHtml(group.id, path)}
           <div class="pathway-layout">
             <div class="pathway-canvas-panel">
               <div class="pathway-canvas">
@@ -8297,9 +8320,10 @@
             </div>
             <div class="pathway-options-panel">
               <div class="condition-family-head">
-                <span>Next Separation Moves</span>
+                <span>${path.editIndex >= 0 ? "Replacement Moves" : "Next Separation Moves"}</span>
                 <span class="pill">${path.nextOptions.length}</span>
               </div>
+              ${path.editIndex >= 0 ? `<div class="sep-sim-status partial"><strong>Editing from step ${path.editIndex + 1}</strong><span>Choosing a route here replaces this branch and discards ${path.discardedSteps.length} downstream step${path.discardedSteps.length === 1 ? "" : "s"}.</span></div>` : ""}
               ${path.nextOptions.length ? path.nextOptions.map(option => pathwayOptionCardHtml(group.id, option)).join("") : `
                 <div class="mfa-empty">
                   ${path.active.length <= 1 ? "Pathway is reduced to one main stream. Apply it or reset to test another route." : "No route can be drawn yet. Sync substances, fetch PubChem properties, then complete binary data for azeotrope/miscibility where needed."}
@@ -8307,7 +8331,104 @@
               `}
             </div>
           </div>
+          <details class="pathway-secondary-details">
+            <summary>Binary matrix and balance details</summary>
+            <div class="pathway-balance-strip">
+              ${reactionBalanceRecognitionHtml(path.balance)}
+            </div>
+            ${pathwayPairPriorityHtml(path)}
+          </details>
         </section>
+      `;
+    }
+
+    function pathwayRouteReferenceHtml(groupId, path) {
+      const selected = path.steps.find(step => step.id === path.pathway.selectedStepId) || path.steps[path.steps.length - 1];
+      const option = path.nextOptions[0] || null;
+      if (path.editIndex >= 0 && path.editingStep) {
+        return `
+          <div class="pathway-route-reference">
+            <div class="pathway-route-reference-main">
+              <span class="label">Editing Branch From Step ${path.editIndex + 1}</span>
+              <strong>${escapeHtml(path.editingStep.unit || path.editingStep.title || "selected separation route")}</strong>
+              <span class="muted small">Pick a replacement route below. The mixture is recalculated from before this step.</span>
+            </div>
+            <div class="pathway-route-reference-meta">
+              <span class="pill warn">${path.discardedSteps.length} step${path.discardedSteps.length === 1 ? "" : "s"} will be replaced</span>
+              <button data-pathway-cancel-edit="${escapeAttr(groupId)}">Cancel Edit</button>
+            </div>
+            ${pbbTranslationSummaryHtml(path.editingStep)}
+          </div>
+        `;
+      }
+      if (!selected && !option) {
+        return `
+          <div class="pathway-route-reference empty">
+            <div>
+              <span class="label">Route Reference</span>
+              <strong>No candidate route yet</strong>
+            </div>
+            <span class="muted small">Complete substances, phases and binary data to unlock a gated route.</span>
+          </div>
+        `;
+      }
+      if (selected) {
+        return `
+          <div class="pathway-route-reference">
+            <div class="pathway-route-reference-main">
+              <span class="label">Selected Route Reference</span>
+              <strong>${escapeHtml(selected.unit || selected.title || "selected separation route")}</strong>
+              <span class="muted small">${escapeHtml(selected.separated.map(item => item.name).join(", ") || "target pending")} separated; ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "remaining mixture")} retained.</span>
+            </div>
+            <div class="pathway-route-reference-meta">
+              <span class="pill green">${escapeHtml(formatMathScore(selected.score))}</span>
+              ${selected.possibleOutletPhase ? `<span class="pill">outlet ${escapeHtml(selected.possibleOutletPhase)}</span>` : ""}
+              ${selected.agentAdded ? `<span class="pill">agent ${escapeHtml(selected.agentAdded)}</span>` : ""}
+            </div>
+            ${pbbTranslationSummaryHtml(selected)}
+          </div>
+        `;
+      }
+      return `
+        <div class="pathway-route-reference">
+          <div class="pathway-route-reference-main">
+            <span class="label">Recommended Next Route</span>
+            <strong>${escapeHtml(option.unit || option.variant.title)}</strong>
+            <span class="muted small">${escapeHtml(option.pairLabel)} · separate ${escapeHtml(option.separated.map(item => item.name).join(", "))}; retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
+          </div>
+          <div class="pathway-route-reference-meta">
+            <span class="pill ${option.variant.level === "supported" ? "green" : "blue"}">${escapeHtml(option.variant.level)} · ${escapeHtml(formatMathScore(option.variant.score))}</span>
+            <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">Try Route</button>
+          </div>
+          ${pbbTranslationSummaryHtml(option.variant)}
+        </div>
+      `;
+    }
+
+    function pathwayPairPriorityHtml(path) {
+      return `
+        <div class="sep-route-variants">
+          <div class="sep-route-title">
+            <strong>Binary Pair Priority</strong>
+            <span class="muted small">All active pairwise comparisons ranked before drawing the next separation.</span>
+            <span class="pill">${path.pairPriorities.length} pairs</span>
+          </div>
+          ${path.pairPriorities.length ? path.pairPriorities.map((item, index) => `
+            <article class="sep-route-card ${escapeAttr(item.level)}">
+              <div class="sep-route-card-head">
+                <strong>${index + 1}. ${escapeHtml(item.pairLabel)}</strong>
+                <span class="pill ${item.priority === "high" ? "green" : item.priority === "medium" ? "blue" : "warn"}">${escapeHtml(item.priority)} · ${escapeHtml(formatMathScore(item.score))}</span>
+              </div>
+              <div class="predictor-reason">${escapeHtml(item.bestRoute ? `Prioritize ${item.bestRoute}${item.bestUnit ? ` via ${item.bestUnit}` : ""}. ${item.reason}` : item.reason)}</div>
+              ${pbbTranslationSummaryHtml(item)}
+              <div class="predictor-missing">
+                ${item.mainProductPair ? `<span class="pill green">main-product pair</span>` : `<span class="pill">secondary pair</span>`}
+                ${item.drivers.slice(0, 3).map(driver => `<span class="pill blue">${escapeHtml(driver)}</span>`).join("")}
+                ${item.missing.slice(0, 3).map(missing => `<span class="pill warn">${escapeHtml(missing)}</span>`).join("")}
+              </div>
+            </article>
+          `).join("") : `<div class="mfa-empty">No active binary pairs remain.</div>`}
+        </div>
       `;
     }
 
@@ -8320,7 +8441,7 @@
         </div>
         ${path.steps.map((step, index) => `
           <div class="pathway-arrow">-></div>
-          <button class="pathway-node separator ${path.pathway.selectedStepId === step.id ? "selected" : ""}" data-pathway-select-step="${escapeAttr(step.id)}" data-sep-group="${escapeAttr(group.id)}">
+          <button class="pathway-node separator ${path.pathway.selectedStepId === step.id ? "selected" : ""} ${path.pathway.editFromStepId === step.id ? "editing" : ""}" data-pathway-select-step="${escapeAttr(step.id)}" data-sep-group="${escapeAttr(group.id)}">
             <span class="pill">${index + 1}</span>
             <strong>${escapeHtml(step.unit || step.title || "separation route")}</strong>
             <span class="muted small">${escapeHtml(step.title || "KB3.1 route")} · ${escapeHtml(step.separated.map(item => item.name).join(", ") || "target pending")}</span>
@@ -8349,6 +8470,7 @@
           <span class="muted small">Pair score: ${escapeHtml(formatMathScore(selected.score))}</span>
           <span class="muted small">Separates: ${escapeHtml(selected.separated.map(item => item.name).join(", ") || "pending")}</span>
           <span class="muted small">Retains: ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "pending")}</span>
+          ${pbbTranslationSummaryHtml(selected)}
           <div class="predictor-missing">
             ${selected.drivers.map(line => `<span class="pill green">${escapeHtml(line)}</span>`).join("")}
             ${selected.missing.map(line => `<span class="pill warn">${escapeHtml(line)}</span>`).join("")}
@@ -8358,6 +8480,8 @@
     }
 
     function pathwayOptionCardHtml(groupId, option) {
+      const path = separationPathwayModel(groupModel(groupId));
+      const replacing = path.editIndex >= 0;
       return `
         <article class="pathway-option-card ${escapeAttr(option.variant.level)}">
           <div class="sep-route-card-head">
@@ -8369,13 +8493,11 @@
             <span class="pill green">separate ${escapeHtml(option.separated.map(item => item.name).join(", "))}</span>
             <span class="pill blue">retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
           </div>
-          <div class="predictor-reason">${escapeHtml(option.variant.graphPreview)}</div>
-          ${binaryMathSummaryHtml(option.variant)}
           <div class="predictor-missing">
-            ${option.variant.drivers.map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
-            ${option.variant.missing.map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}
+            ${option.variant.pbb.slice(0, 4).map(code => `<span class="pill blue">${escapeHtml(code)}</span>`).join("")}
+            ${option.variant.drivers.slice(0, 2).map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
           </div>
-          <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">Try This Route</button>
+          <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">${replacing ? "Replace From Here" : "Try This Route"}</button>
         </article>
       `;
     }
@@ -8388,8 +8510,12 @@
       if (!option) return;
       pushUndo();
       const simulator = ensureGroup(groupId).separationSimulator;
+      const replacing = path.editIndex >= 0;
+      if (replacing) {
+        simulator.pathway.steps = simulator.pathway.steps.slice(0, path.editIndex);
+      }
       const step = {
-        id: `PW${Date.now().toString(36)}${path.pathway.steps.length + 1}`,
+        id: `PW${Date.now().toString(36)}${simulator.pathway.steps.length + 1}`,
         pairKey: option.pairKey,
         routeId: option.routeId,
         title: option.variant.title,
@@ -8398,11 +8524,17 @@
         retainedIds: option.retained.map(item => item.id),
         drivers: option.variant.drivers,
         missing: option.variant.missing,
+        pbb: option.variant.pbb || [],
+        possibleOutletPhase: option.variant.possibleOutletPhase || "",
+        agentAdded: option.variant.agentAdded || "",
+        translationBasis: option.variant.translationBasis || "",
+        unitCandidates: option.variant.unitCandidates || [],
         score: option.variant.score,
         note: option.variant.graphPreview
       };
       simulator.pathway.steps.push(step);
       simulator.pathway.selectedStepId = step.id;
+      simulator.pathway.editFromStepId = "";
       simulator.tab = "pathway";
       renderSeparationSimulatorModal();
       renderExport();
@@ -8414,6 +8546,7 @@
       pushUndo();
       simulator.pathway.steps.pop();
       simulator.pathway.selectedStepId = simulator.pathway.steps.length ? simulator.pathway.steps[simulator.pathway.steps.length - 1].id : "";
+      simulator.pathway.editFromStepId = "";
       simulator.tab = "pathway";
       renderSeparationSimulatorModal();
       renderExport();
@@ -8425,6 +8558,7 @@
       pushUndo();
       simulator.pathway.steps = [];
       simulator.pathway.selectedStepId = "";
+      simulator.pathway.editFromStepId = "";
       simulator.pathway.appliedAt = "";
       simulator.tab = "pathway";
       renderSeparationSimulatorModal();
@@ -8434,6 +8568,13 @@
     function selectPathwayStep(groupId, stepId) {
       const simulator = ensureGroup(groupId).separationSimulator;
       simulator.pathway.selectedStepId = stepId;
+      simulator.pathway.editFromStepId = stepId;
+      renderSeparationSimulatorModal();
+    }
+
+    function cancelPathwayEdit(groupId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      simulator.pathway.editFromStepId = "";
       renderSeparationSimulatorModal();
     }
 
@@ -8443,6 +8584,7 @@
       const model = separationSimulatorModel(sourceGroup);
       const path = separationPathwayModel(sourceGroup, model);
       if (!path.steps.length) return;
+      if (path.editIndex >= 0) return;
       pushUndo();
       const sourceState = ensureGroup(groupId);
       const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
@@ -8521,9 +8663,9 @@
     function separationSuggestionsHtml(group, model) {
       const readiness = separationSimulatorReadiness(model);
       const actionable = model.suggestions
-        .filter(item => item.ruleId !== "NO-KB3.1-MATCH")
-        .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.pairLabel.localeCompare(b.pairLabel));
-      const blocked = model.suggestions.filter(item => item.ruleId === "NO-KB3.1-MATCH");
+        .filter(item => item.ruleId !== "NO-KB3.1-MATCH" && item.eligibility !== "not eligible")
+        .sort((a, b) => Number(a.selectable === false) - Number(b.selectable === false) || suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.pairLabel.localeCompare(b.pairLabel));
+      const blocked = model.suggestions.filter(item => item.ruleId === "NO-KB3.1-MATCH" || item.eligibility === "not eligible");
       const grouped = new Map();
       actionable.forEach(item => {
         if (!grouped.has(item.pairLabel)) grouped.set(item.pairLabel, []);
@@ -8536,9 +8678,9 @@
             <div class="muted small">The simulator proposes theories only. Use Apply as Candidate when you intentionally want to test one unit operation in the group.</div>
           </div>
           <div class="sep-result-summary">
-            <span><strong>${readiness.actionableCount}</strong> actionable route theories</span>
+            <span><strong>${readiness.actionableCount}</strong> gated route theories</span>
             <span><strong>${readiness.supportedCount}</strong> supported</span>
-            <span><strong>${blocked.length}</strong> pairs waiting for data</span>
+            <span><strong>${blocked.length}</strong> waiting/rejected</span>
           </div>
           <div class="sep-suggestions">
             ${grouped.size ? Array.from(grouped.entries()).map(([pairLabel, items]) => `
@@ -8555,7 +8697,10 @@
                 ${blocked.map(item => `
                   <div class="sep-missing-row">
                     <strong>${escapeHtml(item.pairLabel)}</strong>
-                    <span>${item.missing.map(missing => `<span class="pill warn">${escapeHtml(missing)}</span>`).join("")}</span>
+                    <span>
+                      ${(item.blockers || []).map(line => `<span class="pill warn">${escapeHtml(line)}</span>`).join("")}
+                      ${item.missing.map(missing => `<span class="pill warn">${escapeHtml(missing)}</span>`).join("")}
+                    </span>
                   </div>
                 `).join("")}
               </div>
@@ -8577,24 +8722,29 @@
 
     function separationSuggestionCardHtml(groupId, item) {
       const units = item.units.length ? item.units : ["add data before selecting a unit"];
+      const selectable = item.selectable !== false;
+      const status = item.eligibility || item.level;
       return `
-        <article class="predictor-row ${item.level === "supported" ? "keep" : item.level === "blocked" ? "reject" : "weak"}">
+        <article class="predictor-row ${item.level === "supported" ? "keep" : item.level === "blocked" || !selectable ? "reject" : "weak"}">
           <div class="predictor-row-top">
             <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.level === "supported" ? "green" : item.level === "blocked" ? "warn" : "blue"}">${escapeHtml(item.level)}</span>
+            <span class="pill ${item.level === "supported" ? "green" : item.level === "blocked" || !selectable ? "warn" : "blue"}">${escapeHtml(status)} · ${escapeHtml(formatMathScore(item.score))}</span>
           </div>
           <div class="predictor-reason">${escapeHtml(item.note)}</div>
           <div class="predictor-meta">
             <span class="pill">${escapeHtml(item.source)}</span>
-            ${item.pbb.map(code => `<span class="pill blue">${escapeHtml(code)}</span>`).join("")}
+            ${item.routeFamily ? `<span class="pill blue">${escapeHtml(item.routeFamily)}</span>` : ""}
           </div>
+          ${pbbTranslationSummaryHtml(item)}
           <div class="predictor-missing">
             ${item.evidence.length ? item.evidence.map(line => `<span class="pill green">${escapeHtml(line)}</span>`).join("") : `<span class="pill warn">no threshold matched yet</span>`}
+            ${(item.eligibilityReasons || []).map(line => `<span class="pill blue">${escapeHtml(line)}</span>`).join("")}
+            ${(item.blockers || []).map(line => `<span class="pill warn">${escapeHtml(line)}</span>`).join("")}
             ${item.missing.length ? item.missing.map(line => `<span class="pill warn">${escapeHtml(line)}</span>`).join("") : ""}
           </div>
           <div class="sep-unit-actions">
             ${units.map(unit => `
-              <button data-sep-apply-candidate="${escapeAttr(unit)}" data-sep-group="${escapeAttr(groupId)}" ${item.units.length ? "" : "disabled"}>${escapeHtml(unit)}</button>
+              <button data-sep-apply-candidate="${escapeAttr(unit)}" data-sep-group="${escapeAttr(groupId)}" ${item.units.length && selectable ? "" : "disabled"}>${escapeHtml(unit)}</button>
             `).join("")}
             <button data-sep-add-note="${escapeAttr(item.pairKey)}" data-sep-note-rule="${escapeAttr(item.ruleId)}" data-sep-group="${escapeAttr(groupId)}">Add as note</button>
           </div>
@@ -8696,6 +8846,9 @@
       });
       root.querySelectorAll("[data-pathway-select-step]").forEach(button => {
         button.addEventListener("click", () => selectPathwayStep(button.dataset.sepGroup, button.dataset.pathwaySelectStep));
+      });
+      root.querySelectorAll("[data-pathway-cancel-edit]").forEach(button => {
+        button.addEventListener("click", () => cancelPathwayEdit(button.dataset.pathwayCancelEdit));
       });
       root.querySelectorAll("[data-pathway-apply]").forEach(button => {
         button.addEventListener("click", async () => {
@@ -9252,16 +9405,52 @@
 
     function renderPhenomenaGrid(block) {
       if (block) sanitizeBlockPhenomena(block);
+      const container = $("phenomenaGridSection");
+      if (!container) return;
+      const expanded = Boolean(state.phenomenaGridExpanded);
+
+      if (!expanded) {
+        const assigned = block ? block.phenomena : [];
+        container.innerHTML = `
+          <div class="phen-summary-head">
+            <div class="label">Phenomena On This Block</div>
+            <button class="mini-button" data-toggle-phenomena-grid="true">Edit phenomena</button>
+          </div>
+          <div class="phen-summary-chips">
+            ${assigned.length ? assigned.map(phenomenonPill).join("") : `<span class="muted small">No phenomena assigned yet.</span>`}
+          </div>
+        `;
+        container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
+          button.addEventListener("click", () => {
+            state.phenomenaGridExpanded = true;
+            renderPhenomenaGrid(selectedBlock());
+          });
+        });
+        return;
+      }
+
       const options = availablePhenomenaForBlock(block);
       const phaseContext = block ? blockPhaseContext(block) : null;
       const phaseHint = block && !phaseContext.hasKnown
         ? `<div class="muted small" style="margin-bottom:6px">Add stream phases to filter Lutze-compatible phenomena.</div>`
         : "";
-      $("phenomenaGrid").innerHTML = phaseHint + options.map(phen => {
-        const active = block?.phenomena.includes(phen);
-        return phenomenonOptionButton(phen, active, !block);
-      }).join("");
-      document.querySelectorAll("[data-phen]").forEach(button => {
+      container.innerHTML = `
+        <div class="phen-summary-head">
+          <div class="label">Phenomena On This Block</div>
+          <button class="mini-button primary" data-toggle-phenomena-grid="false">Done</button>
+        </div>
+        ${phaseHint}
+        <div class="phen-grid">
+          ${options.map(phen => phenomenonOptionButton(phen, block?.phenomena.includes(phen), !block)).join("")}
+        </div>
+      `;
+      container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.phenomenaGridExpanded = false;
+          renderPhenomenaGrid(selectedBlock());
+        });
+      });
+      container.querySelectorAll("[data-phen]").forEach(button => {
         button.addEventListener("click", () => {
           const block = selectedBlock();
           if (!block) return;

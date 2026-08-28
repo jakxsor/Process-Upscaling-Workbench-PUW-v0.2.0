@@ -154,6 +154,16 @@ assert.strictEqual(tripleModel.pairs.length, 6, "4 substances should produce 6 p
 assert.strictEqual(productPairs.length, 3, "3-reagent demo should create three product/reagent binary pairs");
 assert(tripleModel.suggestions.some(item => item.pairLabel.includes("triethylamine") && item.pairLabel.includes("benzyl acetate") && item.score >= 60), "Triethylamine/product pair should receive a numeric KB3.1 score");
 assert(tripleUnits.has("Evaporation") || tripleUnits.has("Distillation") || tripleUnits.has("Liquid-liquid extraction"), "3-reagent demo should suggest separation assets");
+const triplePath = separationPathwayModel(g2, tripleModel);
+assert.strictEqual(triplePath.pairPriorities.length, 6, "Pathway should rank every active binary pair");
+assert(triplePath.pairPriorities[0].mainProductPair, "Pathway should prioritize a product-facing binary pair first");
+assert(["high", "medium"].includes(triplePath.pairPriorities[0].priority), "Best binary pair should receive an explicit priority label");
+const triplePathHtml = separationPathwayHtml(g2, tripleModel);
+assert(triplePathHtml.includes("Recommended Next Route"), "Pathway UI should show the route reference directly under the main-product status");
+assert(triplePathHtml.includes("Binary matrix and balance details"), "Pathway UI should keep detailed binary matrix information secondary");
+assert(triplePathHtml.includes("Binary Pair Priority"), "Pathway UI should show the binary pair priority table");
+assert(triplePathHtml.includes("KB3.1 PBBs"), "Pathway UI should show KB3.1 PBB selection before unit operation translation");
+assert(triplePath.nextOptions.every(option => option.variant.unitCandidates.length), "Selectable pathway options should carry KB3.2 unit-operation candidates");
 
 loadTripleReactantExampleProject();
 const loadedGroup = groupModel("G1");
@@ -211,6 +221,7 @@ assert.deepStrictEqual(loadedModel.substances.map(item => item.name), ["benzyl a
 assert(loadedVariants.some(item => item.graphPreview.includes("G1 -> V-L separator")), "Top-level 3-reagent case should preview a G1 graph variant");
 
 const volatilityRoute = loadedVariants.find(item => item.title === "Volatility route");
+assert(volatilityRoute.unitCandidates.some(item => item.source === "KB3.2/Table S.11"), "Route variants should translate PBBs through KB3.2 unit-operation candidates");
 insertSeparationRoute("G1", loadedPair.key, volatilityRoute.id);
 const insertedGroup = groupModel("G3");
 assert(insertedGroup, "Inserting a route should create a new separator group");
@@ -241,15 +252,36 @@ assert.strictEqual(pathwayAfterTry.steps.length, 3, "Pathway sandbox should supp
 assert.deepStrictEqual(pathwayAfterTry.active.map(item => item.name), ["benzyl acetate"], "After three routes only the product should remain active");
 assert(pathwayAfterTry.steps[0].retained.map(item => item.name).includes("benzyl alcohol"), "First pathway split should retain all non-separated components, not just the binary pair counterpart");
 assert(separationPathwayHtml(pathwayGroup, separationSimulatorModel(pathwayGroup)).includes("Lutze Reaction-Separation Sandbox"), "Pathway tab should render the sandbox");
+selectPathwayStep("G1", pathwayAfterTry.steps[0].id);
+let editPath = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup));
+assert.strictEqual(editPath.editIndex, 0, "Selecting the first pathway node should enter edit-from-step mode");
+assert.strictEqual(editPath.active.length, 4, "Editing from the first step should recalculate options from the original reaction mixture");
+assert(separationPathwayHtml(pathwayGroup, separationSimulatorModel(pathwayGroup)).includes("Editing Branch From Step 1"), "Pathway UI should explain branch replacement mode");
+const replacementOption = editPath.nextOptions.find(item => item.separated.some(component => component.name === "acetic anhydride"));
+assert(replacementOption, "Branch edit should expose an alternative first separation route");
+tryPathwayRoute("G1", replacementOption.id);
+let replacedPath = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup));
+assert.strictEqual(replacedPath.steps.length, 1, "Replacing from the first step should discard downstream draft steps");
+assert(replacedPath.steps[0].separated.some(component => component.name === "acetic anhydride"), "Replacement route should become the new first step");
+assert.strictEqual(replacedPath.pathway.editFromStepId, "", "Replacement should exit branch edit mode");
+["triethylamine", "benzyl alcohol"].forEach(name => {
+  const option = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup)).nextOptions
+    .find(item => item.separated.some(component => component.name === name));
+  assert(option, "Pathway sandbox should expose a regenerated route to separate " + name);
+  tryPathwayRoute("G1", option.id);
+});
+replacedPath = separationPathwayModel(pathwayGroup, separationSimulatorModel(pathwayGroup));
+assert.strictEqual(replacedPath.steps.length, 3, "Regenerated branch should again support three sequential separations");
+assert.deepStrictEqual(replacedPath.active.map(item => item.name), ["benzyl acetate"], "Regenerated branch should still reduce to the product stream");
 applyPathwayToMainFlowsheet("G1");
 const pathwayInsertedGroup = groupModel("G3");
 assert(pathwayInsertedGroup, "Applying a pathway should create a separator group");
 assert(pathwayInsertedGroup.selectionBasis.includes("Lutze Reaction-Separation pathway"), "Applied pathway group should preserve provenance");
 assert(pathwayInsertedGroup.selectionBasis.includes("Separation step 1") && pathwayInsertedGroup.selectionBasis.includes("Lutze/KB3.1 score"), "Applied pathway group should include the automatic Lutze narrative");
-assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separate triethylamine from") && block.text.includes("benzyl acetate")), "Applied pathway block should state what is separated and retained");
+assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separate acetic anhydride from") && block.text.includes("benzyl acetate")), "Applied pathway block should state what is separated and retained after branch replacement");
 const firstPathwayBlock = pathwayInsertedGroup.blocks[0];
 assert(firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl alcohol") && firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl acetate"), "Applied pathway feed should carry the full active mixture into the separator");
-assert(firstPathwayBlock.streams.some(stream => stream.role === "output" && stream.name.includes("benzyl alcohol") && stream.name.includes("retained mixture")), "Applied pathway retained outlet should list the remaining mixture components");
+assert(firstPathwayBlock.streams.some(stream => stream.role === "output" && stream.name.includes("triethylamine") && stream.name.includes("retained mixture")), "Applied pathway retained outlet should list the remaining mixture components after branch replacement");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Applied pathway should connect source group to first separator");
 assert(groupModel("G4"), "Applying a 3-step pathway should create a second separator group");
 assert(groupModel("G5"), "Applying a 3-step pathway should create a third separator group");

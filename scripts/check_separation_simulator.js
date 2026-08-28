@@ -77,6 +77,44 @@ assert(ruleIds.includes("KB3.1-VL-BP-PVAP"), "property ratios should trigger V-L
 assert(ruleIds.includes("SCREEN-THERMAL-SENSITIVE"), "heat-sensitive product should trigger thin-film/short-path suggestions");
 assert(model.suggestions.some(item => item.units.includes("Evaporation")), "suggestions should include evaporation");
 assert(model.suggestions.some(item => item.units.includes("Short-path distillation")), "suggestions should include short-path distillation");
+assert(model.suggestions.some(item => item.ruleId === "KB3.1-VL-BP-PVAP" && item.selectable === true), "V-L route should pass the phase/phenomena eligibility gate");
+const vlSuggestion = model.suggestions.find(item => item.ruleId === "KB3.1-VL-BP-PVAP" && item.selectable === true);
+assert(vlSuggestion.principlePbbs.includes("PT(VL)") && vlSuggestion.principlePbbs.includes("PS(VL)"), "V-L suggestion should expose KB3.1 principle PBBs");
+assert(vlSuggestion.unitCandidates.some(item => item.source === "KB3.2/Table S.11"), "V-L suggestion should expose KB3.2 unit-operation candidates");
+
+state.blocks = [{ id: "B98", start: 0, end: 1, groupId: "GV", streams: [], phenomena: [], conditions: {} }];
+state.groups = {
+  GV: {
+    id: "GV",
+    task: "incompatible liquid split test",
+    selectedUnit: "",
+    schedule: scheduleDefaults(),
+    properties: {},
+    separationSimulator: {
+      tab: "suggestions",
+      substances: [
+        { id: "CS1", name: "vapor A", role: "reactant", phase: "V", fate: "recover", thermalSensitivity: "low", mw: "44" },
+        { id: "CS2", name: "vapor B", role: "product", phase: "V", fate: "product", thermalSensitivity: "low", mw: "58" }
+      ],
+      pairInsights: {},
+      notes: ""
+    }
+  }
+};
+state.groups.GV.separationSimulator.pairInsights[separationPairKey("CS1", "CS2")] = {
+  relativeVolatility: "",
+  azeotrope: "unknown",
+  pressureSensitive: "unknown",
+  miscibilityGap: "yes",
+  eutectic: "unknown",
+  note: "contradictory test matrix"
+};
+const vaporModel = separationSimulatorModel(groupModel("GV"));
+const llGate = vaporModel.suggestions.find(item => item.ruleId === "KB3.1-LL-GAP");
+assert(llGate, "miscibility insight should still be diagnosed");
+assert.strictEqual(llGate.eligibility, "not eligible", "L-L suggestion should be rejected for vapor-only phases");
+assert.strictEqual(llGate.selectable, false, "Rejected L-L suggestion should not be selectable");
+assert(!binaryRouteVariants("GV", vaporModel.pairs[0]).some(item => item.title === "Liquid-liquid split route"), "Rejected L-L suggestion should not become a route variant");
 
 state.blocks = [{
   id: "B100",

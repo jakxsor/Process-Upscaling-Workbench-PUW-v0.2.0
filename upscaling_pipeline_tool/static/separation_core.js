@@ -139,6 +139,26 @@
     }
   ];
 
+  const kb32UnitOperationRules = [
+    { id: "KB3.2-PARTIAL-VAP", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Partial condensation / vaporization", feedPhase: "V and/or L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V or L", agentAdded: "ESA", outlets: 1 },
+    { id: "KB3.2-FLASH", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Flash vaporization", feedPhase: "L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V", agentAdded: "pressure reduction", outlets: 2 },
+    { id: "KB3.2-EVAP", ruleIds: ["KB3.1-VL-BP-PVAP", "SCREEN-THERMAL-SENSITIVE"], name: "Evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V", agentAdded: "ESA", outlets: 1 },
+    { id: "KB3.2-DISTILL", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-AZEO", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Azeotropic distillation", feedPhase: "V and/or L", pbb: ["M", "PC(VL)", "PT(VL)", "PS(VL)", "PC(LL)", "PS(LL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
+    { id: "KB3.2-EXTRACTIVE", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Extractive distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
+    { id: "KB3.2-PRESSURE-SWING", ruleIds: ["KB3.1-PRESSURE-SENSITIVE-AZEO"], name: "Pressure-swing distillation", feedPhase: "V and/or L", pbb: ["2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(D)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-LLE", ruleIds: ["KB3.1-LL-GAP", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Liquid-liquid extraction", feedPhase: "L", pbb: ["M", "PC(LL)", "PT(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "MSA", outlets: 2 },
+    { id: "KB3.2-DECANTER", ruleIds: ["KB3.1-LL-GAP"], name: "Decanter", feedPhase: "L", pbb: ["M", "PC(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "none", outlets: 2 },
+    { id: "KB3.2-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Crystallization", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-MELT-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Melt crystallization", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-PERVAP", ruleIds: ["KB3.1-MEMBRANE-SIZE", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Membrane pervaporation", feedPhase: "V and L", pbb: ["M", "PT(MVL)", "PS(VL)"], outletPhase: "L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-VAPOR-PERM", ruleIds: ["KB3.1-MEMBRANE-SIZE"], name: "Membrane vapor permeation", feedPhase: "V", pbb: ["M", "PT(MVV)", "PS(VV)"], outletPhase: "V", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-THIN-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Thin-film evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-WIPED-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Wiped-film evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-SHORT-PATH", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Short-path distillation", feedPhase: "L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-VACUUM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Vacuum distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 }
+  ];
+
   function normalizeLookupSummary(value) {
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     return {
@@ -222,12 +242,27 @@
       retainedIds: Array.isArray(step.retainedIds) ? step.retainedIds.map(String).filter(Boolean) : [],
       drivers: Array.isArray(step.drivers) ? step.drivers.map(String).filter(Boolean) : [],
       missing: Array.isArray(step.missing) ? step.missing.map(String).filter(Boolean) : [],
+      pbb: Array.isArray(step.pbb) ? step.pbb.map(String).filter(Boolean) : [],
+      possibleOutletPhase: String(step.possibleOutletPhase || ""),
+      agentAdded: String(step.agentAdded || ""),
+      translationBasis: String(step.translationBasis || ""),
+      unitCandidates: Array.isArray(step.unitCandidates) ? step.unitCandidates.map(candidate => ({
+        id: String(candidate.id || candidate.name || ""),
+        name: String(candidate.name || ""),
+        source: String(candidate.source || ""),
+        feedPhase: String(candidate.feedPhase || ""),
+        outletPhase: String(candidate.outletPhase || ""),
+        pbb: Array.isArray(candidate.pbb) ? candidate.pbb.map(String).filter(Boolean) : [],
+        agentAdded: String(candidate.agentAdded || ""),
+        outlets: Number.isFinite(Number(candidate.outlets)) ? Number(candidate.outlets) : 0
+      })).filter(candidate => candidate.name) : [],
       score: Number.isFinite(Number(step.score)) ? Number(step.score) : 0,
       note: String(step.note || "")
     })) : [];
     return {
       steps,
       selectedStepId: String(source.selectedStepId || (steps.length ? steps[steps.length - 1].id : "") || ""),
+      editFromStepId: String(source.editFromStepId || ""),
       appliedAt: String(source.appliedAt || "")
     };
   }
@@ -256,14 +291,14 @@
   function separationSimulatorReadiness(model) {
     const quantifiedCount = model.substances.filter(item => item.quantity && item.unit).length;
     const propertyCount = model.substances.filter(item => purePropertyDefs.some(def => String(item[def.id] || "").trim())).length;
-    const actionableCount = model.suggestions.filter(item => item.ruleId !== "NO-KB3.1-MATCH").length;
-    const supportedCount = model.suggestions.filter(item => item.level === "supported").length;
-    const blockedCount = model.suggestions.filter(item => item.level === "blocked").length;
+    const actionableCount = model.suggestions.filter(suggestionIsSelectable).length;
+    const supportedCount = model.suggestions.filter(item => suggestionIsSelectable(item) && item.level === "supported").length;
+    const blockedCount = model.suggestions.filter(item => !suggestionIsSelectable(item)).length;
     if (actionableCount) {
       return {
         status: supportedCount ? "ready" : "partial",
         title: supportedCount ? "First separation theories available" : "Partial theories available",
-        message: `${actionableCount} KB3.1-triggered suggestion${actionableCount === 1 ? "" : "s"} found. Review evidence and missing data before applying a candidate.`,
+        message: `${actionableCount} gated KB3.1 route${actionableCount === 1 ? "" : "s"} passed phase/phenomena checks. Review evidence and missing data before applying a candidate.`,
         quantifiedCount,
         propertyCount,
         actionableCount,
@@ -330,6 +365,8 @@
       .map(rule => {
         const missing = separationMissingForSuggestion(pair, rule);
         const math = binaryMathForRule(pair, rule, missing);
+        const eligibility = routeEligibilityForRule(pair, rule, missing, math);
+        const unitCandidates = eligibility.selectable ? unitOperationCandidatesForRule(rule) : [];
         return {
           pairKey: pair.key,
           pairLabel: `${pair.a.name} / ${pair.b.name}`,
@@ -338,17 +375,28 @@
           source: rule.source,
           evidence: rule.evidence(pair),
           pbb: rule.pbb,
-          units: rule.units,
-          level: rule.level,
+          principlePbbs: rule.pbb,
+          possibleFeedPhase: possibleFeedPhaseForRule(rule.id),
+          possibleOutletPhase: possibleOutletPhaseForRule(rule.id),
+          agentAdded: agentAddedForRule(rule.id),
+          unitCandidates,
+          units: unitCandidates.length ? unitCandidates.map(item => item.name) : rule.units,
+          translationBasis: unitCandidates.length ? "KB3.2 unit-operation translation" : "KB3.1 PBB screening only",
+          level: eligibility.level,
+          eligibility: eligibility.status,
+          selectable: eligibility.selectable,
+          routeFamily: eligibility.family,
+          eligibilityReasons: eligibility.reasons,
+          blockers: eligibility.blockers,
           note: rule.note,
           missing,
-          score: math.score,
+          score: eligibility.selectable ? math.score : 0,
           strength: math.strength,
           comparisons: math.comparisons
         };
       })
-      .sort((a, b) => b.score - a.score || suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.label.localeCompare(b.label));
-    if (matched.length) return matched.map(item => ({ ...item, level: item.missing.length ? "partial" : item.level }));
+      .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || b.score - a.score || a.label.localeCompare(b.label));
+    if (matched.length) return matched;
     return [{
       pairKey: pair.key,
       pairLabel: `${pair.a.name} / ${pair.b.name}`,
@@ -357,14 +405,29 @@
       source: "A1.1 + KB3.1/Table S.10",
       evidence: [],
       pbb: [],
+      principlePbbs: [],
+      possibleFeedPhase: "",
+      possibleOutletPhase: "",
+      agentAdded: "",
+      unitCandidates: [],
       units: [],
+      translationBasis: "KB3.1 PBB screening only",
       level: pairHasAnyData(pair) ? "hypothesis" : "blocked",
+      eligibility: pairHasAnyData(pair) ? "hypothesis" : "not eligible",
+      selectable: false,
+      routeFamily: "unknown",
+      eligibilityReasons: pairHasAnyData(pair) ? ["some properties are present, but no KB3.1 threshold is met"] : [],
+      blockers: pairHasAnyData(pair) ? ["no supported KB3.1 trigger"] : ["missing binary/property evidence"],
       note: "Add pure-component values or binary mixture insights before proposing a defendable separation route.",
       missing: separationMissingForPair(pair),
       score: 0,
       strength: null,
       comparisons: []
     }];
+  }
+
+  function suggestionIsSelectable(item) {
+    return Boolean(item && item.ruleId !== "NO-KB3.1-MATCH" && item.selectable !== false && item.level !== "blocked" && item.eligibility !== "not eligible");
   }
 
   function binaryMathForRule(pair, rule, missing = []) {
@@ -520,6 +583,120 @@
     return [...new Set(missing)].slice(0, 4);
   }
 
+  function routeEligibilityForRule(pair, rule, missing = [], math = {}) {
+    const family = routeFamilyForRule(rule.id);
+    const compatibility = routeFamilyCompatibility(pair, family);
+    const reasons = [...compatibility.reasons];
+    const blockers = [...compatibility.blockers];
+    const evidence = rule.evidence(pair);
+    const hasThresholdEvidence = (math.comparisons || []).some(item => item.met) || evidence.length > 0;
+    if (blockers.length) {
+      return {
+        status: "not eligible",
+        level: "blocked",
+        selectable: false,
+        family,
+        reasons,
+        blockers
+      };
+    }
+    if (!hasThresholdEvidence) {
+      return {
+        status: "hypothesis",
+        level: "hypothesis",
+        selectable: false,
+        family,
+        reasons,
+        blockers: ["no property or binary threshold matched"]
+      };
+    }
+    if (missing.length) reasons.push("route has evidence but still needs review data");
+    const level = rule.level === "supported" && missing.length ? "partial" : rule.level;
+    return {
+      status: level === "supported" ? "supported" : "partial",
+      level,
+      selectable: true,
+      family,
+      reasons,
+      blockers
+    };
+  }
+
+  function routeFamilyForRule(ruleId) {
+    if (ruleId === "KB3.1-VL-BP-PVAP" || ruleId === "KB3.1-AZEO" || ruleId === "KB3.1-PRESSURE-SENSITIVE-AZEO" || ruleId === "SCREEN-THERMAL-SENSITIVE") return "VL";
+    if (ruleId === "KB3.1-LL-GAP") return "LL";
+    if (ruleId === "KB3.1-LS-MELTING") return "LS";
+    if (ruleId === "KB3.1-MEMBRANE-SIZE" || ruleId === "SCREEN-RVOL-LOW") return "AFFINITY";
+    return "unknown";
+  }
+
+  function unitOperationCandidatesForRule(rule) {
+    return kb32UnitOperationRules
+      .filter(item => item.ruleIds.includes(rule.id))
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        source: "KB3.2/Table S.11",
+        feedPhase: item.feedPhase,
+        outletPhase: item.outletPhase,
+        pbb: item.pbb,
+        agentAdded: item.agentAdded,
+        outlets: item.outlets
+      }));
+  }
+
+  function possibleFeedPhaseForRule(ruleId) {
+    const candidates = kb32UnitOperationRules.filter(item => item.ruleIds.includes(ruleId)).map(item => item.feedPhase);
+    if (candidates.length) return [...new Set(candidates)].join(" / ");
+    const family = routeFamilyForRule(ruleId);
+    if (family === "VL" || family === "AFFINITY") return "V and/or L";
+    if (family === "LL" || family === "LS") return "L";
+    return "";
+  }
+
+  function possibleOutletPhaseForRule(ruleId) {
+    const candidates = kb32UnitOperationRules.filter(item => item.ruleIds.includes(ruleId)).map(item => item.outletPhase);
+    if (candidates.length) return [...new Set(candidates)].join(" / ");
+    const family = routeFamilyForRule(ruleId);
+    if (family === "VL") return "V and L";
+    if (family === "LL") return "L";
+    if (family === "LS") return "S and L";
+    return "";
+  }
+
+  function agentAddedForRule(ruleId) {
+    const candidates = kb32UnitOperationRules.filter(item => item.ruleIds.includes(ruleId)).map(item => item.agentAdded);
+    return candidates.length ? [...new Set(candidates)].join(" / ") : "";
+  }
+
+  function routeFamilyCompatibility(pair, family) {
+    const phases = pair.components.map(component => String(component.phase || "unknown").toUpperCase());
+    const known = phases.filter(phase => phase && phase !== "UNKNOWN");
+    const hasUnknown = known.length !== phases.length;
+    const hasLiquidLike = phases.some(phase => phase === "L" || phase.includes("L"));
+    const hasVaporOnly = known.length && known.every(phase => phase === "V" || phase === "VV");
+    const hasSolidOnly = known.length && known.every(phase => phase === "S" || phase === "SS");
+    const hasSolidLike = phases.some(phase => phase === "S" || phase.includes("S"));
+    const reasons = [];
+    const blockers = [];
+    if (!known.length) reasons.push("phase not specified; compatibility inferred from property trigger");
+    if (family === "VL") {
+      if (hasSolidOnly) blockers.push("both substances are marked solid; V-L route needs liquid/vapor handling basis");
+      else reasons.push(hasLiquidLike ? "liquid/vapor-compatible phases" : "V-L route requires phase confirmation");
+    } else if (family === "LL") {
+      if (hasVaporOnly) blockers.push("both substances are marked vapor; L-L split is not phase-compatible");
+      else if (!hasLiquidLike && !hasUnknown) blockers.push("L-L split needs a liquid phase basis");
+      else reasons.push("liquid-liquid phase basis available or declared by miscibility data");
+    } else if (family === "LS") {
+      if (hasVaporOnly) blockers.push("both substances are marked vapor; L-S route is not phase-compatible");
+      else reasons.push(hasSolidLike || hasLiquidLike ? "solid-liquid phase basis available or can be generated" : "L-S route requires phase confirmation");
+    } else if (family === "AFFINITY") {
+      if (hasSolidOnly) blockers.push("both substances are marked solid; membrane/affinity route needs a fluid phase basis");
+      else reasons.push(hasLiquidLike || hasUnknown ? "fluid/affinity route basis available" : "affinity route requires phase confirmation");
+    }
+    return { reasons: [...new Set(reasons)], blockers: [...new Set(blockers)] };
+  }
+
   function reactionBalanceModel(group, simulatorModel, balanceSource) {
     const balance = normalizeReactionBalance(balanceSource);
     const conversion = reactionConversionFraction(group, balance);
@@ -599,7 +776,7 @@
   function workupPlanModel(group, simulatorModel, balanceSource) {
     const balance = reactionBalanceModel(group, simulatorModel, balanceSource);
     const rows = balance.rows;
-    const suggestions = simulatorModel.suggestions.filter(item => item.ruleId !== "NO-KB3.1-MATCH");
+    const suggestions = simulatorModel.suggestions.filter(suggestionIsSelectable);
     const product = rows.find(row => row.role === "product");
     const steps = [];
     const coproducts = rows.filter(row => row.role === "coproduct");
@@ -632,7 +809,7 @@
 
   function binaryRouteVariants(groupId, pair) {
     const variants = [];
-    const suggestions = separationSuggestionsForPair(pair).filter(item => item.ruleId !== "NO-KB3.1-MATCH");
+    const suggestions = separationSuggestionsForPair(pair).filter(suggestionIsSelectable);
     const supportedBy = ruleId => suggestions.filter(item => item.ruleId === ruleId);
     const volatility = supportedBy("KB3.1-VL-BP-PVAP");
     if (volatility.length) {
@@ -648,6 +825,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(volatility, ["Evaporation", "Distillation", "Flash vaporization", "Partial condensation / vaporization"]),
         pbb: uniqueFlat(volatility.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(volatility),
+        possibleOutletPhase: combinedOutletPhase(volatility),
+        agentAdded: combinedAgentAdded(volatility),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "V-L separator",
         drivers: volatility.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(volatility.map(item => item.missing)),
@@ -667,6 +849,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(thermal, ["Short-path distillation", "Wiped-film evaporation", "Thin-film evaporation", "Vacuum distillation"]),
         pbb: uniqueFlat(thermal.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(thermal),
+        possibleOutletPhase: combinedOutletPhase(thermal),
+        agentAdded: combinedAgentAdded(thermal),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "gentle separator",
         drivers: thermal.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(thermal.map(item => item.missing)),
@@ -685,6 +872,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(liquid, ["Decanter", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(liquid.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(liquid),
+        possibleOutletPhase: combinedOutletPhase(liquid),
+        agentAdded: combinedAgentAdded(liquid),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "L-L separator",
         drivers: liquid.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(liquid.map(item => item.missing)),
@@ -704,6 +896,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(solid, ["Crystallization", "Melt crystallization"]),
         pbb: uniqueFlat(solid.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(solid),
+        possibleOutletPhase: combinedOutletPhase(solid),
+        agentAdded: combinedAgentAdded(solid),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "crystallizer/filter",
         drivers: solid.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(solid.map(item => item.missing)),
@@ -723,6 +920,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(affinity, ["Membrane pervaporation", "Membrane vapor permeation", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(affinity.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(affinity),
+        possibleOutletPhase: combinedOutletPhase(affinity),
+        agentAdded: combinedAgentAdded(affinity),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "selective separator",
         drivers: affinity.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(affinity.map(item => item.missing)),
@@ -741,6 +943,11 @@
         comparisons: math.comparisons,
         units: prioritizedUnits(weakDistillation, ["Extractive distillation", "Azeotropic distillation", "Membrane pervaporation", "Liquid-liquid extraction"]),
         pbb: uniqueFlat(weakDistillation.map(item => item.pbb)),
+        unitCandidates: uniqueUnitCandidates(weakDistillation),
+        possibleOutletPhase: combinedOutletPhase(weakDistillation),
+        agentAdded: combinedAgentAdded(weakDistillation),
+        translationBasis: "KB3.1 PBBs translated through KB3.2",
+        selectable: true,
         flowLabel: "assisted separator",
         drivers: weakDistillation.flatMap(item => item.evidence).slice(0, 4),
         missing: uniqueFlat(weakDistillation.map(item => item.missing)),
@@ -757,6 +964,11 @@
         comparisons: [],
         units: ["Review candidate unit"],
         pbb: [],
+        unitCandidates: [],
+        possibleOutletPhase: "",
+        agentAdded: "",
+        translationBasis: "KB3.1 PBB screening only",
+        selectable: false,
         flowLabel: "review separator",
         drivers: Object.entries(pair.ratios)
           .filter(([, value]) => Number.isFinite(value))
@@ -797,6 +1009,26 @@
       ...units.filter(unit => !preferred.includes(unit))
     ];
     return sorted.slice(0, 4);
+  }
+
+  function uniqueUnitCandidates(items) {
+    const seen = new Set();
+    return items
+      .flatMap(item => item.unitCandidates || [])
+      .filter(candidate => {
+        const key = candidate.id || candidate.name;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function combinedOutletPhase(items) {
+    return [...new Set(items.map(item => item.possibleOutletPhase).filter(Boolean))].join(" / ");
+  }
+
+  function combinedAgentAdded(items) {
+    return [...new Set(items.map(item => item.agentAdded).filter(Boolean))].join(" / ");
   }
 
   function uniqueFlat(groups) {
@@ -864,20 +1096,23 @@
     const balance = reactionBalanceModel(group, simulatorModel, balanceSource);
     const mainProduct = balance.mainProduct || mainProductRow(simulatorModel.substances.map(item => reactionBalanceRow(item)), balance.balance);
     const allById = new Map(simulatorModel.substances.map(item => [item.id, item]));
-    const resolvedIds = new Set();
     const steps = pathway.steps.map(step => {
-      step.separatedIds.forEach(id => resolvedIds.add(id));
       return {
         ...step,
         separated: step.separatedIds.map(id => allById.get(id)).filter(Boolean),
         retained: step.retainedIds.map(id => allById.get(id)).filter(Boolean)
       };
     });
+    const editIndex = pathway.editFromStepId ? steps.findIndex(step => step.id === pathway.editFromStepId) : -1;
+    const optionStepSource = editIndex >= 0 ? pathway.steps.slice(0, editIndex) : pathway.steps;
+    const resolvedIds = new Set();
+    optionStepSource.forEach(step => step.separatedIds.forEach(id => resolvedIds.add(id)));
     const active = simulatorModel.substances.filter(item => !resolvedIds.has(item.id));
     const activeIds = new Set(active.map(item => item.id));
-    const nextOptions = simulatorModel.pairs
-      .filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id))
-      .flatMap(pair => binaryRouteVariants(groupId, pair).map(variant => {
+    const activePairs = simulatorModel.pairs.filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id));
+    const pairPriorities = binaryPairPriorities(groupId, activePairs, mainProduct);
+    const nextOptions = activePairs
+      .flatMap(pair => binaryRouteVariants(groupId, pair).filter(variant => variant.selectable !== false).map(variant => {
         const split = pathwaySplitTargets(pair, variant, mainProduct);
         const separatedIds = new Set(split.separated.map(item => item.id));
         const retained = active.filter(item => !separatedIds.has(item.id));
@@ -901,11 +1136,59 @@
       balance,
       mainProduct,
       steps,
+      editIndex,
+      editingStep: editIndex >= 0 ? steps[editIndex] : null,
+      discardedSteps: editIndex >= 0 ? steps.slice(editIndex) : [],
       active,
       resolved: simulatorModel.substances.filter(item => resolvedIds.has(item.id)),
+      pairPriorities,
       nextOptions,
       complete: active.length <= 1 || nextOptions.length === 0
     };
+  }
+
+  function binaryPairPriorities(groupId, pairs, mainProduct) {
+    return pairs.map(pair => {
+      const variants = binaryRouteVariants(groupId, pair)
+        .filter(variant => variant.selectable !== false)
+        .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || (Number(b.score) || 0) - (Number(a.score) || 0));
+      const best = variants[0] || null;
+      const mainId = mainProduct?.id || "";
+      const touchesMain = mainId && (pair.a.id === mainId || pair.b.id === mainId);
+      const opposite = touchesMain ? (pair.a.id === mainId ? pair.b : pair.a) : null;
+      const roleWeight = touchesMain && opposite?.role === "reactant" ? 3
+        : touchesMain && opposite && opposite.role !== "product" ? 2
+          : touchesMain ? 1
+            : 0;
+      const score = best ? Number(best.score) || 0 : 0;
+      const priorityScore = roleWeight * 1000 + score;
+      const priority = best && roleWeight >= 2 && score >= 60 ? "high"
+        : best && (roleWeight >= 1 || score >= 50) ? "medium"
+          : best ? "low"
+            : "needs data";
+      const noMatch = separationSuggestionsForPair(pair).find(item => item.ruleId === "NO-KB3.1-MATCH");
+      return {
+        pairKey: pair.key,
+        pairLabel: `${pair.a.name} / ${pair.b.name}`,
+        priority,
+        priorityScore,
+        mainProductPair: Boolean(touchesMain),
+        bestRoute: best ? best.title : "",
+        bestUnit: best ? (best.units || []).find(unit => unit !== "Review candidate unit") || "" : "",
+        level: best ? best.level : noMatch?.level || "blocked",
+        score,
+        pbb: best ? best.pbb || [] : [],
+        possibleOutletPhase: best ? best.possibleOutletPhase || "" : "",
+        agentAdded: best ? best.agentAdded || "" : "",
+        translationBasis: best ? best.translationBasis || "" : "",
+        unitCandidates: best ? best.unitCandidates || [] : [],
+        drivers: best ? best.drivers || [] : [],
+        missing: best ? best.missing || [] : noMatch?.missing || separationMissingForPair(pair),
+        reason: best
+          ? `${touchesMain ? "separates a non-product from the selected main product" : "secondary pair after product-facing cuts"}; ${best.graphPreview}`
+          : "no selectable route has passed the Lutze/KB3.1 gate yet"
+      };
+    }).sort((a, b) => b.priorityScore - a.priorityScore || a.pairLabel.localeCompare(b.pairLabel));
   }
 
   function pathwayOptionRank(option, mainProduct) {
@@ -953,6 +1236,7 @@
     thermalOptions,
     purePropertyDefs,
     kbRules,
+    kb32UnitOperationRules,
     normalizeLookupSummary,
     normalizeReactionBalance,
     normalizeSeparationSubstance,
@@ -967,6 +1251,7 @@
     numberFromText,
     formatRatio,
     separationSuggestionsForPair,
+    suggestionIsSelectable,
     binaryMathForRule,
     binaryRuleComparisons,
     thresholdMet,
@@ -975,6 +1260,13 @@
     pairHasAnyData,
     separationMissingForPair,
     separationMissingForSuggestion,
+    routeEligibilityForRule,
+    routeFamilyForRule,
+    unitOperationCandidatesForRule,
+    possibleFeedPhaseForRule,
+    possibleOutletPhaseForRule,
+    agentAddedForRule,
+    routeFamilyCompatibility,
     reactionBalanceModel,
     mainProductRow,
     reactionConversionFraction,
@@ -988,6 +1280,9 @@
     strongestSuggestionLevel,
     suggestionLevelRank,
     prioritizedUnits,
+    uniqueUnitCandidates,
+    combinedOutletPhase,
+    combinedAgentAdded,
     uniqueFlat,
     preferredVolatileComponent,
     preferredSolidComponent,
@@ -996,6 +1291,7 @@
     routeVariantPhenomena,
     routeVariantBehavior,
     separationPathwayModel,
+    binaryPairPriorities,
     pathwayOptionRank,
     pathwaySplitTargets
   };
