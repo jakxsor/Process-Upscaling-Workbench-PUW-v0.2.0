@@ -197,11 +197,8 @@
     .behavior-preset-help {
       display: grid;
       gap: 4px;
-      padding: 7px 8px;
-      border: 1px solid #cfe0ee;
-      border-left: 4px solid var(--blue);
-      border-radius: 8px;
-      background: var(--info-blue-soft);
+      padding: 2px 0 2px 9px;
+      border-left: 2px solid var(--line);
       line-height: 1.35;
     }
 
@@ -334,21 +331,6 @@
       background: var(--info-pink-soft);
     }
 
-    /* Tint the whole panel, not just its header, so the 3 zones (protocol / board /
-       inspector) read apart at a glance - cards inside keep the plain --panel background,
-       so they read as distinct white cards floating on a tinted floor instead of every
-       nesting level fighting for its own border. */
-    #protocolPanel {
-      background: var(--info-blue-soft);
-    }
-
-    .workflow-panel {
-      background: var(--accent-soft);
-    }
-
-    #inspectorPanel {
-      background: var(--info-pink-soft);
-    }
 
     .panel-body {
       padding: 10px;
@@ -3041,6 +3023,109 @@
       background: var(--info-warm-soft);
     }
 
+    .paper-compliance-badge {
+      display: grid;
+      grid-template-columns: minmax(170px, 0.7fr) minmax(260px, 1fr);
+      gap: 7px 10px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid #dfe8ec;
+      border-radius: 8px;
+      background: #fbfdfe;
+    }
+
+    .paper-compliance-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .paper-compliance-head > div {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .paper-compliance-head strong {
+      color: #1d2b33;
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .paper-compliance-guard {
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .paper-compliance-guard span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 2px 7px;
+      border: 1px solid #cfe0ee;
+      border-radius: 999px;
+      background: var(--info-blue-soft);
+      color: #315d7d;
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .paper-compliance-items {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .paper-compliance-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 3px 7px;
+      border: 1px solid #d5e0e7;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink-3);
+      font-size: 10px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .paper-compliance-item strong {
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .paper-compliance-item em {
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .paper-compliance-item.done {
+      border-color: #b8dcc5;
+      background: #ecf8f0;
+    }
+
+    .paper-compliance-item.partial {
+      border-color: #b8d3ee;
+      background: #eef7fb;
+    }
+
+    .paper-compliance-item.not {
+      border-color: #ead6a6;
+      background: #fff7df;
+    }
+
     .sep-sim-tabs {
       display: flex;
       align-items: center;
@@ -4214,6 +4299,8 @@
       main.scale-focused,
       main.heuristic-focused { grid-template-columns: 1fr; }
       .mfa-grid { grid-template-columns: 1fr; }
+      .paper-compliance-badge { grid-template-columns: 1fr; }
+      .paper-compliance-guard { justify-content: flex-start; }
       .group-drawer-overview-grid,
       .group-drawer-work-grid { grid-template-columns: 1fr; }
       .group-drawer-section-label { align-items: flex-start; flex-direction: column; gap: 2px; }

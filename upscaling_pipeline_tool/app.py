@@ -159,9 +159,6 @@ APP_HTML = r"""<!doctype html>
               <div class="label">Description Text</div>
               <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
             </label>
-          </div>
-
-          <div class="card stack">
             <span class="step-flag"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span></span>
             <label>
               <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>

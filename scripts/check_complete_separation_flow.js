@@ -163,6 +163,10 @@ assert(triplePathHtml.includes("Recommended Next Route"), "Pathway UI should sho
 assert(triplePathHtml.includes("Binary matrix and balance details"), "Pathway UI should keep detailed binary matrix information secondary");
 assert(triplePathHtml.includes("Binary Pair Priority"), "Pathway UI should show the binary pair priority table");
 assert(triplePathHtml.includes("KB3.1 PBBs"), "Pathway UI should show KB3.1 PBB selection before unit operation translation");
+assert(paperComplianceBadgeHtml(tripleModel).includes("EI ranking"), "Simulator should expose the paper-compliance badge and EI limitation");
+assert(paperComplianceBadgeHtml(tripleModel).includes("Method Guard"), "Simulator should expose the method safety guard");
+assert(paperComplianceBadgeHtml(tripleModel).includes("manual apply"), "Method guard should state that flowsheet application is manual");
+assert(paperComplianceBadgeHtml(tripleModel).includes("EI not final"), "Method guard should avoid presenting screening score as EI ranking");
 assert(triplePath.nextOptions.every(option => option.variant.unitCandidates.length), "Selectable pathway options should carry KB3.2 unit-operation candidates");
 
 loadTripleReactantExampleProject();
@@ -228,7 +232,7 @@ assert(insertedGroup, "Inserting a route should create a new separator group");
 assert.strictEqual(insertedGroup.task.includes("Volatility route"), true, "Inserted group should retain the route title");
 assert.strictEqual(insertedGroup.selectedUnit.length > 0, true, "Inserted group should receive a candidate unit");
 assert(insertedGroup.blocks.some(block => block.text.includes("triethylamine / benzyl acetate")), "Inserted group should contain a proposed route block");
-assert(insertedGroup.blocks.some(block => block.text.includes("Rationale: Volatility route") && block.text.includes("Lutze/KB3.1 score")), "Inserted route block should include an automatic Lutze narrative with score");
+assert(insertedGroup.blocks.some(block => block.text.includes("Method trace: KB3.1 selected") && block.text.includes("screening score") && block.text.includes("EI ranking is not calculated")), "Inserted route block should include an automatic method-trace narrative");
 assert(insertedGroup.selectionBasis.includes("use") && insertedGroup.selectionBasis.includes("to separate"), "Inserted route selection basis should include the narrative rationale");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Inserted route should connect source group to separator");
 assert(state.links.some(link => link.from === "G3" && link.to === "G2"), "Inserted route should reconnect separator to previous downstream group");
@@ -277,7 +281,7 @@ applyPathwayToMainFlowsheet("G1");
 const pathwayInsertedGroup = groupModel("G3");
 assert(pathwayInsertedGroup, "Applying a pathway should create a separator group");
 assert(pathwayInsertedGroup.selectionBasis.includes("Lutze Reaction-Separation pathway"), "Applied pathway group should preserve provenance");
-assert(pathwayInsertedGroup.selectionBasis.includes("Separation step 1") && pathwayInsertedGroup.selectionBasis.includes("Lutze/KB3.1 score"), "Applied pathway group should include the automatic Lutze narrative");
+assert(pathwayInsertedGroup.selectionBasis.includes("Separation step 1") && pathwayInsertedGroup.selectionBasis.includes("screening score") && pathwayInsertedGroup.selectionBasis.includes("EI ranking is not calculated"), "Applied pathway group should include the automatic method-trace narrative");
 assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separate acetic anhydride from") && block.text.includes("benzyl acetate")), "Applied pathway block should state what is separated and retained after branch replacement");
 const firstPathwayBlock = pathwayInsertedGroup.blocks[0];
 assert(firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl alcohol") && firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl acetate"), "Applied pathway feed should carry the full active mixture into the separator");

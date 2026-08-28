@@ -7095,6 +7095,7 @@
           <strong>${escapeHtml(readiness.title)}</strong>
           <span>${escapeHtml(readiness.message)}</span>
         </div>
+        ${paperComplianceBadgeHtml(model)}
         <div class="sep-sim-tabs" role="tablist" aria-label="Separation simulator tabs">
           ${tabs.map(([id, label]) => `<button class="sep-sim-tab ${simulator.tab === id ? "active" : ""}" data-sep-sim-tab="${id}">${label}</button>`).join("")}
         </div>
@@ -7110,6 +7111,44 @@
 
     function separationSimulatorReadiness(model) {
       return separationCore.separationSimulatorReadiness(model);
+    }
+
+    function paperComplianceBadgeHtml(model) {
+      const hasPairs = model.pairs.length > 0;
+      const kb31 = model.suggestions.filter(item => item.ruleId !== "NO-KB3.1-MATCH");
+      const gated = kb31.filter(item => item.eligibility && item.selectable !== false);
+      const translated = gated.filter(item => Array.isArray(item.unitCandidates) && item.unitCandidates.length);
+      const guardStatus = gated.length ? "active" : "waiting";
+      const item = (label, status, detail) => `
+        <span class="paper-compliance-item ${escapeAttr(status)}" title="${escapeAttr(detail)}">
+          <strong>${escapeHtml(label)}</strong>
+          <em>${escapeHtml(status)}</em>
+        </span>
+      `;
+      return `
+        <div class="paper-compliance-badge" aria-label="Paper method compliance">
+          <div class="paper-compliance-head">
+            <div>
+              <span class="label">Method Guard</span>
+              <strong>${guardStatus === "active" ? "Gated suggestions active" : "Waiting for gated route"}</strong>
+            </div>
+            <span class="pill ${guardStatus === "active" ? "green" : "warn"}">${guardStatus === "active" ? `${gated.length} safe to test` : "not ready"}</span>
+          </div>
+          <div class="paper-compliance-guard">
+            <span title="Only phase/phenomena-compatible KB3.1 routes can be tried.">gated routes only</span>
+            <span title="The main flowsheet changes only after Apply Pathway.">manual apply</span>
+            <span title="Editing a previous branch discards only downstream draft steps.">branch-safe edit</span>
+            <span title="Current score is a screening score; EI ranking requires mass and energy balance.">EI not final</span>
+          </div>
+          <div class="paper-compliance-items">
+            ${item("A1.1 binary matrix", hasPairs ? "done" : "waiting", hasPairs ? `${model.pairs.length} binary pair comparisons generated.` : "At least two substances are needed.")}
+            ${item("KB3.1 PBB screen", kb31.length ? "partial" : "waiting", kb31.length ? `${kb31.length} PBB trigger(s) found from available properties.` : "No KB3.1 trigger yet.")}
+            ${item("Feasibility gate", gated.length ? "done" : "waiting", gated.length ? `${gated.length} route(s) passed phase/phenomena checks.` : "No route has passed the gate yet.")}
+            ${item("KB3.2 unit translation", translated.length ? "partial" : "waiting", translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No translated unit candidates yet.")}
+            ${item("EI ranking", "not implemented", "Enthalpy Index ranking requires mass and energy balance data.")}
+          </div>
+        </div>
+      `;
     }
 
     function syncSeparationSimulatorSubstances(group) {
@@ -8028,7 +8067,7 @@
 
     function formatMathScore(score) {
       const value = Number(score);
-      return Number.isFinite(value) && value > 0 ? `${Math.round(value)}/100` : "score pending";
+      return Number.isFinite(value) && value > 0 ? `screening ${Math.round(value)}/100` : "screening pending";
     }
 
     function binaryMathSummaryHtml(variant) {
@@ -8080,11 +8119,14 @@
       const separated = resolvedSplit.separated?.map(item => item.name).filter(Boolean).join(", ") || preferredSeparatedName(pair, variant);
       const retained = resolvedSplit.retained?.map(item => item.name).filter(Boolean).join(", ") || "the remaining product-rich stream";
       const unit = (variant.units || []).find(item => item !== "Review candidate unit") || variant.flowLabel || "candidate separator";
-      const scoreText = Number(variant.score) > 0 ? `Lutze/KB3.1 score ${formatMathScore(variant.score)}` : "Lutze/KB3.1 score pending";
+      const pbb = (variant.pbb || []).length ? `KB3.1 selected ${variant.pbb.join(", ")}` : "KB3.1 PBB selection pending";
+      const candidates = (variant.unitCandidates || []).map(item => item.name).filter(Boolean);
+      const translation = candidates.length ? `KB3.2 maps this PBB set to ${candidates.slice(0, 4).join(", ")}` : "KB3.2 unit translation pending";
+      const scoreText = Number(variant.score) > 0 ? `screening score ${Math.round(Number(variant.score))}/100` : "screening score pending";
       const drivers = routeNarrativeDrivers(variant);
       const missing = (variant.missing || []).length ? ` Remaining checks: ${(variant.missing || []).join("; ")}.` : "";
       const prefix = stepIndex ? `Separation step ${stepIndex}` : "Proposed separation";
-      return `${prefix}: use ${unit} to separate ${separated} from ${retained} in ${groupId}. Rationale: ${variant.title || "property-based separation"} for binary pair ${pair.a.name} / ${pair.b.name}; ${scoreText}${drivers ? `; ${drivers}` : ""}.${missing}`;
+      return `${prefix}: use ${unit} to separate ${separated} from ${retained} in ${groupId}. Method trace: ${pbb} for binary pair ${pair.a.name} / ${pair.b.name}${drivers ? ` because ${drivers}` : ""}; ${translation}. ${scoreText}. EI ranking is not calculated here and requires mass and energy balance data.${missing}`;
     }
 
     function preferredSeparatedName(pair, variant) {
@@ -8467,7 +8509,7 @@
         <div class="pathway-info-panel">
           <strong>${escapeHtml(selected.title || selected.unit || "Selected route")}</strong>
           <span class="muted small">Unit: ${escapeHtml(selected.unit || "not fixed")}</span>
-          <span class="muted small">Pair score: ${escapeHtml(formatMathScore(selected.score))}</span>
+          <span class="muted small">Screening score: ${escapeHtml(formatMathScore(selected.score))}</span>
           <span class="muted small">Separates: ${escapeHtml(selected.separated.map(item => item.name).join(", ") || "pending")}</span>
           <span class="muted small">Retains: ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "pending")}</span>
           ${pbbTranslationSummaryHtml(selected)}
