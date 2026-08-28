@@ -47,6 +47,22 @@ const g2 = groupModel("G2");
 const g3 = groupModel("G3");
 syncSeparationSimulatorSubstances(g2);
 
+const scale = scaleModel();
+const throughput = throughputDiagnosticsModel(scale, taskScheduleModel());
+const g2Capacity = throughput.rows.find(row => row.groupId === "G2" && row.capacityUnit === "m3");
+assert(g2Capacity, "G2 should expose a volumetric capacity check");
+assert(Math.abs(g2Capacity.actualValue - 10.689) < 0.02, "G2 m3 capacity should use the reactor charge volume from the paper-scale sizing basis");
+assert.strictEqual(g2Capacity.actualSource, "reactor sizing total charge", "G2 should disclose the source of its volumetric load");
+assert(throughputDiagnosticsHtml(throughput).includes("reactor sizing total charge"), "Capacity UI should show the source of volumetric checks");
+assert.strictEqual(scale.reactorSizing.source, "manual L/kg product recipe loadings", "Octocrylene reactor sizing should disclose manual paper-linked loading inputs");
+assert(Math.abs(conversionNumber(scale.reactorSizing.reactorVolumeM3) - 15.27) < 0.03, "Octocrylene reactor sizing should reproduce the 15 m3-class reactor");
+const oneCubicMeter = groupScaledLoadVolumeM3(
+  { rows: [{ groupId: "GX", role: "input", scaledQuantity: "870", scaledUnit: "kg" }] },
+  "GX",
+  { properties: { density: { value: "870", unit: "kg/m3" } } }
+);
+assert(Math.abs(oneCubicMeter.value - 1) < 0.0001, "Group volumetric load should convert mass through group density");
+
 assert(postReactionSeparationSupportApplies(g2), "G2 should expose post-reaction separation support");
 assert(!postReactionSeparationSupportApplies(g3), "G3 cooling-only group should not expose post-reaction separation support");
 
@@ -173,9 +189,13 @@ loadTripleReactantExampleProject();
 const loadedGroup = groupModel("G1");
 const loadedReactionBlock = state.blocks.find(block => block.id === "B1");
 const loadedModel = separationSimulatorModel(loadedGroup);
+const loadedScale = scaleModel();
 const loadedPair = loadedModel.pairs.find(pair => [pair.a.name, pair.b.name].includes("triethylamine") && [pair.a.name, pair.b.name].includes("benzyl acetate"));
 const loadedVariants = binaryRouteVariants("G1", loadedPair);
 assert.strictEqual(state.text.includes("benzyl acetate"), true, "Top-level 3-reagent case should load source text");
+assert.strictEqual(loadedScale.reactorSizing.source, "auto from G1 scaled MFA + group density", "3-reagent demo should auto-size the reactor from scaled MFA and density");
+assert.strictEqual(loadedScale.reactorSizing.autoGroupId, "G1", "3-reagent auto-sizing should target the reaction group");
+assert(Math.abs(conversionNumber(loadedScale.reactorSizing.reactorVolumeM3) - 0.005) < 0.002, "3-reagent demo should calculate a working-fill reactor volume from MFA inputs");
 assert.strictEqual(conversionReactantStreams(loadedReactionBlock).length, 3, "Top-level 3-reagent case should expose three selectable conversion reagents");
 assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4", "Top-level 3-reagent case should preselect the product in Conversion");
 assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");

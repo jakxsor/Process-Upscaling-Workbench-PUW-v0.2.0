@@ -1358,7 +1358,7 @@
           selectedUnit: "Batch / semi-batch reactor",
           selectionBasis: "secondary demo: reaction group used to test multi-reactant residual handling and sequential Lutze separation pathways",
           schedule: { ...scheduleDefaults(), durationH: "3", scaleSensitivity: "kinetics-bound", notes: "demo only; verify stoichiometry before design use" },
-          properties: {},
+          properties: { density: { value: "930", unit: "kg/m3", status: "assumed", note: "demo mixture density for automatic reactor sizing from MFA mass" } },
           propertiesEditing: false,
           x: 620,
           y: 120
@@ -1384,7 +1384,13 @@
         referenceBlockId: "B2",
         basisAmount: "1.25",
         basisUnit: "kg",
-        mode: "batch"
+        mode: "batch",
+        productKgPerBatch: "",
+        reactantsLoadingLPerKgProduct: "",
+        solventLoadingLPerKgProduct: "",
+        reactorWorkingFillPercent: "70",
+        productMolecularWeightGmol: "150.18",
+        condensationWaterMolPerMol: ""
       };
       state.ruleChecks = [];
       state.aiRefine = null;
@@ -2321,11 +2327,12 @@
           event.stopImmediatePropagation();
           startConnectDrag(event, handle.dataset.connectHandle);
         });
-        handle.addEventListener("mousedown", event => {
-          event.preventDefault();
-          event.stopPropagation();
-          event.stopImmediatePropagation();
-        });
+        if (!window.PointerEvent) {
+          handle.addEventListener("mousedown", event => {
+            if (event.button !== 0) return;
+            startConnectDrag(event, handle.dataset.connectHandle);
+          });
+        }
         handle.addEventListener("click", event => {
           event.preventDefault();
           event.stopPropagation();
@@ -2346,10 +2353,12 @@
           event.stopPropagation();
           showGroupMenu(event.clientX, event.clientY, box.dataset.groupBox);
         });
-        box.addEventListener("mousedown", event => {
+        const startGroupBoxDrag = event => {
           if (event.button !== 0 || event.target.closest("[data-connect-handle]") || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
           startDrag(event, box.dataset.groupBox, "group");
-        });
+        };
+        box.addEventListener("pointerdown", startGroupBoxDrag);
+        if (!window.PointerEvent) box.addEventListener("mousedown", startGroupBoxDrag);
       });
       root.querySelectorAll("[data-select-group]").forEach(button => {
         button.addEventListener("click", event => {
@@ -2360,10 +2369,12 @@
 
       const draftBox = root.querySelector("[data-draft-box]");
       if (draftBox) {
-        draftBox.addEventListener("mousedown", event => {
+        const startDraftDrag = event => {
           if (event.button !== 0 || event.target.closest("[data-connect-handle]") || event.target.closest("[data-block-card]") || event.target.closest("button")) return;
           startDrag(event, "draft", "draft");
-        });
+        };
+        draftBox.addEventListener("pointerdown", startDraftDrag);
+        if (!window.PointerEvent) draftBox.addEventListener("mousedown", startDraftDrag);
       }
 
       root.querySelectorAll("[data-unit]").forEach(button => {
@@ -3839,6 +3850,7 @@
         };
       });
       const rows = blocks.flatMap(block => block.streams);
+      const reactorSizing = reactorSizingModel(basis, targetBatchKg, rows, reference);
       return {
         basis,
         reference: reference ? {
@@ -3854,7 +3866,7 @@
           kgPerYear: Number.isFinite(targetKgPerYear(basis)) ? formatNumber(targetKgPerYear(basis)) : ""
         },
         schedule: scheduleModel(basis, targetBatchKg),
-        reactorSizing: reactorSizingModel(basis, targetBatchKg),
+        reactorSizing,
         factors: {
           productFactor: Number.isFinite(productFactor) ? formatNumber(productFactor) : "",
           upstreamFactor: Number.isFinite(upstreamFactor) ? formatNumber(upstreamFactor) : ""
@@ -3865,10 +3877,73 @@
       };
     }
 
+    function reactorSizingGroupId(basis, reference) {
+      const selected = selectedGroup();
+      if (selected && reactionReactorLikeGroup(selected)) return selected.id;
+      const referenceGroup = reference?.block?.groupId ? groupModel(reference.block.groupId) : null;
+      if (referenceGroup && reactionReactorLikeGroup(referenceGroup)) return referenceGroup.id;
+      const ids = groupIdsInTextOrder();
+      const reactionId = ids.find(id => reactionReactorLikeGroup(groupModel(id)));
+      if (reactionId) return reactionId;
+      return ids.find(id => /reactor|vessel|tank|batch|semi-batch|cstr/i.test(`${ensureGroup(id).selectedUnit || ""} ${ensureGroup(id).task || ""}`)) || "";
+    }
+
+    function reactionReactorLikeGroup(group) {
+      if (!group) return false;
+      const text = `${group.task || ""} ${group.selectedUnit || ""} ${group.text || ""}`.toLowerCase();
+      return (group.phenomena || []).some(code => code.startsWith("R(")) || /reactor|reaction|batch|semi-batch|cstr/.test(text);
+    }
+
+    function solventLikeScaleRow(row) {
+      const text = `${row.name || ""} ${row.fate || ""}`.toLowerCase();
+      return /solvent|cyclohexane|toluene|xylene|heptane|hexane|ethanol|methanol|acetone|acetonitrile|dichloromethane|dmf|dmso|thf/.test(text);
+    }
+
+    function reactorAutoChargeModel(basis, targetBatchKg, scaleRows = [], reference = null) {
+      if (!Number.isFinite(targetBatchKg) || targetBatchKg <= 0 || !scaleRows.length) {
+        return { ready: false, missing: ["target kg/batch and scaled MFA rows"] };
+      }
+      const groupId = reactorSizingGroupId(basis, reference);
+      if (!groupId) return { ready: false, missing: ["reaction/reactor group"] };
+      const group = groupModel(groupId) || ensureGroup(groupId);
+      const rows = scaleRows.filter(row => row.groupId === groupId);
+      const inputRows = rows.filter(row => row.role === "input");
+      const basisRows = inputRows.length ? inputRows : rows.filter(row => row.role === "output");
+      if (!basisRows.length) return { ready: false, groupId, missing: [`MFA input streams for ${groupId}`] };
+      const densityKgM3 = groupDensityKgM3(group);
+      const converted = basisRows
+        .map(row => ({ row, ...rowVolumeM3(row, densityKgM3) }))
+        .filter(item => Number.isFinite(item.value) && item.value >= 0);
+      const missingDensity = basisRows.some(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit)) && !Number.isFinite(densityKgM3));
+      if (!converted.length) {
+        return {
+          ready: false,
+          groupId,
+          missing: [missingDensity ? `density for ${groupId}` : `volume-bearing streams for ${groupId}`]
+        };
+      }
+      const solventVolumeM3 = converted
+        .filter(item => solventLikeScaleRow(item.row))
+        .reduce((sum, item) => sum + item.value, 0);
+      const reactantsVolumeM3 = converted
+        .filter(item => !solventLikeScaleRow(item.row))
+        .reduce((sum, item) => sum + item.value, 0);
+      const totalChargeM3 = converted.reduce((sum, item) => sum + item.value, 0);
+      return {
+        ready: true,
+        groupId,
+        reactantsVolumeM3,
+        solventVolumeM3,
+        totalChargeM3,
+        source: `auto from ${groupId} scaled MFA${Number.isFinite(densityKgM3) ? " + group density" : ""}`,
+        missing: missingDensity ? [`density for additional mass-only streams in ${groupId}`] : []
+      };
+    }
+
     // Returns the calculated MINIMUM working volume at the stated fill fraction, not an as-built
     // vessel size: real reactor selection adds a design margin (commonly ~10%) on top of this
     // figure and rounds up to the nearest standard manufacturer size.
-    function reactorSizingModel(basis, targetBatchKg) {
+    function reactorSizingModel(basis, targetBatchKg, scaleRows = [], reference = null) {
       const productBatchKg = Number.isFinite(targetBatchKg) && targetBatchKg > 0 ? targetBatchKg : NaN;
       // Both reactants and solvent are stored as L per kg product (recipe ratios, assumed scale-invariant),
       // not as fixed m3 totals, so the charge volume scales automatically with the target batch size instead
@@ -3878,15 +3953,38 @@
       const workingFill = percentFactor(basis.reactorWorkingFillPercent, 70);
       const mw = parseStreamQuantity(basis.productMolecularWeightGmol);
       const waterStoich = parseStreamQuantity(basis.condensationWaterMolPerMol);
-      const reactantsVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(reactantsLoadingLPerKg) && reactantsLoadingLPerKg >= 0
+      const manualReactantsVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(reactantsLoadingLPerKg) && reactantsLoadingLPerKg >= 0
         ? productBatchKg * reactantsLoadingLPerKg / 1000
         : NaN;
-      const solventVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(solventLoadingLPerKg) && solventLoadingLPerKg >= 0
+      const manualSolventVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(solventLoadingLPerKg) && solventLoadingLPerKg >= 0
         ? productBatchKg * solventLoadingLPerKg / 1000
         : NaN;
-      const totalChargeM3 = Number.isFinite(reactantsVolumeM3) && Number.isFinite(solventVolumeM3)
+      const manualReady = Number.isFinite(manualReactantsVolumeM3) || Number.isFinite(manualSolventVolumeM3);
+      const autoCharge = manualReady ? { ready: false, missing: [] } : reactorAutoChargeModel(basis, productBatchKg, scaleRows, reference);
+      const reactantsVolumeM3 = manualReady
+        ? (Number.isFinite(manualReactantsVolumeM3) ? manualReactantsVolumeM3 : 0)
+        : autoCharge.reactantsVolumeM3;
+      const solventVolumeM3 = manualReady
+        ? (Number.isFinite(manualSolventVolumeM3) ? manualSolventVolumeM3 : 0)
+        : autoCharge.solventVolumeM3;
+      const totalChargeM3 = manualReady
         ? reactantsVolumeM3 + solventVolumeM3
-        : NaN;
+        : autoCharge.totalChargeM3;
+      const source = manualReady
+        ? "manual L/kg product recipe loadings"
+        : autoCharge.ready
+          ? autoCharge.source
+          : "waiting for automatic MFA charge volume";
+      const reactantsLoadingOut = Number.isFinite(reactantsLoadingLPerKg)
+        ? reactantsLoadingLPerKg
+        : Number.isFinite(productBatchKg) && Number.isFinite(reactantsVolumeM3)
+          ? reactantsVolumeM3 * 1000 / productBatchKg
+          : NaN;
+      const solventLoadingOut = Number.isFinite(solventLoadingLPerKg)
+        ? solventLoadingLPerKg
+        : Number.isFinite(productBatchKg) && Number.isFinite(solventVolumeM3)
+          ? solventVolumeM3 * 1000 / productBatchKg
+          : NaN;
       const reactorVolumeM3 = Number.isFinite(totalChargeM3) && Number.isFinite(workingFill) && workingFill > 0
         ? totalChargeM3 / workingFill
         : NaN;
@@ -3896,22 +3994,25 @@
       const ready = Number.isFinite(reactorVolumeM3) || Number.isFinite(generatedWaterKg);
       return {
         productBatchKg: Number.isFinite(productBatchKg) ? formatNumber(productBatchKg) : "",
-        reactantsLoadingLPerKgProduct: Number.isFinite(reactantsLoadingLPerKg) ? formatNumber(reactantsLoadingLPerKg) : "",
+        reactantsLoadingLPerKgProduct: Number.isFinite(reactantsLoadingOut) ? formatNumber(reactantsLoadingOut) : "",
         reactantsVolumeM3: Number.isFinite(reactantsVolumeM3) ? formatNumber(reactantsVolumeM3) : "",
-        solventLoadingLPerKgProduct: Number.isFinite(solventLoadingLPerKg) ? formatNumber(solventLoadingLPerKg) : "",
+        solventLoadingLPerKgProduct: Number.isFinite(solventLoadingOut) ? formatNumber(solventLoadingOut) : "",
         solventVolumeM3: Number.isFinite(solventVolumeM3) ? formatNumber(solventVolumeM3) : "",
         totalChargeM3: Number.isFinite(totalChargeM3) ? formatNumber(totalChargeM3) : "",
         workingFillPercent: Number.isFinite(workingFill) ? formatNumber(workingFill * 100) : "",
         reactorVolumeM3: Number.isFinite(reactorVolumeM3) ? formatNumber(reactorVolumeM3) : "",
         generatedWaterKg: Number.isFinite(generatedWaterKg) ? formatNumber(generatedWaterKg) : "",
+        source,
+        autoGroupId: autoCharge.groupId || "",
+        autoReady: Boolean(autoCharge.ready),
         ready,
-        missing: [
+        missing: [...new Set([
           Number.isFinite(productBatchKg) ? "" : "product kg/batch",
-          Number.isFinite(reactantsLoadingLPerKg) ? "" : "reactants loading",
-          Number.isFinite(solventLoadingLPerKg) ? "" : "solvent loading",
+          manualReady || autoCharge.ready ? "" : "reactants/solvent loading or MFA volume",
           Number.isFinite(workingFill) ? "" : "working fill",
-          Number.isFinite(mw) ? "" : "product MW for stoichiometric water"
-        ].filter(Boolean)
+          Number.isFinite(mw) ? "" : "product MW for stoichiometric water",
+          ...(autoCharge.missing || [])
+        ].filter(Boolean))]
       };
     }
 
@@ -3924,6 +4025,67 @@
       return values.length ? values.reduce((sum, value) => sum + value, 0) : NaN;
     }
 
+    function volumeToM3(value, unit) {
+      const number = parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return NaN;
+      if (unit === "m3") return number;
+      if (unit === "L") return number / 1000;
+      if (unit === "mL") return number / 1000000;
+      return NaN;
+    }
+
+    function densityToKgM3(value, unit = "kg/m3") {
+      const number = parseStreamQuantity(value);
+      if (!Number.isFinite(number) || number <= 0) return NaN;
+      const normalized = String(unit || "kg/m3").toLowerCase().replace(/\s+/g, "");
+      if (normalized === "kg/m3" || normalized === "kg/m^3" || normalized === "kgm-3") return number;
+      if (normalized === "g/ml" || normalized === "g/cm3" || normalized === "g/cm^3") return number * 1000;
+      if (normalized === "kg/l") return number * 1000;
+      return NaN;
+    }
+
+    function groupDensityKgM3(group) {
+      const density = group?.properties?.density;
+      if (!density) return NaN;
+      return densityToKgM3(density.value, density.unit);
+    }
+
+    function rowVolumeM3(row, densityKgM3) {
+      const direct = volumeToM3(row.scaledQuantity, row.scaledUnit);
+      if (Number.isFinite(direct)) return { value: direct, source: "direct MFA volume" };
+      const massKg = massToKg(row.scaledQuantity, row.scaledUnit);
+      if (Number.isFinite(massKg) && Number.isFinite(densityKgM3) && densityKgM3 > 0) {
+        return { value: massKg / densityKgM3, source: "scaled MFA mass / group density" };
+      }
+      return { value: NaN, source: "" };
+    }
+
+    function groupScaledLoadVolumeM3(scale, groupId, group = groupModel(groupId)) {
+      const groupRows = (scale.rows || []).filter(row => row.groupId === groupId);
+      const preferred = groupRows.filter(row => row.role === "input");
+      const fallback = groupRows.filter(row => row.role === "output");
+      const rows = preferred.length ? preferred : fallback;
+      const densityKgM3 = groupDensityKgM3(group);
+      const converted = rows
+        .map(row => ({ row, ...rowVolumeM3(row, densityKgM3) }))
+        .filter(item => Number.isFinite(item.value) && item.value >= 0);
+      const massRowsMissingDensity = rows.filter(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit)) && !Number.isFinite(densityKgM3));
+      if (!converted.length) {
+        return {
+          value: NaN,
+          unit: "m3",
+          source: massRowsMissingDensity.length ? "needs group density for mass-to-volume" : "no volumetric MFA basis",
+          missing: massRowsMissingDensity.length ? ["group density"] : ["volume stream or density-backed mass stream"]
+        };
+      }
+      return {
+        value: converted.reduce((sum, item) => sum + item.value, 0),
+        unit: "m3",
+        source: [...new Set(converted.map(item => item.source))].join(" + "),
+        missing: massRowsMissingDensity.length ? ["density for additional mass-only streams"] : []
+      };
+    }
+
     function groupCapacityActual(task, scale, reactorSizing) {
       const capacityUnit = task.capacityUnit || "";
       const loadKg = groupScaledLoadKg(scale, task.groupId);
@@ -3934,12 +4096,22 @@
           : { value: NaN, unit: "kg/h", source: "missing load or time" };
       }
       if (capacityUnit === "m3") {
+        const group = groupModel(task.groupId) || ensureGroup(task.groupId);
+        const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
+        if (Number.isFinite(groupVolume.value)) return groupVolume;
         const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
-        return { value: charge, unit: "m3", source: "reactor sizing total charge" };
+        return Number.isFinite(charge)
+          ? { value: charge, unit: "m3", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
+          : groupVolume;
       }
       if (capacityUnit === "L") {
+        const group = groupModel(task.groupId) || ensureGroup(task.groupId);
+        const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
+        if (Number.isFinite(groupVolume.value)) return { ...groupVolume, value: groupVolume.value * 1000, unit: "L" };
         const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
-        return { value: Number.isFinite(charge) ? charge * 1000 : NaN, unit: "L", source: "reactor sizing total charge" };
+        return Number.isFinite(charge)
+          ? { value: charge * 1000, unit: "L", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
+          : { ...groupVolume, unit: "L" };
       }
       return { value: NaN, unit: capacityUnit, source: "capacity basis missing" };
     }
@@ -3966,6 +4138,7 @@
           actualValue: actual.value,
           actualUnit: actual.unit,
           actualSource: actual.source,
+          actualMissing: actual.missing || [],
           utilizationPercent: utilization,
           combinedScore
         };
@@ -4879,7 +5052,7 @@
           </div>
 
           <div class="scale-metric">
-            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Reactor volume = ((reactants L/kg product + solvent L/kg product) x product kg/batch / 1000) / working fill. Both L/kg ratios come from the lab recipe and scale automatically with the target batch size - they are not fixed volumes. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. This is the calculated minimum at standard working fill (70-80% is typical for stirred batch/semi-batch reactors); real vessel selection typically adds a design margin (commonly ~10%) and rounds up to the nearest standard manufacturer size, so the as-built reactor is usually somewhat larger than this figure.")}</span>
+            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Preferred path: enter reactants and solvent L/kg product from the recipe, then reactor volume = ((reactants + solvent) x product kg/batch / 1000) / working fill. If those recipe loading fields are blank, the tool tries an automatic MFA path: find the reaction/reactor group, scale its input streams to the production target, convert direct L/mL/m3 streams or mass streams with group density, then divide total charge by working fill. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. This is a screening minimum; real vessel selection adds design margin and rounds up to standard sizes.")}</span>
             ${reactorSizingHtml(model.reactorSizing)}
           </div>
 
@@ -4975,6 +5148,9 @@
         ["Condensation water", sizing.generatedWaterKg ? `${sizing.generatedWaterKg} kg/batch` : "missing"]
       ];
       return `
+        <div class="mfa-empty ${sizing.autoReady ? "ok" : ""}" style="margin-bottom:6px">
+          Reactor sizing source: ${escapeHtml(sizing.source || "missing")}${sizing.autoGroupId ? ` (${escapeHtml(sizing.autoGroupId)})` : ""}.
+        </div>
         <div class="scale-metric-grid">
           ${rows.map(([label, value]) => `
             <div class="scale-mini-metric">
@@ -5027,6 +5203,7 @@
                 <span>${Number.isFinite(row.actualValue) ? `${formatNumber(row.actualValue)} ${escapeHtml(row.actualUnit)}` : "actual missing"}</span>
                 <span>${escapeHtml(row.capacityAmount || "capacity missing")} ${escapeHtml(row.capacityUnit || "")}</span>
                 <span>${Number.isFinite(row.utilizationPercent) ? `${formatNumber(row.utilizationPercent)}%` : "not calculated"}</span>
+                <span class="muted small">${escapeHtml(row.actualSource || "capacity basis missing")}${row.actualMissing?.length ? `; missing ${escapeHtml(row.actualMissing.join(", "))}` : ""}</span>
               </div>
             `).join("")}
           </div>
@@ -11294,17 +11471,22 @@
 
     function startDrag(event, id, kind) {
       if (state.connectDrag || event.target?.closest?.("[data-connect-handle]")) return;
+      event.preventDefault();
+      event.stopPropagation();
       const rect = $("groupFlow").getBoundingClientRect();
       const current = kind === "draft" ? state.draftPos : ensureGroup(id);
       state.drag = {
         id,
         kind,
+        pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
         moved: false,
         startClientX: event.clientX,
         startClientY: event.clientY,
         offsetX: (event.clientX - rect.left + $("groupFlow").scrollLeft) / state.zoom - current.x,
         offsetY: (event.clientY - rect.top + $("groupFlow").scrollTop) / state.zoom - current.y
       };
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+      $("groupFlow")?.classList.add("board-dragging");
     }
 
     function dragLimits() {
@@ -11357,10 +11539,13 @@
 
     function dragMove(event) {
       if (!state.drag) return;
+      if (state.drag.pointerId !== null && event.pointerId !== state.drag.pointerId) return;
+      if (state.drag.pointerId !== null && event.type?.startsWith?.("mouse")) return;
       const movement = Math.abs(event.clientX - state.drag.startClientX) + Math.abs(event.clientY - state.drag.startClientY);
       if (!state.drag.moved && movement < 5) return;
       state.drag.moved = true;
       event.preventDefault();
+      event.stopPropagation();
       const rect = $("groupFlow").getBoundingClientRect();
       const limits = dragLimits();
       const x = Math.max(0, Math.min(limits.maxX, (event.clientX - rect.left + $("groupFlow").scrollLeft) / state.zoom - state.drag.offsetX));
@@ -11375,14 +11560,17 @@
       scheduleDragRender();
     }
 
-    function dragEnd() {
+    function dragEnd(event = {}) {
       if (!state.drag) return;
+      if (state.drag.pointerId !== null && event.pointerId !== state.drag.pointerId) return;
+      if (state.drag.pointerId !== null && event.type?.startsWith?.("mouse")) return;
       const moved = state.drag.moved;
       if (boardDragFrame) {
         cancelAnimationFrame(boardDragFrame);
         boardDragFrame = null;
       }
       state.drag = null;
+      $("groupFlow")?.classList.remove("board-dragging");
       if (moved) renderGroupFlow();
     }
 
@@ -11404,6 +11592,7 @@
       const point = boardPointFromEvent(event);
       state.connectDrag = {
         fromId,
+        pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
         x: point.x,
         y: point.y,
         startClientX: event.clientX,
@@ -11412,11 +11601,14 @@
       };
       state.connectingFrom = fromId;
       event.currentTarget?.setPointerCapture?.(event.pointerId);
+      $("groupFlow")?.classList.add("connect-dragging");
       renderConnectDragPreview();
     }
 
     function connectDragMove(event) {
       if (!state.connectDrag) return;
+      if (state.connectDrag.pointerId !== null && event.pointerId !== state.connectDrag.pointerId) return;
+      if (state.connectDrag.pointerId !== null && event.type?.startsWith?.("mouse")) return;
       event.preventDefault();
       event.stopPropagation();
       const point = boardPointFromEvent(event);
@@ -11460,6 +11652,8 @@
 
     function connectDragEnd(event) {
       if (!state.connectDrag) return;
+      if (state.connectDrag.pointerId !== null && event.pointerId !== state.connectDrag.pointerId) return;
+      if (state.connectDrag.pointerId !== null && event.type?.startsWith?.("mouse")) return;
       if (connectDragFrame) {
         cancelAnimationFrame(connectDragFrame);
         connectDragFrame = null;
@@ -11467,6 +11661,7 @@
       const fromId = state.connectDrag.fromId;
       const moved = state.connectDrag.moved;
       state.connectDrag = null;
+      $("groupFlow")?.classList.remove("connect-dragging");
       const toId = connectTargetFromPoint(event.clientX, event.clientY, fromId);
       if (toId && toId !== fromId) {
         addConnection(fromId, toId);
@@ -11606,6 +11801,9 @@
 
     function closeFloatingActions() {
       state.connectingFrom = null;
+      state.drag = null;
+      $("groupFlow")?.classList.remove("board-dragging");
+      $("groupFlow")?.classList.remove("connect-dragging");
       if (state.connectDrag) {
         state.connectDrag = null;
         $("groupFlow")?.querySelector(".link-layer")?.querySelector("#connectDragPreviewLine")?.remove();
@@ -11750,7 +11948,7 @@
       const space = flow.querySelector(".board-space");
       const canvas = flow.querySelector(".board-canvas");
       if (!space || !canvas) return;
-      const board = boardBounds();
+      const board = boardWithDrawerClearance(boardBounds());
       space.style.width = `${board.width * state.zoom}px`;
       space.style.height = `${board.height * state.zoom}px`;
       canvas.style.width = `${board.width}px`;
