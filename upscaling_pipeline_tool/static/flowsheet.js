@@ -154,6 +154,26 @@
       return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, totalOutputKg };
     }
 
+    // An input stream counts as "external" (a fresh reagent/utility charge, not the bulk material
+    // already implied by the main process-train arrow) when no other visualized group's outputs
+    // has a same-named stream. The main train arrow itself carries no per-substance identity (it's
+    // drawn from totalOutputKg, see flowsheetFlowTooltip), so this name match is how we avoid
+    // drawing a second arrow for material the reader already sees arriving via the black arrow.
+    function flowsheetExternalInputStreams(group, allGroups) {
+      const upstreamNames = new Set();
+      allGroups.forEach(other => {
+        if (other.id === group.id) return;
+        (other.outputStreams || []).forEach(stream => {
+          const name = stream.name.trim().toLowerCase();
+          if (name) upstreamNames.add(name);
+        });
+      });
+      return (group.inputStreams || []).filter(stream => {
+        const name = stream.name.trim().toLowerCase();
+        return name && !upstreamNames.has(name);
+      });
+    }
+
     function flowsheetGroupSpecs(group) {
       const conditions = aggregateGroupConditions(group);
       const byId = id => conditions.find(item => item.id === id);
@@ -245,6 +265,40 @@
         rowById.set(groupId, row);
       });
       return { stageById, rowById, rowByStage };
+    }
+
+    // Picks the single most representative output stream to print on a connector arrow (by mass,
+    // excluding waste/vent/purge which get their own stub arrows) - a full stream list would be
+    // unreadable at this scale, but the hover tooltip (flowsheetFlowTooltip) still has everything.
+    function flowsheetConnectorLabelText(fromBox, maxChars = 30) {
+      const candidates = (fromBox.outputStreams || [])
+        .filter(stream => stream.name.trim() && !["wastewater", "solid waste", "purge", "loss", "vent"].includes(stream.fate));
+      if (!candidates.length) return "";
+      const primary = candidates.reduce((best, stream) => {
+        const kg = massToKg(stream.quantity, stream.unit);
+        const bestKg = massToKg(best.quantity, best.unit);
+        return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
+      }, candidates[0]);
+      const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
+      const label = `${primary.name}${qty ? `, ${qty}` : ""}`;
+      return label.length > maxChars ? `${label.slice(0, maxChars - 1)}...` : label;
+    }
+
+    // Prints a stream label directly on the diagram instead of only in the hover tooltip - the
+    // exported/downloaded SVG has no hover, so without this the substance/quantity data is lost
+    // the moment the diagram leaves the browser (e.g. dropped into a paper figure).
+    function flowsheetConnectorLabelMarkup(points, text, color) {
+      if (!text || state.flowsheetShowStreamLabels === false) return "";
+      let best = null;
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const a = points[i];
+        const b = points[i + 1];
+        if (Math.abs(a.y - b.y) > 1) continue;
+        const len = Math.abs(b.x - a.x);
+        if (!best || len > best.len) best = { len, x: (a.x + b.x) / 2, y: a.y };
+      }
+      if (!best || best.len < 40) return "";
+      return `<text x="${best.x}" y="${best.y - 7}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${color}" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${escapeHtml(text)}</text>`;
     }
 
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
@@ -438,11 +492,12 @@
         return Math.min(4.8, Math.max(2.2, (kg / model.maxOutputKg) * 3.1 + 1.7));
       };
 
-      const flowPathMarkup = (points, strokeWidth, tooltip, marker = "url(#fsArrow)", color = "#172027", dash = "") => {
+      const flowPathMarkup = (points, strokeWidth, tooltip, marker = "url(#fsArrow)", color = "#172027", dash = "", labelText = "") => {
         const d = orthogonalPath(points, 14);
         return `
           <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 5}" stroke-linejoin="round" stroke-linecap="round" fill="none"></path>
           <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="${color}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" ${dash ? `stroke-dasharray="${dash}"` : ""} ${marker ? `marker-end="${marker}"` : ""}></path>
+          ${flowsheetConnectorLabelMarkup(points, labelText, color)}
         `;
       };
 
@@ -477,7 +532,7 @@
         const yValues = [source.y, ...targetPorts.map(item => item.point.y)];
         forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: Math.min(...yValues) }, { x: manifoldX, y: Math.max(...yValues) }], strokeWidth, `parallel manifold from ${from.id}`, "", "#172027"));
         targetPorts.forEach(({ target, point }) => {
-          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], strokeWidth, flowsheetFlowTooltip(from, target, from.totalOutputKg), "url(#fsArrow)", "#172027"));
+          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], strokeWidth, flowsheetFlowTooltip(from, target, from.totalOutputKg), "url(#fsArrow)", "#172027", "", flowsheetConnectorLabelText(from)));
           renderedForward.add(forwardLinkKey(from.id, target.id));
         });
       });
@@ -493,7 +548,7 @@
         const target = { x: to.x - 14, y: flowsheetBoxCenter(to).y };
         const manifoldX = Math.max(...sourcePorts.map(item => item.point.x)) + 46;
         sourcePorts.forEach(({ source, point }) => {
-          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(source.totalOutputKg), flowsheetFlowTooltip(source, to, source.totalOutputKg), "", "#172027"));
+          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(source.totalOutputKg), flowsheetFlowTooltip(source, to, source.totalOutputKg), "", "#172027", "", flowsheetConnectorLabelText(source)));
           renderedForward.add(forwardLinkKey(source.id, to.id));
         });
         const yValues = [target.y, ...sourcePorts.map(item => item.point.y)];
@@ -509,7 +564,7 @@
         const points = flowsheetConnectorPoints(model, from, to);
         const strokeWidth = sankeyWidth(from.totalOutputKg);
         const tooltip = flowsheetFlowTooltip(from, to, from.totalOutputKg);
-        forwardGroups.push(flowPathMarkup(points, strokeWidth, tooltip, "url(#fsArrow)", "#172027"));
+        forwardGroups.push(flowPathMarkup(points, strokeWidth, tooltip, "url(#fsArrow)", "#172027", "", flowsheetConnectorLabelText(from)));
       });
       const forwardPaths = forwardGroups.join("");
 
@@ -606,6 +661,7 @@
         `;
       })() : "";
 
+      const firstGroupId = model.groups[0]?.id;
       const boxes = model.groups.map(box => {
         const style = flowsheetCategoryStyle[box.category];
         const center = flowsheetBoxCenter(box);
@@ -623,6 +679,23 @@
               <text x="${labelX}" y="${stubY + 4}" font-size="10" fill="${color.line}" text-anchor="${labelAnchor}">${escapeHtml(label.length > 34 ? `${label.slice(0, 33)}...` : label)}</text>
             `;
           }).join("");
+        // G1 already gets a dedicated feed box/arrows (feedBoxMarkup below) for its inputs. Every
+        // other unit's fresh reagent/utility charges (e.g. cooling water into a mid-train exchanger)
+        // previously had no arrow anywhere on the diagram, even though they exist in the MFA data -
+        // draw a small labeled inlet stub for those. Restricted to the top row (stageRow 0) since
+        // that's the only row with guaranteed free space above the box to route into.
+        const extraInlets = box.id !== firstGroupId && box.stageRow === 0
+          ? flowsheetExternalInputStreams(box, model.groups).slice(0, 2)
+          : [];
+        const inletHtml = extraInlets.map((stream, i) => {
+          const stubX = box.x + box.w * (0.32 + i * 0.36);
+          const stubYStart = box.y - 46;
+          const label = `in: ${stream.name}${stream.quantity ? ` ${stream.quantity} ${stream.unit || ""}` : ""}`.trim();
+          return `
+            <path d="M ${stubX} ${stubYStart} L ${stubX} ${box.y}" stroke="#657480" stroke-width="1.6" fill="none" marker-end="url(#fsArrowGrey)"></path>
+            <text x="${stubX}" y="${stubYStart - 4}" font-size="9.5" fill="#657480" text-anchor="middle">${escapeHtml(label.length > 26 ? `${label.slice(0, 25)}...` : label)}</text>
+          `;
+        }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
         const specsLine = [box.specs.join(" / "), box.totalOutputKg > 0 ? `${formatNumber(box.totalOutputKg)} kg/batch` : ""].filter(Boolean).join(" — ");
         const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
@@ -647,6 +720,7 @@
             ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 50}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
+            ${inletHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
           </g>
         `;
@@ -745,6 +819,8 @@
           : "Fit the generated flowsheet inside the modal for overview";
       }
       $("resetFlowsheetLayout").disabled = false;
+      const labelToggle = $("flowsheetShowStreamLabels");
+      if (labelToggle) labelToggle.checked = state.flowsheetShowStreamLabels !== false;
     }
 
     async function renderFlowsheetModal() {

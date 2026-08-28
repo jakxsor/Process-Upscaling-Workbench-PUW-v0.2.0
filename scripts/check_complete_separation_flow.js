@@ -73,6 +73,11 @@ assert(!postReactionSeparationSupportApplies(g3), "G3 cooling-only group should 
 
 const g2Root = fakeElement();
 renderGroupAggregateStepInspector(g2Root, g2);
+assert(!g2Root.innerHTML.includes("<strong>Group Task</strong>"), "Group drawer should not spend a full panel on task assignment");
+assert(g2Root.innerHTML.includes("R(L)") && g2Root.innerHTML.includes("PS(LL)"), "Group drawer header should keep the compact phenomena list");
+assert(groupUnitSuggestionGateHtml(g2, { board: true }).includes('data-suggest-unit-operation="G2"'), "Task board card should expose the compact unit-operation action");
+assert(groupUnitSuggestionGateHtml(g2, { board: true }).includes("Assign Unit Operation") || groupUnitSuggestionGateHtml(g2, { board: true }).includes("Switch Unit Operation"), "Unit-operation action should be a direct task-level button");
+assert(!g2Root.innerHTML.includes("Review Lutze Again"), "Unit-operation gate should not duplicate the Lutze review action");
 assert(g2Root.innerHTML.includes("Lutze Reaction-Separation"), "G2 drawer should render the focused Lutze reaction-separation entry point");
 assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 drawer should offer one focused Lutze simulation button");
 assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");

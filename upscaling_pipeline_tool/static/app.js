@@ -1868,34 +1868,38 @@
       };
     }
 
-    function groupUnitSuggestionGateHtml(group) {
+    function groupUnitSuggestionGateHtml(group, options = {}) {
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
-      const showSuggestions = readiness.ready && groupState.unitSuggestionsExpanded;
+      const showSuggestions = readiness.ready && groupState.unitSuggestionsExpanded && !options.board;
       const alternatives = showSuggestions ? unitOperationCandidatesForGroup(group).slice(0, 5) : [];
-      const statusPill = (label, ok) => `<span class="pill ${ok ? "green" : "warn"}">${escapeHtml(label)}: ${ok ? "ready" : "needed"}</span>`;
-      const helper = readiness.ready
-        ? (readiness.lutzeReady
-          ? "Ready to suggest unit operations from task, MFA/phase context, conditions, and Lutze phenomena."
-          : "Ready for a preliminary unit-operation suggestion from task, MFA/phase context, and conditions. Review Lutze next to strengthen the choice.")
-        : `Locked until you complete ${readiness.missing.join(", ")}. The suggestion uses the completed input/output or waste streams, stream phases, and operating conditions.`;
+      const label = group.selectedUnit ? "Switch Unit Operation" : "Assign Unit Operation";
+      const status = group.selectedUnit || (readiness.ready ? "ready to assign" : `needs ${readiness.missing.join(", ") || "task data"}`);
+      if (options.board) {
+        return `
+          <button class="unit-action-button ${readiness.ready ? "ready" : ""}" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}
+            title="${escapeAttr(readiness.ready ? "Assign or switch the task unit operation from completed MFA, phase, and condition data." : `Complete ${readiness.missing.join(", ") || "task data"} before assigning a unit operation.`)}">
+            ${escapeHtml(label)}
+          </button>
+        `;
+      }
       return `
-        <div class="unit-suggest-gate ${readiness.ready ? "ready" : readiness.dataReady ? "review" : "blocked"}">
-          <div class="unit-suggest-status">
-            ${statusPill("MFA", readiness.mfaReady && readiness.phaseReady)}
-            ${statusPill("Conditions", readiness.conditionsReady)}
-            <span class="pill ${readiness.lutzeReady ? "green" : "blue"}">Lutze: ${readiness.lutzeReady ? "reviewed" : "next step"}</span>
-          </div>
-          <div class="muted small">${escapeHtml(helper)}</div>
-          <div class="unit-suggest-actions">
-            <button data-review-lutze="${escapeAttr(group.id)}" ${readiness.dataReady ? "" : "disabled"}>${readiness.lutzeReady ? "Review Lutze Again" : "Review Lutze Phenomena"}</button>
-            <button class="primary" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}>${groupState.unitSuggestionsExpanded ? "Update Suggestions" : "Suggest Unit Operation"}</button>
+        <div class="unit-suggest-gate compact ${readiness.ready ? "ready" : "blocked"}">
+          <div class="unit-suggest-main">
+            <div>
+              <strong>Unit Operation</strong>
+              <span class="muted small">${escapeHtml(status)}</span>
+            </div>
+            <button class="unit-action-button ${readiness.ready ? "ready" : ""}" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}
+              title="${escapeAttr(readiness.ready ? "Assign or switch the task unit operation from completed MFA, phase, and condition data." : `Complete ${readiness.missing.join(", ") || "task data"} before assigning a unit operation.`)}">
+              ${escapeHtml(label)}
+            </button>
           </div>
           ${showSuggestions ? `
             <div class="unit-suggest-results">
               <div class="unit-suggest-result-head">
-                <strong>Data-Based Unit Operation Suggestions</strong>
-                <span class="muted small">${readiness.lutzeReady ? "task + MFA + conditions + Lutze" : "pre-Lutze: task + MFA + conditions"}</span>
+                <strong>Suggestions</strong>
+                <span class="muted small">task + MFA/phases + conditions${readiness.lutzeReady ? " + Lutze" : ""}</span>
               </div>
               ${alternatives.length ? alternatives.map(candidate => `
                 <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
@@ -1907,6 +1911,22 @@
           ` : groupState.unitSuggestionsExpanded ? `
             <div class="mfa-empty">Suggestions are hidden until task, MFA, phases, and conditions are complete again.</div>
           ` : ""}
+        </div>
+      `;
+    }
+
+    function boardUnitOperationPickerHtml(group, limit = 4) {
+      const readiness = groupUnitSuggestionReadiness(group);
+      const groupState = ensureGroup(group.id);
+      if (!readiness.ready || !groupState.unitSuggestionsExpanded) return "";
+      const alternatives = unitOperationCandidatesForGroup(group).slice(0, limit);
+      return `
+        <div class="board-unit-picker">
+          ${alternatives.length ? alternatives.map(candidate => `
+            <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
+              ${escapeHtml(candidate.name)}
+            </button>
+          `).join("") : `<span class="muted small">No matching unit operation.</span>`}
         </div>
       `;
     }
@@ -2309,6 +2329,8 @@
               <div class="compact-body">
                 <strong>${escapeHtml(group.selectedUnit || "no unit selected")}</strong>
                 <span class="muted small">${escapeHtml(group.task)}</span>
+                ${groupUnitSuggestionGateHtml(group, { board: true })}
+                ${boardUnitOperationPickerHtml(group, 3)}
                 <span class="compact-open-hint">Click to open group</span>
               </div>
             </section>
@@ -2341,7 +2363,9 @@
               <div class="group-unit-summary">
                 <div class="label">Unit Operation</div>
                 <strong>${escapeHtml(group.selectedUnit || "not selected")}</strong>
-                <span class="muted small">${unitReadiness.ready ? "Open Group, then Suggest Unit Operation." : `Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before suggestions.`}</span>
+                ${groupUnitSuggestionGateHtml(group, { board: true })}
+                ${boardUnitOperationPickerHtml(group)}
+                <span class="muted small">${unitReadiness.ready ? "Ready from task, MFA/phases, and conditions." : `Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before assigning.`}</span>
               </div>
             </div>
           </section>
@@ -2407,7 +2431,7 @@
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
-          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group]")) return;
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group]") || event.target.closest("[data-suggest-unit-operation]")) return;
           if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
             addConnection(state.connectingFrom, box.dataset.groupBox);
             return;
@@ -2432,6 +2456,21 @@
           selectGroup(button.dataset.selectGroup);
         });
       });
+      root.querySelectorAll("[data-suggest-unit-operation]").forEach(button => {
+        button.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const group = groupModel(button.dataset.suggestUnitOperation);
+          const readiness = group ? groupUnitSuggestionReadiness(group) : null;
+          if (!group || !readiness?.ready) {
+            await alertModal(`Complete ${readiness?.missing.join(", ") || "task data"} before assigning a unit operation.`);
+            return;
+          }
+          ensureGroup(group.id).unitSuggestionsExpanded = true;
+          selectGroup(group.id);
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
+      });
 
       const draftBox = root.querySelector("[data-draft-box]");
       if (draftBox) {
@@ -2448,6 +2487,7 @@
           const group = groupModel(button.dataset.unitGroup);
           if (!group || !groupUnitSuggestionReadiness(group).ready) return;
           ensureGroup(group.id).selectedUnit = button.dataset.unit;
+          ensureGroup(group.id).unitSuggestionsExpanded = false;
           renderAll();
         });
       });
@@ -3075,30 +3115,6 @@
           <span class="group-composite-meta">${escapeHtml(summary.meta.join(" / "))}</span>
           ${summary.conditions.length ? `<span class="group-composite-conditions">${escapeHtml(summary.conditions.join(" / "))}</span>` : ""}
         </button>
-      `;
-    }
-
-    function groupCompositionPanelHtml(group) {
-      const summary = groupProcessSummary(group);
-      return `
-        <div class="condition-panel">
-          <div class="condition-head">
-            <strong>Group Composition</strong>
-            <span class="muted small">${escapeHtml(summary.title)}</span>
-          </div>
-          <div class="condition-body">
-            <div class="group-block-chain">
-              ${group.blocks.map(block => `
-                <button class="group-block-chip ${state.selectedIds.includes(block.id) ? "selected" : ""}" data-open-block-from-group="${escapeAttr(block.id)}">
-                  <strong>${escapeHtml(block.id)}</strong>
-                  <span>${escapeHtml(behaviorPresets[block.behavior]?.task || block.behavior || "unassigned")}</span>
-                </button>
-              `).join("")}
-            </div>
-            <div class="group-composition-meta">${escapeHtml(summary.meta.join(" / "))}</div>
-            ${summary.conditions.length ? `<div class="group-composition-meta">${escapeHtml(summary.conditions.join(" / "))}</div>` : ""}
-          </div>
-        </div>
       `;
     }
 
@@ -10139,6 +10155,9 @@
             <div class="label">Group Aggregate View</div>
             <strong>${escapeHtml(group.id)}</strong>
             <span class="pill blue">${escapeHtml(group.task)}</span>
+            <div class="drawer-head-phenomena">
+              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena assigned.</span>`}
+            </div>
           </div>
           <div class="mfa-summary-strip">
             <span class="pill">${group.blocks.length} blocks</span>
@@ -10147,35 +10166,9 @@
             <span class="pill warn">${conditions.length} conditions</span>
           </div>
         </div>
-        ${groupCompositionPanelHtml(group)}
-        <div class="group-drawer-overview-grid">
-          <div class="condition-panel group-drawer-panel compact">
-            <div class="condition-head">
-              <strong>Group Task</strong>
-              <span class="muted small">shared task</span>
-            </div>
-            <div class="condition-body">
-              <label>
-                <div class="label">Task Assigned To Group</div>
-                <input data-group-task-aggregate="${escapeAttr(group.id)}" value="${escapeAttr(group.task)}" placeholder="reaction, washing, purification...">
-              </label>
-              ${groupUnitSuggestionGateHtml(group)}
-            </div>
-          </div>
-          <div class="condition-panel group-drawer-panel compact">
-            <div class="condition-head">
-              <strong>Summed Phenomena</strong>
-              <span class="muted small">union of blocks</span>
-            </div>
-            <div class="condition-body group-phenomena-strip">
-              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena assigned.</span>`}
-            </div>
-          </div>
-        </div>
         <div class="group-drawer-work-grid">
           <div class="group-drawer-section-label">
             <strong>Material & Conditions</strong>
-            <span>What enters/leaves the grouped step and which operating evidence is aggregated.</span>
           </div>
           <div class="mfa-grid group-mfa-grid">
             ${mfaByRole.map(roleGroup => `
@@ -13326,6 +13319,10 @@
     });
     $("fitFlowsheetView").addEventListener("click", () => {
       state.flowsheetFit = !state.flowsheetFit;
+      renderFlowsheetModal();
+    });
+    $("flowsheetShowStreamLabels")?.addEventListener("change", event => {
+      state.flowsheetShowStreamLabels = event.target.checked;
       renderFlowsheetModal();
     });
     if ($("flowsheetTechnicalMode")) {

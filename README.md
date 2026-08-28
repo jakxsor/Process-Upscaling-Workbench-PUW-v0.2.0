@@ -96,19 +96,19 @@ From the repository root:
 
 ```bash
 python3 -m pip install -r upscaling_pipeline_tool/requirements.txt
-python3 run_upscaling_tool.py --port 8787
+python3 start.py
 ```
 
-Then open:
+The launcher opens the browser automatically. If it does not, open:
 
 ```text
 http://127.0.0.1:8787
 ```
 
-On macOS you can also run:
+You can still choose a specific port manually:
 
 ```bash
-open http://127.0.0.1:8787
+python3 run_upscaling_tool.py --port 8787
 ```
 
 ## Windows Instructions
@@ -140,14 +140,14 @@ located.
 
 ```powershell
 python -m pip install -r upscaling_pipeline_tool/requirements.txt
-python run_upscaling_tool.py --port 8787
+python start.py
 ```
 
 If `python` is not recognized, use:
 
 ```powershell
 py -m pip install -r upscaling_pipeline_tool/requirements.txt
-py run_upscaling_tool.py --port 8787
+py start.py
 ```
 
 5. Open the browser at:
