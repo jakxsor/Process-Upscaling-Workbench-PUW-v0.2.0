@@ -117,6 +117,17 @@
       output: { title: "Outputs", addLabel: "+ Output", placeholder: "reaction mixture", empty: "No product/intermediate stream yet." },
       waste: { title: "Waste / Emissions", addLabel: "+ Waste", placeholder: "brine waste", empty: "No waste or emission stream yet." }
     };
+    const streamOutletMeta = {
+      title: "Outlets",
+      addLabel: "+ Outlet",
+      placeholder: "product, recovered solvent, purge...",
+      empty: "No product, recovery, waste, or emission outlet yet."
+    };
+    const streamEditorSections = ["input", "outlet"];
+    const outletRoles = ["output", "waste"];
+    const wasteFates = new Set(["purge", "vent", "wastewater", "solid waste", "loss", "unreacted reagent"]);
+    const productFates = new Set(["product", "co-product"]);
+    const recycleFates = new Set(["recycled input", "recovered solvent"]);
 
     const streamUnits = ["kg", "g", "t", "mol", "kmol", "L", "mL", "m3", "kg/kg product", "L/kg product", "%", "ppm"];
     const streamScalingModes = [
@@ -210,6 +221,8 @@
       "solid waste",
       "loss",
       "product",
+      "co-product",
+      "unreacted reagent",
       "intermediate"
     ];
     const streamTimingOptions = [
@@ -394,6 +407,19 @@
       "molecularDiameter",
       "kineticDiameter"
     ]);
+    const streamChemicalPropertyFields = [
+      ...separationSharedPropertyFields,
+      "density"
+    ];
+    globalThis.streamChemicalPropertyFields = streamChemicalPropertyFields;
+    const streamChemicalPropertyDefs = [
+      { id: "mw", label: "MW", unit: "g/mol", placeholder: "e.g. 84.16" },
+      { id: "tb", label: "Boiling point", unit: "K", placeholder: "for V-L screen" },
+      { id: "pvap", label: "Vapor pressure", unit: "Pa", placeholder: "at relevant T" },
+      { id: "density", label: "Density", unit: "kg/m3", placeholder: "for volume sizing" },
+      { id: "solubilityParameter", label: "Solubility parameter", unit: "", placeholder: "affinity screen" },
+      { id: "molarVolume", label: "Molar volume", unit: "m3/kmol", placeholder: "size screen" }
+    ];
 
     const state = {
       text: "",
@@ -449,6 +475,7 @@
       expandedGanttRows: {},
       phenomenaGridExpanded: false,
       scheduleScenarioView: "conservative",
+      pubchemStreamSuggestions: {},
       activeSeparationSimulatorGroupId: null,
       activeSeparationSimulatorMode: "full",
       activeConversionBlockId: null,
@@ -470,7 +497,8 @@
       focusEndpoint: null,
       flowsheetMode: "editable",
       flowsheetFit: true,
-      drag: null
+      drag: null,
+      boardPan: null
     };
 
     const $ = id => document.getElementById(id);
@@ -488,6 +516,7 @@
     let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
+    const pubchemStreamSuggestTimers = new Map();
     const flowsheetLayoutVersion = "editable-train-v6";
 
     function undoSnapshot() {
@@ -1030,6 +1059,7 @@
         makeupRequired: values.makeupRequired || "",
         accumulationRisk: values.accumulationRisk || "",
         note: values.note || "",
+        ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, values[field] || values.chemicalProperties?.[field] || ""])),
         editing: Boolean(values.editing)
       });
     }
@@ -1439,8 +1469,42 @@
         makeupRequired: String(stream?.makeupRequired || ""),
         accumulationRisk: String(stream?.accumulationRisk || ""),
         note: String(stream?.note || ""),
+        ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, String(stream?.[field] || stream?.chemicalProperties?.[field] || "")])),
+        thermalSensitivity: separationThermalOptions.includes(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
+          ? String(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
+          : "unknown",
         editing: Boolean(stream?.editing)
       };
+    }
+
+    function streamSectionMeta(role) {
+      return role === "outlet" ? streamOutletMeta : streamRoles[role];
+    }
+
+    function streamIsOutlet(stream) {
+      return outletRoles.includes(stream?.role);
+    }
+
+    function streamRoleForFate(fate, currentRole = "output") {
+      if (currentRole === "input") return "input";
+      return wasteFates.has(fate) ? "waste" : "output";
+    }
+
+    function streamTone(stream, displayRole = "") {
+      if (displayRole === "input" || stream?.role === "input") return "input";
+      if (recycleFates.has(stream?.fate)) return "recycle";
+      if (productFates.has(stream?.fate)) return "product";
+      if (wasteFates.has(stream?.fate) || stream?.role === "waste") return "waste";
+      return "output";
+    }
+
+    function mfaGroupsForDisplay(aggregates) {
+      const byRole = new Map(aggregates.map(group => [group.role, group]));
+      const outletItems = outletRoles.flatMap(role => byRole.get(role)?.items || []);
+      return streamEditorSections.map(role => {
+        if (role === "outlet") return { role, items: outletItems };
+        return byRole.get(role) || { role, items: [] };
+      });
     }
 
     function defaultStreamScalingMode(role, unit = "", fate = "") {
@@ -1473,10 +1537,12 @@
 
     function streamCounts(block) {
       ensureBlockFlowFields(block);
-      return Object.keys(streamRoles).reduce((counts, role) => {
+      const counts = Object.keys(streamRoles).reduce((counts, role) => {
         counts[role] = block.streams.filter(stream => stream.role === role).length;
         return counts;
       }, {});
+      counts.outlet = counts.output + counts.waste;
+      return counts;
     }
 
     function phaseLabel(code) {
@@ -3037,11 +3103,12 @@
     }
 
     function streamTipLines(streams) {
-      const roleOrder = ["input", "output", "waste"];
-      return roleOrder.flatMap(role => {
-        const items = streams.filter(stream => stream.role === role);
+      return streamEditorSections.flatMap(role => {
+        const items = role === "outlet"
+          ? streams.filter(stream => streamIsOutlet(stream))
+          : streams.filter(stream => stream.role === role);
         if (!items.length) return [];
-        const header = streamRoles[role].title;
+        const header = streamSectionMeta(role).title;
         return [
           `${header}:`,
           ...items.slice(0, 5).map(stream => `- ${streamTipText(stream)}`),
@@ -3062,14 +3129,14 @@
     }
 
     function groupMfaSummaryHtml(group) {
-      const aggregates = aggregateGroupStreams(group);
+      const aggregates = mfaGroupsForDisplay(aggregateGroupStreams(group)).filter(roleGroup => roleGroup.items.length);
       if (!aggregates.length) return "";
       return `
         <div class="group-mfa">
           <div class="label">Group MFA</div>
           ${aggregates.map(roleGroup => `
             <div class="group-mfa-role role-${escapeAttr(roleGroup.role)}">
-              <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
+              <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
               ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item, group.id, false, roleGroup.role)).join("")}
               ${roleGroup.items.length > 3 ? `<span class="muted small">+${roleGroup.items.length - 3} more material groups</span>` : ""}
             </div>
@@ -3081,12 +3148,14 @@
     function groupMfaItemHtml(item, groupId, editable, role = "") {
       const total = item.totalText ? item.totalText : "not summed";
       const pillLabel = item.override ? `${escapeHtml(item.override.value)} ${escapeHtml(item.totalUnit || "")}`.trim() : escapeHtml(total);
+      const tone = role === "outlet" ? streamTone({ role: item.role, fate: item.fates?.[0] }, role) : role;
       return `
-        <div class="group-mfa-item ${role ? `role-${escapeAttr(role)}` : ""}">
+        <div class="group-mfa-item ${tone ? `role-${escapeAttr(tone)}` : ""}">
           <div class="group-mfa-item-head">
             <strong>${escapeHtml(item.name)}</strong>
             <span class="pill ${item.override ? "blue" : item.totalText ? "blue" : "warn"}">${pillLabel}</span>
           </div>
+          ${item.fates?.length ? `<div class="mfa-label-meta">${item.fates.slice(0, 3).map(fate => `<span class="pill ${streamTone({ role: item.role, fate }) === "waste" ? "warn" : streamTone({ role: item.role, fate }) === "product" ? "green" : "blue"}">${escapeHtml(fate)}</span>`).join("")}</div>` : ""}
           <div class="group-mfa-lines">
             ${item.lines.slice(0, 4).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
             ${item.lines.length > 4 ? `<span>+${item.lines.length - 4} more entries</span>` : ""}
@@ -3346,7 +3415,7 @@
         const items = Array.from(byMaterial.values()).map(materialStreams => {
           const aggregated = aggregateMaterialStreams(materialStreams);
           const key = `${role}||${aggregated.name.toLowerCase()}`;
-          return { ...aggregated, key, override: mfaOverrides[key] || null };
+          return { ...aggregated, role, key, override: mfaOverrides[key] || null };
         });
         return { role, items };
       }).filter(roleGroup => roleGroup.items.length);
@@ -3364,6 +3433,7 @@
       });
       const lines = [];
       const totals = [];
+      const fates = [...new Set(streams.map(stream => stream.fate).filter(fate => fate && fate !== "unknown"))];
       lineGroups.forEach(group => {
         const timing = group[0].timing || "unspecified";
         const unit = group[0].unit || "";
@@ -3384,6 +3454,7 @@
       return {
         name,
         lines,
+        fates,
         totalText: total.text,
         totalValue: total.value,
         totalUnit: total.unit,
@@ -3394,6 +3465,7 @@
           quantity: stream.quantity,
           unit: stream.unit,
           phase: stream.phase,
+          fate: stream.fate,
           status: stream.status,
           note: stream.note
         }))
@@ -3914,7 +3986,9 @@
       const converted = basisRows
         .map(row => ({ row, ...rowVolumeM3(row, densityKgM3) }))
         .filter(item => Number.isFinite(item.value) && item.value >= 0);
-      const missingDensity = basisRows.some(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit)) && !Number.isFinite(densityKgM3));
+      const missingDensity = basisRows.some(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit))
+        && !Number.isFinite(densityToKgM3(row.density, "kg/m3"))
+        && !Number.isFinite(densityKgM3));
       if (!converted.length) {
         return {
           ready: false,
@@ -3935,7 +4009,7 @@
         reactantsVolumeM3,
         solventVolumeM3,
         totalChargeM3,
-        source: `auto from ${groupId} scaled MFA${Number.isFinite(densityKgM3) ? " + group density" : ""}`,
+        source: `auto from ${groupId} scaled MFA${Number.isFinite(densityKgM3) ? " + group density" : converted.some(item => /stream density/.test(item.source)) ? " + stream density" : ""}`,
         missing: missingDensity ? [`density for additional mass-only streams in ${groupId}`] : []
       };
     }
@@ -4054,6 +4128,10 @@
       const direct = volumeToM3(row.scaledQuantity, row.scaledUnit);
       if (Number.isFinite(direct)) return { value: direct, source: "direct MFA volume" };
       const massKg = massToKg(row.scaledQuantity, row.scaledUnit);
+      const streamDensityKgM3 = densityToKgM3(row.density, "kg/m3");
+      if (Number.isFinite(massKg) && Number.isFinite(streamDensityKgM3) && streamDensityKgM3 > 0) {
+        return { value: massKg / streamDensityKgM3, source: "scaled MFA mass / stream density" };
+      }
       if (Number.isFinite(massKg) && Number.isFinite(densityKgM3) && densityKgM3 > 0) {
         return { value: massKg / densityKgM3, source: "scaled MFA mass / group density" };
       }
@@ -4069,7 +4147,9 @@
       const converted = rows
         .map(row => ({ row, ...rowVolumeM3(row, densityKgM3) }))
         .filter(item => Number.isFinite(item.value) && item.value >= 0);
-      const massRowsMissingDensity = rows.filter(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit)) && !Number.isFinite(densityKgM3));
+      const massRowsMissingDensity = rows.filter(row => Number.isFinite(massToKg(row.scaledQuantity, row.scaledUnit))
+        && !Number.isFinite(densityToKgM3(row.density, "kg/m3"))
+        && !Number.isFinite(densityKgM3));
       if (!converted.length) {
         return {
           value: NaN,
@@ -4178,7 +4258,8 @@
         appliedFactor: Number.isFinite(resolved.factor) ? formatNumber(resolved.factor) : "",
         scaledQuantity: Number.isFinite(resolved.quantity) ? formatNumber(resolved.quantity) : "",
         scaledUnit: resolved.unit || stream.unit,
-        scalingStatus: resolved.status
+        scalingStatus: resolved.status,
+        ...streamChemicalPropertyPayloadWithDensity(stream)
       };
     }
 
@@ -4963,6 +5044,9 @@
       root.querySelectorAll("[data-scale-focus-group]").forEach(button => {
         button.addEventListener("click", () => focusGroupForEditing(button.dataset.scaleFocusGroup));
       });
+      root.querySelectorAll("[data-add-density-basis]").forEach(button => {
+        button.addEventListener("click", () => openDensityBasisEditor(button.dataset.addDensityBasis));
+      });
       root.querySelectorAll("[data-schedule-field]").forEach(field => {
         field.addEventListener("input", updateGroupScheduleField);
         field.addEventListener("change", rerenderScaleAfterEdit);
@@ -5012,8 +5096,38 @@
       setInspectorTab("inspect");
       renderAll();
     }
+
+    function openDensityBasisEditor(groupId) {
+      const group = groupModel(groupId);
+      if (!group) return;
+      const groupState = ensureGroup(groupId);
+      groupState.properties.density = normalizePropertyValue(groupState.properties.density, propertyPromptCatalog.find(item => item.id === "density"));
+      groupState.properties.density.unit = groupState.properties.density.unit || "kg/m3";
+      groupState.properties.density.status = groupState.properties.density.status === "missing" ? "assumed" : groupState.properties.density.status;
+      groupState.properties.density.note = groupState.properties.density.note || "Needed for automatic reactor sizing from mass-based MFA.";
+      groupState.propertiesEditing = true;
+      state.selectedGroupId = groupId;
+      state.selectedBlockId = null;
+      state.selectedIds = group.blocks.map(block => block.id);
+      state.focusEndpoint = groupId;
+      setInspectorTab("inspect");
+      setSourcePanelTab("board");
+      renderAll();
+    }
     function infoIconHtml(tip) {
       return `<span class="info-icon tip" data-tip="${escapeAttr(tip)}">ⓘ</span>`;
+    }
+
+    function compactDetailsHtml(title, bodyHtml, meta = "", open = false) {
+      return `
+        <details class="compact-details" ${open ? "open" : ""}>
+          <summary>
+            <strong>${escapeHtml(title)}</strong>
+            ${meta ? `<span class="muted small">${escapeHtml(meta)}</span>` : ""}
+          </summary>
+          <div class="compact-details-body">${bodyHtml}</div>
+        </details>
+      `;
     }
 
     function scaleResultsHtml(model) {
@@ -5064,30 +5178,36 @@
             ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
           </div>
 
-          <div class="scale-metric">
-            <span class="label">Bottleneck classification</span>
-            ${throughputDiagnosticsHtml(throughput)}
-          </div>
+          ${compactDetailsHtml(
+            "Bottleneck classification",
+            throughputDiagnosticsHtml(throughput),
+            throughput.timeBottleneck ? `${throughput.timeBottleneck.groupId} time bottleneck` : "capacity and throughput checks"
+          )}
 
-          <div class="scale-metric">
-            <span class="label">Scaled MFA preview</span>
-            ${rowGroups.length ? rowGroups.map(group => `
+          ${compactDetailsHtml(
+            "Scaled MFA preview",
+            rowGroups.length ? rowGroups.map(group => `
               <div class="scale-section">
                 <div class="scale-section-title">${escapeHtml(streamRoles[group.role].title)}</div>
                 ${group.rows.slice(0, 3).map(row => scaledFlowRowHtml(row)).join("")}
                 ${group.rows.length > 3 ? `<span class="muted small">+${group.rows.length - 3} more streams in export</span>` : ""}
               </div>
-            `).join("") : `<div class="mfa-empty">Add stream quantities to preview scaled MFA.</div>`}
-          </div>
+            `).join("") : `<div class="mfa-empty">Add stream quantities to preview scaled MFA.</div>`,
+            rowGroups.length ? `${rowGroups.reduce((sum, group) => sum + group.rows.length, 0)} streams` : "empty"
+          )}
 
-          <div class="scale-metric">
-            <span class="label">Scale-up assessment</span>
+          ${compactDetailsHtml(
+            "Scale-up assessment",
+            `
             ${assessment.length ? assessment.slice(0, 8).map(scaleAssessmentCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, and conditions to generate scale-up risk cards.</div>`}
             ${assessment.length > 8 ? `<span class="muted small">+${assessment.length - 8} more assessment cards in export</span>` : ""}
-          </div>
+            `,
+            assessment.length ? `${assessment.length} cards` : "no risk cards"
+          )}
 
-          <div class="scale-metric">
-            <span class="label">Recycle / fate summary</span>
+          ${compactDetailsHtml(
+            "Recycle / fate summary",
+            `
             ${recycle.fates.length ? recycle.fates.slice(0, 5).map(item => `<div class="scaled-flow-row"><strong>${escapeHtml(item.fate)}</strong><span>${item.count} stream${item.count === 1 ? "" : "s"}</span></div>`).join("") : `<div class="mfa-empty">No stream fate data yet.</div>`}
             ${recycle.closures.length ? `
               <div class="event-label-group">
@@ -5102,11 +5222,14 @@
               </div>
             ` : ""}
             ${recycle.warnings.length ? `<span class="pill warn">${recycle.warnings.length} recycle warning${recycle.warnings.length === 1 ? "" : "s"}</span>` : ""}
-          </div>
-          <div class="scale-metric">
-            <span class="label">Energy bridge candidates</span>
-            ${energy.length ? energyBridgeGroupsHtml(energy) : `<div class="mfa-empty">Assign thermal, mixing, pressure, or phase-change phenomena to generate energy bridge events.</div>`}
-          </div>
+            `,
+            recycle.closures.length ? `${recycle.closures.length} closure rows` : `${recycle.fates.length} fate classes`
+          )}
+          ${compactDetailsHtml(
+            "Energy bridge candidates",
+            energy.length ? energyBridgeGroupsHtml(energy) : `<div class="mfa-empty">Assign thermal, mixing, pressure, or phase-change phenomena to generate energy bridge events.</div>`,
+            energy.length ? `${energy.length} events` : "empty"
+          )}
         </div>
       `;
     }
@@ -5150,6 +5273,7 @@
       return `
         <div class="mfa-empty ${sizing.autoReady ? "ok" : ""}" style="margin-bottom:6px">
           Reactor sizing source: ${escapeHtml(sizing.source || "missing")}${sizing.autoGroupId ? ` (${escapeHtml(sizing.autoGroupId)})` : ""}.
+          ${sizing.autoGroupId && (sizing.missing || []).some(item => /density/i.test(item)) ? `<button class="mini-button scale-inline-action" data-add-density-basis="${escapeAttr(sizing.autoGroupId)}">Add Density Basis</button>` : ""}
         </div>
         <div class="scale-metric-grid">
           ${rows.map(([label, value]) => `
@@ -5236,27 +5360,29 @@
         <div class="scale-results">
           <div class="scale-metric">
             <span class="label">Heuristic Rules</span>
-            <div class="mfa-empty" style="margin-bottom:8px">
-              Pre-scale screening. Only rules triggered by the current synthesis are shown here; the full ${heuristics.totalRules}-rule library remains in the JSON export.
-            </div>
             <div class="scaled-flow-row">
               <strong>${heuristics.triggered.length} triggered / ${heuristics.totalRules} available</strong>
-              <span>Rules are matched from phenomena, phases, stream fates, conditions, properties, and source text.</span>
+              <span>Matched from phenomena, phases, fates, conditions, properties, and source text.</span>
             </div>
-            <div class="scaled-flow-row">
-              <strong>Application criterion</strong>
-              <span>A rule appears when the match is specific enough: usually at least two rule tags, or one strong specific tag such as vacuum, recycle, purge, exotherm, crystallization, membrane, hazard, or heat sensitivity.</span>
-              <span class="muted small">Generic single tags such as vapor, liquid, utility, pressure, or heat exchange are not enough by themselves. Context tags come from group phenomena, Lutze phases, stream fate, conditions, properties, selected unit alternatives, and keywords.</span>
-            </div>
+            ${compactDetailsHtml(
+              "Application criterion",
+              `<div class="scaled-flow-row">
+                <span>A rule appears when the match is specific enough: usually at least two rule tags, or one strong specific tag such as vacuum, recycle, purge, exotherm, crystallization, membrane, hazard, or heat sensitivity.</span>
+                <span class="muted small">Generic single tags such as vapor, liquid, utility, pressure, or heat exchange are not enough by themselves.</span>
+              </div>`,
+              "why rules appear"
+            )}
             <div class="heuristic-actions">
               <button data-toggle-heuristic-library="true">${state.showAllHeuristicRules ? "Hide full library" : `Show all ${heuristics.totalRules} rules`}</button>
               <button data-open-refine-modal="true" class="primary">Open Process Rule Check</button>
             </div>
           </div>
-          <div class="scale-metric">
-            <span class="label">Process Rule Check</span>
-            ${refine ? aiRefinePanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. This uses the local checker; external AI is optional.</div>`}
-          </div>
+          ${compactDetailsHtml(
+            "Process Rule Check",
+            refine ? aiRefinePanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. This uses the local checker; external AI is optional.</div>`,
+            refine ? refine.topSeverity : "not run",
+            Boolean(refine)
+          )}
           <div class="scale-metric">
             <span class="label">Triggered Rule Cards</span>
             ${heuristics.triggered.length ? heuristics.triggered.map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
@@ -5493,6 +5619,10 @@
         ? `Needs: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "..." : ""}`
         : "Core screening data present";
       const expanded = Boolean(state.expandedGanttRows[task.groupId]);
+      const showDensityBasis = ["m3", "L"].includes(task.capacityUnit) || /reactor|vessel|tank|batch|semi-batch/i.test(`${task.selectedUnit} ${task.task}`);
+      const densityButton = showDensityBasis
+        ? `<button class="mini-button scale-density-button" data-add-density-basis="${escapeAttr(task.groupId)}">${propertyHasValue(groupModel(task.groupId) || ensureGroup(task.groupId), "density") ? "Edit Density Basis" : "Add Density Basis"}</button>`
+        : "";
       return `
         <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""} ${expanded ? "expanded" : "collapsed"}">
           <div class="gantt-row-head" data-toggle-gantt-row="${escapeAttr(task.groupId)}">
@@ -5501,6 +5631,7 @@
               <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
               <span class="muted small">${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
               ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
+              ${scaleSensitivityBadgeHtml(task.scaleSensitivity)}
             </div>
             <div class="gantt-row-bar-col">
               <div class="gantt-bar-track" title="${escapeAttr(effective)}">
@@ -5522,6 +5653,7 @@
                 <strong>${escapeHtml(profile.label)}</strong>
                 <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
                 <span class="muted small">${escapeHtml(scaleNote)}</span>
+                ${densityButton}
               </div>
             </div>
           ` : ""}
@@ -6480,6 +6612,14 @@
       root.querySelectorAll("[data-step-audit-kind]").forEach(button => {
         button.addEventListener("click", () => focusStepAuditTarget(button.dataset.stepAuditKind, button.dataset.stepAuditId));
       });
+      // The audit panel lives in the "Board" source-tab, which isn't the default tab (Protocol is) -
+      // surface the open-issue count on the tab button itself so it's not silently missed.
+      const badge = $("boardTabAuditBadge");
+      if (badge) {
+        const openCount = cards.reduce((sum, card) => sum + card.issues.filter(issue => !issue.warningOnly).length, 0);
+        badge.hidden = !openCount;
+        badge.textContent = openCount;
+      }
     }
 
     function focusStepAuditTarget(kind, id) {
@@ -6863,7 +7003,8 @@
           residualSourceId: meta.residualSourceId || "",
           chemicalKey: key,
           source: `${sourceBlockId}/${stream.id}`,
-          note: [stream.note, residualNote].filter(Boolean).join(" | ")
+          note: [stream.note, residualNote].filter(Boolean).join(" | "),
+          ...streamChemicalPropertyPayload(stream)
         }, simulator.substances.length);
         simulator.substances.push(substance);
       } else {
@@ -6882,6 +7023,7 @@
         if (residualNote && !String(substance.note || "").includes(residualNote)) {
           substance.note = [substance.note, residualNote].filter(Boolean).join(" | ");
         }
+        mergeCandidateChemicalProperties(substance, stream);
       }
       applyChemicalKey(substance);
       propagateSeparationChemicalProperties(groupId, substance);
@@ -6922,7 +7064,8 @@
           timing: "waste purge",
           fate: "purge",
           scalingMode: "per batch",
-          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted; treat as recovery or waste candidate before Lutze separation.`
+          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted; treat as recovery or waste candidate before Lutze separation.`,
+          ...streamChemicalPropertyPayloadWithDensity(row.stream)
         });
         if (block.groupId) {
           upsertSeparationSubstanceForConversion(block.groupId, stream, "reactant", "recover", block.id, {
@@ -7383,11 +7526,36 @@
             residualSourceId: residual ? stream.id || "" : "",
             chemicalKey: canonicalChemicalKey(name),
             source: `${block.id}/${stream.id || stream.role || "stream"}`,
-            note: stream.note || ""
+            note: stream.note || "",
+            ...streamChemicalPropertyPayload(stream)
           });
         });
       });
       return aggregateSeparationCandidates(candidates).slice(0, 12);
+    }
+
+    function streamChemicalPropertyPayload(stream) {
+      return Object.fromEntries(streamChemicalPropertyFields
+        .filter(field => field !== "density")
+        .map(field => [field, String(stream?.[field] || "").trim()])
+        .filter(([field, value]) => value && !(field === "thermalSensitivity" && value === "unknown")));
+    }
+
+    function streamChemicalPropertyPayloadWithDensity(stream) {
+      return Object.fromEntries(streamChemicalPropertyFields
+        .map(field => [field, String(stream?.[field] || "").trim()])
+        .filter(([field, value]) => value && !(field === "thermalSensitivity" && value === "unknown")));
+    }
+
+    function mergeMissingStreamChemicalProperties(target, source, includeDensity = false) {
+      if (!target || !source) return;
+      const fields = streamChemicalPropertyFields.filter(field => includeDensity || field !== "density");
+      fields.forEach(field => {
+        const sourceValue = String(source[field] || "").trim();
+        if (!sourceValue) return;
+        const targetValue = String(target[field] || "").trim();
+        if (!targetValue) target[field] = sourceValue;
+      });
     }
 
     function aggregateSeparationCandidates(candidates) {
@@ -7406,6 +7574,7 @@
         if (candidate.note && !String(current.note || "").includes(candidate.note)) {
           current.note = [current.note, candidate.note].filter(Boolean).join(" | ");
         }
+        mergeCandidateChemicalProperties(current, candidate);
         current.residualOf = current.residualOf || candidate.residualOf || "";
         current.residualSourceId = current.residualSourceId || candidate.residualSourceId || "";
         current.chemicalKey = current.chemicalKey || candidate.chemicalKey || key;
@@ -7413,6 +7582,14 @@
         current.source = current.sourceList.join(", ");
       });
       return Array.from(byName.values()).map(({ sourceList, ...item }) => ({ ...item, source: sourceList.join(", ") }));
+    }
+
+    function mergeCandidateChemicalProperties(current, candidate) {
+      separationSharedPropertyFields.forEach(field => {
+        if (!String(current[field] || "").trim() && String(candidate[field] || "").trim()) {
+          current[field] = String(candidate[field]);
+        }
+      });
     }
 
     function mergeCandidateQuantityByChemicalState(current, candidate) {
@@ -8395,11 +8572,15 @@
           phase: meta.separatedPhase,
           status: "proposed",
           fate: item.fate && item.fate !== "unknown" ? item.fate : "intermediate",
-          note: narrative || `Route variant output for ${item.name}; confirm recovery, purity, and destination.`
+          note: narrative || `Route variant output for ${item.name}; confirm recovery, purity, and destination.`,
+          ...streamChemicalPropertyPayloadWithDensity(item)
         }));
       });
       if (resolvedSplit.retained.length) {
         const retainedQuantity = routeQuantityForSubstances(resolvedSplit.retained);
+        const retainedPureProperties = resolvedSplit.retained.length === 1
+          ? streamChemicalPropertyPayloadWithDensity(resolvedSplit.retained[0])
+          : {};
         streams.push(
           createStream("output", {
             id: `${blockId}-S${streams.length + 2}`,
@@ -8409,7 +8590,8 @@
             phase: meta.retainedPhase,
             status: "proposed",
             fate: resolvedSplit.retained.some(item => item.fate === "product") ? "product" : "intermediate",
-            note: narrative || `Retained mixture for the next separation step: ${resolvedSplit.retained.map(item => item.name).join(", ")}.`
+            note: narrative || `Retained mixture for the next separation step: ${resolvedSplit.retained.map(item => item.name).join(", ")}.`,
+            ...retainedPureProperties
           })
         );
       }
@@ -9798,16 +9980,16 @@
           </div>
           <div class="mfa-summary-strip">
             <span class="pill blue">I:${counts.input}</span>
-            <span class="pill">O:${counts.output}</span>
-            <span class="pill warn">W:${counts.waste}</span>
+            <span class="pill green">Out:${counts.outlet}</span>
             ${conversionQuickActionHtml(block)}
             <span>material balance basis: per selected block</span>
           </div>
         </div>
-        <div class="mfa-grid">
-          ${Object.keys(streamRoles).map(role => streamSectionHtml(block, role)).join("")}
+        <div class="mfa-grid stream-editor-grid">
+          ${streamEditorSections.map(role => streamSectionHtml(block, role)).join("")}
         </div>
         ${conditionPanelHtml(block)}
+        ${blockLutzeReactionSeparationLaunchHtml(block)}
       `;
       root.querySelectorAll("[data-add-stream]").forEach(button => {
         button.addEventListener("click", () => {
@@ -9815,7 +9997,8 @@
           if (!current) return;
           ensureBlockFlowFields(current);
           pushUndo();
-          const stream = createStream(button.dataset.addStream, { editing: true });
+          const addRole = button.dataset.addStream === "outlet" ? "output" : button.dataset.addStream;
+          const stream = createStream(addRole, { editing: true });
           stream.id = nextStreamId(current);
           current.streams.push(stream);
           syncLegacyStreamLists(current);
@@ -9840,6 +10023,20 @@
           event.preventDefault();
           event.stopPropagation();
           applyStreamSuggestion(button.dataset.applyStreamSuggestion, button.dataset);
+        });
+      });
+      root.querySelectorAll("[data-apply-stream-pubchem-suggestion]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          applyStreamPubChemSuggestion(button.dataset.applyStreamPubchemSuggestion, button.dataset.pubchemSuggestionName);
+        });
+      });
+      root.querySelectorAll("[data-fetch-stream-pubchem]").forEach(button => {
+        button.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          await fetchPubChemForStream(button.dataset.fetchStreamPubchem, button);
         });
       });
       root.querySelectorAll("[data-remove-stream]").forEach(button => {
@@ -9911,10 +10108,23 @@
           openConversionModal(button.dataset.openConversionModal);
         });
       });
+      root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
+        button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
+      });
+    }
+
+    function blockLutzeReactionSeparationLaunchHtml(block) {
+      if (!block?.groupId) return "";
+      const group = groupModel(block.groupId);
+      if (!group) return "";
+      const model = separationSimulatorModel(group);
+      if (!postReactionSeparationSupportApplies(group, model)) return "";
+      return lutzeReactionSeparationLaunchHtml(group, model);
     }
 
     function renderGroupAggregateStepInspector(root, group) {
       const mfa = aggregateGroupStreams(group);
+      const mfaByRole = mfaGroupsForDisplay(mfa);
       const conditions = aggregateGroupConditions(group);
       const separationModel = separationSimulatorModel(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
@@ -9968,17 +10178,19 @@
             <span>What enters/leaves the grouped step and which operating evidence is aggregated.</span>
           </div>
           <div class="mfa-grid group-mfa-grid">
-            ${mfa.length ? mfa.map(roleGroup => `
+            ${mfaByRole.map(roleGroup => `
               <section class="mfa-section role-${escapeAttr(roleGroup.role)}">
                 <div class="mfa-section-head">
-                  <strong>${escapeHtml(streamRoles[roleGroup.role].title)}</strong>
+                  <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
                   <span class="pill">${roleGroup.items.length}</span>
                 </div>
                 <div class="mfa-rows">
-                  ${roleGroup.items.map(item => groupMfaItemHtml(item, group.id, true, roleGroup.role)).join("")}
+                  ${roleGroup.items.length
+                    ? roleGroup.items.map(item => groupMfaItemHtml(item, group.id, true, roleGroup.role)).join("")
+                    : `<div class="mfa-empty">${escapeHtml(streamSectionMeta(roleGroup.role).empty)}</div>`}
                 </div>
               </section>
-            `).join("") : `<div class="mfa-empty">No quantified group streams yet.</div>`}
+            `).join("")}
           </div>
           <div class="condition-panel group-drawer-panel">
             <div class="condition-head">
@@ -10454,9 +10666,11 @@
     }
 
     function streamSectionHtml(block, role) {
-      const meta = streamRoles[role];
-      const streams = block.streams.filter(stream => stream.role === role);
-      const canCopyInputs = role === "output" && block.streams.some(stream => stream.role === "input" && String(stream.name || "").trim());
+      const meta = streamSectionMeta(role);
+      const streams = role === "outlet"
+        ? block.streams.filter(stream => streamIsOutlet(stream))
+        : block.streams.filter(stream => stream.role === role);
+      const canCopyInputs = role === "outlet" && block.streams.some(stream => stream.role === "input" && String(stream.name || "").trim());
       return `
         <section class="mfa-section role-${escapeAttr(role)}">
           <div class="mfa-section-head">
@@ -10477,13 +10691,21 @@
       if (!stream.editing) return streamLabelHtml(stream, block);
       const sid = escapeAttr(stream.id);
       const hasAdvanced = Boolean(stream.recoveryPercent || stream.purgePercent || stream.loopId || stream.destinationGroup || stream.makeupRequired || stream.accumulationRisk);
-      const showConversionShortcut = streamNeedsConversionShortcut(stream, role, block);
+      const hasChemical = streamHasChemicalProperties(stream);
+      const actualRole = role === "outlet" ? (stream.role || "output") : role;
+      const tone = streamTone(stream, role);
+      const suggestionRole = role === "outlet" ? "outlet" : actualRole;
+      const showConversionShortcut = streamNeedsConversionShortcut(stream, actualRole, block);
       return `
-        <div class="mfa-row role-${escapeAttr(role)}" data-stream-id="${sid}">
+        <div class="mfa-row role-${escapeAttr(tone)}" data-stream-id="${sid}">
           <label class="stream-field span-2">
             <span class="stream-field-label">Material / stream</span>
-            <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}">
-            ${streamSuggestionRailHtml(block, stream, role)}
+            <div class="stream-name-row">
+              <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off">
+              <button type="button" class="mini-button" data-fetch-stream-pubchem="${sid}" title="Fetch optional pure-component properties for Lutze/scale-up support">PubChem</button>
+            </div>
+            ${streamSuggestionRailHtml(block, stream, suggestionRole)}
+            ${streamPubChemSuggestionRailHtml(stream)}
           </label>
           <label class="stream-field">
             <span class="stream-field-label">Amount</span>
@@ -10503,6 +10725,12 @@
             <span class="stream-field-label">Phase</span>
             <select data-stream-field="phase" data-stream-id="${sid}">${phaseOptionHtml(stream.phase)}</select>
           </label>
+          ${actualRole !== "input" ? `
+            <label class="stream-field">
+              <span class="stream-field-label">Outlet type</span>
+              <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions.filter(item => item !== "fresh input"), stream.fate)}</select>
+            </label>
+          ` : ""}
           <label class="stream-field">
             <span class="stream-field-label">Data status</span>
             <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
@@ -10518,10 +10746,12 @@
           <details class="stream-advanced span-2" ${hasAdvanced ? "open" : ""}>
             <summary>Fate, recycle & notes${hasAdvanced ? " •" : ""}</summary>
             <div class="stream-advanced-grid">
-              <label class="stream-field">
-                <span class="stream-field-label">Fate</span>
-                <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions, stream.fate)}</select>
-              </label>
+              ${actualRole === "input" ? `
+                <label class="stream-field">
+                  <span class="stream-field-label">Fate</span>
+                  <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions, stream.fate)}</select>
+                </label>
+              ` : ""}
               <label class="stream-field">
                 <span class="stream-field-label">Recovery %</span>
                 <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="90" inputmode="decimal">
@@ -10552,10 +10782,72 @@
               </label>
             </div>
           </details>
+          <details class="stream-advanced stream-chemical span-2" ${hasChemical ? "open" : ""}>
+            <summary>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</summary>
+            <div class="stream-advanced-grid">
+              <label class="stream-field">
+                <span class="stream-field-label">Thermal sensitivity</span>
+                <select data-stream-field="thermalSensitivity" data-stream-id="${sid}">${optionHtml(separationThermalOptions, stream.thermalSensitivity)}</select>
+              </label>
+              ${streamChemicalPropertyDefs.map(def => `
+                <label class="stream-field">
+                  <span class="stream-field-label">${escapeHtml(def.label)}${def.unit ? ` (${escapeHtml(def.unit)})` : ""}</span>
+                  <input data-stream-field="${escapeAttr(def.id)}" data-stream-id="${sid}" value="${escapeAttr(stream[def.id])}" placeholder="${escapeAttr(def.placeholder)}" inputmode="decimal">
+                </label>
+              `).join("")}
+              <label class="stream-field">
+                <span class="stream-field-label">Formula</span>
+                <input data-stream-field="molecularFormula" data-stream-id="${sid}" value="${escapeAttr(stream.molecularFormula)}" placeholder="optional">
+              </label>
+              <label class="stream-field">
+                <span class="stream-field-label">PubChem CID</span>
+                <input data-stream-field="pubchemCid" data-stream-id="${sid}" value="${escapeAttr(stream.pubchemCid)}" placeholder="optional">
+              </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">Property source</span>
+                <input data-stream-field="propertySource" data-stream-id="${sid}" value="${escapeAttr(stream.propertySource)}" placeholder="manual, PubChem, supplier SDS...">
+              </label>
+            </div>
+          </details>
           <div class="mfa-edit-actions span-2">
             <button class="delete-stream" data-remove-stream="${sid}" title="Remove stream">Delete</button>
             <button class="primary" data-save-stream="${sid}">Save</button>
           </div>
+        </div>
+      `;
+    }
+
+    function streamHasChemicalProperties(stream) {
+      return streamChemicalPropertyFields.some(field => {
+        const value = String(stream?.[field] || "").trim();
+        return value && !(field === "thermalSensitivity" && value === "unknown");
+      })
+        || String(stream?.thermalSensitivity || "unknown") !== "unknown";
+    }
+
+    function streamPubChemSuggestionRailHtml(stream) {
+      const key = stream.id;
+      const stateEntry = state.pubchemStreamSuggestions?.[key];
+      if (!stateEntry) return "";
+      if (stateEntry.status === "running") {
+        return `<div class="stream-suggestion-rail pubchem"><span>PubChem</span><span class="muted small">searching...</span></div>`;
+      }
+      if (stateEntry.status === "error") {
+        return `<div class="stream-suggestion-rail pubchem"><span>PubChem</span><span class="muted small">${escapeHtml(stateEntry.message || "no candidates")}</span></div>`;
+      }
+      const candidates = stateEntry.candidates || [];
+      if (!candidates.length) return "";
+      return `
+        <div class="stream-suggestion-rail pubchem">
+          <span>PubChem</span>
+          ${candidates.slice(0, 5).map(item => `
+            <button type="button" class="stream-suggestion-chip pubchem"
+              data-apply-stream-pubchem-suggestion="${escapeAttr(stream.id)}"
+              data-pubchem-suggestion-name="${escapeAttr(item.name)}"
+              title="${escapeAttr(item.formula ? `Formula ${item.formula}` : item.source || "PubChem candidate")}">
+              ${escapeHtml(item.name)}
+            </button>
+          `).join("")}
         </div>
       `;
     }
@@ -10586,6 +10878,8 @@
       const query = String(stream?.name || "").trim().toLowerCase();
       const text = String(block.text || "");
       const candidates = [];
+      const existingKeys = existingStreamSuggestionKeys(block, role, stream?.id || "");
+      const phraseRoles = role === "outlet" ? ["output", "waste"] : [role];
       materialMentionsFromText(text).forEach(item => {
         candidates.push({
           ...item,
@@ -10593,10 +10887,13 @@
           reason: item.quantity ? `Detected in source text: ${item.quantity} ${item.unit}` : "Detected in source text"
         });
       });
-      phraseSuggestionsFromText(text, role).forEach(name => {
-        candidates.push({ name, tone: role, reason: `Suggested ${role} phrase from block description` });
+      phraseRoles.forEach(phraseRole => {
+        phraseSuggestionsFromText(text, phraseRole).forEach(name => {
+          const label = role === "outlet" ? `outlet/${phraseRole}` : phraseRole;
+          candidates.push({ name, tone: phraseRole, reason: `Suggested ${label} phrase from block description` });
+        });
       });
-      if (role === "output") {
+      if (role === "output" || role === "outlet") {
         (block.streams || [])
           .filter(item => item.role === "input" && String(item.name || "").trim())
           .forEach(item => candidates.push({
@@ -10612,13 +10909,27 @@
       return candidates
         .map(item => ({ ...item, name: normalizeSuggestionName(item.name) }))
         .filter(item => item.name && (!query || item.name.toLowerCase().includes(query)))
+        .filter(item => !existingKeys.has(streamSuggestionKey(item.name)))
         .filter(item => {
-          const key = item.name.toLowerCase();
+          const key = streamSuggestionKey(item.name);
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
         })
         .slice(0, 5);
+    }
+
+    function streamSuggestionKey(value) {
+      const normalized = normalizeSuggestionName(value);
+      return (cleanSubstanceName(normalized) || normalized).toLowerCase();
+    }
+
+    function existingStreamSuggestionKeys(block, role, currentStreamId = "") {
+      ensureBlockFlowFields(block);
+      return new Set((block.streams || [])
+        .filter(item => (role === "outlet" ? streamIsOutlet(item) : item.role === role) && item.id !== currentStreamId)
+        .map(item => streamSuggestionKey(item.name))
+        .filter(Boolean));
     }
 
     function materialMentionsFromText(text) {
@@ -10682,20 +10993,112 @@
       renderExport();
     }
 
+    function applyStreamPubChemSuggestion(streamId, name) {
+      const current = selectedBlock();
+      if (!current) return;
+      ensureBlockFlowFields(current);
+      const stream = current.streams.find(item => item.id === streamId);
+      if (!stream || !name) return;
+      pushUndo();
+      stream.name = name;
+      stream.status = stream.status === "missing" ? "estimated" : stream.status;
+      delete state.pubchemStreamSuggestions?.[streamId];
+      syncLegacyStreamLists(current);
+      invalidateAiRefine();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
+    function scheduleStreamPubChemSuggestions(streamId, query) {
+      const clean = String(query || "").trim();
+      if (!streamId || clean.length < 3 || typeof lookupPubChem !== "function") {
+        delete state.pubchemStreamSuggestions?.[streamId];
+        return;
+      }
+      if (pubchemStreamSuggestTimers.has(streamId)) clearTimeout(pubchemStreamSuggestTimers.get(streamId));
+      pubchemStreamSuggestTimers.set(streamId, setTimeout(async () => {
+        const currentQuery = String(selectedBlock()?.streams?.find(item => item.id === streamId)?.name || "").trim();
+        if (currentQuery !== clean) return;
+        state.pubchemStreamSuggestions[streamId] = { status: "running", candidates: [], message: "" };
+        renderStepFlowInspector();
+        try {
+          const data = await lookupPubChem(clean, { mode: "search" });
+          state.pubchemStreamSuggestions[streamId] = {
+            status: data.suggestions?.length ? "ready" : "error",
+            candidates: data.suggestions || [],
+            message: data.suggestions?.length ? "" : "No PubChem candidates."
+          };
+        } catch (error) {
+          state.pubchemStreamSuggestions[streamId] = { status: "error", candidates: [], message: error.message };
+        }
+        renderStepFlowInspector();
+      }, 450));
+    }
+
+    async function fetchPubChemForStream(streamId, button = null) {
+      const current = selectedBlock();
+      if (!current || typeof lookupPubChem !== "function" || typeof applyPubChemLookup !== "function") return;
+      ensureBlockFlowFields(current);
+      const stream = current.streams.find(item => item.id === streamId);
+      if (!stream || !String(stream.name || "").trim()) {
+        await alertModal("Add a compound name before fetching PubChem properties.");
+        return;
+      }
+      const previousText = button?.textContent;
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Fetching...";
+      }
+      try {
+        const data = await lookupPubChem(stream.name);
+        if (!data.ok) {
+          state.pubchemStreamSuggestions[streamId] = {
+            status: data.suggestions?.length ? "ready" : "error",
+            candidates: data.suggestions || [],
+            message: data.suggestions?.length ? "Choose a candidate name, then fetch again." : data.error || "PubChem lookup failed."
+          };
+          renderStepFlowInspector();
+          if (!data.suggestions?.length) await alertModal(data.error || "PubChem lookup failed.");
+          return;
+        }
+        pushUndo();
+        applyPubChemLookup(stream, data);
+        stream.status = stream.status === "missing" ? "estimated" : stream.status;
+        delete state.pubchemStreamSuggestions?.[streamId];
+        syncLegacyStreamLists(current);
+        invalidateAiRefine();
+        renderStepFlowInspector();
+        renderExport();
+      } catch (error) {
+        await alertModal(`PubChem lookup failed: ${error.message}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = previousText || "PubChem";
+        }
+      }
+    }
+
     function copyInputsToOutputs(block) {
       if (!block) return;
       ensureBlockFlowFields(block);
       const inputs = block.streams.filter(stream => stream.role === "input" && String(stream.name || "").trim());
       if (!inputs.length) return;
       pushUndo();
-      const existing = new Set(block.streams
+      const existing = new Map(block.streams
         .filter(stream => stream.role === "output")
-        .map(stream => cleanSubstanceName(stream.name).toLowerCase() || String(stream.name || "").trim().toLowerCase())
-        .filter(Boolean));
+        .map(stream => [
+          cleanSubstanceName(stream.name).toLowerCase() || String(stream.name || "").trim().toLowerCase(),
+          stream
+        ])
+        .filter(([key]) => key));
       inputs.forEach(input => {
         const key = cleanSubstanceName(input.name).toLowerCase() || String(input.name || "").trim().toLowerCase();
-        if (existing.has(key)) return;
-        block.streams.push(createStream("output", {
+        if (existing.has(key)) {
+          mergeMissingStreamChemicalProperties(existing.get(key), input, true);
+          return;
+        }
+        const output = createStream("output", {
           id: nextStreamId(block),
           name: input.name,
           quantity: input.quantity,
@@ -10705,9 +11108,11 @@
           timing: "in-process intermediate",
           fate: "intermediate",
           scalingMode: input.scalingMode === "per batch" ? "per batch" : "auto",
-          note: `Copied from input ${input.id || input.name}; use this for pass-through or same-material transformation steps.`
-        }));
-        existing.add(key);
+          note: `Copied from input ${input.id || input.name}; use this for pass-through or same-material transformation steps.`,
+          ...streamChemicalPropertyPayloadWithDensity(input)
+        });
+        block.streams.push(output);
+        existing.set(key, output);
       });
       syncLegacyStreamLists(block);
       invalidateAiRefine();
@@ -10728,6 +11133,7 @@
       });
       pushUndo();
       if (existing) {
+        mergeMissingStreamChemicalProperties(existing, input, true);
         existing.editing = true;
         state.menuStreamId = existing.id;
       } else {
@@ -10742,6 +11148,7 @@
           fate: "intermediate",
           scalingMode: input.scalingMode === "per batch" ? "per batch" : "auto",
           note: `Copied from input ${input.id || input.name}; use this for pass-through or same-material transformation steps.`,
+          ...streamChemicalPropertyPayloadWithDensity(input),
           editing: true
         });
         block.streams.push(stream);
@@ -10765,8 +11172,9 @@
       const title = stream.name.trim() || "Untitled stream";
       const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
       const canCopyToOutput = block && stream.role === "input" && String(stream.name || "").trim();
+      const propertyBadges = streamChemicalSummaryHtml(stream);
       return `
-        <article class="mfa-label-card role-${escapeAttr(stream.role)}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
+        <article class="mfa-label-card role-${escapeAttr(streamTone(stream))}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
           <div class="mfa-label-top">
             <strong>${escapeHtml(title)}</strong>
             <span class="pill ${stream.status === "missing" ? "warn" : "blue"}">${escapeHtml(stream.status)}</span>
@@ -10779,10 +11187,22 @@
             <span class="pill ${stream.fate === "unknown" ? "warn" : "green"}">${escapeHtml(stream.fate)}</span>
           </div>
           ${stream.recoveryPercent || stream.purgePercent || stream.loopId ? `<div class="mfa-label-meta">${stream.recoveryPercent ? `<span>recovery ${escapeHtml(stream.recoveryPercent)}%</span>` : ""}${stream.purgePercent ? `<span>purge ${escapeHtml(stream.purgePercent)}%</span>` : ""}${stream.loopId ? `<span>loop ${escapeHtml(stream.loopId)}</span>` : ""}</div>` : ""}
+          ${propertyBadges}
           ${stream.note.trim() ? `<div class="mfa-label-note">${escapeHtml(stream.note)}</div>` : ""}
           ${canCopyToOutput ? `<div class="mfa-label-actions"><button type="button" class="mini-button" data-copy-input-stream-to-output="${escapeAttr(stream.id)}">Use as output</button></div>` : ""}
         </article>
       `;
+    }
+
+    function streamChemicalSummaryHtml(stream) {
+      const badges = [];
+      if (stream.mw) badges.push(`MW ${stream.mw}`);
+      if (stream.tb) badges.push(`Tb ${stream.tb} K`);
+      if (stream.pvap) badges.push(`Pvap ${stream.pvap}`);
+      if (stream.density) badges.push(`rho ${stream.density}`);
+      if (stream.pubchemCid) badges.push(`CID ${stream.pubchemCid}`);
+      if (!badges.length) return "";
+      return `<div class="mfa-label-meta chemical">${badges.slice(0, 4).map(item => `<span class="pill blue">${escapeHtml(item)}</span>`).join("")}${badges.length > 4 ? `<span class="pill">+${badges.length - 4}</span>` : ""}</div>`;
     }
 
     function optionHtml(values, selected) {
@@ -10794,6 +11214,17 @@
         const label = value === "unknown" ? "Auto (inferred from phenomena)" : value;
         return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
       }).join("");
+    }
+
+    // Surfaces the "Time vs. scale" value on the collapsed Gantt row too, since that select only
+    // renders once a row is expanded (ganttRowHtml) - without this badge the value is invisible
+    // until a user clicks to expand every row.
+    function scaleSensitivityBadgeHtml(value) {
+      if (!value || value === "unknown") return "";
+      const tone = value === "kinetics-bound" ? "warn"
+        : value === "increases with scale" || value === "equipment dependent" ? "blue"
+        : "green";
+      return `<span class="pill ${tone}" title="Time vs. scale">${escapeHtml(value)}</span>`;
     }
 
     function scheduleOperationClassOptionHtml(selected) {
@@ -10811,8 +11242,20 @@
       if (!stream) return;
       invalidateAiRefine();
       stream[event.target.dataset.streamField] = event.target.value;
+      if (event.target.dataset.streamField === "name") {
+        scheduleStreamPubChemSuggestions(stream.id, stream.name);
+      }
       if (event.target.dataset.streamField === "unit" && ["kg/kg product", "L/kg product"].includes(stream.unit) && stream.scalingMode === "auto") {
         stream.scalingMode = "per kg product";
+      }
+      if (event.target.dataset.streamField === "fate") {
+        const nextRole = streamRoleForFate(stream.fate, stream.role);
+        if (nextRole !== stream.role) {
+          stream.role = nextRole;
+          if (stream.role === "waste" && stream.timing === "in-process intermediate") stream.timing = defaultStreamTiming("waste");
+          if (stream.role === "output" && stream.timing === "waste purge") stream.timing = defaultStreamTiming("output");
+          if (stream.scalingMode === "auto") stream.scalingMode = defaultStreamScalingMode(stream.role, stream.unit, stream.fate);
+        }
       }
       if (event.target.dataset.streamField === "fate" && ["recycled input", "recovered solvent"].includes(stream.fate) && stream.scalingMode === "auto") {
         stream.scalingMode = "recycle loop";
@@ -11574,6 +12017,49 @@
       if (moved) renderGroupFlow();
     }
 
+    function boardPanBlockedTarget(target) {
+      return target?.closest?.("[data-block-card], [data-group-box], [data-draft-box], [data-connect-handle], button, input, textarea, select, summary, details, .context-menu, .step-flow-inspector");
+    }
+
+    function startBoardPan(event) {
+      if (event.button !== 0 || state.drag || state.connectDrag || boardPanBlockedTarget(event.target)) return;
+      const flow = $("groupFlow");
+      if (!flow?.contains(event.target)) return;
+      event.preventDefault();
+      hideBlockMenu();
+      hideGroupMenu();
+      hideStreamMenu();
+      hideTextSelectionMenu();
+      state.boardPan = {
+        pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startScrollLeft: flow.scrollLeft,
+        startScrollTop: flow.scrollTop
+      };
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+      flow.classList.add("board-panning");
+    }
+
+    function boardPanMove(event) {
+      if (!state.boardPan) return;
+      if (state.boardPan.pointerId !== null && event.pointerId !== state.boardPan.pointerId) return;
+      if (state.boardPan.pointerId !== null && event.type?.startsWith?.("mouse")) return;
+      const flow = $("groupFlow");
+      if (!flow) return;
+      event.preventDefault();
+      flow.scrollLeft = Math.max(0, state.boardPan.startScrollLeft - (event.clientX - state.boardPan.startClientX));
+      flow.scrollTop = Math.max(0, state.boardPan.startScrollTop - (event.clientY - state.boardPan.startClientY));
+    }
+
+    function boardPanEnd(event = {}) {
+      if (!state.boardPan) return;
+      if (state.boardPan.pointerId !== null && event.pointerId !== state.boardPan.pointerId) return;
+      if (state.boardPan.pointerId !== null && event.type?.startsWith?.("mouse")) return;
+      state.boardPan = null;
+      $("groupFlow")?.classList.remove("board-panning");
+    }
+
     // Drag-to-connect: mousedown on a .connect-handle starts this instead of a box-move drag
     // (see the handle's own mousedown binding, which stops propagation before startDrag's board
     // listener sees it). Reuses state.connectingFrom for the "connecting" glow class and Escape/
@@ -11802,7 +12288,9 @@
     function closeFloatingActions() {
       state.connectingFrom = null;
       state.drag = null;
+      state.boardPan = null;
       $("groupFlow")?.classList.remove("board-dragging");
+      $("groupFlow")?.classList.remove("board-panning");
       $("groupFlow")?.classList.remove("connect-dragging");
       if (state.connectDrag) {
         state.connectDrag = null;
@@ -12045,14 +12533,33 @@
       });
     }
 
+    // Chevrons point in the direction each toggle collapses its panel toward, matching the panel's
+    // side (left panel collapses left, right/inspector panel collapses right) - replaces the old
+    // shared ◐/◑ pair that only themeToggle's glyphs (☀/☾) were distinct from.
+    function updateProtocolToggleIcon() {
+      const collapsed = $("appMain").classList.contains("protocol-collapsed");
+      const button = $("toggleProtocolPanel");
+      button.textContent = collapsed ? "›" : "‹";
+      button.setAttribute("aria-label", collapsed ? "Show protocol panel" : "Hide protocol panel");
+      button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+    }
+
+    function updateInspectorToggleIcon() {
+      const collapsed = $("appMain").classList.contains("inspector-collapsed");
+      const button = $("toggleInspector");
+      button.textContent = collapsed ? "‹" : "›";
+      button.setAttribute("aria-label", collapsed ? "Show Phenomena/Group panel" : "Hide Phenomena/Group panel");
+      button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+    }
+
     function toggleInspector() {
       $("appMain").classList.toggle("inspector-collapsed");
-      $("toggleInspector").textContent = $("appMain").classList.contains("inspector-collapsed") ? "◑" : "◐";
+      updateInspectorToggleIcon();
     }
 
     function toggleProtocolPanel() {
       $("appMain").classList.toggle("protocol-collapsed");
-      $("toggleProtocolPanel").textContent = $("appMain").classList.contains("protocol-collapsed") ? "◑" : "◐";
+      updateProtocolToggleIcon();
     }
 
     function setSourcePanelTab(tab) {
@@ -12076,7 +12583,7 @@
     function openScalePanel() {
       if ($("appMain").classList.contains("inspector-collapsed")) {
         $("appMain").classList.remove("inspector-collapsed");
-        $("toggleInspector").textContent = "◐";
+        updateInspectorToggleIcon();
       }
       setInspectorTab("scale");
     }
@@ -12737,6 +13244,8 @@
       applyThemeToggleIcon();
     });
     applyThemeToggleIcon();
+    updateProtocolToggleIcon();
+    updateInspectorToggleIcon();
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
@@ -12751,7 +13260,7 @@
       if (!step) return;
       if ($("appMain").classList.contains("inspector-collapsed")) {
         $("appMain").classList.remove("inspector-collapsed");
-        $("toggleInspector").textContent = "◐";
+        updateInspectorToggleIcon();
       }
       setInspectorTab(step.tab);
       renderWorkflowStepper();
@@ -12889,6 +13398,8 @@
     window.addEventListener("touchend", rememberStepFlowEditorHeight);
     $("groupFlow").addEventListener("wheel", handleGraphWheel, { passive: false });
     $("groupFlow").addEventListener("contextmenu", handleBoardContextMenu);
+    $("groupFlow").addEventListener("pointerdown", startBoardPan);
+    if (!window.PointerEvent) $("groupFlow").addEventListener("mousedown", startBoardPan);
     document.querySelectorAll("[data-inspector-tab]").forEach(button => {
       button.addEventListener("click", () => setInspectorTab(button.dataset.inspectorTab));
     });
@@ -13071,6 +13582,11 @@
     document.addEventListener("mouseout", hideHoverTip);
     document.addEventListener("mousemove", dragMove);
     document.addEventListener("mouseup", dragEnd);
+    document.addEventListener("pointermove", boardPanMove);
+    document.addEventListener("pointerup", boardPanEnd);
+    document.addEventListener("pointercancel", boardPanEnd);
+    document.addEventListener("mousemove", boardPanMove);
+    document.addEventListener("mouseup", boardPanEnd);
     document.addEventListener("pointermove", connectDragMove);
     document.addEventListener("pointerup", connectDragEnd);
     document.addEventListener("pointercancel", connectDragEnd);

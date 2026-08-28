@@ -158,6 +158,17 @@
       filter: brightness(1.08);
     }
 
+    button.export-json-button {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--panel);
+      font-weight: 800;
+    }
+
+    button.export-json-button:hover {
+      background: var(--accent-soft);
+    }
+
     .mini-button {
       min-height: 24px;
       padding: 0 7px;
@@ -238,11 +249,11 @@
     }
 
     main.scale-focused {
-      grid-template-columns: minmax(210px, 250px) minmax(360px, 1fr) minmax(500px, 590px);
+      grid-template-columns: minmax(190px, 230px) minmax(420px, 1fr) minmax(380px, 460px);
     }
 
     main.heuristic-focused {
-      grid-template-columns: minmax(210px, 250px) minmax(420px, 1fr) minmax(500px, 590px);
+      grid-template-columns: minmax(190px, 230px) minmax(420px, 1fr) minmax(380px, 460px);
     }
 
     main.inspector-collapsed {
@@ -273,11 +284,11 @@
     }
 
     main.protocol-collapsed.scale-focused {
-      grid-template-columns: 42px minmax(360px, 1fr) minmax(500px, 590px);
+      grid-template-columns: 42px minmax(420px, 1fr) minmax(380px, 460px);
     }
 
     main.protocol-collapsed.heuristic-focused {
-      grid-template-columns: 42px minmax(420px, 1fr) minmax(500px, 590px);
+      grid-template-columns: 42px minmax(420px, 1fr) minmax(380px, 460px);
     }
 
     main.protocol-collapsed.inspector-collapsed {
@@ -431,6 +442,26 @@
     }
 
     .source-tab-view[hidden] {
+      display: none;
+    }
+
+    .tab-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      margin-left: 5px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--red);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      vertical-align: middle;
+    }
+
+    .tab-badge[hidden] {
       display: none;
     }
 
@@ -603,7 +634,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--info-blue-soft);
-      cursor: default;
+      cursor: grab;
       overscroll-behavior: contain;
       margin-bottom: 8px;
     }
@@ -731,6 +762,15 @@
     }
 
     .group-flow.board-dragging {
+      cursor: grabbing;
+    }
+
+    .group-flow.board-panning {
+      cursor: grabbing;
+      user-select: none;
+    }
+
+    .group-flow.board-panning .board-canvas {
       cursor: grabbing;
     }
 
@@ -1483,8 +1523,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 22px;
-      margin: -9px -9px 8px;
+      height: 14px;
+      margin: -9px -9px 4px;
       border-bottom: 1px solid #cfe0ee;
       border-radius: 8px 8px 0 0;
       background: var(--info-blue-soft);
@@ -1496,7 +1536,7 @@
       content: "";
       display: block;
       width: 54px;
-      height: 4px;
+      height: 3px;
       border-radius: 999px;
       background: #9fc3d9;
     }
@@ -1681,7 +1721,7 @@
     }
 
     .group-mfa-grid {
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      grid-template-columns: minmax(210px, 0.85fr) minmax(300px, 1.35fr);
       gap: 7px;
     }
 
@@ -1710,6 +1750,10 @@
       gap: 7px;
     }
 
+    .stream-editor-grid {
+      grid-template-columns: minmax(220px, 0.85fr) minmax(310px, 1.35fr);
+    }
+
     .mfa-section {
       min-width: 0;
       border: 1px solid var(--line);
@@ -1727,6 +1771,11 @@
     .mfa-section.role-output {
       border-left-color: var(--accent);
       background: var(--info-blue-soft);
+    }
+
+    .mfa-section.role-outlet {
+      border-left-color: var(--accent);
+      background: linear-gradient(90deg, var(--info-blue-soft), var(--panel));
     }
 
     .mfa-section.role-waste {
@@ -1755,6 +1804,11 @@
       background: var(--info-blue-soft);
     }
 
+    .mfa-section.role-outlet .mfa-section-head {
+      border-bottom-color: #cfe8d8;
+      background: #f6fbfb;
+    }
+
     .mfa-section.role-waste .mfa-section-head {
       border-bottom-color: #efd9aa;
       background: var(--info-warm-soft);
@@ -1771,6 +1825,10 @@
     }
 
     .mfa-section.role-output .mfa-section-head strong {
+      color: #13765f;
+    }
+
+    .mfa-section.role-outlet .mfa-section-head strong {
       color: #13765f;
     }
 
@@ -1821,6 +1879,16 @@
     .mfa-row.role-output {
       border-left-color: var(--accent);
       background: var(--info-blue-soft);
+    }
+
+    .mfa-row.role-product {
+      border-left-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .mfa-row.role-recycle {
+      border-left-color: #2c64a0;
+      background: var(--blue-soft);
     }
 
     .mfa-row.role-waste {
@@ -1889,6 +1957,29 @@
       color: var(--orange);
     }
 
+    .stream-name-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .stream-name-row input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .stream-suggestion-rail.pubchem {
+      border-color: #cfe0ee;
+      background: var(--info-blue-soft);
+    }
+
+    .stream-suggestion-chip.pubchem {
+      border-color: #cbdff0;
+      background: #fff;
+      color: var(--blue);
+    }
+
     .mfa-row .delete-stream {
       min-height: 25px;
       padding: 0 10px;
@@ -1950,6 +2041,16 @@
     .mfa-label-card.role-output {
       border-left-color: var(--accent);
       background: var(--info-blue-soft);
+    }
+
+    .mfa-label-card.role-product {
+      border-left-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .mfa-label-card.role-recycle {
+      border-left-color: #2c64a0;
+      background: var(--blue-soft);
     }
 
     .mfa-label-card.role-waste {
@@ -2032,6 +2133,10 @@
       color: #13765f;
     }
 
+    .group-mfa-role.role-outlet > strong {
+      color: #13765f;
+    }
+
     .group-mfa-role.role-waste > strong {
       color: #8a5300;
     }
@@ -2052,6 +2157,16 @@
     .group-mfa-item.role-output {
       border-left-color: var(--accent);
       background: var(--info-blue-soft);
+    }
+
+    .group-mfa-item.role-product {
+      border-left-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .group-mfa-item.role-recycle {
+      border-left-color: #2c64a0;
+      background: var(--blue-soft);
     }
 
     .group-mfa-item.role-waste {
@@ -2573,14 +2688,24 @@
     .scale-section {
       display: grid;
       gap: 4px;
-      padding: 5px;
-      border: 1px solid #e1e8ed;
-      border-radius: 8px;
-      background: var(--info-blue-soft);
+      padding: 6px 2px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
     }
 
     .scale-section + .scale-section {
-      margin-top: 5px;
+      margin-top: 2px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    /* Plain divider for two conceptually-separate blocks sharing one card, instead of a second
+       bordered/tinted box - see the merged Description+Phenomena and Heuristics+Review Results cards. */
+    .card-divider {
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      margin-top: 2px;
     }
 
     .scale-section-title {
@@ -2637,6 +2762,44 @@
       display: grid;
       gap: 5px;
       margin-top: 5px;
+    }
+
+    .compact-details {
+      border: 1px solid #dfe7ec;
+      border-radius: 7px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .compact-details summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 28px;
+      padding: 5px 7px;
+      cursor: pointer;
+      color: var(--ink-3);
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .compact-details summary strong {
+      font-size: 10.5px;
+    }
+
+    .compact-details summary .small {
+      text-transform: none;
+      font-weight: 700;
+    }
+
+    .compact-details-body {
+      display: grid;
+      gap: 5px;
+      padding: 5px;
+      border-top: 1px solid #e7eef2;
+      background: var(--info-blue-soft);
     }
 
     .scale-metric-grid {
@@ -2822,6 +2985,18 @@
       font-size: 10.5px;
     }
 
+    /* "Time vs. scale" is the 5th control and the only one that changes what a bottleneck-split
+       actually does (see splitGroupIntoParallelUnits) - give it its own full-width row instead of
+       being squeezed into the same 82px column as Duration/Parallel/Capacity. */
+    .gantt-controls label:nth-child(5) {
+      grid-column: 1 / -1;
+    }
+
+    .gantt-controls label:nth-child(5) select {
+      font-size: 12px;
+      min-height: 30px;
+    }
+
     .gantt-scale-note {
       display: flex;
       align-items: center;
@@ -2840,6 +3015,19 @@
     .gantt-scale-note strong {
       color: #20313c;
       font-size: 11px;
+    }
+
+    .scale-inline-action,
+    .scale-density-button {
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    .scale-density-button {
+      border-color: rgba(22, 143, 115, 0.35);
+      background: rgba(22, 143, 115, 0.08);
+      color: #146f5c;
+      font-weight: 800;
     }
 
     .rule-card.high {
@@ -2881,6 +3069,54 @@
       max-height: 360px;
       overflow: auto;
       padding-right: 2px;
+    }
+
+    main.scale-focused .scale-results,
+    main.heuristic-focused .scale-results {
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    main.scale-focused .scale-metric,
+    main.heuristic-focused .scale-metric,
+    main.scale-focused .rule-card,
+    main.heuristic-focused .rule-card,
+    main.scale-focused .scaled-flow-row,
+    main.heuristic-focused .scaled-flow-row {
+      padding: 4px 5px;
+      gap: 2px;
+    }
+
+    main.scale-focused .scale-mini-metric {
+      padding: 3px 4px;
+    }
+
+    main.scale-focused .scale-mini-metric strong,
+    main.heuristic-focused .scale-mini-metric strong,
+    main.scale-focused .rule-card strong,
+    main.heuristic-focused .rule-card strong,
+    main.scale-focused .scaled-flow-row strong,
+    main.heuristic-focused .scaled-flow-row strong {
+      font-size: 10.5px;
+    }
+
+    main.scale-focused .gantt-summary {
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    main.scale-focused .gantt-row {
+      padding: 4px 5px;
+      gap: 3px;
+    }
+
+    main.scale-focused .gantt-bar-track {
+      height: 12px;
+    }
+
+    main.heuristic-focused .rule-card-head {
+      gap: 5px;
+      min-height: 22px;
     }
 
     .modal-backdrop {

@@ -11,7 +11,9 @@
       reactor: { fill: "#fff8f7", stroke: "#cf4b42", label: "Reactor" },
       separation: { fill: "#f5f9ff", stroke: "#1671c2", label: "Separation" },
       utility: { fill: "#fffaf0", stroke: "#b97916", label: "Utility" },
-      storage: { fill: "#f4fbf6", stroke: "#25834a", label: "Storage" },
+      // Deliberately not green - the Feed/Product terminator boxes (below) already use #25834a/
+      // #f4fbf6, so a storage unit next to a terminator would otherwise read as the same category.
+      storage: { fill: "#f1fbfa", stroke: "#0f766e", label: "Storage" },
       waste: { fill: "#faf8f5", stroke: "#8b7057", label: "Waste" }
     };
 

@@ -53,7 +53,7 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <button id="openFlowsheet" class="flowsheet-view-button" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
-      <button id="exportJson">Export JSON</button>
+      <button id="exportJson" class="export-json-button" title="Download the full project data as a JSON file">&#8595; Export JSON</button>
     </div>
   </header>
 
@@ -62,7 +62,7 @@ APP_HTML = r"""<!doctype html>
   <main id="appMain">
     <section class="panel" id="protocolPanel">
       <div class="panel-head source-panel-head">
-        <button id="toggleProtocolPanel" class="eye-button" title="Show/hide protocol panel">◐</button>
+        <button id="toggleProtocolPanel" class="eye-button" title="Show/hide protocol panel">&#8249;</button>
         <div class="source-panel-head-body">
           <div>
             <h2>Laboratory Protocol Description</h2>
@@ -71,7 +71,7 @@ APP_HTML = r"""<!doctype html>
           </div>
           <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
             <button class="source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
-            <button class="source-panel-tab" data-source-tab="board" role="tab">Board</button>
+            <button class="source-panel-tab" data-source-tab="board" role="tab">Board<span id="boardTabAuditBadge" class="tab-badge" hidden></span></button>
           </div>
         </div>
       </div>
@@ -141,7 +141,7 @@ APP_HTML = r"""<!doctype html>
 
     <section class="panel" id="inspectorPanel">
       <div class="panel-head">
-        <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">◐</button>
+        <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">&#8250;</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
           <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-4: Blocks, Phenomena, Unit Ops, Network"><span class="panel-tab-step">1-4</span><span class="panel-tab-label">Phenomena/Group</span></button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-step">5</span><span class="panel-tab-label">Heuristics</span></button>
@@ -197,10 +197,7 @@ APP_HTML = r"""<!doctype html>
           <div class="scale-scroll-body stack">
             <section class="card stack">
               <div id="heuristicsPanel"></div>
-            </section>
-
-            <section class="card stack">
-              <div>
+              <div class="card-divider">
                 <div class="label">Review Results</div>
                 <div class="muted small">Conflicts and missing information detected before scale-up.</div>
               </div>

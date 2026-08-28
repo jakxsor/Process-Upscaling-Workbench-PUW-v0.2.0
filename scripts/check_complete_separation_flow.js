@@ -56,6 +56,11 @@ assert.strictEqual(g2Capacity.actualSource, "reactor sizing total charge", "G2 s
 assert(throughputDiagnosticsHtml(throughput).includes("reactor sizing total charge"), "Capacity UI should show the source of volumetric checks");
 assert.strictEqual(scale.reactorSizing.source, "manual L/kg product recipe loadings", "Octocrylene reactor sizing should disclose manual paper-linked loading inputs");
 assert(Math.abs(conversionNumber(scale.reactorSizing.reactorVolumeM3) - 15.27) < 0.03, "Octocrylene reactor sizing should reproduce the 15 m3-class reactor");
+state.expandedGanttRows.G2 = true;
+assert(ganttPanelHtml(taskScheduleModel()).includes("Add Density Basis"), "Volumetric reactor Gantt rows should expose the density-basis action");
+openDensityBasisEditor("G2");
+assert.strictEqual(ensureGroup("G2").properties.density.unit, "kg/m3", "Density action should prepare the group density unit");
+assert.strictEqual(ensureGroup("G2").propertiesEditing, true, "Density action should open the group properties editor");
 const oneCubicMeter = groupScaledLoadVolumeM3(
   { rows: [{ groupId: "GX", role: "input", scaledQuantity: "870", scaledUnit: "kg" }] },
   "GX",
@@ -71,6 +76,8 @@ renderGroupAggregateStepInspector(g2Root, g2);
 assert(g2Root.innerHTML.includes("Lutze Reaction-Separation"), "G2 drawer should render the focused Lutze reaction-separation entry point");
 assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 drawer should offer one focused Lutze simulation button");
 assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");
+assert(g2Root.innerHTML.includes("Outlets"), "Group drawer should expose the unified outlets MFA section");
+assert(g2Root.innerHTML.includes("water of condensation"), "Unified outlets should still include waste/emission streams");
 
 ensureGroup("G2").separationSupportExpanded = true;
 renderGroupAggregateStepInspector(g2Root, g2);
@@ -200,13 +207,31 @@ assert.strictEqual(conversionReactantStreams(loadedReactionBlock).length, 3, "To
 assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4", "Top-level 3-reagent case should preselect the product in Conversion");
 assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");
 assert(Math.abs(conversionNumber(conversionProductStream(loadedReactionBlock).quantity) * 0.9 - 1.25) < 0.01, "Conversion popup should derive the 90% product amount from the theoretical product basis");
+assert(blockLutzeReactionSeparationLaunchHtml(loadedReactionBlock).includes("Simulate Lutze Substance Separation"), "Grouped reaction task block should expose the Lutze simulator launcher");
 const draftInputStream = createStream("input", { id: "B1-SD", name: "", editing: true });
-assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("benzyl alcohol"), "Input editor should suggest materials from the source block text");
+assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("benzyl alcohol"), "Input editor should not suggest materials already present as inputs in this step");
+assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("Chemical properties for Lutze / sizing"), "Stream editor should expose optional chemical properties for Lutze and sizing");
+assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes('stream-chemical span-2" open'), "New empty streams should not auto-open the chemical properties panel");
+assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("data-fetch-stream-pubchem"), "Stream editor should expose a PubChem fetch action");
+const draftOutletStream = createStream("output", { id: "B1-SO", name: "", editing: true });
+assert(streamSectionHtml(loadedReactionBlock, "outlet").includes("+ Outlet"), "Block editor should expose one unified outlet add action");
+assert(streamRowHtml(draftOutletStream, "product", "outlet", loadedReactionBlock).includes("Outlet type"), "Outlet editor should classify product, recovery, and waste outlets in one place");
+assert.strictEqual(streamRoleForFate("vent", "output"), "waste", "Vent outlets should keep waste semantics internally");
+assert.strictEqual(streamRoleForFate("product", "waste"), "output", "Product outlets should keep output semantics internally");
+const benzylInput = loadedReactionBlock.streams.find(stream => stream.role === "input" && stream.name === "benzyl alcohol");
+benzylInput.mw = "108.14";
+benzylInput.tb = "478.15";
+benzylInput.density = "1044";
+syncSeparationSimulatorSubstances(loadedGroup);
+const benzylSubstance = separationSimulatorModel(loadedGroup).substances.find(item => item.name === "benzyl alcohol");
+assert.strictEqual(benzylSubstance.mw, "108.14", "Lutze substances should inherit MW entered on MFA streams");
+assert.strictEqual(benzylSubstance.tb, "478.15", "Lutze substances should inherit boiling point entered on MFA streams");
 assert(streamRowHtml(loadedReactionBlock.streams.find(stream => stream.role === "input" && stream.name === "benzyl alcohol"), "reactant", "input", loadedReactionBlock).includes("Use as output"), "Saved input cards should remain reusable as outputs");
 const outputsBeforeCopy = loadedReactionBlock.streams.filter(stream => stream.role === "output").length;
 copyInputsToOutputs(loadedReactionBlock);
 assert(loadedReactionBlock.streams.filter(stream => stream.role === "output").length >= outputsBeforeCopy + 3, "Copy inputs should create pass-through output streams for each input");
 assert(loadedReactionBlock.streams.some(stream => stream.role === "output" && stream.name === "triethylamine"), "Copy inputs should preserve input stream names in outputs");
+assert.strictEqual(loadedReactionBlock.streams.find(stream => stream.role === "output" && stream.name === "benzyl alcohol").mw, "108.14", "Copy inputs should preserve stream chemical properties");
 const outputCountBeforeSingleCopy = loadedReactionBlock.streams.filter(stream => stream.role === "output").length;
 copyOneInputToOutput(loadedReactionBlock, "B1-S1");
 assert.strictEqual(loadedReactionBlock.streams.filter(stream => stream.role === "output").length, outputCountBeforeSingleCopy, "Copying one already-present input should edit the existing output rather than duplicating it");
@@ -231,6 +256,8 @@ const balancedBenzylAlcohol = balancedModel.substances.find(item => item.name ==
 assert(Math.abs(conversionNumber(balancedBenzylAlcohol.quantity) - 0.1) < 0.001, "Lutze reactant quantity should update to the unreacted residual after balancing");
 assert.strictEqual(balancedBenzylAlcohol.residualOf, "benzyl alcohol", "Lutze should tag unreacted material as a residual of the canonical chemical");
 assert.strictEqual(balancedBenzylAlcohol.chemicalKey, "benzyl alcohol", "Residual substance should keep the canonical chemical key");
+assert.strictEqual(generatedResiduals.find(stream => stream.name === "unreacted benzyl alcohol").mw, "108.14", "Generated unreacted waste stream should inherit pure-component properties from the reactant");
+assert.strictEqual(generatedResiduals.find(stream => stream.name === "unreacted benzyl alcohol").density, "1044", "Generated unreacted waste stream should inherit density from the reactant");
 assert(separationSubstanceRowHtml("G1", balancedBenzylAlcohol).includes("same properties as benzyl alcohol"), "Residual substance cards should show that chemical properties are shared");
 syncSeparationSimulatorSubstances(groupModel("G1"));
 assert(Math.abs(conversionNumber(ensureGroup("G1").separationSimulator.substances.find(item => item.name === "benzyl alcohol").quantity) - 0.1) < 0.001, "Sync should not sum initial feed mass with the post-conversion residual quantity");
@@ -306,6 +333,9 @@ assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separat
 const firstPathwayBlock = pathwayInsertedGroup.blocks[0];
 assert(firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl alcohol") && firstPathwayBlock.streams.find(stream => stream.role === "input").name.includes("benzyl acetate"), "Applied pathway feed should carry the full active mixture into the separator");
 assert(firstPathwayBlock.streams.some(stream => stream.role === "output" && stream.name.includes("triethylamine") && stream.name.includes("retained mixture")), "Applied pathway retained outlet should list the remaining mixture components after branch replacement");
+const separatedAceticAnhydride = firstPathwayBlock.streams.find(stream => stream.role === "output" && stream.name.includes("acetic anhydride"));
+assert.strictEqual(separatedAceticAnhydride.mw, "102.09", "Applied Lutze pathway output should preserve pure-component MW");
+assert.strictEqual(separatedAceticAnhydride.pubchemCid, "7918", "Applied Lutze pathway output should preserve PubChem identity");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Applied pathway should connect source group to first separator");
 assert(groupModel("G4"), "Applying a 3-step pathway should create a second separator group");
 assert(groupModel("G5"), "Applying a 3-step pathway should create a third separator group");

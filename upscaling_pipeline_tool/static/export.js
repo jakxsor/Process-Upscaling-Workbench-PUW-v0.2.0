@@ -168,7 +168,10 @@
         destinationGroup: stream.destinationGroup,
         makeupRequired: stream.makeupRequired,
         accumulationRisk: stream.accumulationRisk,
-        note: stream.note
+        note: stream.note,
+        chemicalProperties: Object.fromEntries((globalThis.streamChemicalPropertyFields || [])
+          .map(field => [field, stream[field] || ""])
+          .filter(([, value]) => String(value || "").trim()))
       };
     }
 
