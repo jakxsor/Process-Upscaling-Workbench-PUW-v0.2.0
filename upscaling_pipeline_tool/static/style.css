@@ -334,6 +334,22 @@
       background: var(--info-pink-soft);
     }
 
+    /* Tint the whole panel, not just its header, so the 3 zones (protocol / board /
+       inspector) read apart at a glance - cards inside keep the plain --panel background,
+       so they read as distinct white cards floating on a tinted floor instead of every
+       nesting level fighting for its own border. */
+    #protocolPanel {
+      background: var(--info-blue-soft);
+    }
+
+    .workflow-panel {
+      background: var(--accent-soft);
+    }
+
+    #inspectorPanel {
+      background: var(--info-pink-soft);
+    }
+
     .panel-body {
       padding: 10px;
     }

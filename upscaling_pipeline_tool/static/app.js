@@ -12536,7 +12536,7 @@
       state.aiRefine = null;
       renderAll();
     });
-    $("exportJson").addEventListener("click", writeExportNow);
+    $("exportJson").addEventListener("click", downloadProjectJson);
     document.querySelectorAll("[data-source-tab]").forEach(button => {
       button.addEventListener("click", () => setSourcePanelTab(button.dataset.sourceTab));
     });

@@ -103,6 +103,24 @@
       $("jsonOut").textContent = JSON.stringify(buildProjectExport(), null, 2);
     }
 
+    // The visible JSON preview card was removed from the UI (it was the only way to get data
+    // out - select-all-copy from a giant text blob), but #jsonOut itself stays in the DOM
+    // (hidden) since other code reads it back (see the AI Refine flow above). The header
+    // "Export JSON" button now triggers an actual file download instead.
+    function downloadProjectJson() {
+      writeExportNow();
+      const text = $("jsonOut").textContent || "{}";
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "upscaling-project.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
     // Debounced: called on every keystroke by the various update*Field handlers, so coalesce rapid
     // typing into a single rebuild of the full project export instead of re-serializing on each key.
     function renderExport() {

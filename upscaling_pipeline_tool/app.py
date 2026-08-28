@@ -171,10 +171,7 @@ APP_HTML = r"""<!doctype html>
             <div id="phenomenaGridSection"></div>
           </div>
 
-          <div class="card">
-            <div class="label">Export</div>
-            <pre id="jsonOut">{}</pre>
-          </div>
+          <pre id="jsonOut" hidden>{}</pre>
 
           <div class="card stack">
             <div class="row between">
