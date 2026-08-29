@@ -270,7 +270,9 @@
     // Picks the single most representative output stream to print on a connector arrow (by mass,
     // excluding waste/vent/purge which get their own stub arrows) - a full stream list would be
     // unreadable at this scale, but the hover tooltip (flowsheetFlowTooltip) still has everything.
-    function flowsheetConnectorLabelText(fromBox, maxChars = 30) {
+    // Not truncated here - the available space varies per connector (adjacent boxes only leave a
+    // narrow gap, a routed detour leaves much more), so flowsheetConnectorLabelMarkup fits it later.
+    function flowsheetConnectorLabelText(fromBox) {
       const candidates = (fromBox.outputStreams || [])
         .filter(stream => stream.name.trim() && !["wastewater", "solid waste", "purge", "loss", "vent"].includes(stream.fate));
       if (!candidates.length) return "";
@@ -280,13 +282,16 @@
         return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
       }, candidates[0]);
       const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
-      const label = `${primary.name}${qty ? `, ${qty}` : ""}`;
-      return label.length > maxChars ? `${label.slice(0, maxChars - 1)}...` : label;
+      return `${primary.name}${qty ? `, ${qty}` : ""}`;
     }
 
     // Prints a stream label directly on the diagram instead of only in the hover tooltip - the
     // exported/downloaded SVG has no hover, so without this the substance/quantity data is lost
     // the moment the diagram leaves the browser (e.g. dropped into a paper figure).
+    // Adjacent unit boxes only leave ~50-60px of the connector visible between them (the rest of
+    // the "gap" is the box footprints on either side), so the label is truncated to the actual
+    // free pixel width of its segment - a fixed character cap either overlapped the neighboring
+    // box (short segments) or wasted the room on long routed detours.
     function flowsheetConnectorLabelMarkup(points, text, color) {
       if (!text || state.flowsheetShowStreamLabels === false) return "";
       let best = null;
@@ -295,10 +300,16 @@
         const b = points[i + 1];
         if (Math.abs(a.y - b.y) > 1) continue;
         const len = Math.abs(b.x - a.x);
-        if (!best || len > best.len) best = { len, x: (a.x + b.x) / 2, y: a.y };
+        if (!best || len > best.len) best = { len, left: Math.min(a.x, b.x), y: a.y };
       }
-      if (!best || best.len < 40) return "";
-      return `<text x="${best.x}" y="${best.y - 7}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${color}" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${escapeHtml(text)}</text>`;
+      if (!best || best.len < 34) return "";
+      const avgCharPx = 5.6; // approx glyph width at font-size 9.5, font-weight 700
+      const maxChars = Math.max(3, Math.floor((best.len - 12) / avgCharPx));
+      const clipped = text.length > maxChars ? `${text.slice(0, Math.max(2, maxChars - 1))}...` : text;
+      // Left-anchored at the segment's own start (not centered on its midpoint) so the label can
+      // never bleed backward into the box the segment starts from - width is already fit to the
+      // segment, so at worst it runs slightly long into the box the connector is heading into.
+      return `<text x="${best.left + 6}" y="${best.y - 7}" font-size="9.5" font-weight="700" text-anchor="start" fill="${color}" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${escapeHtml(clipped)}</text>`;
     }
 
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
@@ -314,7 +325,9 @@
       const layout = flowsheetAutoLayout(groupIds);
       const boxW = 224;
       const boxH = 184;
-      const stageGapX = 82;
+      // Wide enough to fit a short stream label between adjacent unit boxes (see
+      // flowsheetConnectorLabelMarkup) without it running under either box's footprint.
+      const stageGapX = 128;
       const rowGapY = 286;
       const originX = 286;
       const originY = 132;
@@ -688,12 +701,12 @@
           ? flowsheetExternalInputStreams(box, model.groups).slice(0, 2)
           : [];
         const inletHtml = extraInlets.map((stream, i) => {
-          const stubX = box.x + box.w * (0.32 + i * 0.36);
+          const stubX = box.x + box.w * (extraInlets.length > 1 ? 0.26 + i * 0.48 : 0.5);
           const stubYStart = box.y - 46;
           const label = `in: ${stream.name}${stream.quantity ? ` ${stream.quantity} ${stream.unit || ""}` : ""}`.trim();
           return `
             <path d="M ${stubX} ${stubYStart} L ${stubX} ${box.y}" stroke="#657480" stroke-width="1.6" fill="none" marker-end="url(#fsArrowGrey)"></path>
-            <text x="${stubX}" y="${stubYStart - 4}" font-size="9.5" fill="#657480" text-anchor="middle">${escapeHtml(label.length > 26 ? `${label.slice(0, 25)}...` : label)}</text>
+            <text x="${stubX}" y="${stubYStart - 4}" font-size="9.5" fill="#657480" text-anchor="middle">${escapeHtml(label.length > 20 ? `${label.slice(0, 19)}...` : label)}</text>
           `;
         }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
