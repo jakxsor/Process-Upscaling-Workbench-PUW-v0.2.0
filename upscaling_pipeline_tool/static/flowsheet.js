@@ -187,6 +187,57 @@
       return lines;
     }
 
+    function flowsheetStreamLabel(stream) {
+      const name = String(stream?.name || "").trim();
+      if (!name) return "";
+      const qty = String(stream?.quantity || "").trim();
+      const unit = String(stream?.unit || "").trim();
+      return `${name}${qty ? ` ${qty}${unit ? ` ${unit}` : ""}` : ""}`;
+    }
+
+    function flowsheetTopStreamSummary(streams, label, limit = 1) {
+      const items = (streams || [])
+        .filter(stream => String(stream?.name || "").trim())
+        .slice(0, limit)
+        .map(flowsheetStreamLabel)
+        .filter(Boolean);
+      if (!items.length) return "";
+      const extra = streams.length > limit ? ` +${streams.length - limit}` : "";
+      return `${label}: ${items.join(", ")}${extra}`;
+    }
+
+    function flowsheetEquipmentSizeLine(group) {
+      const schedule = group?.schedule || {};
+      const amount = String(schedule.capacityAmount || "").trim();
+      const unit = String(schedule.capacityUnit || "").trim();
+      if (!amount || !unit) return "";
+      return `Equipment: ${amount} ${unit}`;
+    }
+
+    function flowsheetUnitDetailLines(box) {
+      const materialLine = [
+        flowsheetTopStreamSummary(box.inputStreams, "In"),
+        flowsheetTopStreamSummary(box.outputStreams, "Out")
+      ].filter(Boolean).join(" | ");
+      return [
+        box.equipmentSizeLine,
+        box.totalOutputKg > 0 ? `Load: ${formatNumber(box.totalOutputKg)} kg/batch out` : "",
+        (box.specs || []).length ? `Operating: ${box.specs.join(" / ")}` : "",
+        materialLine ? `MFA: ${materialLine}` : ""
+      ].filter(Boolean).slice(0, 3);
+    }
+
+    function flowsheetUnitDetailsMarkup(box, x, y, width) {
+      if (state.flowsheetShowUnitDetails !== true) return "";
+      const lines = flowsheetUnitDetailLines(box);
+      if (!lines.length) return "";
+      const maxChars = Math.max(18, Math.min(30, Math.floor((width - 8) / 5.4)));
+      return lines.map((line, index) => {
+        const clipped = line.length > maxChars ? `${line.slice(0, Math.max(12, maxChars - 1))}...` : line;
+        return `<text x="${x}" y="${y + index * 12}" font-size="9.4" font-weight="650" fill="#40515d">${escapeHtml(clipped)}</text>`;
+      }).join("");
+    }
+
     function flowsheetCanOverlap(group) {
       const schedule = group?.schedule || {};
       return String(schedule.canOverlap || "").toLowerCase() === "yes"
@@ -324,7 +375,7 @@
       const groupIds = groupIdsInTextOrder();
       const layout = flowsheetAutoLayout(groupIds);
       const boxW = 224;
-      const boxH = 184;
+      const boxH = state.flowsheetShowUnitDetails === true ? 224 : 184;
       // Wide enough to fit a short stream label between adjacent unit boxes (see
       // flowsheetConnectorLabelMarkup) without it running under either box's footprint.
       const stageGapX = 128;
@@ -356,6 +407,7 @@
           category,
           subcategory,
           specs,
+          equipmentSizeLine: flowsheetEquipmentSizeLine(group),
           tip,
           x,
           y,
@@ -371,11 +423,15 @@
       const byId = new Map(groups.map(item => [item.id, item]));
       const forwardLinks = [];
       const recycleLinks = [];
+      const seenLinks = new Set();
       state.links.forEach(link => {
         const from = resolvedEndpointId(link.from);
         const to = resolvedEndpointId(link.to);
         if (!byId.has(from) || !byId.has(to)) return;
-        if (isBackwardLink(link)) recycleLinks.push({ from, to });
+        const key = `${from}->${to}`;
+        if (from === to || seenLinks.has(key)) return;
+        seenLinks.add(key);
+        if (isBackwardLink({ from, to })) recycleLinks.push({ from, to });
         else forwardLinks.push({ from, to });
       });
       const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
@@ -577,7 +633,7 @@
       const forwardPaths = forwardGroups.join("");
 
       let recycleIndex = 0;
-      const showAuxiliaryArrows = state.flowsheetShowAuxiliaryArrows === true;
+      const showAuxiliaryArrows = state.flowsheetShowAuxiliaryArrows !== false;
       const recyclePaths = (showAuxiliaryArrows ? model.recycleLinks : []).map(link => {
         const from = model.byId.get(link.from);
         const to = model.byId.get(link.to);
@@ -706,12 +762,17 @@
           `;
         }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
-        const specsLine = [box.specs.join(" / "), box.totalOutputKg > 0 ? `${formatNumber(box.totalOutputKg)} kg/batch` : ""].filter(Boolean).join(" — ");
+        const footerLine = [
+          box.totalOutputKg > 0 ? `${formatNumber(box.totalOutputKg)} kg/batch out` : "",
+          box.specs.join(" / ")
+        ].filter(Boolean).join(" - ");
         const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
         const symbolY = box.y + 10;
-        const symbolH = 118;
-        const tagY = box.y + 142;
-        const unitLines = wrapSvgText(box.selectedUnit, 28);
+        const showUnitDetails = state.flowsheetShowUnitDetails === true;
+        const symbolH = showUnitDetails ? 108 : 118;
+        const tagY = box.y + (showUnitDetails ? 132 : 142);
+        const tagHeight = box.h - symbolH - (showUnitDetails ? 14 : 18);
+        const unitLines = wrapSvgText(box.selectedUnit, showUnitDetails ? 24 : 28);
         const taskLine = wrapSvgText(box.task, 38)[0] || "";
         return `
           <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
@@ -719,15 +780,16 @@
             <rect x="${box.x - 10}" y="${box.y - 10}" width="${box.w + 20}" height="${box.h + 20}" rx="6" fill="#ffffff" stroke="#d6e0e5" stroke-width="1" opacity="0.86"></rect>
             <rect x="${box.x - 10}" y="${box.y - 10}" width="4" height="${box.h + 20}" rx="2" fill="${strokeColor}"></rect>
             ${flowsheetShapeMarkup(box.subcategory, box.x, symbolY, box.w, symbolH, strokeColor)}
-            <rect x="${box.x + 16}" y="${tagY - 12}" width="${box.w - 32}" height="${box.h - symbolH - 18}" rx="3" fill="${style.fill}" stroke="${strokeColor}" stroke-width="0.8" opacity="0.9"></rect>
+            <rect x="${box.x + 16}" y="${tagY - 12}" width="${box.w - 32}" height="${tagHeight}" rx="3" fill="${style.fill}" stroke="${strokeColor}" stroke-width="0.8" opacity="0.9"></rect>
             <text x="${box.x + box.w / 2}" y="${tagY}" font-size="12" font-weight="900" text-anchor="middle" fill="${strokeColor}">U${box.unitNumber} ${escapeHtml(box.id)}</text>
             <text x="${box.x + box.w / 2}" y="${tagY + 17}" font-size="11.5" font-weight="800" text-anchor="middle" fill="#172027">
-              ${unitLines.slice(0, 2).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 13}">${escapeHtml(line)}</tspan>`).join("")}
+              ${unitLines.slice(0, showUnitDetails ? 1 : 2).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 13}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
-            ${specsLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(specsLine.length > 54 ? `${specsLine.slice(0, 53)}...` : specsLine)}</text>` : ""}
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h + 34}" font-size="10.2" text-anchor="middle" fill="#657480">${escapeHtml(taskLine)}</text>
+            ${flowsheetUnitDetailsMarkup(box, box.x + 24, tagY + 37, box.w - 48)}
+            ${!showUnitDetails && footerLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(footerLine.length > 54 ? `${footerLine.slice(0, 53)}...` : footerLine)}</text>` : ""}
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 18 : 34)}" font-size="10.2" text-anchor="middle" fill="#657480">${escapeHtml(taskLine)}</text>
             ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
-            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 50}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
+            ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 34 : 50)}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
             ${inletHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
@@ -757,7 +819,7 @@
           ${recyclePaths}
           ${boxes}
           ${productMarkup}
-          <g transform="translate(36, ${drawingHeight - 52})">
+          <g transform="translate(36, ${drawingHeight - 70})">
             ${legendLineItems.map((item, i) => `
               <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
               <text x="${i * 130 + 32}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
@@ -839,7 +901,9 @@
       const labelToggle = $("flowsheetShowStreamLabels");
       if (labelToggle) labelToggle.checked = state.flowsheetShowStreamLabels !== false;
       const auxToggle = $("flowsheetShowAuxiliaryArrows");
-      if (auxToggle) auxToggle.checked = state.flowsheetShowAuxiliaryArrows === true;
+      if (auxToggle) auxToggle.checked = state.flowsheetShowAuxiliaryArrows !== false;
+      const detailsToggle = $("flowsheetShowUnitDetails");
+      if (detailsToggle) detailsToggle.checked = state.flowsheetShowUnitDetails === true;
     }
 
     async function renderFlowsheetModal() {

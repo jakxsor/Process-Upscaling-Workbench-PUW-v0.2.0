@@ -147,8 +147,8 @@
       "manual"
     ];
     const conversionProductAmountModes = [
-      { value: "actual", label: "Reported amount at yield" },
-      { value: "theoretical", label: "100% theoretical basis" },
+      { value: "actual", label: "Reported product amount" },
+      { value: "theoretical", label: "Theoretical product basis" },
       { value: "from reactants", label: "Calculate from reactants" }
     ];
     const conversionOutletBasisModes = [
@@ -231,7 +231,7 @@
       ["VV", "VV - vapor-vapor"]
     ];
     const streamPhases = lutzePhaseOptions.map(item => item[0]);
-    const streamDataStatuses = ["reported", "calculated", "estimated", "assumed", "missing"];
+    const streamDataStatuses = ["reported", "calculated", "estimated", "assumed", "manual override", "missing"];
     const streamFateOptions = [
       "unknown",
       "fresh input",
@@ -519,7 +519,10 @@
       focusEndpoint: null,
       flowsheetMode: "editable",
       flowsheetFit: true,
-      flowsheetShowAuxiliaryArrows: false,
+      // Recycle arrows and waste/vent stubs used to always be drawn; defaulting this off hid the
+      // streams most relevant to a waste/safety review behind a checkbox nobody knew to look for.
+      flowsheetShowAuxiliaryArrows: true,
+      flowsheetShowUnitDetails: false,
       drag: null,
       boardPan: null
     };
@@ -1540,7 +1543,10 @@
       const text = `${name || ""} ${fate || ""} ${note || ""}`.toLowerCase();
       if (/\b(catalyst|catalytic|enzyme|photocatalyst|organocatalyst|pd\/c)\b/.test(text)) return "catalyst";
       if (/\b(solvent|cosolvent)\b/.test(text)) return "solvent";
-      if (/\b(inert|nitrogen|argon|helium)\b/.test(text)) return "inert";
+      // Bare element names (nitrogen/argon/helium) used to always mean "inert", but those are
+      // real reactants in plenty of processes (e.g. N2 in ammonia synthesis) - only the explicit
+      // word "inert" (or a named purge/blanket gas phrase) is unambiguous enough to default on.
+      if (/\b(inert|purge gas|blanket(?:ing)? gas)\b/.test(text)) return "inert";
       if (/\b(quench|wash|drying agent|work[- ]?up aid)\b/.test(text)) return "auxiliary";
       return "reactant";
     }
@@ -1565,6 +1571,16 @@
       return streamReactionRoles
         .map(value => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(streamReactionRoleLabel(value))}</option>`)
         .join("");
+    }
+
+    function streamDataStatusLabel(status) {
+      const clean = String(status || "").trim();
+      return streamDataStatuses.includes(clean) ? clean : "missing";
+    }
+
+    function streamDataStatusBadgeHtml(status, title = "") {
+      const clean = streamDataStatusLabel(status);
+      return `<span class="data-status-badge status-${escapeAttr(clean.replace(/\s+/g, "-"))}" title="${escapeAttr(title || `Data status: ${clean}`)}">${escapeHtml(clean)}</span>`;
     }
 
     function streamReactiveInStoichiometry(stream) {
@@ -7142,7 +7158,10 @@
         percent: String(row.percent || ""),
         amount: String(row.amount || ""),
         unit: String(row.unit || ""),
-        role: ["coproduct", "byproduct", "residual"].includes(row.role) ? row.role : "byproduct"
+        // New rows default to basis "residual pool %" above, so their role should default to
+        // "residual" to match - a flat "byproduct" default mislabeled every freshly-added outlet
+        // (the default basis) as consuming nothing from the pool when it actually does.
+        role: ["coproduct", "byproduct", "residual"].includes(row.role) ? row.role : (basis === "residual pool %" ? "residual" : "byproduct")
       };
     }
 
@@ -7191,7 +7210,7 @@
     }
 
     function conversionProductModeLabel(value) {
-      return conversionProductAmountModes.find(mode => mode.value === value)?.label || "Reported amount at yield";
+      return conversionProductAmountModes.find(mode => mode.value === value)?.label || "Reported product amount";
     }
 
     function conversionProductModeOptions(selected, canCalculateFromReactants = true) {
@@ -7241,10 +7260,14 @@
       return "The tool estimates the theoretical product basis from reagent quantities, MW, and coefficients when possible.";
     }
 
+    // All three bases are percent/amount arithmetic, even under "Stoichiometric balance" mode -
+    // there's no field here for a byproduct's own MW/stoichiometric coefficient, so its mass is
+    // never derived from the reaction extent the way the main product is. Said explicitly in each
+    // tooltip so "stoichiometric ready" elsewhere in the popup doesn't read as covering these rows.
     function conversionOutletBasisTooltip(basis) {
-      if (basis === "actual") return "Use for an explicitly known co-product or byproduct amount. It does not consume the unreacted reagent pool.";
-      if (basis === "product basis %") return "Use when an outlet is reported as a percentage of the 100% theoretical product basis.";
-      return "Use only when this named outlet consumes part of the unconverted reagent pool.";
+      if (basis === "actual") return "Use for an explicitly known co-product or byproduct amount. It does not consume the unreacted reagent pool. Not derived from stoichiometry even in Stoichiometric balance mode.";
+      if (basis === "product basis %") return "Use when an outlet is reported as a percentage of the 100% theoretical product basis. This is a flat percentage, not derived from this outlet's own stoichiometric coefficient.";
+      return "Use only when this named outlet consumes part of the unconverted reagent pool. This is a flat percentage of the pool, not derived from this outlet's own stoichiometric coefficient.";
     }
 
     function conversionMassFactor(unit) {
@@ -7282,12 +7305,16 @@
       return values.length > 0 && values.every(Number.isFinite);
     }
 
-    function hydrateConversionStreamProperties(block) {
-      if (!block?.groupId) return;
+    // Pure dry-run: which stream fields WOULD be backfilled from a matching separation substance,
+    // without mutating anything. Split out so openConversionModal can decide whether a pushUndo()
+    // checkpoint is warranted before actually applying anything (see hydrateConversionStreamProperties).
+    function pendingConversionStreamHydration(block) {
+      if (!block?.groupId) return [];
       const simulator = state.groups?.[block.groupId]?.separationSimulator;
       const substances = simulator?.substances || [];
-      if (!substances.length) return;
+      if (!substances.length) return [];
       ensureBlockFlowFields(block);
+      const pending = [];
       block.streams.forEach(stream => {
         const key = canonicalChemicalKey(stream.residualOf || stream.name || "");
         if (!key) return;
@@ -7296,9 +7323,21 @@
         separationSharedPropertyFields.forEach(field => {
           const currentValue = String(stream[field] || "").trim();
           const nextValue = String(match[field] || "").trim();
-          if (!currentValue && nextValue) stream[field] = nextValue;
+          if (!currentValue && nextValue) pending.push({ stream, field, nextValue });
         });
       });
+      return pending;
+    }
+
+    // Only called once, when the Conversion modal is opened (see openConversionModal) - not from
+    // conversionCalculationModel, which runs on every render/keystroke while the modal is open and
+    // must stay a pure read of current state. Mutating block.streams from inside that "calculation
+    // model" getter meant simply opening the (nominally read-only) popup could silently backfill a
+    // stream's MW/density with no pushUndo() checkpoint, so Ctrl+Z could never remove it.
+    function hydrateConversionStreamProperties(block) {
+      const pending = pendingConversionStreamHydration(block);
+      pending.forEach(({ stream, field, nextValue }) => { stream[field] = nextValue; });
+      return pending.length > 0;
     }
 
     function streamMolesForConversion(stream) {
@@ -7425,8 +7464,10 @@
     function conversionCalculationModel(block) {
       ensureBlockConditionFields(block);
       const detail = ensureConversionDetail(block);
-      hydrateConversionStreamProperties(block);
-      const percent = Math.max(0, Math.min(100, conversionNumber(block.conditions.conversion_yield || "95")));
+      const rawYield = String(block.conditions.conversion_yield || "").trim();
+      const hasYieldCondition = Boolean(rawYield);
+      const percent = Math.max(0, Math.min(100, conversionNumber(rawYield || "95")));
+      const yieldStatus = hasYieldCondition ? "reported" : "assumed";
       const leftoverPercent = 100 - percent;
       const inputs = conversionInputStreams(block);
       const reactants = conversionReactantStreams(block);
@@ -7499,7 +7540,10 @@
         if (Number.isFinite(leftoverInPoolUnit)) {
           pooledLeftover += leftoverInPoolUnit;
         } else {
-          pooledLeftover += leftover;
+          // Don't add a raw value in this reactant's own unit into a pool labeled in
+          // residualPoolUnit (e.g. a mol quantity with no MW added straight into a kg pool) - that
+          // silently produced a numerically wrong total. Leave it out and let the existing
+          // pooledLeftoverConvertible warning below say the pool is understated instead.
           pooledLeftoverConvertible = false;
         }
         return {
@@ -7551,6 +7595,8 @@
       return {
         detail,
         percent,
+        hasYieldCondition,
+        yieldStatus,
         leftoverPercent,
         inputs,
         reactants,
@@ -7614,6 +7660,9 @@
       if (calc.balanceMethod === "stoichiometric" && !calc.stoichReady) {
         issues.push({ severity: "warn", text: "Stoichiometric balance needs mol units or MW for every reagent plus coefficients; simple residuals are shown until complete." });
       }
+      if (calc.balanceMethod === "stoichiometric" && calc.byproductRows.some(row => row.role === "coproduct" || row.role === "byproduct")) {
+        issues.push({ severity: "warn", text: "Declared co-products/byproducts are still a flat percent of the pool or product basis, not derived from their own stoichiometric coefficient - Stoichiometric balance only covers the main reagent/product leg." });
+      }
       if (calc.requestedProductMode === "from reactants" && calc.productMode !== "from reactants") {
         issues.push({ severity: "warn", text: "Calculate from reactants is unavailable, so the reported product amount is used until MW/amount data are completed." });
       }
@@ -7621,7 +7670,7 @@
         issues.push({ severity: "error", text: `Residual-pool outlets allocate ${formatNumber(calc.residualAllocatedPercent)}%; keep the residual split at or below 100%.` });
       }
       if (!calc.pooledLeftoverConvertible) {
-        issues.push({ severity: "warn", text: "Residual pool mixes units that are not directly convertible; per-reagent residual streams remain valid." });
+        issues.push({ severity: "warn", text: "Residual pool excludes at least one reagent whose leftover can't be converted to the pool's unit (missing MW/density) - the pool total is understated; per-reagent residual streams remain valid." });
       }
       if (calc.massClosure?.status === "open") {
         issues.push({ severity: "warn", text: calc.massClosure.note });
@@ -7974,6 +8023,12 @@
       if (!block) return;
       ensureBlockConditionFields(block);
       ensureConversionDetail(block);
+      // Dry-run first so pushUndo() only fires when there's actually something to undo, not on
+      // every plain open of the modal.
+      if (pendingConversionStreamHydration(block).length) {
+        pushUndo();
+        hydrateConversionStreamProperties(block);
+      }
       state.activeConversionBlockId = blockId;
       const modal = $("conversionModal");
       if (!modal) return;
@@ -8000,7 +8055,10 @@
     }
 
     function byproductColor(index) {
-      const palette = ["#9eb3c1", "#b4c2ca", "#c3cdd3"];
+      // Distinguishable hues (incl. for colorblind viewers), not near-identical grays - this is
+      // the only non-textual way to tell allocation-bar segments/legend swatches apart once a
+      // block has 3+ declared byproducts/residual outlets.
+      const palette = ["#7c9cff", "#f2b84b", "#4bc9a8", "#e07a9e", "#9b8bf4"];
       return palette[index % palette.length];
     }
 
@@ -8098,6 +8156,38 @@
       `;
     }
 
+    function conversionDataQualityHtml(calc) {
+      const productStatus = calc.productMode === "from reactants"
+        ? "calculated"
+        : streamDataStatusLabel(calc.product?.status);
+      const residualStatus = calc.stoichReady ? "calculated" : "estimated";
+      const closureStatus = calc.massClosure?.status === "closed"
+        ? "calculated"
+        : calc.massClosure?.status === "open"
+          ? "estimated"
+          : "missing";
+      const item = (label, status, tip) => `
+        <span class="conversion-data-quality-item" title="${escapeAttr(tip)}">
+          <em>${escapeHtml(label)}</em>
+          ${streamDataStatusBadgeHtml(status, tip)}
+        </span>
+      `;
+      return `
+        <div class="conversion-data-quality" aria-label="Conversion data provenance">
+          ${item("Product", productStatus, calc.productMode === "from reactants"
+            ? "Product amount is calculated from reagent quantities, MW, and coefficients."
+            : "Product amount uses the selected outlet stream data status.")}
+          ${item("Yield", calc.yieldStatus, calc.hasYieldCondition
+            ? "Yield/conversion was entered on this reaction condition."
+            : "No yield/conversion was entered; the popup is using the default assumption until edited.")}
+          ${item("Residuals", residualStatus, calc.stoichReady
+            ? "Residual reagents are calculated from molar stoichiometry and MW."
+            : "Residual reagents are estimated by applying the same conversion percentage to each reactive input.")}
+          ${item("Closure", closureStatus, calc.massClosure?.note || "Mass-closure status for the reactive subset.")}
+        </div>
+      `;
+    }
+
     function conversionAdvancedControlsHtml(calc) {
       if (!calc.product) return "";
       const product = calc.product;
@@ -8183,7 +8273,10 @@
                 : "Add MW for mol/kmol units, or density for volume units, to convert this residual to kg.";
             return `
               <div class="conversion-reagent-row ${row.nonReactive ? "non-reactive" : ""}">
-                <strong>${escapeHtml(row.stream.name || "(unnamed input)")}</strong>
+                <strong class="conversion-stream-name">
+                  <span>${escapeHtml(row.stream.name || "(unnamed input)")}</span>
+                  ${streamDataStatusBadgeHtml(row.stream.status, "Status of this input amount/property evidence.")}
+                </strong>
                 <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagent/reactant enters the reaction stoichiometry. Solvents, catalysts, auxiliaries, and inerts are tracked but not consumed by conversion.">
                   ${streamReactionRoleOptions(row.reactionRole || streamReactionRole(row.stream))}
                 </select>
@@ -8217,6 +8310,7 @@
           name: calc.product.name || "(selected product)",
           quantity: calc.productMade,
           unit: calc.product.unit || calc.fallbackUnit,
+          status: calc.productMode === "from reactants" ? "calculated" : streamDataStatusLabel(calc.product.status),
           note: calc.productMode === "actual"
             ? `${formatNumber(calc.productInputQty)} ${calc.product.unit || calc.fallbackUnit} is treated as the amount already produced.`
             : `${formatNumber(calc.percent)}% of ${formatNumber(calc.productQty)} ${calc.product.unit || calc.fallbackUnit} theoretical basis.`
@@ -8236,6 +8330,7 @@
           secondary,
           sourceStreamId: row.stream.id,
           staged: calc.detail.stagedResidualStreamIds.includes(row.stream.id),
+          status: writesKg ? "calculated" : "estimated",
           note: writesKg
             ? "Kg equivalent will be saved for MFA/Lutze; chemical properties remain linked to the input reagent."
             : "Add MW/density to convert this residual to kg before saving."
@@ -8250,6 +8345,7 @@
           quantity: hasKg ? row.initialKg : row.qty,
           unit: hasKg ? "kg" : row.stream.unit || "kg",
           secondary: hasKg && (row.stream.unit || "").toLowerCase() !== "kg" ? `${formatNumber(row.qty)} ${row.stream.unit || ""} original` : "",
+          status: streamDataStatusLabel(row.stream.status),
           note: `${streamReactionRoleLabel(row.reactionRole)} is excluded from reaction stoichiometry and kept for MFA/Lutze recovery or separation.`
         });
       });
@@ -8261,6 +8357,7 @@
           name,
           quantity: row.mass,
           unit: row.unit || calc.fallbackUnit,
+          status: "calculated",
           note: row.displayBasis
         });
       });
@@ -8275,7 +8372,10 @@
           ${rows.map(row => `
             <div class="conversion-preview-row ${row.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}">
               <span class="conversion-preview-type">${escapeHtml(row.type)}</span>
-              <strong>${escapeHtml(row.name)}</strong>
+              <strong class="conversion-stream-name">
+                <span>${escapeHtml(row.name)}</span>
+                ${streamDataStatusBadgeHtml(row.status, "Status of this simulated stream before it is written to MFA/Lutze.")}
+              </strong>
               <span class="conversion-preview-amount">${formatNumber(row.quantity)} ${escapeHtml(row.unit)}${row.secondary ? `<small>${escapeHtml(row.secondary)}</small>` : ""}</span>
               <small>${escapeHtml(row.note)}</small>
               ${row.type === "Residual" ? `
@@ -8357,7 +8457,7 @@
             ${product ? `
               <div class="conversion-basis-grid">
                 <label>
-                  <span class="label">Product amount ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                  <span class="label">Reference amount ${conversionInfoIcon(productModeTooltip(productMode))}</span>
                   <input type="number" min="0" step="0.001" id="conversionProductQuantity" value="${escapeAttr(productEntryQuantity)}" title="${escapeAttr(productModeTooltip(productMode))}" ${productMode === "from reactants" ? `placeholder="calculated from reagents"` : ""}>
                 </label>
                 <label>
@@ -8372,25 +8472,17 @@
                   </div>
                 </label>
                 <label class="conversion-mode-field" title="${escapeAttr(productModeTooltip(productMode))}">
-                  <span class="label">Amount meaning ${conversionInfoIcon(productModeTooltip(productMode))}</span>
-                  <select id="conversionProductMode" title="${escapeAttr(productModeTooltip(productMode))}">${conversionProductModeOptions(productMode, calc.canCalculateFromReactants)}</select>
+                  <span class="label">Known datum ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                  <select id="conversionProductMode" title="${escapeAttr(productModeTooltip(productMode))}">${conversionProductModeOptions(calc.requestedProductMode, calc.canCalculateFromReactants)}</select>
                 </label>
                 <div class="conversion-mode-help" title="${escapeAttr(productModeTooltip(productMode))}">${escapeHtml(productModeHelpText(productMode, percent))}</div>
               </div>
               ${conversionYieldBasisStatementHtml(calc, productEntryQuantity)}
               ${conversionAnalysisHtml(calc)}
+              ${conversionDataQualityHtml(calc)}
               ${conversionYieldSliderHtml(calc)}
               ${conversionAdvancedControlsHtml(calc)}
             ` : `<div class="muted small">No output stream to treat as the product yet. Add one here or in MFA/streams.</div>`}
-          </div>
-
-          <div class="conversion-section conversion-preview-section">
-            <div class="conversion-section-head">
-              <span>Simulated streams before apply</span>
-              <button type="button" class="mini-button" id="stageAllConversionResiduals" ${calc.reactantRows.some(row => row.leftover > 0) ? "" : "disabled"} title="Stage all simulated unreacted reagents below before saving them to MFA/Lutze.">Add residual reagents</button>
-            </div>
-            ${conversionPreviewTableHtml(calc)}
-            ${conversionStagedResidualsHtml(calc)}
           </div>
 
           <div class="conversion-section">
@@ -8431,6 +8523,15 @@
               </div>
             </div>
             <button type="button" class="mini-button" id="addConversionByproduct" title="Add a named byproduct, co-product, or residual outlet only when it is known or intentionally modeled.">+ Add outlet/byproduct</button>
+          </div>
+
+          <div class="conversion-section conversion-preview-section">
+            <div class="conversion-section-head">
+              <span>Simulated streams before apply</span>
+              <button type="button" class="mini-button" id="stageAllConversionResiduals" ${calc.reactantRows.some(row => row.leftover > 0) ? "" : "disabled"} title="Stage all simulated unreacted reagents below before saving them to MFA/Lutze.">Add residual reagents</button>
+            </div>
+            ${conversionPreviewTableHtml(calc)}
+            ${conversionStagedResidualsHtml(calc)}
           </div>
 
           <div class="row between" style="margin-top:12px">
@@ -8508,6 +8609,7 @@
           const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionInputReactionRole);
           if (!stream) return;
           stream.reactionRole = event.target.value;
+          stream.reactionRoleManual = true;
           if (stream.reactionRole !== "reactant") stream.stoichCoeff = "";
           ensureConversionDetail(block).stagedResidualStreamIds = ensureConversionDetail(block).stagedResidualStreamIds
             .filter(id => conversionReactantStreams(block).some(item => item.id === id));
@@ -12375,7 +12477,10 @@
       const mention = String(rawMention || "").toLowerCase();
       if (/\b(catalyst|catalytic|pd\/c)\b/.test(mention)) return { role: "catalyst", reason: "the mention contains a catalyst label" };
       if (/\b(solvent|cosolvent)\b/.test(mention)) return { role: "solvent", reason: "the mention contains a solvent label" };
-      if (/\b(?:in|with|using|dissolved in|solution in)\s*$/.test(before)) return { role: "solvent", reason: "it follows an in/with/using solvent phrase" };
+      // "with"/"using"/bare "in" are too generic to default to solvent - "react X with Y" reads as
+      // a genuine second reactant, not a solvent. Only the phrases that specifically describe
+      // dissolving/suspending something are unambiguous enough to default on.
+      if (/\b(?:dissolve in|dissolved in|suspend in|suspended in|solution in)\s*$/.test(before)) return { role: "solvent", reason: "it follows a dissolve/suspend-in phrase" };
       if (/\b(?:under)\s*$/.test(before)) return { role: "inert", reason: "it follows an inert-atmosphere phrase" };
       return { role: "", reason: "" };
     }
@@ -12420,7 +12525,7 @@
         const suggestedReactionRole = String(dataset.suggestionReactionRole || "").trim().toLowerCase();
         const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
         const nextReactionRole = streamReactionRoles.includes(suggestedReactionRole) ? suggestedReactionRole : inferredReactionRole;
-        if (stream.reactionRole === "reactant" && nextReactionRole !== "reactant") {
+        if (!stream.reactionRoleManual && nextReactionRole !== stream.reactionRole) {
           stream.reactionRole = nextReactionRole;
         }
       }
@@ -12444,7 +12549,7 @@
       pushUndo();
       stream.name = name;
       const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
-      if (stream.role === "input" && stream.reactionRole === "reactant" && inferredReactionRole !== "reactant") {
+      if (!stream.reactionRoleManual && stream.role === "input" && inferredReactionRole !== stream.reactionRole) {
         stream.reactionRole = inferredReactionRole;
       }
       stream.status = stream.status === "missing" ? "estimated" : stream.status;
@@ -12706,9 +12811,16 @@
       if (!stream) return;
       invalidateAiRefine();
       stream[event.target.dataset.streamField] = event.target.value;
+      if (event.target.dataset.streamField === "reactionRole") {
+        // The user just picked this explicitly - stop the name-driven auto-classifier below from
+        // ever overwriting it again (see reactionRoleManual usages: it used to compare against the
+        // literal string "reactant", which couldn't tell "auto-defaulted to reactant" apart from
+        // "user deliberately chose Reagent/reactant", so a later name edit silently reverted it).
+        stream.reactionRoleManual = true;
+      }
       if (event.target.dataset.streamField === "name") {
         const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
-        if (stream.role === "input" && stream.reactionRole === "reactant" && inferredReactionRole !== "reactant") {
+        if (!stream.reactionRoleManual && stream.role === "input" && inferredReactionRole !== stream.reactionRole) {
           stream.reactionRole = inferredReactionRole;
         }
         scheduleStreamPubChemSuggestions(stream.id, stream.name);
@@ -14871,6 +14983,10 @@
     });
     $("flowsheetShowAuxiliaryArrows")?.addEventListener("change", event => {
       state.flowsheetShowAuxiliaryArrows = event.target.checked;
+      renderFlowsheetModal();
+    });
+    $("flowsheetShowUnitDetails")?.addEventListener("change", event => {
+      state.flowsheetShowUnitDetails = event.target.checked;
       renderFlowsheetModal();
     });
     if ($("flowsheetTechnicalMode")) {

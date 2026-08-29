@@ -471,12 +471,16 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
     rendered: set[tuple[str, str]] = set()
     order_index = {node["gid"]: i for i, node in enumerate(nodes)}
     valid_links: list[tuple[str, str]] = []
+    seen_links: set[tuple[str, str]] = set()
     for link in links if isinstance(links, list) else []:
         if not isinstance(link, dict):
             continue
         from_id, to_id = endpoint_gid(link.get("from")), endpoint_gid(link.get("to"))
         if from_id not in by_gid or to_id not in by_gid or from_id == to_id:
             continue
+        if (from_id, to_id) in seen_links:
+            continue
+        seen_links.add((from_id, to_id))
         valid_links.append((from_id, to_id))
 
     forward_links = [(from_id, to_id) for from_id, to_id in valid_links if order_index[from_id] <= order_index[to_id] and by_gid[from_id]["stage"] != by_gid[to_id]["stage"]]
@@ -526,10 +530,6 @@ def _svgwrite_pfd(project: dict[str, Any]) -> dict[str, Any]:
             continue
         rendered.add((from_id, to_id))
         add_connection(_route_between(by_gid[from_id], by_gid[to_id], nodes), "#172027", "arrow_process")
-
-    if not rendered and len(nodes) > 1:
-        for src, dst in zip(nodes, nodes[1:]):
-            add_connection(_route_between(src, dst, nodes), "#172027", "arrow_process")
 
     s, e = _port_for(nodes[-1], "right", 12), (product["x"] - 16, product["y"] + product["h"] / 2)
     mid_x = (s[0] + e[0]) / 2
@@ -709,6 +709,7 @@ def render_pyflowsheet_svg(project: dict[str, Any]) -> dict[str, Any]:
             connect_stream("S_FEED", feed["Out"], feed["Out"], in_port)
 
     rendered_pairs: set[tuple[str, str]] = set()
+    seen_pairs: set[tuple[str, str]] = set()
     for link in links if isinstance(links, list) else []:
         if not isinstance(link, dict):
             continue
@@ -716,18 +717,13 @@ def render_pyflowsheet_svg(project: dict[str, Any]) -> dict[str, Any]:
         to_id = _clean(link.get("to"))
         if from_id not in units or to_id not in units or from_id == to_id:
             continue
+        if (from_id, to_id) in seen_pairs:
+            continue
+        seen_pairs.add((from_id, to_id))
         _, out_port = _ports(units[from_id], kinds[from_id])
         in_port, _ = _ports(units[to_id], kinds[to_id])
         connect_stream(f"S{stream_no:02d}", units[from_id], out_port, in_port)
         rendered_pairs.add((from_id, to_id))
-
-    if not rendered_pairs and len(ordered_ids) > 1:
-        for from_id, to_id in zip(ordered_ids, ordered_ids[1:]):
-            if from_id not in units or to_id not in units:
-                continue
-            _, out_port = _ports(units[from_id], kinds[from_id])
-            in_port, _ = _ports(units[to_id], kinds[to_id])
-            connect_stream(f"S{stream_no:02d}", units[from_id], out_port, in_port)
 
     last = ordered_ids[-1] if ordered_ids else ""
     if last in units:

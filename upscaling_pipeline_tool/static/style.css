@@ -3016,6 +3016,74 @@
       cursor: help;
     }
 
+    .conversion-data-quality {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 2px 0;
+    }
+
+    .conversion-data-quality-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      color: var(--ink-3);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      cursor: help;
+    }
+
+    .conversion-data-quality-item em {
+      font-style: normal;
+    }
+
+    .data-status-badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      max-width: 118px;
+      padding: 2px 6px;
+      border: 1px solid #d7e1e6;
+      border-radius: 999px;
+      background: #f7fafb;
+      color: var(--ink-3);
+      font-size: 9px;
+      font-weight: 900;
+      line-height: 1.2;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .data-status-badge.status-reported,
+    .data-status-badge.status-calculated {
+      border-color: #cfe8d7;
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .data-status-badge.status-estimated,
+    .data-status-badge.status-assumed,
+    .data-status-badge.status-manual-override {
+      border-color: #ecd8b8;
+      background: #fff8e8;
+      color: var(--orange-ink);
+    }
+
+    .conversion-stream-name {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .conversion-stream-name span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .conversion-advanced-details {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -6012,7 +6080,9 @@
     }
 
     .flowsheet-toolbar {
-      gap: 8px;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .flowsheet-toolbar .mini-button.primary {
@@ -6029,11 +6099,17 @@
     .flowsheet-toolbar-check {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
+      min-height: 24px;
+      padding: 0 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
       color: var(--ink-3);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       cursor: pointer;
+      white-space: nowrap;
     }
 
     .flowsheet-toolbar-check input {
@@ -6063,11 +6139,55 @@
     }
 
     .flowsheet-hint {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       padding: 8px 16px;
       border-bottom: 1px solid var(--line);
       background: var(--accent-soft);
       color: #0b5f59;
       font-size: 11.5px;
+    }
+
+    .flowsheet-hint > span {
+      min-width: 220px;
+    }
+
+    .flowsheet-layer-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      flex-wrap: wrap;
+      font-size: 10px;
+      color: var(--ink-3);
+    }
+
+    .flowsheet-layer-controls > span {
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .flowsheet-layer-controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      min-height: 20px;
+      padding: 0 6px;
+      border: 1px solid #d6e0e5;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .flowsheet-layer-controls input {
+      width: 11px;
+      min-height: 0;
+      margin: 0;
     }
 
     .tutorial-overlay {

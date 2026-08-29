@@ -463,7 +463,10 @@ assert(Math.abs(unavailableReactantCalc.productMade - 1.89) < 0.0001, "Fallback 
 assert(conversionValidationIssues(unavailableReactantCalc).some(issue => issue.severity === "warn"), "Unavailable reactant-derived mode should surface a warning");
 assert(conversionYieldBasisStatementHtml(unavailableReactantCalc, "1.89").includes("amount obtained at 90% yield"), "Yield statement should bind reported product quantity to the selected yield");
 assert(renderConversionModal.toString().includes("Reaction yield basis"), "Conversion modal should start with the product/yield basis section");
-assert(renderConversionModal.toString().includes("Product amount"), "Conversion modal should expose editable product amount");
+assert(renderConversionModal.toString().includes("Reference amount"), "Conversion modal should expose editable product reference amount");
+assert(streamDataStatuses.includes("manual override"), "Stream data status should support explicit manual overrides");
+assert(conversionDataQualityHtml(unavailableReactantCalc).includes("Conversion data provenance"), "Conversion modal should expose compact data provenance");
+assert(renderConversionModal.toString().indexOf("Reaction inputs") < renderConversionModal.toString().indexOf("Simulated streams before apply"), "Conversion modal should classify inputs before showing the apply preview");
 assert(renderConversionModal.toString().includes("conversionAdvancedControlsHtml"), "Conversion modal should move product stoichiometry fields into an advanced section");
 assert(conversionAdvancedControlsHtml(conversionCalculationModel(stoichProductCoeffBlock)).includes("Product coeff"), "Advanced conversion controls should expose editable product stoichiometric coefficient");
 assert(conversionAdvancedControlsHtml(conversionCalculationModel(stoichProductCoeffBlock)).includes("Product MW"), "Advanced conversion controls should expose editable product MW");

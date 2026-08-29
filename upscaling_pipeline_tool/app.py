@@ -372,18 +372,26 @@ APP_HTML = r"""<!doctype html>
           <span class="flowsheet-toolbar-divider"></span>
           <button id="fitFlowsheetView" class="mini-button primary" title="Fit the generated flowsheet inside the modal for overview">Fit View</button>
           <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
-          <label class="flowsheet-toolbar-check" title="Print substance + quantity on each stream arrow, not just on hover - matters once the diagram leaves the browser (e.g. downloaded as SVG for a figure)">
-            <input type="checkbox" id="flowsheetShowStreamLabels" checked> Stream labels
-          </label>
-          <label class="flowsheet-toolbar-check" title="Show secondary feed, waste, and vent stubs. Keep this off for a clean process-sequence diagram.">
-            <input type="checkbox" id="flowsheetShowAuxiliaryArrows"> Aux arrows
-          </label>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
           <span class="flowsheet-toolbar-divider"></span>
           <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
-      <div class="flowsheet-hint">PFD-style board generated from groups, streams, recycle, waste, and selected unit operations. Drag units to refine the layout; double-click a unit label to edit it.</div>
+      <div class="flowsheet-hint">
+        <span>PFD-style board generated from declared group links. Drag units to refine the layout; double-click a unit label to edit it.</span>
+        <div class="flowsheet-layer-controls" aria-label="Flowsheet view layers">
+          <span>View layers</span>
+          <label title="Print substance + quantity on each stream arrow, not just on hover.">
+            <input type="checkbox" id="flowsheetShowStreamLabels" checked> labels
+          </label>
+          <label title="Show recycle-loop arrows and waste/vent stubs. Turn this off only for a clean process-sequence diagram - it hides the streams most relevant to a waste/safety review.">
+            <input type="checkbox" id="flowsheetShowAuxiliaryArrows" checked> aux
+          </label>
+          <label title="Show compact unit size, main input materials, and main outlets inside each flowsheet block.">
+            <input type="checkbox" id="flowsheetShowUnitDetails"> unit details
+          </label>
+        </div>
+      </div>
       <div class="modal-body">
         <div id="flowsheetHost" class="flowsheet-host"></div>
       </div>
