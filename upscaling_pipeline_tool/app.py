@@ -104,6 +104,10 @@ APP_HTML = r"""<!doctype html>
               <div id="linkSummary"></div>
               <div id="networkClosure" class="closure-strip"></div>
             </div>
+            <div class="board-control-section">
+              <div class="label tip" data-tip="Per group: sums input-stream mass against everything that leaves the group (output + waste/vent streams), both converted to kg. A coarse screening check on entered/estimated quantities, not a validated balance - groups without enough mass-unit (kg/g/t) data on both sides are skipped rather than flagged.">Mass Balance</div>
+              <div id="massBalanceCheck" class="closure-strip"></div>
+            </div>
           </div>
         </div>
       </div>

@@ -11599,6 +11599,69 @@
       `;
     }
 
+    // Deterministic, local mass-balance screen: per group, sums input-role stream mass against
+    // everything that leaves the group (output + waste roles, i.e. outletRoles - covers product,
+    // intermediate, recycle, and waste/vent alike) in kg, using the same massToKg conversion the
+    // rest of the MFA views use. Streams in non-mass units (L, mol, %, ...) can't be summed this
+    // way and are excluded from both sides rather than treated as zero - this is a coarse
+    // screening check on whatever quantities are entered/estimated, not a validated balance, so a
+    // group is only judged once both sides have at least one convertible stream.
+    function massBalanceModel() {
+      return groupIdsInTextOrder().map(groupId => {
+        const group = groupModel(groupId);
+        const streams = group.blocks.flatMap(block => (block.streams || []).filter(stream => stream.name.trim()));
+        const inputStreams = streams.filter(stream => stream.role === "input");
+        const outputStreams = streams.filter(stream => streamIsOutlet(stream));
+        const convertibleInputs = inputStreams.filter(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)));
+        const convertibleOutputs = outputStreams.filter(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)));
+        const sumKg = list => list.reduce((sum, stream) => sum + massToKg(stream.quantity, stream.unit), 0);
+        const inputKg = sumKg(convertibleInputs);
+        const outputKg = sumKg(convertibleOutputs);
+        const base = {
+          groupId,
+          inputKg,
+          outputKg,
+          inputCount: inputStreams.length,
+          outputCount: outputStreams.length,
+          convertibleInputCount: convertibleInputs.length,
+          convertibleOutputCount: convertibleOutputs.length
+        };
+        if (!convertibleInputs.length || !convertibleOutputs.length || inputKg <= 0) {
+          return { ...base, status: "no-data" };
+        }
+        const diffKg = outputKg - inputKg;
+        const diffPercent = Math.abs(diffKg) / inputKg * 100;
+        const status = diffPercent >= 25 ? "high" : diffPercent >= 10 ? "warn" : "ok";
+        return { ...base, diffKg, diffPercent, status };
+      });
+    }
+
+    function massBalanceChipTooltip(item) {
+      return `${item.groupId}: ${formatNumber(item.inputKg)} kg input (${item.convertibleInputCount}/${item.inputCount} streams in mass units) vs ${formatNumber(item.outputKg)} kg output (${item.convertibleOutputCount}/${item.outputCount} streams in mass units). Screening check on entered/estimated quantities, not a validated balance. A large gap often just means the bulk material carried over from an upstream group isn't re-declared as an explicit input stream here - only this group's own newly-added inputs count on the input side, so add an input stream for the incoming intermediate if you want this group's balance to close.`;
+    }
+
+    function renderMassBalance() {
+      const root = $("massBalanceCheck");
+      if (!root) return;
+      if (!state.blocks.length || !groupIdsInTextOrder().length) {
+        root.innerHTML = "";
+        return;
+      }
+      const results = massBalanceModel();
+      const flagged = results.filter(item => item.status === "warn" || item.status === "high");
+      const noData = results.filter(item => item.status === "no-data");
+      if (!flagged.length) {
+        const note = noData.length
+          ? ` (${noData.length} group${noData.length === 1 ? "" : "s"} skipped: not enough mass-unit data)`
+          : "";
+        root.innerHTML = `<span class="closure-chip ok">✓ Mass balance within ±10% for every group with enough data${escapeHtml(note)}</span>`;
+        return;
+      }
+      root.innerHTML = flagged.map(item => `
+        <span class="closure-chip ${escapeAttr(item.status)}" title="${escapeAttr(massBalanceChipTooltip(item))}">${escapeHtml(item.groupId)}: ${formatNumber(item.inputKg)} kg in vs ${formatNumber(item.outputKg)} kg out (${item.diffKg >= 0 ? "+" : "-"}${formatNumber(item.diffPercent)}%)</span>
+      `).join("");
+    }
+
     function cleanupGroupIfEmpty(groupId) {
       if (!groupId) return;
       if (blocksForGroup(groupId).length) return;
@@ -13360,6 +13423,7 @@
       renderWorkflowStepper();
       renderDataReadiness();
       renderNetworkClosure();
+      renderMassBalance();
       renderSeparationSimulatorModal();
     }
 
