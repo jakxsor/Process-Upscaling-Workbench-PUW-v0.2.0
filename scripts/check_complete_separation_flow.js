@@ -6,6 +6,8 @@ const assert = require("assert");
 
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
+const cssSource = fs.readFileSync("upscaling_pipeline_tool/static/style.css", "utf8");
+assert(cssSource.includes(".stream-editor-grid {\n      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);"), "Stream editor should give Inputs and Outlets equal horizontal space");
 const marker = "$(\"behaviorSelect\").innerHTML";
 source = source.slice(0, source.indexOf(marker));
 
@@ -83,6 +85,21 @@ assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 dra
 assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");
 assert(g2Root.innerHTML.includes("Outlets"), "Group drawer should expose the unified outlets MFA section");
 assert(g2Root.innerHTML.includes("water of condensation"), "Unified outlets should still include waste/emission streams");
+assert(renderGroupFlow.toString().includes("data-open-group-board"), "Flowchart group cards should expose an explicit open-group button");
+assert(renderGroupFlow.toString().includes("data-compact-group-board"), "Detailed flowchart group cards should expose a compact-return button");
+assert(renderGroupFlow.toString().includes("groupBoardOverviewHtml(group)"), "Detailed flowchart group cards should render the reduced board overview");
+assert(renderGroupFlow.toString().includes("compact-meta"), "Compact flowchart group cards should keep lightweight block/phenomena counts");
+assert(renderGroupFlow.toString().includes("Open detailed group"), "Compact flowchart cards should provide the explicit detailed-open action");
+assert(renderGroupFlow.toString().includes("Back to compact"), "Detailed flowchart cards should provide the explicit compact-return action");
+assert(renderGroupFlow.toString().includes("unitCategoryBadgeHtml(group"), "Flowchart cards should expose a compact unit-category micro badge");
+assert(groupBoardOverviewHtml(g2).includes("group-mini-block"), "Detailed flowchart group cards should keep internal blocks as compact clickable chips");
+state.boardCompact = true;
+openGroupFromBoard("G2");
+assert.strictEqual(state.boardCompact, false, "Opening a group from compact flowchart cards should switch to detailed board view");
+assert.strictEqual(state.selectedGroupId, "G2", "Opening a group from the flowchart should select that group");
+compactGroupFromBoard("G2");
+assert.strictEqual(state.boardCompact, true, "Returning from detailed flowchart cards should switch to compact board view");
+state.boardCompact = false;
 
 ensureGroup("G2").separationSupportExpanded = true;
 renderGroupAggregateStepInspector(g2Root, g2);
@@ -228,9 +245,61 @@ const actualProductBlock = {
 let actualCalc = conversionCalculationModel(actualProductBlock);
 assert(Math.abs(actualCalc.productMade - 0.9) < 0.0001, "Actual produced product amount should not be multiplied by yield again");
 assert(Math.abs(actualCalc.productQty - 1.0) < 0.0001, "Actual produced amount should back-calculate the theoretical product basis");
+actualProductBlock.streams.find(stream => stream.id === "BT-S2").quantity = "100";
+actualProductBlock.conversionDetail.productAmountMode = "actual";
+actualCalc = conversionCalculationModel(actualProductBlock);
+assert(Math.abs(actualCalc.productMade - 100) < 0.0001, "100 kg entered as reported product at 90% conversion should preview 100 kg product");
+assert(Math.abs(actualCalc.productQty - 111.111) < 0.002, "100 kg reported product at 90% conversion should back-calculate 111.111 kg theoretical basis");
+assert(conversionPreviewTableHtml(actualCalc).includes("actual product"), "Conversion preview should render simulated output rows before applying");
 actualProductBlock.conversionDetail.productAmountMode = "theoretical";
 actualCalc = conversionCalculationModel(actualProductBlock);
-assert(Math.abs(actualCalc.productMade - 0.81) < 0.0001, "Theoretical product basis should still be multiplied by yield");
+assert(Math.abs(actualCalc.productMade - 90) < 0.0001, "100 kg entered as theoretical basis at 90% conversion should preview 90 kg product");
+const balancedYieldEditBlock = {
+  id: "BYE",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BYE-S1", name: "reactant A", quantity: "1", unit: "kg", phase: "L" }),
+    createStream("output", { id: "BYE-S2", name: "product P", quantity: "100", unit: "kg", phase: "L", fate: "product" })
+  ],
+  conditions: { conversion_yield: "90" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BYE-S2", productAmountMode: "actual", byproducts: [] }
+};
+applyConversionBalanceStreams(balancedYieldEditBlock);
+assert.strictEqual(balancedYieldEditBlock.conversionDetail.productAmountMode, "theoretical", "After balance, product edits should retain the theoretical basis so yield changes can recalculate production");
+updateConversionPercent(balancedYieldEditBlock, "75");
+assert(Math.abs(conversionCalculationModel(balancedYieldEditBlock).productMade - 83.333) < 0.002, "Lowering yield after balance should reduce the calculated product amount from the saved theoretical basis");
+const stoichProductBlock = {
+  id: "BST",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BST-S1", name: "excess A", quantity: "1.5", unit: "mol", phase: "L", stoichCoeff: "1", mw: "100" }),
+    createStream("input", { id: "BST-S2", name: "limiting B", quantity: "1", unit: "mol", phase: "L", stoichCoeff: "1", mw: "80" }),
+    createStream("output", { id: "BST-S3", name: "product P", quantity: "0.95", unit: "mol", phase: "L", fate: "product", stoichCoeff: "1", mw: "180" })
+  ],
+  conditions: { conversion_yield: "95" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BST-S3", productAmountMode: "actual", balanceMethod: "stoichiometric", byproducts: [] }
+};
+const stoichCalc = conversionCalculationModel(stoichProductBlock);
+const excessRow = stoichCalc.reactantRows.find(row => row.stream.name === "excess A");
+const limitingRow = stoichCalc.reactantRows.find(row => row.stream.name === "limiting B");
+assert.strictEqual(stoichCalc.stoichReady, true, "Stoichiometric balance should be ready for mol inputs and coefficients");
+assert.strictEqual(limitingRow.limiting, true, "Stoichiometric balance should identify the limiting reagent");
+assert(Math.abs(excessRow.leftover - 0.55) < 0.0001, "Stoichiometric balance should leave 0.55 mol of the excess reagent");
+assert(Math.abs(limitingRow.leftover - 0.05) < 0.0001, "Stoichiometric balance should leave 0.05 mol of the limiting reagent");
+assert(Math.abs(excessRow.leftoverKg - 0.055) < 0.0001, "Stoichiometric residual should convert excess reagent mol to kg using MW");
+assert(conversionPreviewTableHtml(stoichCalc).includes("data-stage-conversion-residual"), "Conversion preview should allow simulated residuals to be staged as reagents");
+stageAllConversionResiduals(stoichProductBlock);
+assert.strictEqual(ensureConversionDetail(stoichProductBlock).stagedResidualStreamIds.length, 2, "All simulated residuals should stage as residual reagents");
+assert(conversionStagedResidualsHtml(conversionCalculationModel(stoichProductBlock)).includes("Save residual reagents"), "Staged residual reagents should appear below the preview before saving");
+saveStagedConversionResiduals(stoichProductBlock);
+const generatedStoichExcess = stoichProductBlock.streams.find(stream => stream.name === "unreacted excess A");
+assert.strictEqual(generatedStoichExcess.unit, "kg", "Saved stoichiometric residual should be written as kg for MFA/Lutze");
+assert(Math.abs(conversionNumber(generatedStoichExcess.quantity) - 0.055) < 0.0001, "Saved excess residual should use MW-converted kg amount");
+assert(generatedStoichExcess.note.includes("0.55 mol"), "Saved residual note should preserve the original molar trace");
 actualProductBlock.conversionDetail = {
   productStreamId: "BT-S2",
   productAmountMode: "actual",
@@ -242,7 +311,7 @@ actualProductBlock.conversionDetail = {
 actualCalc = conversionCalculationModel(actualProductBlock);
 assert(Math.abs(actualCalc.byproductRows.find(row => row.id === "bp-actual").mass - 0.2) < 0.0001, "Actual byproduct amount should be independent from the unconverted reagent pool");
 assert(Math.abs(actualCalc.byproductRows.find(row => row.id === "bp-residual").mass - 0.02) < 0.0001, "Residual outlet percent should be normalized on the unconverted reagent pool");
-assert(Math.abs(actualCalc.wasteMass - 0.08) < 0.0001, "Only residual-pool allocations should reduce unassigned waste");
+assert(Math.abs(actualCalc.wasteMass - 0.08) < 0.0001, "Only residual-pool allocations should reduce the unrouted residual remainder");
 const fromReactantsBlock = {
   ...actualProductBlock,
   streams: [
@@ -256,17 +325,178 @@ assert(Math.abs(fromReactantsCalc.productQty - 2.0) < 0.0001, "Reactant-derived 
 assert(Math.abs(fromReactantsCalc.productMade - 1.8) < 0.0001, "Reactant-derived mode should apply yield only after calculating theoretical basis");
 fromReactantsBlock.conversionDetail.productAmountMode = "";
 assert.strictEqual(conversionProductAmountMode(fromReactantsBlock, fromReactantsBlock.streams[1]), "from reactants", "Blank product quantity should default to reactant-derived calculation rather than actual zero product");
+const stoichProductCoeffBlock = {
+  id: "BPC",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BPC-S1", name: "reactant A", quantity: "2", unit: "mol", phase: "L", stoichCoeff: "1", mw: "100" }),
+    createStream("output", { id: "BPC-S2", name: "product P", quantity: "", unit: "kg", phase: "L", fate: "product", stoichCoeff: "2", mw: "50" })
+  ],
+  conditions: { conversion_yield: "100" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BPC-S2", productAmountMode: "from reactants", balanceMethod: "stoichiometric", byproducts: [] }
+};
+const stoichProductCoeffCalc = conversionCalculationModel(stoichProductCoeffBlock);
+assert.strictEqual(stoichProductCoeffCalc.stoichReady, true, "Product coefficient case should have ready stoichiometric reagent data");
+assert(Math.abs(stoichProductCoeffCalc.productQty - 0.2) < 0.0001, "Product coefficient and product MW should affect product mass from reactants");
+const nonReactiveInputBlock = {
+  id: "BNR",
+  groupId: "",
+  text: "React A in toluene with palladium catalyst to form P.",
+  behavior: "reaction",
+  phenomena: ["R(L)", "M(L)"],
+  streams: [
+    createStream("input", { id: "BNR-S1", name: "reactant A", quantity: "1", unit: "mol", phase: "L", stoichCoeff: "1", mw: "100" }),
+    createStream("input", { id: "BNR-S2", name: "toluene solvent", quantity: "2", unit: "kg", phase: "L" }),
+    createStream("input", { id: "BNR-S3", name: "palladium catalyst", quantity: "0.05", unit: "kg", phase: "S" }),
+    createStream("output", { id: "BNR-S4", name: "product P", quantity: "0.09", unit: "kg", phase: "L", fate: "product", stoichCoeff: "1", mw: "100" })
+  ],
+  conditions: { conversion_yield: "90" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BNR-S4", productAmountMode: "actual", balanceMethod: "stoichiometric", byproducts: [] }
+};
+const nonReactiveCalc = conversionCalculationModel(nonReactiveInputBlock);
+assert.strictEqual(nonReactiveCalc.reactantRows.length, 1, "Only reactants should enter conversion stoichiometry");
+assert.strictEqual(nonReactiveCalc.nonReactiveRows.length, 2, "Solvent/catalyst inputs should stay non-reactive in conversion");
+assert.strictEqual(streamReactionRole(createStream("input", { id: "ETH", name: "ethanol" })), "reactant", "Common solvent names should not be excluded unless the stream is explicitly marked as solvent");
+const roleMentions = materialMentionsFromText("Dissolve in 10 mL toluene and add 0.1 g palladium catalyst and 1 mol ethanol.");
+assert.strictEqual(roleMentions.find(item => item.name === "toluene")?.reactionRole, "solvent", "Protocol phrasing should classify solvent-like mentions as solvent");
+assert.strictEqual(roleMentions.find(item => item.name === "palladium")?.reactionRole, "catalyst", "Protocol phrasing should classify catalyst-labelled mentions as catalyst");
+assert.strictEqual(roleMentions.find(item => item.name === "ethanol")?.reactionRole, "", "Plain chemical mentions should not be guessed as non-reactive by name alone");
+assert(streamSuggestionRailHtml({ text: "Dissolve in 10 mL toluene.", streams: [] }, createStream("input", { id: "SUG-S1", name: "", reactionRole: "reactant" }), "input").includes('data-suggestion-reaction-role="solvent"'), "Input suggestions should carry the inferred reaction role into the UI");
+assert(conversionPreviewTableHtml(nonReactiveCalc).includes("Non-reactive"), "Conversion preview should show non-reactive inputs without consuming them");
+stageAllConversionResiduals(nonReactiveInputBlock);
+assert.deepStrictEqual(ensureConversionDetail(nonReactiveInputBlock).stagedResidualStreamIds, ["BNR-S1"], "Only reactive residuals should be staged");
+applyConversionBalanceStreams(nonReactiveInputBlock);
+assert(nonReactiveInputBlock.streams.some(stream => stream.name === "unreacted reactant A"), "Reactive residual should be generated");
+assert(!nonReactiveInputBlock.streams.some(stream => stream.name === "unreacted toluene solvent"), "Solvent should not be generated as unreacted waste");
+assert(streamRowHtml(nonReactiveInputBlock.streams.find(stream => stream.name === "toluene solvent"), "reactant", "input", nonReactiveInputBlock).includes("Reaction role"), "Input editor should expose reaction role classification");
+const impossibleProductBlock = {
+  id: "BIMP",
+  groupId: "",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BIMP-S1", name: "A", quantity: "100", unit: "mol", phase: "L", stoichCoeff: "1", mw: "100" }),
+    createStream("input", { id: "BIMP-S2", name: "B", quantity: "100", unit: "mol", phase: "L", stoichCoeff: "1", mw: "100" }),
+    createStream("output", { id: "BIMP-S3", name: "P", quantity: "10", unit: "kg", phase: "L", fate: "product", stoichCoeff: "1", mw: "100" })
+  ],
+  conditions: { conversion_yield: "95" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BIMP-S3", productAmountMode: "actual", balanceMethod: "stoichiometric", byproducts: [] }
+};
+assert(conversionValidationIssues(conversionCalculationModel(impossibleProductBlock)).some(issue => issue.severity === "error" && issue.text.includes("exceeds the stoichiometric maximum")), "Stoichiometric conversion should reject product/yield bases that exceed reagent capacity");
+const esterificationClosureBlock = {
+  id: "BEST",
+  groupId: "",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BEST-S1", name: "acetic acid", quantity: "1", unit: "mol", phase: "L", stoichCoeff: "1", mw: "60.052" }),
+    createStream("input", { id: "BEST-S2", name: "ethanol", quantity: "1.5", unit: "mol", phase: "L", stoichCoeff: "1", mw: "46.069" }),
+    createStream("input", { id: "BEST-S3", name: "toluene solvent", quantity: "1", unit: "kg", phase: "L" }),
+    createStream("input", { id: "BEST-S4", name: "sulfuric acid catalyst", quantity: "0.01", unit: "kg", phase: "L" }),
+    createStream("output", { id: "BEST-S5", name: "ethyl acetate", quantity: "", unit: "kg", phase: "L", fate: "product", stoichCoeff: "1", mw: "88.106" })
+  ],
+  conditions: { conversion_yield: "90" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: {
+    productStreamId: "BEST-S5",
+    productAmountMode: "from reactants",
+    balanceMethod: "stoichiometric",
+    byproducts: [{ id: "BEST-BP1", name: "water", basis: "actual", amount: "0.0162135", unit: "kg", role: "byproduct" }]
+  }
+};
+const esterificationClosure = conversionCalculationModel(esterificationClosureBlock);
+assert.strictEqual(esterificationClosure.reactantRows.length, 2, "Esterification example should keep ethanol as a reagent, not a guessed solvent");
+assert.strictEqual(esterificationClosure.nonReactiveRows.length, 2, "Esterification example should keep explicit solvent/catalyst non-reactive");
+assert.strictEqual(esterificationClosure.massClosure.status, "closed", "Esterification example should close when water byproduct is declared");
+const esterificationMissingWaterBlock = {
+  ...esterificationClosureBlock,
+  conversionDetail: { ...esterificationClosureBlock.conversionDetail, byproducts: [] }
+};
+assert.strictEqual(conversionCalculationModel(esterificationMissingWaterBlock).massClosure.status, "open", "Reaction mass closure should open when a stoichiometric byproduct is missing");
+const hydrogenationClosureBlock = {
+  id: "BHYD",
+  groupId: "",
+  behavior: "reaction",
+  phenomena: ["R(L)", "M(L)"],
+  streams: [
+    createStream("input", { id: "BHYD-S1", name: "styrene", quantity: "1", unit: "mol", phase: "L", stoichCoeff: "1", mw: "104.15" }),
+    createStream("input", { id: "BHYD-S2", name: "hydrogen", quantity: "1.2", unit: "mol", phase: "V", stoichCoeff: "1", mw: "2.016" }),
+    createStream("input", { id: "BHYD-S3", name: "Pd/C catalyst", quantity: "0.02", unit: "kg", phase: "S" }),
+    createStream("output", { id: "BHYD-S4", name: "ethylbenzene", quantity: "", unit: "kg", phase: "L", fate: "product", stoichCoeff: "1", mw: "106.17" })
+  ],
+  conditions: { conversion_yield: "95" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BHYD-S4", productAmountMode: "from reactants", balanceMethod: "stoichiometric", byproducts: [] }
+};
+const hydrogenationClosure = conversionCalculationModel(hydrogenationClosureBlock);
+assert.strictEqual(hydrogenationClosure.nonReactiveRows.length, 1, "Hydrogenation catalyst should be non-reactive");
+assert.strictEqual(hydrogenationClosure.massClosure.status, "closed", "Hydrogenation example should close from product plus unreacted reagents");
+const unavailableReactantCalcBlock = {
+  ...fromReactantsBlock,
+  streams: [
+    createStream("input", { id: "BU-S1", name: "reactant A", quantity: "1", unit: "kg", phase: "L" }),
+    createStream("output", { id: "BU-S2", name: "reported product", quantity: "1.89", unit: "kg", phase: "L", fate: "product" })
+  ],
+  conversionDetail: { productStreamId: "BU-S2", productAmountMode: "from reactants", byproducts: [] }
+};
+const unavailableReactantCalc = conversionCalculationModel(unavailableReactantCalcBlock);
+assert.strictEqual(unavailableReactantCalc.requestedProductMode, "from reactants", "The model should remember when reactant-derived mode was requested");
+assert.strictEqual(unavailableReactantCalc.productMode, "actual", "Reactant-derived mode without MW should fall back to reported product amount when product quantity exists");
+assert(Math.abs(unavailableReactantCalc.productMade - 1.89) < 0.0001, "Fallback from unavailable reactant calculation should keep the reported product amount");
+assert(conversionValidationIssues(unavailableReactantCalc).some(issue => issue.severity === "warn"), "Unavailable reactant-derived mode should surface a warning");
+assert(conversionYieldBasisStatementHtml(unavailableReactantCalc, "1.89").includes("amount obtained at 90% yield"), "Yield statement should bind reported product quantity to the selected yield");
+assert(renderConversionModal.toString().includes("Reaction yield basis"), "Conversion modal should start with the product/yield basis section");
+assert(renderConversionModal.toString().includes("Product amount"), "Conversion modal should expose editable product amount");
+assert(renderConversionModal.toString().includes("conversionAdvancedControlsHtml"), "Conversion modal should move product stoichiometry fields into an advanced section");
+assert(conversionAdvancedControlsHtml(conversionCalculationModel(stoichProductCoeffBlock)).includes("Product coeff"), "Advanced conversion controls should expose editable product stoichiometric coefficient");
+assert(conversionAdvancedControlsHtml(conversionCalculationModel(stoichProductCoeffBlock)).includes("Product MW"), "Advanced conversion controls should expose editable product MW");
+assert(renderConversionModal.toString().includes("Simulated streams before apply"), "Conversion modal should show the simulated streams before saving");
+setConversionProductQuantity(unavailableReactantCalcBlock, "10");
+assert.strictEqual(unavailableReactantCalcBlock.conversionDetail.productAmountMode, "actual", "Editing quantity after unavailable reactant-derived mode should persist the reported-amount fallback");
+assert.strictEqual(unavailableReactantCalcBlock.streams.find(stream => stream.id === "BU-S2").quantity, "10", "Reported-amount fallback should edit the product quantity");
+const inferredTheoreticalBlock = {
+  id: "BI",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BI-S1", name: "reactant A", quantity: "10", unit: "kg", phase: "L" }),
+    createStream("output", { id: "BI-S2", name: "product C", quantity: "9", conversionBaseQuantity: "10", unit: "kg", phase: "L", fate: "product" })
+  ],
+  conditions: { conversion_yield: "90" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BI-S2", productAmountMode: "", byproducts: [] }
+};
+assert.strictEqual(conversionProductAmountMode(inferredTheoreticalBlock, inferredTheoreticalBlock.streams[1]), "theoretical", "Saved conversion basis should infer theoretical mode");
+setConversionProductQuantity(inferredTheoreticalBlock, "20");
+assert.strictEqual(inferredTheoreticalBlock.conversionDetail.productAmountMode, "theoretical", "Editing an inferred theoretical product should persist the inferred mode");
+assert.strictEqual(inferredTheoreticalBlock.conversionDetail.productBasisQuantity, "20", "Editing an inferred theoretical product should update the theoretical basis, not the produced amount");
+assert(Math.abs(conversionCalculationModel(inferredTheoreticalBlock).productMade - 18) < 0.0001, "Edited theoretical basis should recalculate produced product");
 assert(blockLutzeReactionSeparationLaunchHtml(loadedReactionBlock).includes("Simulate Lutze Substance Separation"), "Grouped reaction task block should expose the Lutze simulator launcher");
 const draftInputStream = createStream("input", { id: "B1-SD", name: "", editing: true });
 assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("benzyl alcohol"), "Input editor should not suggest materials already present as inputs in this step");
 assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("Chemical properties for Lutze / sizing"), "Stream editor should expose optional chemical properties for Lutze and sizing");
+assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("stream-field span-4"), "Stream editor should give the material field the full stream-card width");
 assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes('stream-chemical span-2" open'), "New empty streams should not auto-open the chemical properties panel");
 assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("data-fetch-stream-pubchem"), "Stream editor should expose a PubChem fetch action");
+assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("Fate, recycle & notes"), "Stream editor should not expose the old noisy routing section title");
+assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("Routing / notes"), "Stream editor should remove routing and notes from the visible stream form");
+assert(renderConversionModal.toString().includes("conversionAnalysisHtml"), "Conversion modal should render a compact conversion analysis section");
+assert(conversionAnalysisHtml(conversionCalculationModel(nonReactiveInputBlock)).includes("non-reactive"), "Conversion analysis should summarize non-reactive input count");
+assert(conversionAnalysisHtml(conversionCalculationModel(nonReactiveInputBlock)).includes("title="), "Conversion analysis should expose hover explanations");
 const draftOutletStream = createStream("output", { id: "B1-SO", name: "", editing: true });
 assert(streamSectionHtml(loadedReactionBlock, "outlet").includes("+ Outlet"), "Block editor should expose one unified outlet add action");
+assert(streamSectionHtml(loadedReactionBlock, "input").includes('data-stream-section-role="input"'), "Input stream section should expose a stable scroll-restore role");
+assert(streamSectionHtml(loadedReactionBlock, "outlet").includes('data-stream-section-role="outlet"'), "Outlet stream section should expose a stable scroll-restore role");
 assert(streamRowHtml(draftOutletStream, "product", "outlet", loadedReactionBlock).includes("Outlet type"), "Outlet editor should classify product, recovery, and waste outlets in one place");
 assert.strictEqual(streamRoleForFate("vent", "output"), "waste", "Vent outlets should keep waste semantics internally");
 assert.strictEqual(streamRoleForFate("product", "waste"), "output", "Product outlets should keep output semantics internally");
+assert(renderStepFlowInspector.toString().includes("captureStepFlowStreamViewport"), "Step flow inspector should preserve stream scroll/focus across rerenders");
+assert(renderStepFlowInspector.toString().includes("restoreStepFlowStreamViewport"), "Step flow inspector should restore stream scroll/focus after rerenders");
+assert(applyStreamSuggestion.toString().includes("pendingStepStreamFocusId"), "Applying a stream suggestion should keep the edited stream in view");
 const benzylInput = loadedReactionBlock.streams.find(stream => stream.role === "input" && stream.name === "benzyl alcohol");
 benzylInput.mw = "108.14";
 benzylInput.tb = "478.15";
@@ -299,7 +529,7 @@ const balancedModel = separationSimulatorModel(groupModel("G1"));
 assert(Math.abs(conversionNumber(balancedProduct.quantity) - 1.25) < 0.01, "Balance action should write the formed product amount into the output stream");
 assert.strictEqual(generatedResiduals.length, 3, "Balance action should create one residual stream for each unreacted reagent");
 assert(generatedByproduct, "Balance action should create declared coproduct/byproduct streams");
-assert(generatedWaste, "Balance action should create the unassigned waste stream");
+assert(!generatedWaste, "Balance action should not create a generic unassigned waste stream that duplicates the residual reagents");
 assert(balancedModel.substances.some(item => item.name === "light ester byproduct" && item.role === "byproduct"), "Balance action should pass declared byproducts into Lutze substances");
 const balancedBenzylAlcohol = balancedModel.substances.find(item => item.name === "benzyl alcohol");
 assert(Math.abs(conversionNumber(balancedBenzylAlcohol.quantity) - 0.1) < 0.001, "Lutze reactant quantity should update to the unreacted residual after balancing");

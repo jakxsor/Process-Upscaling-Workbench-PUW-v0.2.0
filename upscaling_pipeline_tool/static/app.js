@@ -130,6 +130,14 @@
     const recycleFates = new Set(["recycled input", "recovered solvent"]);
 
     const streamUnits = ["kg", "g", "t", "mol", "kmol", "L", "mL", "m3", "kg/kg product", "L/kg product", "%", "ppm"];
+    const streamReactionRoles = ["reactant", "solvent", "catalyst", "auxiliary", "inert"];
+    const streamReactionRoleLabels = {
+      reactant: "Reagent/reactant",
+      solvent: "Solvent",
+      catalyst: "Catalyst",
+      auxiliary: "Auxiliary",
+      inert: "Inert"
+    };
     const streamScalingModes = [
       "auto",
       "per kg product",
@@ -139,7 +147,7 @@
       "manual"
     ];
     const conversionProductAmountModes = [
-      { value: "actual", label: "Actual produced amount" },
+      { value: "actual", label: "Reported amount at yield" },
       { value: "theoretical", label: "100% theoretical basis" },
       { value: "from reactants", label: "Calculate from reactants" }
     ];
@@ -147,6 +155,10 @@
       { value: "actual", label: "Actual amount" },
       { value: "product basis %", label: "% of theoretical product" },
       { value: "residual pool %", label: "% of unconverted reagent pool" }
+    ];
+    const conversionBalanceMethods = [
+      { value: "simple", label: "Simple mass fraction" },
+      { value: "stoichiometric", label: "Stoichiometric balance" }
     ];
 
     const heuristicRuleLibrary = [
@@ -582,16 +594,31 @@
       const count = Math.max(1, blockCount);
       if (state.boardCompact && kind !== "draft") return 240;
       if (kind === "draft") return Math.max(430, 78 + count * 258);
-      return Math.max(560, 92 + count * 194);
+      return Math.max(430, 96 + count * 128);
     }
 
     const flowsheetCategoryIcon = {
-      reactor: "⚗",
-      separation: "⬡",
-      utility: "⚙",
-      storage: "◉",
-      waste: "♻"
+      reactor: "Rx",
+      separation: "Sep",
+      utility: "Util",
+      storage: "Hold",
+      waste: "Waste"
     };
+
+    const flowsheetCategoryLabel = {
+      reactor: "Reaction or reactor task",
+      separation: "Separation task",
+      utility: "Heating, cooling, or utility task",
+      storage: "Storage or hold task",
+      waste: "Waste or treatment task"
+    };
+
+    function unitCategoryBadgeHtml(group, extraClass = "") {
+      const category = typeof flowsheetUnitCategory === "function" ? flowsheetUnitCategory(group) : "storage";
+      const icon = flowsheetCategoryIcon[category] || "Task";
+      const label = flowsheetCategoryLabel[category] || "Task category";
+      return `<span class="unit-micro-icon compact-icon-${category} ${extraClass}" title="${escapeAttr(label)}">${escapeHtml(icon)}</span>`;
+    }
 
     function boardBounds() {
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
@@ -1058,6 +1085,8 @@
         name: values.name || "",
         quantity: values.quantity || "",
         conversionBaseQuantity: values.conversionBaseQuantity || "",
+        stoichCoeff: values.stoichCoeff || "",
+        reactionRole: values.reactionRole || "",
         unit: values.unit || "kg",
         phase: values.phase || "unknown",
         status: values.status || "missing",
@@ -1469,6 +1498,8 @@
         name: String(stream?.name || stream?.material || ""),
         quantity: String(stream?.quantity || stream?.qty || ""),
         conversionBaseQuantity: String(stream?.conversionBaseQuantity || ""),
+        stoichCoeff: String(stream?.stoichCoeff || ""),
+        reactionRole: normalizeStreamReactionRole(stream, role),
         unit: streamUnits.includes(stream?.unit) ? stream.unit : "kg",
         phase: streamPhases.includes(stream?.phase) ? stream.phase : "unknown",
         status: streamDataStatuses.includes(stream?.status) ? stream.status : "missing",
@@ -1501,6 +1532,42 @@
     function streamRoleForFate(fate, currentRole = "output") {
       if (currentRole === "input") return "input";
       return wasteFates.has(fate) ? "waste" : "output";
+    }
+
+    function defaultStreamReactionRole(name = "", role = "input", fate = "", note = "") {
+      if (role !== "input") return "";
+      const text = `${name || ""} ${fate || ""} ${note || ""}`.toLowerCase();
+      if (/\b(catalyst|catalytic|enzyme|photocatalyst|organocatalyst|pd\/c)\b/.test(text)) return "catalyst";
+      if (/\b(solvent|cosolvent)\b/.test(text)) return "solvent";
+      if (/\b(inert|nitrogen|argon|helium)\b/.test(text)) return "inert";
+      if (/\b(quench|wash|drying agent|work[- ]?up aid)\b/.test(text)) return "auxiliary";
+      return "reactant";
+    }
+
+    function normalizeStreamReactionRole(stream, role = stream?.role || "input") {
+      if (role !== "input") return "";
+      const value = String(stream?.reactionRole || "").trim().toLowerCase();
+      if (streamReactionRoles.includes(value)) return value;
+      return defaultStreamReactionRole(stream?.name || stream?.material || "", role, stream?.fate || "", stream?.note || "");
+    }
+
+    function streamReactionRole(stream) {
+      return normalizeStreamReactionRole(stream, stream?.role || "input");
+    }
+
+    function streamReactionRoleLabel(value) {
+      const role = streamReactionRoles.includes(value) ? value : "reactant";
+      return streamReactionRoleLabels[role] || role;
+    }
+
+    function streamReactionRoleOptions(selected) {
+      return streamReactionRoles
+        .map(value => `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(streamReactionRoleLabel(value))}</option>`)
+        .join("");
+    }
+
+    function streamReactiveInStoichiometry(stream) {
+      return stream?.role === "input" && streamReactionRole(stream) === "reactant";
     }
 
     function streamTone(stream, displayRole = "") {
@@ -2290,6 +2357,24 @@
       renderAll();
     }
 
+    function setGroupBoardMode(groupId, compact = false) {
+      const blocks = blocksForGroup(groupId);
+      state.selectedGroupId = groupId;
+      state.selectedBlockId = null;
+      state.selectedIds = blocks.map(block => block.id);
+      state.focusEndpoint = groupId;
+      state.boardCompact = compact;
+      renderAll();
+    }
+
+    function openGroupFromBoard(groupId) {
+      setGroupBoardMode(groupId, false);
+    }
+
+    function compactGroupFromBoard(groupId) {
+      setGroupBoardMode(groupId, true);
+    }
+
     function renderGroupFlow() {
       const root = $("groupFlow");
       $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
@@ -2322,19 +2407,16 @@
       ` : "";
       const groupHtml = groupIds.map(groupId => {
         const group = groupModel(groupId);
-        const unitReadiness = groupUnitSuggestionReadiness(group);
         const active = state.selectedGroupId === group.id;
         const contextActive = !active && group.blocks.some(block => state.selectedIds.includes(block.id));
         const boxClasses = `group-box tip ${state.boardCompact ? "compact" : ""} ${active ? "active" : ""} ${contextActive ? "context-active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}`;
         if (state.boardCompact) {
-          const category = flowsheetUnitCategory(group);
-          const icon = flowsheetCategoryIcon[category] || "◼";
           return `
             <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
               <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
               <div class="group-head">
                 <div class="row">
-                  <span class="compact-icon compact-icon-${category}">${icon}</span>
+                  ${unitCategoryBadgeHtml(group)}
                   <strong>${escapeHtml(group.id)}</strong>
                 </div>
                 <span class="pill ${active ? "green" : ""}">${active ? "selected" : group.blocks.length}</span>
@@ -2342,9 +2424,9 @@
               <div class="compact-body">
                 <strong>${escapeHtml(group.selectedUnit || "no unit selected")}</strong>
                 <span class="muted small">${escapeHtml(group.task)}</span>
+                <span class="compact-meta">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"} · ${group.phenomena.length} phenomena</span>
                 ${groupUnitSuggestionGateHtml(group, { board: true })}
-                ${boardUnitOperationPickerHtml(group, 3)}
-                <span class="compact-open-hint">Click to open group</span>
+                <button type="button" class="compact-open-hint" data-open-group-board="${escapeAttr(group.id)}">Open detailed group</button>
               </div>
             </section>
           `;
@@ -2354,33 +2436,17 @@
             <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
             <div class="group-head">
               <div class="row">
+                ${unitCategoryBadgeHtml(group, "detailed")}
                 <strong>${escapeHtml(group.id)}</strong>
                 <span class="pill blue">${escapeHtml(group.task)}</span>
                 ${active ? `<span class="selected-group-badge">Selected</span>` : ""}
               </div>
               <div class="row">
-                <button class="mini-button" data-select-group="${escapeAttr(group.id)}" title="Open this group below: summed MFA, aggregated conditions, unit alternatives, and selection basis">Open Group</button>
+                <button class="mini-button ghost" data-compact-group-board="${escapeAttr(group.id)}" title="Return this board to compact cards">Back to compact</button>
                 <span class="pill">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"}</span>
               </div>
             </div>
-            ${groupCompositeSummaryHtml(group)}
-            <div class="block-strip composite">
-              ${group.blocks.map(block => blockCardHtml(block)).join("")}
-            </div>
-            <div class="group-summary">
-              <div class="label">Summed Phenomena</div>
-              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted">No phenomena assigned.</span>`}
-              ${groupMfaSummaryHtml(group)}
-              ${groupConditionSummaryHtml(group)}
-              ${state.showConnections && linksForGroup(group.id).length ? `<div class="group-connection-chips">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>` : ""}
-              <div class="group-unit-summary">
-                <div class="label">Unit Operation</div>
-                <strong>${escapeHtml(group.selectedUnit || "not selected")}</strong>
-                ${groupUnitSuggestionGateHtml(group, { board: true })}
-                ${boardUnitOperationPickerHtml(group)}
-                <span class="muted small">${unitReadiness.ready ? "Ready from task, MFA/phases, and conditions." : `Complete ${escapeHtml(unitReadiness.missing.join(", ") || "task data")} before assigning.`}</span>
-              </div>
-            </div>
+            ${groupBoardOverviewHtml(group)}
           </section>
         `;
       }).join("");
@@ -2444,7 +2510,7 @@
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
-          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group]") || event.target.closest("[data-suggest-unit-operation]")) return;
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board]") || event.target.closest("[data-suggest-unit-operation]")) return;
           if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
             addConnection(state.connectingFrom, box.dataset.groupBox);
             return;
@@ -2468,6 +2534,22 @@
           event.stopPropagation();
           selectGroup(button.dataset.selectGroup);
         });
+      });
+      root.querySelectorAll("[data-open-group-board]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          openGroupFromBoard(button.dataset.openGroupBoard);
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
+      });
+      root.querySelectorAll("[data-compact-group-board]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          compactGroupFromBoard(button.dataset.compactGroupBoard);
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
       });
       root.querySelectorAll("[data-suggest-unit-operation]").forEach(button => {
         button.addEventListener("click", async event => {
@@ -3128,6 +3210,75 @@
           <span class="group-composite-meta">${escapeHtml(summary.meta.join(" / "))}</span>
           ${summary.conditions.length ? `<span class="group-composite-conditions">${escapeHtml(summary.conditions.join(" / "))}</span>` : ""}
         </button>
+      `;
+    }
+
+    function groupBoardMetaHtml(group) {
+      const summary = groupProcessSummary(group);
+      const conditions = aggregateGroupConditions(group).length;
+      const unit = group.selectedUnit || "unit not assigned";
+      const unitReadiness = groupUnitSuggestionReadiness(group);
+      return `
+        <div class="group-board-meta">
+          <span>${escapeHtml(summary.meta[0])}</span>
+          <span>${escapeHtml(summary.meta[1])}</span>
+          <span>${conditions} condition${conditions === 1 ? "" : "s"}</span>
+          <span class="${unitReadiness.ready ? "ready" : "blocked"}">${unitReadiness.ready ? "unit ready" : "unit locked"}</span>
+        </div>
+        <div class="group-board-unit">
+          <span class="label">Unit operation</span>
+          <strong>${escapeHtml(unit)}</strong>
+          ${groupUnitSuggestionGateHtml(group, { board: true })}
+        </div>
+      `;
+    }
+
+    function groupPhenomenaRibbonHtml(group, limit = 6) {
+      const items = (group.phenomena || []).slice(0, limit);
+      if (!items.length) return `<span class="muted small">No phenomena assigned.</span>`;
+      const extra = group.phenomena.length - items.length;
+      return `
+        <div class="group-phenomena-ribbon">
+          ${items.map(p => phenomenonPill(p)).join("")}
+          ${extra > 0 ? `<span class="pill">+${extra}</span>` : ""}
+        </div>
+      `;
+    }
+
+    function groupMiniBlockHtml(block) {
+      const counts = streamCounts(block);
+      const conditionCount = conditionValuesForBlock(block).length;
+      const selected = state.selectedBlockId === block.id || state.selectedIds.includes(block.id);
+      const body = String(block.text || "").trim();
+      const meta = [
+        counts.input ? `I:${counts.input}` : "",
+        counts.outlet ? `Out:${counts.outlet}` : "",
+        conditionCount ? `C:${conditionCount}` : ""
+      ].filter(Boolean).join(" / ");
+      return `
+        <button class="group-mini-block ${selected ? "selected" : ""}" data-block-card="${escapeAttr(block.id)}" data-node-id="${escapeAttr(block.id)}" data-tip="${escapeAttr(blockContentsTip(block))}">
+          <strong>${escapeHtml(block.id)}</strong>
+          <span>${escapeHtml(block.behavior)}</span>
+          ${body ? `<small>${escapeHtml(body)}</small>` : ""}
+          ${meta ? `<em>${escapeHtml(meta)}</em>` : ""}
+        </button>
+      `;
+    }
+
+    function groupBoardOverviewHtml(group) {
+      const summary = groupProcessSummary(group);
+      return `
+        <div class="group-board-overview">
+          <div class="group-board-title">
+            <strong>${escapeHtml(summary.title)}</strong>
+          </div>
+          ${groupBoardMetaHtml(group)}
+          ${groupPhenomenaRibbonHtml(group)}
+          <div class="group-mini-block-strip">
+            ${group.blocks.map(groupMiniBlockHtml).join("")}
+          </div>
+          ${state.showConnections && linksForGroup(group.id).length ? `<div class="group-connection-chips compact">${linksForGroup(group.id).map(link => `<span class="link-chip">${escapeHtml(formatLink(link, group.id))}</span>`).join("")}</div>` : ""}
+        </div>
       `;
     }
 
@@ -6887,9 +7038,14 @@
       }
       if (!Array.isArray(block.conversionDetail.byproducts)) block.conversionDetail.byproducts = [];
       block.conversionDetail.byproducts = block.conversionDetail.byproducts.map(normalizeConversionOutlet);
+      if (!Array.isArray(block.conversionDetail.stagedResidualStreamIds)) block.conversionDetail.stagedResidualStreamIds = [];
+      block.conversionDetail.stagedResidualStreamIds = Array.from(new Set(block.conversionDetail.stagedResidualStreamIds.map(id => String(id || "")).filter(Boolean)));
       block.conversionDetail.productBasisQuantity = String(block.conversionDetail.productBasisQuantity || "");
       if (!conversionProductAmountModes.some(mode => mode.value === block.conversionDetail.productAmountMode)) {
         block.conversionDetail.productAmountMode = "";
+      }
+      if (!conversionBalanceMethods.some(method => method.value === block.conversionDetail.balanceMethod)) {
+        block.conversionDetail.balanceMethod = "simple";
       }
       block.conversionDetail.lastGeneratedSummary = String(block.conversionDetail.lastGeneratedSummary || "");
       return block.conversionDetail;
@@ -6906,7 +7062,7 @@
         percent: String(row.percent || ""),
         amount: String(row.amount || ""),
         unit: String(row.unit || ""),
-        role: ["coproduct", "byproduct", "residual"].includes(row.role) ? row.role : (basis === "residual pool %" ? "residual" : "byproduct")
+        role: ["coproduct", "byproduct", "residual"].includes(row.role) ? row.role : "byproduct"
       };
     }
 
@@ -6916,8 +7072,16 @@
         .join("");
     }
 
-    function conversionReactantStreams(block) {
+    function conversionInputStreams(block) {
       return (block.streams || []).filter(stream => stream.role === "input");
+    }
+
+    function conversionReactantStreams(block) {
+      return conversionInputStreams(block).filter(streamReactiveInStoichiometry);
+    }
+
+    function conversionNonReactiveInputStreams(block) {
+      return conversionInputStreams(block).filter(stream => !streamReactiveInStoichiometry(stream));
     }
 
     function conversionProductStream(block) {
@@ -6947,13 +7111,114 @@
     }
 
     function conversionProductModeLabel(value) {
-      return conversionProductAmountModes.find(mode => mode.value === value)?.label || "Actual produced amount";
+      return conversionProductAmountModes.find(mode => mode.value === value)?.label || "Reported amount at yield";
     }
 
-    function conversionProductModeOptions(selected) {
+    function conversionProductModeOptions(selected, canCalculateFromReactants = true) {
       return conversionProductAmountModes
-        .map(mode => `<option value="${escapeAttr(mode.value)}" ${mode.value === selected ? "selected" : ""}>${escapeHtml(mode.label)}</option>`)
+        .map(mode => {
+          const disabled = mode.value === "from reactants" && !canCalculateFromReactants && mode.value !== selected;
+          return `<option value="${escapeAttr(mode.value)}" ${mode.value === selected ? "selected" : ""} ${disabled ? "disabled" : ""}>${escapeHtml(mode.label)}${disabled ? " (needs MW)" : ""}</option>`;
+        })
         .join("");
+    }
+
+    function conversionBalanceMethodOptions(selected) {
+      return conversionBalanceMethods
+        .map(method => `<option value="${escapeAttr(method.value)}" ${method.value === selected ? "selected" : ""}>${escapeHtml(method.label)}</option>`)
+        .join("");
+    }
+
+    function conversionBalanceMethodTooltip(method) {
+      if (method === "stoichiometric") {
+        return "Uses reagent moles and stoichiometric coefficients to calculate limiting reagent, consumed mol, and true unreacted residuals.";
+      }
+      return "Applies the same conversion percentage to every reagent quantity. Use only as a quick screening fallback when stoichiometry is unknown.";
+    }
+
+    function conversionProductEntryQuantity(product, mode, detail) {
+      if (!product) return "";
+      if (mode === "theoretical") {
+        const saved = String(detail.productBasisQuantity || product.conversionBaseQuantity || "").trim();
+        return saved || String(product.quantity || "");
+      }
+      return String(product.quantity || "").trim();
+    }
+
+    function productModeHelpText(mode, percent) {
+      if (mode === "actual") {
+        return `Use this when the protocol reports an obtained amount at ${formatNumber(percent)}% yield. Example: 10 kg at ${formatNumber(percent)}% means 10 kg is already the produced amount.`;
+      }
+      if (mode === "theoretical") {
+        return `Use this when the entered amount is the 100% theoretical product basis. Example: 10 kg at ${formatNumber(percent)}% previews ${formatNumber(10 * percent / 100)} kg produced.`;
+      }
+      return "Use this when product amount should be estimated from reagent amounts, MW, and stoichiometric coefficients when available.";
+    }
+
+    function productModeTooltip(mode) {
+      if (mode === "actual") return "The entered product amount is the reported obtained amount at the stated yield; the tool back-calculates the 100% theoretical basis.";
+      if (mode === "theoretical") return "The entered product amount is the 100% theoretical product basis; yield converts it into produced product.";
+      return "The tool estimates the theoretical product basis from reagent quantities, MW, and coefficients when possible.";
+    }
+
+    function conversionOutletBasisTooltip(basis) {
+      if (basis === "actual") return "Use for an explicitly known co-product or byproduct amount. It does not consume the unreacted reagent pool.";
+      if (basis === "product basis %") return "Use when an outlet is reported as a percentage of the 100% theoretical product basis.";
+      return "Use only when this named outlet consumes part of the unconverted reagent pool.";
+    }
+
+    function conversionMassFactor(unit) {
+      const clean = String(unit || "").trim().toLowerCase();
+      if (clean === "kg") return 1;
+      if (clean === "g") return 0.001;
+      if (clean === "t" || clean === "tonne" || clean === "tonnes") return 1000;
+      return NaN;
+    }
+
+    function streamMassKgFromQuantity(value, unit, mw = "", density = "") {
+      const qty = conversionNumber(value);
+      const cleanUnit = String(unit || "").trim().toLowerCase();
+      const massFactor = conversionMassFactor(cleanUnit);
+      if (Number.isFinite(massFactor)) return qty * massFactor;
+      const numericMw = conversionNumber(mw);
+      if (cleanUnit === "mol" && numericMw > 0) return qty * numericMw / 1000;
+      if (cleanUnit === "kmol" && numericMw > 0) return qty * numericMw;
+      const numericDensity = conversionNumber(density);
+      if (cleanUnit === "l" && numericDensity > 0) return qty * numericDensity / 1000;
+      if (cleanUnit === "ml" && numericDensity > 0) return qty * numericDensity / 1000000;
+      if (cleanUnit === "m3" && numericDensity > 0) return qty * numericDensity;
+      return NaN;
+    }
+
+    function streamMassKgForConversion(stream, quantity = stream?.quantity) {
+      return streamMassKgFromQuantity(quantity, stream?.unit, stream?.mw, stream?.density);
+    }
+
+    function sumFiniteNumbers(values) {
+      return values.filter(Number.isFinite).reduce((sum, value) => sum + value, 0);
+    }
+
+    function allFiniteNumbers(values) {
+      return values.length > 0 && values.every(Number.isFinite);
+    }
+
+    function hydrateConversionStreamProperties(block) {
+      if (!block?.groupId) return;
+      const simulator = state.groups?.[block.groupId]?.separationSimulator;
+      const substances = simulator?.substances || [];
+      if (!substances.length) return;
+      ensureBlockFlowFields(block);
+      block.streams.forEach(stream => {
+        const key = canonicalChemicalKey(stream.residualOf || stream.name || "");
+        if (!key) return;
+        const match = substances.find(item => substanceChemicalKey(item) === key || canonicalChemicalKey(item.name) === key);
+        if (!match) return;
+        separationSharedPropertyFields.forEach(field => {
+          const currentValue = String(stream[field] || "").trim();
+          const nextValue = String(match[field] || "").trim();
+          if (!currentValue && nextValue) stream[field] = nextValue;
+        });
+      });
     }
 
     function streamMolesForConversion(stream) {
@@ -6969,18 +7234,60 @@
       return NaN;
     }
 
-    function productAmountFromReactants(product, reactants) {
-      const reactantMoles = reactants.map(streamMolesForConversion).filter(Number.isFinite);
-      const limitingMol = reactantMoles.length ? Math.min(...reactantMoles) : NaN;
-      if (!Number.isFinite(limitingMol) || limitingMol <= 0) return { value: NaN, source: "missing reactant MW/amount" };
+    function conversionStoichCoeff(stream) {
+      const coeff = conversionNumber(stream?.stoichCoeff);
+      return coeff > 0 ? coeff : 1;
+    }
+
+    function streamQuantityFromMoles(moles, stream) {
+      const unit = String(stream?.unit || "").toLowerCase();
+      const mw = conversionNumber(stream?.mw);
+      if (!Number.isFinite(moles)) return NaN;
+      if (unit === "mol") return moles;
+      if (unit === "kmol") return moles / 1000;
+      if (!Number.isFinite(mw) || mw <= 0) return NaN;
+      if (unit === "kg") return moles * mw / 1000;
+      if (unit === "g") return moles * mw;
+      return NaN;
+    }
+
+    function conversionStoichiometricExtent(reactants) {
+      const rows = reactants.map(stream => {
+        const initialMol = streamMolesForConversion(stream);
+        const coeff = conversionStoichCoeff(stream);
+        const extentBasis = Number.isFinite(initialMol) && coeff > 0 ? initialMol / coeff : NaN;
+        return { stream, initialMol, coeff, extentBasis };
+      });
+      const validRows = rows.filter(row => Number.isFinite(row.extentBasis) && row.extentBasis >= 0);
+      const limiting = validRows.length === rows.length && validRows.length
+        ? validRows.reduce((best, row) => row.extentBasis < best.extentBasis ? row : best, validRows[0])
+        : null;
+      return {
+        rows,
+        limiting,
+        limitingExtent: limiting ? limiting.extentBasis : NaN,
+        ready: Boolean(limiting)
+      };
+    }
+
+    function productAmountFromReactants(product, reactants, method = "simple") {
+      const productCoeff = conversionStoichCoeff(product);
+      const stoich = method === "stoichiometric" ? conversionStoichiometricExtent(reactants) : null;
+      const limitingMol = stoich?.ready
+        ? stoich.limitingExtent * productCoeff
+        : Math.min(...reactants.map(streamMolesForConversion).filter(Number.isFinite));
+      if (!Number.isFinite(limitingMol) || limitingMol <= 0) return { value: NaN, source: "missing reagent MW/amount" };
       const unit = String(product?.unit || "kg").toLowerCase();
       const productMw = conversionNumber(product?.mw);
-      if (unit === "mol") return { value: limitingMol, source: "limiting reactant, 1:1 stoichiometry assumed" };
-      if (unit === "kmol") return { value: limitingMol / 1000, source: "limiting reactant, 1:1 stoichiometry assumed" };
+      const source = stoich?.ready
+        ? `limiting reagent ${stoich.limiting.stream.name || "input"} and stoichiometric coefficients`
+        : "limiting reactant, 1:1 stoichiometry assumed";
+      if (unit === "mol") return { value: limitingMol, source };
+      if (unit === "kmol") return { value: limitingMol / 1000, source };
       if (!Number.isFinite(productMw) || productMw <= 0) return { value: NaN, source: "missing product MW" };
       const productKg = limitingMol * productMw / 1000;
-      if (unit === "kg") return { value: productKg, source: "limiting reactant and product MW, 1:1 stoichiometry assumed" };
-      if (unit === "g") return { value: productKg * 1000, source: "limiting reactant and product MW, 1:1 stoichiometry assumed" };
+      if (unit === "kg") return { value: productKg, source };
+      if (unit === "g") return { value: productKg * 1000, source };
       return { value: NaN, source: "unsupported product unit for reactant calculation" };
     }
 
@@ -6997,36 +7304,78 @@
         return { ...normalized, unit, mass, displayBasis: `${formatNumber(percent)}% of theoretical product basis`, subtractsResidualWaste: false };
       }
       const mass = context.pooledLeftover * percent / 100;
-      return { ...normalized, unit, mass, displayBasis: `${formatNumber(percent)}% of unconverted reagent pool`, subtractsResidualWaste: true };
+      return { ...normalized, unit: context.residualPoolUnit || unit, mass, displayBasis: `${formatNumber(percent)}% of unconverted reagent pool`, subtractsResidualWaste: true };
+    }
+
+    function conversionMassClosure(calc) {
+      const reactantInitialKg = calc.reactantRows.map(row => row.initialKg);
+      const reactantResidualKg = calc.reactantRows.map(row => row.leftoverKg);
+      const productKg = calc.product ? streamMassKgForConversion(calc.product, calc.productMade) : NaN;
+      const formedByproductKg = calc.byproductRows
+        .filter(row => !row.subtractsResidualWaste)
+        .map(row => streamMassKgFromQuantity(row.mass, row.unit || calc.fallbackUnit));
+      const required = [...reactantInitialKg, ...reactantResidualKg, productKg, ...formedByproductKg];
+      if (!allFiniteNumbers(required)) {
+        return {
+          status: "needs data",
+          gapKg: NaN,
+          relativeGap: NaN,
+          inputKg: sumFiniteNumbers(reactantInitialKg),
+          outputKg: sumFiniteNumbers([productKg, ...reactantResidualKg, ...formedByproductKg]),
+          note: "Add MW/density and declared byproducts for a local reactive mass-closure check."
+        };
+      }
+      const inputKg = sumFiniteNumbers(reactantInitialKg);
+      const outputKg = sumFiniteNumbers([productKg, ...reactantResidualKg, ...formedByproductKg]);
+      const gapKg = inputKg - outputKg;
+      const relativeGap = inputKg > 0 ? gapKg / inputKg : NaN;
+      const status = Math.abs(relativeGap) <= 0.05 ? "closed" : "open";
+      return {
+        status,
+        gapKg,
+        relativeGap,
+        inputKg,
+        outputKg,
+        note: status === "closed"
+          ? `Reactive mass closes within 5%: ${formatNumber(inputKg)} kg in vs ${formatNumber(outputKg)} kg accounted.`
+          : `Reactive mass gap ${formatNumber(gapKg)} kg (${formatNumber(relativeGap * 100)}%). Add missing byproducts, correct product basis, or use stoichiometric mode.`
+      };
     }
 
     function conversionCalculationModel(block) {
       ensureBlockConditionFields(block);
       const detail = ensureConversionDetail(block);
+      hydrateConversionStreamProperties(block);
       const percent = Math.max(0, Math.min(100, conversionNumber(block.conditions.conversion_yield || "95")));
       const leftoverPercent = 100 - percent;
+      const inputs = conversionInputStreams(block);
       const reactants = conversionReactantStreams(block);
+      const nonReactiveInputs = conversionNonReactiveInputStreams(block);
       const outputs = (block.streams || []).filter(stream => stream.role === "output");
       const product = conversionProductStream(block);
+      const balanceMethod = detail.balanceMethod || "simple";
+      const stoich = conversionStoichiometricExtent(reactants);
+      const stoichReady = balanceMethod === "stoichiometric" && stoich.ready;
+      const residualPoolUnit = reactants.some(stream => Number.isFinite(streamMassKgForConversion(stream))) ? "kg" : (reactants[0]?.unit || product?.unit || "kg");
       let pooledLeftover = 0;
-      const reactantRows = reactants.map(stream => {
-        const qty = conversionNumber(stream.quantity);
-        const used = qty * percent / 100;
-        const leftover = qty * leftoverPercent / 100;
-        pooledLeftover += leftover;
-        return { stream, qty, used, leftover };
-      });
       const productMode = product ? conversionProductAmountMode(block, product) : "actual";
       const productInputQty = conversionNumber(product?.quantity);
-      const fromReactants = product ? productAmountFromReactants(product, reactants) : { value: NaN, source: "" };
+      const fromReactants = product ? productAmountFromReactants(product, reactants, stoichReady ? "stoichiometric" : "simple") : { value: NaN, source: "" };
+      const canCalculateFromReactants = Number.isFinite(fromReactants.value);
+      let effectiveProductMode = productMode;
+      if (productMode === "from reactants" && !canCalculateFromReactants && String(product?.quantity || "").trim()) {
+        effectiveProductMode = "actual";
+      }
       let productQty = product ? conversionProductBasisQuantity(block, product) : 0;
       let productMade = productQty * percent / 100;
       let productBasisSource = "100% theoretical product basis";
-      if (productMode === "actual") {
+      if (effectiveProductMode === "actual") {
         productMade = Number.isFinite(productInputQty) ? productInputQty : 0;
         productQty = percent > 0 ? productMade / (percent / 100) : productMade;
-        productBasisSource = "actual produced amount; theoretical basis back-calculated from yield";
-      } else if (productMode === "from reactants") {
+        productBasisSource = productMode === "from reactants"
+          ? "reactant calculation unavailable; using reported product amount"
+          : "reported product amount; theoretical basis back-calculated from yield";
+      } else if (effectiveProductMode === "from reactants") {
         if (Number.isFinite(fromReactants.value)) {
           productQty = fromReactants.value;
           productMade = productQty * percent / 100;
@@ -7038,8 +7387,82 @@
         }
       }
       const productShortfall = Math.max(0, productQty - productMade);
-      const fallbackUnit = product?.unit || reactants[0]?.unit || "kg";
-      const byproductRows = detail.byproducts.map(bp => conversionOutletMass(bp, { productQty, pooledLeftover, fallbackUnit }));
+      const productMadeMol = product ? streamMolesForConversion({ ...product, quantity: productMade }) : NaN;
+      const productCoeff = conversionStoichCoeff(product);
+      const stoichExtentFromProduct = Number.isFinite(productMadeMol) && productCoeff > 0 ? productMadeMol / productCoeff : NaN;
+      const stoichExtentFromYield = Number.isFinite(stoich.limitingExtent) ? stoich.limitingExtent * percent / 100 : NaN;
+      const stoichReactedExtent = Number.isFinite(stoichExtentFromProduct)
+        ? Math.min(stoichExtentFromProduct, stoich.limitingExtent)
+        : stoichExtentFromYield;
+      let pooledLeftoverConvertible = true;
+      const reactantRows = reactants.map(stream => {
+        const qty = conversionNumber(stream.quantity);
+        const stoichRow = stoich.rows.find(row => row.stream === stream);
+        let used = qty * percent / 100;
+        let leftover = qty * leftoverPercent / 100;
+        let usedMol = NaN;
+        let leftoverMol = NaN;
+        if (stoichReady && stoichRow && Number.isFinite(stoichReactedExtent)) {
+          usedMol = Math.min(stoichRow.initialMol, stoichRow.coeff * stoichReactedExtent);
+          leftoverMol = Math.max(0, stoichRow.initialMol - usedMol);
+          const usedQty = streamQuantityFromMoles(usedMol, stream);
+          const leftoverQty = streamQuantityFromMoles(leftoverMol, stream);
+          if (Number.isFinite(usedQty) && Number.isFinite(leftoverQty)) {
+            used = usedQty;
+            leftover = leftoverQty;
+          }
+        }
+        const initialKg = streamMassKgFromQuantity(qty, stream.unit, stream.mw, stream.density);
+        const usedKg = streamMassKgFromQuantity(used, stream.unit, stream.mw, stream.density);
+        const leftoverKg = streamMassKgFromQuantity(leftover, stream.unit, stream.mw, stream.density);
+        const leftoverInPoolUnit = residualPoolUnit === "kg" ? leftoverKg : leftover;
+        if (Number.isFinite(leftoverInPoolUnit)) {
+          pooledLeftover += leftoverInPoolUnit;
+        } else {
+          pooledLeftover += leftover;
+          pooledLeftoverConvertible = false;
+        }
+        return {
+          stream,
+          qty,
+          used,
+          leftover,
+          coeff: stoichRow?.coeff || conversionStoichCoeff(stream),
+          initialMol: stoichRow?.initialMol ?? NaN,
+          usedMol,
+          leftoverMol,
+          initialKg,
+          usedKg,
+          leftoverKg,
+          mw: conversionNumber(stream.mw),
+          limiting: stoich.limiting?.stream === stream
+        };
+      });
+      const nonReactiveRows = nonReactiveInputs.map(stream => {
+        const qty = conversionNumber(stream.quantity);
+        const initialKg = streamMassKgForConversion(stream);
+        return {
+          stream,
+          reactionRole: streamReactionRole(stream),
+          qty,
+          initialKg,
+          mw: conversionNumber(stream.mw)
+        };
+      });
+      const inputRows = [
+        ...reactantRows.map(row => ({ ...row, reactionRole: "reactant", nonReactive: false })),
+        ...nonReactiveRows.map(row => ({ ...row, nonReactive: true }))
+      ];
+      const fallbackUnit = product?.unit || reactants[0]?.unit || inputs[0]?.unit || "kg";
+      const byproductRows = detail.byproducts.map(bp => conversionOutletMass(bp, { productQty, pooledLeftover, fallbackUnit, residualPoolUnit }));
+      const closureBase = {
+        reactantRows,
+        product,
+        productMade,
+        byproductRows,
+        fallbackUnit
+      };
+      const massClosure = conversionMassClosure(closureBase);
       const residualAllocatedPercent = byproductRows
         .filter(row => row.subtractsResidualWaste)
         .reduce((sum, row) => sum + conversionNumber(row.percent), 0);
@@ -7049,24 +7472,102 @@
         detail,
         percent,
         leftoverPercent,
+        inputs,
         reactants,
+        nonReactiveInputs,
         outputs,
         product,
-        productMode,
+        balanceMethod,
+        stoichReady,
+        stoichLimitingName: stoich.limiting?.stream?.name || "",
+        stoichReactedExtent,
+        productMode: effectiveProductMode,
+        requestedProductMode: productMode,
+        canCalculateFromReactants,
+        productCapacityFromReactants: fromReactants.value,
         productInputQty,
         productBasisSource,
+        inputRows,
         reactantRows,
+        nonReactiveRows,
         productQty,
         productMade,
         productShortfall,
         pooledLeftover,
+        residualPoolUnit,
+        pooledLeftoverConvertible,
         byproductTotalPercent: residualAllocatedPercent,
         residualAllocatedPercent,
         byproductRows,
+        massClosure,
         wastePercent,
         wasteMass,
         fallbackUnit
       };
+    }
+
+    function conversionValidationIssues(calc) {
+      const issues = [];
+      if (!calc.reactants.length) {
+        issues.push({ severity: "error", text: "No reactive reagent is available for conversion balancing. Set at least one input category to Reagent/reactant." });
+      }
+      if (!calc.product) {
+        issues.push({ severity: "error", text: "No product stream is selected. Add or select the main product first." });
+      }
+      if (calc.product && calc.productMode !== "from reactants" && !(calc.productQty > 0 || calc.productMade > 0)) {
+        issues.push({ severity: "error", text: "The selected product has no positive amount for the chosen product-basis mode." });
+      }
+      if (calc.product && calc.productMode === "from reactants" && !(calc.productQty > 0)) {
+        issues.push({ severity: "error", text: "Reactant-derived product calculation needs reagent amounts, reagent MW where needed, product MW, and product coefficient when not 1." });
+      }
+      if (
+        calc.product
+        && calc.stoichReady
+        && Number.isFinite(calc.productCapacityFromReactants)
+        && calc.productQty > calc.productCapacityFromReactants * 1.0001
+      ) {
+        issues.push({
+          severity: "error",
+          text: `Selected product basis (${formatNumber(calc.productQty)} ${calc.product.unit || calc.fallbackUnit}) exceeds the stoichiometric maximum from reagents (${formatNumber(calc.productCapacityFromReactants)} ${calc.product.unit || calc.fallbackUnit}).`
+        });
+      }
+      if (calc.balanceMethod === "stoichiometric" && !calc.stoichReady) {
+        issues.push({ severity: "warn", text: "Stoichiometric balance needs mol units or MW for every reagent plus coefficients; simple residuals are shown until complete." });
+      }
+      if (calc.requestedProductMode === "from reactants" && calc.productMode !== "from reactants") {
+        issues.push({ severity: "warn", text: "Calculate from reactants is unavailable, so the reported product amount is used until MW/amount data are completed." });
+      }
+      if (calc.residualAllocatedPercent > 100) {
+        issues.push({ severity: "error", text: `Residual-pool outlets allocate ${formatNumber(calc.residualAllocatedPercent)}%; keep the residual split at or below 100%.` });
+      }
+      if (!calc.pooledLeftoverConvertible) {
+        issues.push({ severity: "warn", text: "Residual pool mixes units that are not directly convertible; per-reagent residual streams remain valid." });
+      }
+      if (calc.massClosure?.status === "open") {
+        issues.push({ severity: "warn", text: calc.massClosure.note });
+      }
+      calc.byproductRows.forEach(row => {
+        const hasName = String(row.name || "").trim();
+        const hasValue = row.basis === "actual" ? conversionNumber(row.amount) > 0 : conversionNumber(row.percent) > 0;
+        if (hasValue && !hasName) issues.push({ severity: "warn", text: "A co/byproduct or residual outlet has a value but no name." });
+      });
+      return issues;
+    }
+
+    function conversionHasBlockingIssues(issues) {
+      return issues.some(issue => issue.severity === "error");
+    }
+
+    function conversionIssuesHtml(issues) {
+      if (!issues.length) {
+        return `<div class="conversion-checks ok compact"><strong>Ready</strong><span>No blocking balance issue.</span></div>`;
+      }
+      return `
+        <div class="conversion-checks ${conversionHasBlockingIssues(issues) ? "error" : "warn"}">
+          <strong>${conversionHasBlockingIssues(issues) ? "Fix before applying" : "Review before applying"}</strong>
+          ${issues.map(issue => `<span>${escapeHtml(issue.text)}</span>`).join("")}
+        </div>
+      `;
     }
 
     function syncGroupReactionBalanceFromConversionBlock(block) {
@@ -7105,6 +7606,38 @@
       return stream;
     }
 
+    function setConversionProductQuantity(block, rawValue) {
+      const product = conversionProductStream(block);
+      if (!product) return null;
+      const detail = ensureConversionDetail(block);
+      let mode = conversionProductAmountMode(block, product);
+      if (mode === "from reactants") {
+        const canCalculate = Number.isFinite(productAmountFromReactants(product, conversionReactantStreams(block), detail.balanceMethod).value);
+        if (!canCalculate && String(rawValue || product.quantity || "").trim()) mode = "actual";
+      }
+      detail.productAmountMode = mode;
+      if (mode === "theoretical") {
+        detail.productBasisQuantity = rawValue;
+        product.conversionBaseQuantity = rawValue;
+      } else {
+        product.quantity = rawValue;
+        detail.productBasisQuantity = "";
+        product.conversionBaseQuantity = "";
+      }
+      syncLegacyStreamLists(block);
+      invalidateAiRefine();
+      return product;
+    }
+
+    function setConversionProductUnit(block, rawValue) {
+      const product = conversionProductStream(block);
+      if (!product) return null;
+      product.unit = rawValue || "kg";
+      syncLegacyStreamLists(block);
+      invalidateAiRefine();
+      return product;
+    }
+
     function conversionGeneratedStreamId(block, suffix) {
       return `${block.id}-CB-${suffix}`.replace(/[^A-Za-z0-9_-]/g, "-");
     }
@@ -7119,6 +7652,11 @@
         Object.assign(stream, createStream(role, { ...stream, ...values, id }));
       }
       return stream;
+    }
+
+    function removeGeneratedConversionStreams(block) {
+      const prefix = `${block.id}-CB-`;
+      block.streams = (block.streams || []).filter(stream => !String(stream.id || "").startsWith(prefix));
     }
 
     function upsertSeparationSubstanceForConversion(groupId, stream, role, fate, sourceBlockId, meta = {}) {
@@ -7171,15 +7709,129 @@
       return substance;
     }
 
+    function conversionResidualPayload(block, calc, row) {
+      const sourceName = cleanSubstanceName(row.stream.name) || row.stream.name || "reactant";
+      const writesKg = Number.isFinite(row.leftoverKg);
+      const residualQuantity = writesKg ? row.leftoverKg : row.leftover;
+      const residualUnit = writesKg ? "kg" : row.stream.unit || "kg";
+      const originalResidual = `${formatNumber(row.leftover)} ${row.stream.unit || ""}`.trim();
+      const molTrace = calc.stoichReady && Number.isFinite(row.leftoverMol)
+        ? `; stoichiometric residual ${formatNumber(row.leftoverMol)} mol`
+        : "";
+      const massTrace = writesKg && residualUnit !== (row.stream.unit || "")
+        ? `; converted to ${formatNumber(row.leftoverKg)} kg for MFA/Lutze using MW ${formatNumber(row.mw)} g/mol`
+        : "";
+      return {
+        sourceName,
+        id: conversionGeneratedStreamId(block, `unreacted-${sourceName}`),
+        values: {
+          name: `unreacted ${sourceName}`,
+          quantity: formatNumber(residualQuantity),
+          unit: residualUnit,
+          phase: row.stream.phase || "unknown",
+          status: "calculated",
+          timing: "waste purge",
+          fate: "purge",
+          scalingMode: "per batch",
+          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted (${originalResidual})${molTrace}${massTrace}; treat as recovery or waste candidate before Lutze separation.`,
+          ...streamChemicalPropertyPayloadWithDensity(row.stream)
+        }
+      };
+    }
+
+    function writeConversionResidualReagent(block, calc, row) {
+      const payload = conversionResidualPayload(block, calc, row);
+      const stream = upsertConversionStream(block, "waste", payload.id, payload.values);
+      if (block.groupId) {
+        upsertSeparationSubstanceForConversion(block.groupId, stream, "reactant", "recover", block.id, {
+          residualOf: payload.sourceName,
+          residualSourceId: row.stream.id
+        });
+      }
+      return stream;
+    }
+
+    function stagedConversionResidualRows(calc) {
+      const stagedIds = new Set(calc.detail.stagedResidualStreamIds || []);
+      return calc.reactantRows.filter(row => row.leftover > 0 && stagedIds.has(row.stream.id));
+    }
+
+    function stageConversionResidual(block, streamId) {
+      if (!block) return;
+      const detail = ensureConversionDetail(block);
+      const id = String(streamId || "");
+      if (!id || detail.stagedResidualStreamIds.includes(id)) return;
+      detail.stagedResidualStreamIds.push(id);
+      invalidateAiRefine();
+      renderConversionModal();
+    }
+
+    function stageAllConversionResiduals(block) {
+      if (!block) return;
+      const calc = conversionCalculationModel(block);
+      const detail = ensureConversionDetail(block);
+      const ids = calc.reactantRows
+        .filter(row => row.leftover > 0)
+        .map(row => row.stream.id)
+        .filter(Boolean);
+      detail.stagedResidualStreamIds = Array.from(new Set([...detail.stagedResidualStreamIds, ...ids]));
+      invalidateAiRefine();
+      renderConversionModal();
+    }
+
+    function removeStagedConversionResidual(block, streamId) {
+      if (!block) return;
+      const detail = ensureConversionDetail(block);
+      detail.stagedResidualStreamIds = detail.stagedResidualStreamIds.filter(id => id !== streamId);
+      invalidateAiRefine();
+      renderConversionModal();
+    }
+
+    function saveStagedConversionResiduals(block) {
+      if (!block) return;
+      const calc = conversionCalculationModel(block);
+      const issues = conversionValidationIssues(calc);
+      if (conversionHasBlockingIssues(issues)) {
+        alertModal(issues.filter(issue => issue.severity === "error").map(issue => issue.text).join("\n"));
+        return;
+      }
+      const staged = stagedConversionResidualRows(calc);
+      if (!staged.length) return;
+      pushUndo();
+      staged.forEach(row => writeConversionResidualReagent(block, calc, row));
+      syncLegacyStreamLists(block);
+      calc.detail.lastGeneratedSummary = `Saved ${staged.length} staged residual reagent stream(s) from conversion preview for MFA/Lutze.`;
+      if (block.groupId) {
+        syncGroupReactionBalanceFromConversionBlock(block);
+        ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
+      }
+      invalidateAiRefine();
+      renderConversionModal();
+      renderStepFlowInspector();
+      if (typeof flowsheetUnitCategory === "function") {
+        renderGroupFlow();
+        renderStepAuditPanel();
+      } else {
+        renderAll();
+      }
+      renderExport();
+    }
+
     function applyConversionBalanceStreams(block) {
       if (!block) return;
       const calc = conversionCalculationModel(block);
       if (!calc.reactantRows.length && !calc.product) return;
+      const issues = conversionValidationIssues(calc);
+      if (conversionHasBlockingIssues(issues)) {
+        alertModal(issues.filter(issue => issue.severity === "error").map(issue => issue.text).join("\n"));
+        return;
+      }
       pushUndo();
+      removeGeneratedConversionStreams(block);
       if (calc.product) {
         const basis = calc.productQty || conversionNumber(calc.product.quantity);
         calc.detail.productBasisQuantity = String(basis || "");
-        calc.detail.productAmountMode = calc.productMode;
+        calc.detail.productAmountMode = "theoretical";
         calc.product.conversionBaseQuantity = String(basis || "");
         calc.product.quantity = formatNumber(calc.productMade);
         calc.product.status = "calculated";
@@ -7194,28 +7846,9 @@
           if (productSubstance) simulator.reactionBalance.mainProductId = productSubstance.id;
         }
       }
-      calc.reactantRows.forEach(row => {
-        if (!(row.leftover > 0)) return;
-        const sourceName = cleanSubstanceName(row.stream.name) || row.stream.name || "reactant";
-        const stream = upsertConversionStream(block, "waste", conversionGeneratedStreamId(block, `unreacted-${sourceName}`), {
-          name: `unreacted ${sourceName}`,
-          quantity: formatNumber(row.leftover),
-          unit: row.stream.unit || "kg",
-          phase: row.stream.phase || "unknown",
-          status: "calculated",
-          timing: "waste purge",
-          fate: "purge",
-          scalingMode: "per batch",
-          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted; treat as recovery or waste candidate before Lutze separation.`,
-          ...streamChemicalPropertyPayloadWithDensity(row.stream)
-        });
-        if (block.groupId) {
-          upsertSeparationSubstanceForConversion(block.groupId, stream, "reactant", "recover", block.id, {
-            residualOf: sourceName,
-            residualSourceId: row.stream.id
-          });
-        }
-      });
+      calc.reactantRows
+        .filter(row => row.leftover > 0)
+        .forEach(row => writeConversionResidualReagent(block, calc, row));
       calc.byproductRows.forEach((row, index) => {
         const name = String(row.name || "").trim();
         if (!name || !(row.mass > 0)) return;
@@ -7233,25 +7866,12 @@
         });
         if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, role, "recover", block.id);
       });
-      if (calc.wasteMass > 0) {
-        upsertConversionStream(block, "waste", conversionGeneratedStreamId(block, "unassigned-waste"), {
-          name: "unassigned reaction waste",
-          quantity: formatNumber(calc.wasteMass),
-          unit: calc.fallbackUnit,
-          phase: "unknown",
-          status: "calculated",
-          timing: "waste purge",
-          fate: "purge",
-          scalingMode: "per batch",
-          note: `Auto-generated by Conversion balance from unassigned residual pool: ${formatNumber(calc.wastePercent)}% of ${formatNumber(calc.pooledLeftover)} ${calc.fallbackUnit}.`
-        });
-      }
       if (block.groupId) {
         syncGroupReactionBalanceFromConversionBlock(block);
         ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
       }
       syncLegacyStreamLists(block);
-      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover > 0).length} residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct or residual outlet stream(s), ${calc.wasteMass > 0 ? "1" : "0"} unassigned waste stream.`;
+      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover > 0).length} residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct or residual outlet stream(s). Unrouted residual is kept as individual unreacted reagents.`;
       invalidateAiRefine();
       renderConversionModal();
       renderStepFlowInspector();
@@ -7300,7 +7920,7 @@
     }
 
     function byproductColor(index) {
-      const palette = ["#7c9cff", "#f2b84b", "#4bc9a8", "#e07a9e", "#9b8bf4"];
+      const palette = ["#9eb3c1", "#b4c2ca", "#c3cdd3"];
       return palette[index % palette.length];
     }
 
@@ -7326,6 +7946,303 @@
       `;
     }
 
+    function conversionInfoIcon(text) {
+      return `<span class="info-dot" title="${escapeAttr(text)}" data-tooltip="${escapeAttr(text)}" tabindex="0">?</span>`;
+    }
+
+    function conversionYieldBasisStatementHtml(calc, productEntryQuantity) {
+      if (!calc.product) return "";
+      const unit = calc.product.unit || calc.fallbackUnit;
+      const name = calc.product.name || "product";
+      const entry = productEntryQuantity || "not set";
+      let main = "";
+      let detail = "";
+      if (calc.productMode === "actual") {
+        main = `${entry} ${unit} ${name} is treated as the amount obtained at ${formatNumber(calc.percent)}% yield.`;
+        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; the missing ${formatNumber(calc.leftoverPercent)}% is represented as unreacted reagent streams.`;
+      } else if (calc.productMode === "theoretical") {
+        main = `${entry} ${unit} ${name} is treated as the 100% theoretical product basis.`;
+        detail = `${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit} actual product; ${formatNumber(calc.leftoverPercent)}% remains tied to unreacted reagents.`;
+      } else {
+        main = `${name} basis is estimated from limiting reagent data.`;
+        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; ${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit}.`;
+      }
+      if (calc.balanceMethod === "stoichiometric" && calc.stoichReady && calc.stoichLimitingName) {
+        detail += ` Limiting reagent: ${calc.stoichLimitingName}.`;
+      }
+      return `
+        <div class="conversion-yield-statement ${escapeAttr(calc.productMode)}" title="${escapeAttr(productModeTooltip(calc.productMode))}">
+          <strong>${escapeHtml(main)}</strong>
+          <span>${escapeHtml(detail)}</span>
+        </div>
+      `;
+    }
+
+    function conversionAnalysisHtml(calc) {
+      const methodText = calc.balanceMethod === "stoichiometric"
+        ? (calc.stoichReady ? "stoichiometric ready" : "stoichiometric incomplete")
+        : "simple screening";
+      const methodTip = calc.balanceMethod === "stoichiometric"
+        ? "Uses molar amounts, molecular weights, and stoichiometric coefficients. If any reagent is missing these data, the popup falls back to simple residual display until completed."
+        : "Applies the same conversion percentage to each reactive input. Useful as a rough screening fallback, not a rigorous reaction balance.";
+      const limitingText = calc.stoichReady && calc.stoichLimitingName
+        ? calc.stoichLimitingName
+        : "not resolved";
+      const limitingTip = calc.stoichReady
+        ? "The limiting reagent is the reactive input with the smallest molar amount divided by its stoichiometric coefficient."
+        : "Add MW or molar units plus coefficients for every reactive reagent to identify the limiting reagent.";
+      const closureText = calc.massClosure?.status || "needs data";
+      const closureTip = calc.massClosure?.note || "Local reactive mass closure compares reactive reagent mass with product, declared co/byproducts, and unreacted residuals.";
+      return `
+        <div class="conversion-analysis" aria-label="Conversion analysis">
+          <div class="conversion-analysis-item" title="${escapeAttr(productModeTooltip(calc.productMode))}">
+            <span>Basis</span>
+            <strong>${escapeHtml(conversionProductModeLabel(calc.productMode))}</strong>
+          </div>
+          <div class="conversion-analysis-item" title="${escapeAttr(methodTip)}">
+            <span>Method</span>
+            <strong>${escapeHtml(methodText)}</strong>
+          </div>
+          <div class="conversion-analysis-item" title="${escapeAttr(limitingTip)}">
+            <span>Limiting</span>
+            <strong>${escapeHtml(limitingText)}</strong>
+          </div>
+          <div class="conversion-analysis-item closure-${escapeAttr(closureText.replace(/\s+/g, "-"))}" title="${escapeAttr(closureTip)}">
+            <span>Mass closure</span>
+            <strong>${escapeHtml(closureText)}</strong>
+          </div>
+          <div class="conversion-analysis-note" title="Only inputs classified as Reagent/reactant are consumed; solvents, catalysts, auxiliaries, and inerts pass through for MFA/Lutze handling.">
+            ${calc.reactantRows.length} reactive input${calc.reactantRows.length === 1 ? "" : "s"} / ${calc.nonReactiveRows.length} non-reactive
+          </div>
+        </div>
+      `;
+    }
+
+    function conversionAdvancedControlsHtml(calc) {
+      if (!calc.product) return "";
+      const product = calc.product;
+      const shouldOpen = calc.productMode === "from reactants" || calc.balanceMethod === "stoichiometric" || !calc.canCalculateFromReactants;
+      const productCapacity = Number.isFinite(calc.productCapacityFromReactants)
+        ? `max ${formatNumber(calc.productCapacityFromReactants)} ${calc.product.unit || calc.fallbackUnit}`
+        : "optional MW and coefficients";
+      return `
+        <details class="conversion-advanced-details" ${shouldOpen ? "open" : ""}>
+          <summary>
+            <span>Stoichiometric details</span>
+            <small>${escapeHtml(calc.stoichReady ? productCapacity : "optional MW and coefficients")}</small>
+          </summary>
+          <div class="conversion-advanced-grid">
+            <label title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">
+              <span class="label">Balance method ${conversionInfoIcon(conversionBalanceMethodTooltip(calc.balanceMethod))}</span>
+              <select id="conversionBalanceMethod" title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">${conversionBalanceMethodOptions(calc.balanceMethod)}</select>
+            </label>
+            <label>
+              <span class="label">Product coeff ${conversionInfoIcon("Stoichiometric coefficient for the selected product. Example: A + B -> 2P uses 2.")}</span>
+              <input data-conversion-reagent-stoich="${escapeAttr(product.id)}" value="${escapeAttr(product.stoichCoeff || "1")}" title="Stoichiometric coefficient for the selected product.">
+            </label>
+            <label>
+              <span class="label">Product MW ${conversionInfoIcon("Molecular weight in g/mol for the selected product. Needed when calculating product amount from reactants or converting molar product basis to mass.")}</span>
+              <div class="conversion-mw-cell">
+                <input data-conversion-reagent-mw="${escapeAttr(product.id)}" value="${escapeAttr(product.mw || "")}" placeholder="g/mol" title="Product molecular weight in g/mol.">
+                <button type="button" class="mini-button compact" data-conversion-fetch-mw="${escapeAttr(product.id)}" title="Fetch product MW and optional pure-component properties from PubChem.">Fetch</button>
+              </div>
+            </label>
+            <div class="conversion-advanced-note">
+              Stoichiometric mode uses reagent MW, reagent coefficients, product MW, and product coefficient to identify the limiting reagent and residual masses.
+            </div>
+          </div>
+        </details>
+      `;
+    }
+
+    function conversionYieldSliderHtml(calc) {
+      const unit = calc.product?.unit || calc.fallbackUnit;
+      return `
+        <div class="conversion-yield-control">
+          <div class="conversion-yield-control-head">
+            <span>Actual production from yield</span>
+            <strong>${formatNumber(calc.productMade)} ${escapeHtml(unit)}</strong>
+          </div>
+          <input type="range" min="0" max="100" step="1" id="conversionPercentSlider" value="${calc.percent}" title="Move yield/conversion and the produced amount/residual streams update immediately.">
+          <div class="conversion-yield-track" aria-hidden="true">
+            <span class="made" style="width:${Math.max(0, Math.min(100, calc.percent))}%"></span>
+            <span class="missed" style="width:${Math.max(0, Math.min(100, calc.leftoverPercent))}%"></span>
+          </div>
+          <div class="conversion-yield-control-foot">
+            <span>${formatNumber(calc.percent)}% product side</span>
+            <span>${formatNumber(calc.leftoverPercent)}% unreacted reagent side</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function conversionReagentTableHtml(calc) {
+      if (!calc.inputRows.length) return `<div class="mfa-empty">No input streams yet.</div>`;
+      return `
+        <div class="conversion-reagent-table">
+          <div class="conversion-reagent-row header">
+            <span>Input</span>
+            <span>Category</span>
+            <span>Initial</span>
+            <span>Coeff</span>
+            <span>MW</span>
+            <span>${calc.stoichReady ? "Initial mol" : "Used"}</span>
+            <span>${calc.stoichReady ? "Unreacted mol" : "Unreacted"}</span>
+            <span>MFA kg</span>
+          </div>
+          ${calc.inputRows.map(row => {
+            const unit = row.stream.unit || "kg";
+            const kgValue = row.nonReactive ? row.initialKg : row.leftoverKg;
+            const kgText = Number.isFinite(kgValue)
+              ? `${formatNumber(kgValue)} kg`
+              : "needs MW/density";
+            const kgTip = row.nonReactive
+              ? "Non-reactive input: tracked for MFA/Lutze, but excluded from reaction conversion."
+              : Number.isFinite(row.leftoverKg)
+                ? "This is the mass-equivalent residual amount written to MFA/Lutze when saved."
+                : "Add MW for mol/kmol units, or density for volume units, to convert this residual to kg.";
+            return `
+              <div class="conversion-reagent-row ${row.nonReactive ? "non-reactive" : ""}">
+                <strong>${escapeHtml(row.stream.name || "(unnamed input)")}</strong>
+                <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagent/reactant enters the reaction stoichiometry. Solvents, catalysts, auxiliaries, and inerts are tracked but not consumed by conversion.">
+                  ${streamReactionRoleOptions(row.reactionRole || streamReactionRole(row.stream))}
+                </select>
+                <span>${formatNumber(row.qty)} ${escapeHtml(unit)}</span>
+                ${row.nonReactive
+                  ? `<span class="muted small" title="Not used in the reaction extent.">n/a</span>`
+                  : `<input data-conversion-reagent-stoich="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.stoichCoeff || row.coeff || "1")}" title="Stoichiometric coefficient for this reagent.">`}
+                <div class="conversion-mw-cell">
+                  <input data-conversion-reagent-mw="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.mw || "")}" placeholder="MW" title="Molecular weight in g/mol. Used to convert mol/kmol residuals into kg.">
+                  <button type="button" class="mini-button compact" data-conversion-fetch-mw="${escapeAttr(row.stream.id)}" title="Fetch MW and optional pure-component properties from PubChem.">Fetch</button>
+                </div>
+                ${row.nonReactive
+                  ? `<span class="muted small">not consumed</span>`
+                  : `<span>${calc.stoichReady ? formatNumber(row.initialMol) : `${formatNumber(row.used)} ${escapeHtml(unit)}`}</span>`}
+                ${row.nonReactive
+                  ? `<span class="muted small">passes through</span>`
+                  : `<span class="${row.limiting ? "limiting" : ""}">${calc.stoichReady ? `${formatNumber(row.leftoverMol)} mol${row.limiting ? " · limiting" : ""}` : `${formatNumber(row.leftover)} ${escapeHtml(unit)}`}</span>`}
+                <span class="conversion-mass-equivalent" title="${escapeAttr(kgTip)}">${escapeHtml(kgText)}</span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+
+    function conversionPreviewRows(calc) {
+      const rows = [];
+      if (calc.product) {
+        rows.push({
+          type: "Product",
+          name: calc.product.name || "(selected product)",
+          quantity: calc.productMade,
+          unit: calc.product.unit || calc.fallbackUnit,
+          note: calc.productMode === "actual"
+            ? `${formatNumber(calc.productInputQty)} ${calc.product.unit || calc.fallbackUnit} is treated as the amount already produced.`
+            : `${formatNumber(calc.percent)}% of ${formatNumber(calc.productQty)} ${calc.product.unit || calc.fallbackUnit} theoretical basis.`
+        });
+      }
+      calc.reactantRows.forEach(row => {
+        if (!(row.leftover > 0)) return;
+        const writesKg = Number.isFinite(row.leftoverKg);
+        const secondary = writesKg && (row.stream.unit || "").toLowerCase() !== "kg"
+          ? `${formatNumber(row.leftover)} ${row.stream.unit || ""} original`
+          : "";
+        rows.push({
+          type: "Residual",
+          name: `unreacted ${row.stream.name || "reactant"}`,
+          quantity: writesKg ? row.leftoverKg : row.leftover,
+          unit: writesKg ? "kg" : row.stream.unit || "kg",
+          secondary,
+          sourceStreamId: row.stream.id,
+          staged: calc.detail.stagedResidualStreamIds.includes(row.stream.id),
+          note: writesKg
+            ? "Kg equivalent will be saved for MFA/Lutze; chemical properties remain linked to the input reagent."
+            : "Add MW/density to convert this residual to kg before saving."
+        });
+      });
+      calc.nonReactiveRows.forEach(row => {
+        if (!(row.qty > 0)) return;
+        const hasKg = Number.isFinite(row.initialKg);
+        rows.push({
+          type: "Non-reactive",
+          name: row.stream.name || streamReactionRoleLabel(row.reactionRole),
+          quantity: hasKg ? row.initialKg : row.qty,
+          unit: hasKg ? "kg" : row.stream.unit || "kg",
+          secondary: hasKg && (row.stream.unit || "").toLowerCase() !== "kg" ? `${formatNumber(row.qty)} ${row.stream.unit || ""} original` : "",
+          note: `${streamReactionRoleLabel(row.reactionRole)} is excluded from reaction stoichiometry and kept for MFA/Lutze recovery or separation.`
+        });
+      });
+      calc.byproductRows.forEach(row => {
+        const name = String(row.name || "").trim();
+        if (!name || !(row.mass > 0)) return;
+        rows.push({
+          type: row.role === "coproduct" ? "Co-product" : row.role === "residual" ? "Residual outlet" : "Byproduct",
+          name,
+          quantity: row.mass,
+          unit: row.unit || calc.fallbackUnit,
+          note: row.displayBasis
+        });
+      });
+      return rows;
+    }
+
+    function conversionPreviewTableHtml(calc) {
+      const rows = conversionPreviewRows(calc);
+      if (!rows.length) return `<div class="mfa-empty">No simulated streams yet.</div>`;
+      return `
+        <div class="conversion-preview-table">
+          ${rows.map(row => `
+            <div class="conversion-preview-row ${row.type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}">
+              <span class="conversion-preview-type">${escapeHtml(row.type)}</span>
+              <strong>${escapeHtml(row.name)}</strong>
+              <span class="conversion-preview-amount">${formatNumber(row.quantity)} ${escapeHtml(row.unit)}${row.secondary ? `<small>${escapeHtml(row.secondary)}</small>` : ""}</span>
+              <small>${escapeHtml(row.note)}</small>
+              ${row.type === "Residual" ? `
+                <button type="button" class="mini-button" data-stage-conversion-residual="${escapeAttr(row.sourceStreamId)}" ${row.staged ? "disabled" : ""} title="Add this simulated residual to the staged reagent list below.">
+                  ${row.staged ? "Added" : "+ Reagent"}
+                </button>
+              ` : `<span></span>`}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function conversionStagedResidualsHtml(calc) {
+      const rows = stagedConversionResidualRows(calc);
+      if (!rows.length) return "";
+      return `
+        <div class="conversion-staged-residuals">
+          <div class="conversion-staged-head">
+            <strong>Residual reagents to save</strong>
+            <span class="muted small">Review these before writing them to MFA/Lutze.</span>
+          </div>
+          <div class="conversion-staged-list">
+            ${rows.map(row => {
+              const writesKg = Number.isFinite(row.leftoverKg);
+              const amount = writesKg
+                ? `${formatNumber(row.leftoverKg)} kg`
+                : `${formatNumber(row.leftover)} ${row.stream.unit || "kg"}`;
+              const original = writesKg && (row.stream.unit || "").toLowerCase() !== "kg"
+                ? `from ${formatNumber(row.leftover)} ${row.stream.unit || ""}`
+                : "same chemical properties as the input reagent";
+              return `
+                <div class="conversion-staged-row">
+                  <span class="conversion-preview-type residual">Reagent</span>
+                  <strong>unreacted ${escapeHtml(row.stream.name || "reactant")}</strong>
+                  <span>${escapeHtml(amount)}</span>
+                  <small>${escapeHtml(original)}</small>
+                  <button type="button" class="mini-button" data-remove-staged-conversion-residual="${escapeAttr(row.stream.id)}">Remove</button>
+                </div>
+              `;
+            }).join("")}
+          </div>
+          <button type="button" class="primary small-primary" id="saveStagedConversionResiduals">Save residual reagents</button>
+        </div>
+      `;
+    }
+
     function renderConversionModal() {
       const modal = $("conversionModal");
       const body = $("conversionModalBody");
@@ -7337,89 +8254,108 @@
       }
       ensureBlockConditionFields(block);
       const calc = conversionCalculationModel(block);
-      const { detail, percent, leftoverPercent, reactants, outputs, product, productMode, productBasisSource, reactantRows, productQty, productMade, productShortfall, pooledLeftover, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
+      const { detail, percent, inputs, reactants, outputs, product, productMode, productBasisSource, productQty, productMade, productShortfall, pooledLeftover, residualPoolUnit, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
+      const validationIssues = conversionValidationIssues(calc);
+      const hasBlockingIssues = conversionHasBlockingIssues(validationIssues);
+      const productEntryQuantity = conversionProductEntryQuantity(product, productMode, detail);
 
       body.innerHTML = `
         <div class="conversion-modal-body">
-          <div class="conversion-percent-row">
-            <label>
-              Conversion
-              <div class="conversion-percent-controls">
-                <input type="range" min="0" max="100" step="1" id="conversionPercentSlider" value="${percent}">
-                <input type="number" min="0" max="100" step="1" id="conversionPercentNumber" value="${percent}">
-                <span class="unit-badge">%</span>
-              </div>
-            </label>
-            <div class="muted small">At ${percent}% conversion, ${percent}% of each reagent reacts. Unreacted residuals are normalized on the reagent pool, not subtracted from the selected product twice.</div>
-          </div>
-
-          <div class="conversion-section">
-            <div class="conversion-section-head">Reagents${!reactants.length ? ` <span class="muted small">(no input streams on this block yet — add them in MFA/streams)</span>` : ""}</div>
-            ${reactantRows.map(row => conversionStreamRowHtml(row.stream.name || "(unnamed input)", row.qty, row.used, row.leftover, row.stream.unit, "used")).join("")}
-          </div>
-
-          <div class="conversion-section">
+          ${conversionIssuesHtml(validationIssues)}
+          <div class="conversion-section conversion-basis-section">
             <div class="conversion-section-head">
-              <span>Product</span>
+              <span>Reaction yield basis ${conversionInfoIcon("Bind product amount and yield here. This reference drives product, residual reagent, and Lutze preview calculations.")}</span>
               <div class="conversion-product-tools">
               ${outputs.length ? `
-                <select id="conversionProductSelect">
+                <select id="conversionProductSelect" title="Choose which outlet is the main product for this reaction balance.">
                   ${outputs.map(stream => `<option value="${escapeAttr(stream.id)}" ${product && stream.id === product.id ? "selected" : ""}>${escapeHtml(stream.name || stream.id)}</option>`).join("")}
                 </select>
               ` : ""}
-                <button type="button" class="mini-button" id="addConversionProduct">+ Product</button>
+                <button type="button" class="mini-button" id="addConversionProduct" title="Create a new product outlet if the reaction product is not listed yet.">+ Product</button>
               </div>
             </div>
             ${product ? `
-              <label class="conversion-product-mode">
-                <span class="label">Product amount means</span>
-                <select id="conversionProductMode">${conversionProductModeOptions(productMode)}</select>
-                <span class="muted small">${escapeHtml(productBasisSource)}</span>
-              </label>
-            ` : ""}
-            ${product
-              ? conversionStreamRowHtml(product.name || "(unnamed output)", productQty, productMade, productShortfall, product.unit, "made")
-              : `<div class="muted small">No output stream to treat as the product yet — add one in MFA/streams.</div>`}
+              <div class="conversion-basis-grid">
+                <label>
+                  <span class="label">Product amount ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                  <input type="number" min="0" step="0.001" id="conversionProductQuantity" value="${escapeAttr(productEntryQuantity)}" title="${escapeAttr(productModeTooltip(productMode))}" ${productMode === "from reactants" ? `placeholder="calculated from reagents"` : ""}>
+                </label>
+                <label>
+                  <span class="label">Unit</span>
+                  <input type="text" id="conversionProductUnit" value="${escapeAttr(product.unit || fallbackUnit)}" placeholder="kg" title="Product unit. g, kg, t, mol, and kmol are understood when MW is available.">
+                </label>
+                <label>
+                  <span class="label">Yield / conversion ${conversionInfoIcon("Percentage associated with the selected product amount. It also determines residual reagents.")}</span>
+                  <div class="conversion-percent-controls">
+                    <input type="number" min="0" max="100" step="1" id="conversionPercentNumber" value="${percent}" title="Conversion/yield percentage associated with the product basis.">
+                    <span class="unit-badge">%</span>
+                  </div>
+                </label>
+                <label class="conversion-mode-field" title="${escapeAttr(productModeTooltip(productMode))}">
+                  <span class="label">Amount meaning ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                  <select id="conversionProductMode" title="${escapeAttr(productModeTooltip(productMode))}">${conversionProductModeOptions(productMode, calc.canCalculateFromReactants)}</select>
+                </label>
+                <div class="conversion-mode-help" title="${escapeAttr(productModeTooltip(productMode))}">${escapeHtml(productModeHelpText(productMode, percent))}</div>
+              </div>
+              ${conversionYieldBasisStatementHtml(calc, productEntryQuantity)}
+              ${conversionAnalysisHtml(calc)}
+              ${conversionYieldSliderHtml(calc)}
+              ${conversionAdvancedControlsHtml(calc)}
+            ` : `<div class="muted small">No output stream to treat as the product yet. Add one here or in MFA/streams.</div>`}
+          </div>
+
+          <div class="conversion-section conversion-preview-section">
+            <div class="conversion-section-head">
+              <span>Simulated streams before apply</span>
+              <button type="button" class="mini-button" id="stageAllConversionResiduals" ${calc.reactantRows.some(row => row.leftover > 0) ? "" : "disabled"} title="Stage all simulated unreacted reagents below before saving them to MFA/Lutze.">Add residual reagents</button>
+            </div>
+            ${conversionPreviewTableHtml(calc)}
+            ${conversionStagedResidualsHtml(calc)}
           </div>
 
           <div class="conversion-section">
-            <div class="conversion-section-head">Co/byproducts & residual outlets <span class="muted small">(unconverted reagent pool: ${pooledLeftover.toFixed(2)} ${escapeHtml(fallbackUnit)}; unassigned residual: ${wastePercent}%)</span></div>
+            <div class="conversion-section-head">Reaction inputs ${conversionInfoIcon("Classify inputs before balancing. Only reagent/reactant enters stoichiometric conversion; solvent, catalyst, auxiliary, and inert streams stay non-reactive.")}${!inputs.length ? ` <span class="muted small">(no input streams yet)</span>` : ""}</div>
+            ${conversionReagentTableHtml(calc)}
+          </div>
+
+          <div class="conversion-section">
+            <div class="conversion-section-head">Co/byproducts & residual outlets <span class="muted small">(unconverted reagent pool: ${pooledLeftover.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}; unrouted: ${wastePercent}%)</span></div>
             <div class="conversion-summary-bar">
               ${byproductRows.filter(row => row.subtractsResidualWaste).map((row, i) => `<span class="conversion-bar-seg byproduct" style="width:${pooledLeftover ? (row.mass / pooledLeftover * 100) : 0}%; background:${byproductColor(i)}" title="${escapeAttr(row.name || "residual outlet")}: ${row.mass.toFixed(2)} ${escapeAttr(row.unit || fallbackUnit)}"></span>`).join("")}
-              <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Waste: ${wasteMass.toFixed(2)} ${escapeAttr(fallbackUnit)}"></span>
+              <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Unrouted residual: ${wasteMass.toFixed(2)} ${escapeAttr(residualPoolUnit || fallbackUnit)}"></span>
             </div>
             <div class="conversion-byproduct-rows">
               ${detail.byproducts.map((bp, i) => `
                 <div class="conversion-byproduct-row">
                   <span class="conversion-byproduct-swatch" style="background:${byproductColor(i)}"></span>
-                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name">
-                  <select data-conversion-byproduct-role="${i}">
+                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name" title="Name a real byproduct, co-product, or named residual outlet. Leave blank if no such stream exists.">
+                  <select data-conversion-byproduct-role="${i}" title="Choose whether this outlet is a formed byproduct, useful co-product, or residual purge/recovery stream.">
                     ${optionHtml(["byproduct", "coproduct", "residual"], bp.role)}
                   </select>
-                  <select data-conversion-byproduct-basis="${i}">
+                  <select data-conversion-byproduct-basis="${i}" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">
                     ${conversionOutletBasisOptions(bp.basis)}
                   </select>
                   ${bp.basis === "actual"
-                    ? `<input type="number" min="0" step="0.001" data-conversion-byproduct-amount="${i}" value="${escapeAttr(bp.amount)}" placeholder="amount">`
-                    : `<input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}" placeholder="%">`}
-                  <input type="text" data-conversion-byproduct-unit="${i}" value="${escapeAttr(bp.unit || fallbackUnit)}" placeholder="${escapeAttr(fallbackUnit)}">
+                    ? `<input type="number" min="0" step="0.001" data-conversion-byproduct-amount="${i}" value="${escapeAttr(bp.amount)}" placeholder="amount" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`
+                    : `<input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}" placeholder="%" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`}
+                  <input type="text" data-conversion-byproduct-unit="${i}" value="${escapeAttr(bp.unit || fallbackUnit)}" placeholder="${escapeAttr(fallbackUnit)}" title="Unit for this named outlet.">
                   <span class="conversion-byproduct-mass muted small">${byproductRows[i].mass.toFixed(2)} ${escapeHtml(byproductRows[i].unit || fallbackUnit)}</span>
-                  <button type="button" class="mini-button" data-remove-conversion-byproduct="${i}">Remove</button>
+                  <button type="button" class="mini-button" data-remove-conversion-byproduct="${i}" title="Remove this optional named outlet from the conversion preview.">Remove</button>
                 </div>
               `).join("")}
               <div class="conversion-byproduct-row conversion-byproduct-row-waste">
                 <span class="conversion-byproduct-swatch waste"></span>
-                <span class="muted small">Unassigned waste</span>
-                <span class="muted small">${wastePercent}% of leftover</span>
-                <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(fallbackUnit)}</span>
+                <span class="muted small">Unrouted residual</span>
+                <span class="muted small">${wastePercent}% stays as individual unreacted streams</span>
+                <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}</span>
               </div>
             </div>
-            <button type="button" class="mini-button" id="addConversionByproduct">+ Add residual outlet</button>
+            <button type="button" class="mini-button" id="addConversionByproduct" title="Add a named byproduct, co-product, or residual outlet only when it is known or intentionally modeled.">+ Add outlet/byproduct</button>
           </div>
 
           <div class="row between" style="margin-top:12px">
             <span class="muted small">${escapeHtml(detail.lastGeneratedSummary || "Changes save automatically. Press Balance & Create Streams to write residuals into MFA and Lutze.")}</span>
-            <button class="primary" id="conversionApplyBalance" ${reactants.length || product ? "" : "disabled"}>Balance &amp; Create Streams</button>
+            <button class="primary" id="conversionApplyBalance" title="Writes the previewed product, individual unreacted reagents, and named outlets into MFA/Lutze." ${!hasBlockingIssues && (reactants.length || product) ? "" : "disabled"}>Balance &amp; Create Streams</button>
             <button class="primary" id="conversionModalDone">Done</button>
           </div>
         </div>
@@ -7430,9 +8366,33 @@
       $("conversionProductMode")?.addEventListener("change", event => {
         const detail = ensureConversionDetail(block);
         detail.productAmountMode = event.target.value;
-        if (detail.productAmountMode === "actual") detail.productBasisQuantity = "";
+        const product = conversionProductStream(block);
+        if (detail.productAmountMode === "actual") {
+          detail.productBasisQuantity = "";
+          if (product) product.conversionBaseQuantity = "";
+        } else if (detail.productAmountMode === "theoretical" && product) {
+          detail.productBasisQuantity = conversionProductEntryQuantity(product, "theoretical", detail) || product.quantity || "";
+          product.conversionBaseQuantity = detail.productBasisQuantity;
+        }
         invalidateAiRefine();
         renderConversionModal();
+      });
+      $("conversionBalanceMethod")?.addEventListener("change", event => {
+        const detail = ensureConversionDetail(block);
+        detail.balanceMethod = event.target.value;
+        invalidateAiRefine();
+        renderConversionModal();
+        renderExport();
+      });
+      $("conversionProductQuantity")?.addEventListener("input", event => {
+        setConversionProductQuantity(block, event.target.value);
+        renderConversionModalKeepingFocus(event.target);
+        renderExport();
+      });
+      $("conversionProductUnit")?.addEventListener("input", event => {
+        setConversionProductUnit(block, event.target.value);
+        renderConversionModalKeepingFocus(event.target);
+        renderExport();
       });
       $("conversionProductSelect")?.addEventListener("change", event => {
         const detail = ensureConversionDetail(block);
@@ -7462,6 +8422,100 @@
           ensureConversionDetail(block).byproducts[i].name = event.target.value;
           invalidateAiRefine();
         });
+      });
+      body.querySelectorAll("[data-conversion-input-reaction-role]").forEach(select => {
+        select.addEventListener("change", event => {
+          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionInputReactionRole);
+          if (!stream) return;
+          stream.reactionRole = event.target.value;
+          if (stream.reactionRole !== "reactant") stream.stoichCoeff = "";
+          ensureConversionDetail(block).stagedResidualStreamIds = ensureConversionDetail(block).stagedResidualStreamIds
+            .filter(id => conversionReactantStreams(block).some(item => item.id === id));
+          invalidateAiRefine();
+          renderConversionModal();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-conversion-reagent-stoich]").forEach(input => {
+        input.addEventListener("input", event => {
+          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionReagentStoich);
+          if (!stream) return;
+          stream.stoichCoeff = event.target.value;
+          invalidateAiRefine();
+        });
+        input.addEventListener("change", () => {
+          renderConversionModal();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-conversion-reagent-mw]").forEach(input => {
+        input.addEventListener("input", event => {
+          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionReagentMw);
+          if (!stream) return;
+          stream.mw = event.target.value;
+          invalidateAiRefine();
+        });
+        input.addEventListener("change", () => {
+          renderConversionModal();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-conversion-fetch-mw]").forEach(button => {
+        button.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const stream = (block.streams || []).find(item => item.id === button.dataset.conversionFetchMw);
+          if (!stream || !String(stream.name || "").trim()) {
+            await alertModal("Add a material name before fetching PubChem properties.");
+            return;
+          }
+          if (typeof lookupPubChem !== "function" || typeof applyPubChemLookup !== "function") {
+            await alertModal("PubChem lookup is not available in this build.");
+            return;
+          }
+          const previousText = button.textContent;
+          button.disabled = true;
+          button.textContent = "Fetching...";
+          try {
+            const data = await lookupPubChem(stream.name);
+            if (!data.ok) {
+              const suggestions = data.suggestions?.map(item => item.name).filter(Boolean).slice(0, 5).join(", ");
+              await alertModal(suggestions
+                ? `PubChem did not resolve "${stream.name}" directly. Try one of: ${suggestions}.`
+                : data.error || "PubChem lookup failed.");
+              return;
+            }
+            pushUndo();
+            applyPubChemLookup(stream, data);
+            stream.status = stream.status === "missing" ? "estimated" : stream.status;
+            syncLegacyStreamLists(block);
+            invalidateAiRefine();
+            renderConversionModal();
+            renderStepFlowInspector();
+            renderExport();
+          } catch (error) {
+            await alertModal(`PubChem lookup failed: ${error.message}`);
+          } finally {
+            button.disabled = false;
+            button.textContent = previousText || "Fetch";
+          }
+        });
+      });
+      $("stageAllConversionResiduals")?.addEventListener("click", () => {
+        stageAllConversionResiduals(block);
+      });
+      body.querySelectorAll("[data-stage-conversion-residual]").forEach(button => {
+        button.addEventListener("click", () => {
+          stageConversionResidual(block, button.dataset.stageConversionResidual);
+        });
+      });
+      body.querySelectorAll("[data-remove-staged-conversion-residual]").forEach(button => {
+        button.addEventListener("click", () => {
+          removeStagedConversionResidual(block, button.dataset.removeStagedConversionResidual);
+        });
+      });
+      $("saveStagedConversionResiduals")?.addEventListener("click", () => {
+        saveStagedConversionResiduals(block);
       });
       body.querySelectorAll("[data-conversion-byproduct-role]").forEach(input => {
         input.addEventListener("change", event => {
@@ -7525,6 +8579,55 @@
         closeConversionModal();
         renderAll();
       });
+      body.querySelectorAll(".info-dot").forEach(dot => {
+        dot.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const wasActive = dot.classList.contains("active");
+          body.querySelectorAll(".info-dot.active").forEach(active => active.classList.remove("active"));
+          if (!wasActive) dot.classList.add("active");
+        });
+        dot.addEventListener("keydown", event => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          dot.click();
+        });
+      });
+      if (body._conversionTooltipClickHandler) {
+        body.removeEventListener("click", body._conversionTooltipClickHandler);
+      }
+      body._conversionTooltipClickHandler = event => {
+        if (event.target.closest(".info-dot")) return;
+        body.querySelectorAll(".info-dot.active").forEach(dot => dot.classList.remove("active"));
+      };
+      body.addEventListener("click", body._conversionTooltipClickHandler);
+    }
+
+    function renderConversionModalKeepingFocus(target) {
+      let selector = target?.id ? `#${target.id}` : "";
+      if (!selector && target?.dataset) {
+        const key = Object.keys(target.dataset).find(item => item.startsWith("conversion"));
+        if (key) {
+          const attr = `data-${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`;
+          const value = String(target.dataset[key] || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+          selector = `[${attr}="${value}"]`;
+        }
+      }
+      const start = Number.isFinite(target?.selectionStart) ? target.selectionStart : null;
+      const end = Number.isFinite(target?.selectionEnd) ? target.selectionEnd : start;
+      renderConversionModal();
+      if (!selector) return;
+      const body = $("conversionModalBody");
+      const next = body?.querySelector?.(selector);
+      if (!next?.focus) return;
+      next.focus();
+      if (start != null && next.setSelectionRange) {
+        try {
+          next.setSelectionRange(start, end);
+        } catch (_err) {
+          // Number inputs do not always support selection ranges.
+        }
+      }
     }
 
     function openSeparationSimulator(groupId) {
@@ -7878,6 +8981,11 @@
     }
 
     function inferSubstanceRole(stream) {
+      const reactionRole = streamReactionRole(stream);
+      if (reactionRole === "solvent") return "solvent";
+      if (reactionRole === "catalyst") return "catalyst";
+      if (["auxiliary", "inert"].includes(reactionRole)) return "auxiliary";
+      if (reactionRole === "reactant" && stream.role === "input") return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
       if (/catalyst|nh4oac|ammonium acetate/.test(text)) return "catalyst";
       if (/solvent|cyclohexane/.test(text)) return "solvent";
@@ -10145,8 +11253,72 @@
       rememberStepFlowEditorHeight();
     }
 
+    function captureStepFlowStreamViewport(root) {
+      const block = selectedBlock();
+      if (!root || !block) return null;
+      const sections = {};
+      root.querySelectorAll("[data-stream-section-role]").forEach(section => {
+        const role = section.dataset.streamSectionRole;
+        const rows = section.querySelector(".mfa-rows");
+        if (role && rows) sections[role] = rows.scrollTop;
+      });
+      const active = root.contains(document.activeElement) && document.activeElement?.dataset?.streamId
+        ? {
+          streamId: document.activeElement.dataset.streamId,
+          field: document.activeElement.dataset.streamField || "",
+          selectionStart: Number.isFinite(document.activeElement.selectionStart) ? document.activeElement.selectionStart : null,
+          selectionEnd: Number.isFinite(document.activeElement.selectionEnd) ? document.activeElement.selectionEnd : null
+        }
+        : null;
+      return { blockId: block.id, sections, active };
+    }
+
+    function streamEditorElement(root, streamId, field = "") {
+      return Array.from(root.querySelectorAll("[data-stream-id]"))
+        .find(item => item.dataset.streamId === streamId && (!field || item.dataset.streamField === field)) || null;
+    }
+
+    function streamEditorRow(root, streamId) {
+      return Array.from(root.querySelectorAll(".mfa-row[data-stream-id]"))
+        .find(item => item.dataset.streamId === streamId) || null;
+    }
+
+    function restoreStepFlowStreamViewport(snapshot) {
+      const root = $("stepFlowInspector");
+      const block = selectedBlock();
+      const pendingFocusId = state.pendingStepStreamFocusId || "";
+      const pendingScrollRole = state.pendingStepStreamScrollRole || "";
+      state.pendingStepStreamFocusId = "";
+      state.pendingStepStreamScrollRole = "";
+      if (!root || !block || snapshot?.blockId !== block.id) return;
+      root.querySelectorAll("[data-stream-section-role]").forEach(section => {
+        const role = section.dataset.streamSectionRole;
+        const rows = section.querySelector(".mfa-rows");
+        if (!role || !rows) return;
+        if (pendingScrollRole && pendingScrollRole === role) rows.scrollTop = rows.scrollHeight;
+        else if (Number.isFinite(snapshot.sections?.[role])) rows.scrollTop = snapshot.sections[role];
+      });
+      const focusId = pendingFocusId || snapshot.active?.streamId || "";
+      if (!focusId) return;
+      const target = pendingFocusId
+        ? streamEditorElement(root, focusId, "name") || streamEditorElement(root, focusId)
+        : streamEditorElement(root, focusId, snapshot.active?.field || "") || streamEditorElement(root, focusId);
+      const row = streamEditorRow(root, focusId);
+      row?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      if (!target?.focus) return;
+      target.focus({ preventScroll: true });
+      if (!pendingFocusId && snapshot.active?.selectionStart != null && target.setSelectionRange) {
+        try {
+          target.setSelectionRange(snapshot.active.selectionStart, snapshot.active.selectionEnd ?? snapshot.active.selectionStart);
+        } catch (_err) {
+          // Some inputs/selects do not support text selection ranges.
+        }
+      }
+    }
+
     function renderStepFlowInspector() {
       const root = $("stepFlowInspector");
+      const streamViewport = captureStepFlowStreamViewport(root);
       const block = selectedBlock();
       if (!block) {
         const group = selectedGroup();
@@ -10200,6 +11372,8 @@
           const stream = createStream(addRole, { editing: true });
           stream.id = nextStreamId(current);
           current.streams.push(stream);
+          state.pendingStepStreamFocusId = stream.id;
+          state.pendingStepStreamScrollRole = button.dataset.addStream;
           syncLegacyStreamLists(current);
           renderAll();
         });
@@ -10310,6 +11484,7 @@
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
         button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
       });
+      restoreStepFlowStreamViewport(streamViewport);
     }
 
     function blockLutzeReactionSeparationLaunchHtml(block) {
@@ -10848,7 +12023,7 @@
         : block.streams.filter(stream => stream.role === role);
       const canCopyInputs = role === "outlet" && block.streams.some(stream => stream.role === "input" && String(stream.name || "").trim());
       return `
-        <section class="mfa-section role-${escapeAttr(role)}">
+        <section class="mfa-section role-${escapeAttr(role)}" data-stream-section-role="${escapeAttr(role)}">
           <div class="mfa-section-head">
             <strong>${escapeHtml(meta.title)}</strong>
             <div class="mfa-section-actions">
@@ -10866,15 +12041,14 @@
     function streamRowHtml(stream, placeholder, role = stream.role, block = null) {
       if (!stream.editing) return streamLabelHtml(stream, block);
       const sid = escapeAttr(stream.id);
-      const hasAdvanced = Boolean(stream.recoveryPercent || stream.purgePercent || stream.loopId || stream.destinationGroup || stream.makeupRequired || stream.accumulationRisk);
-      const hasChemical = streamHasChemicalProperties(stream);
       const actualRole = role === "outlet" ? (stream.role || "output") : role;
+      const hasChemical = streamHasChemicalProperties(stream);
       const tone = streamTone(stream, role);
       const suggestionRole = role === "outlet" ? "outlet" : actualRole;
       const showConversionShortcut = streamNeedsConversionShortcut(stream, actualRole, block);
       return `
         <div class="mfa-row role-${escapeAttr(tone)}" data-stream-id="${sid}">
-          <label class="stream-field span-2">
+          <label class="stream-field span-4">
             <span class="stream-field-label">Material / stream</span>
             <div class="stream-name-row">
               <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off">
@@ -10891,6 +12065,14 @@
             <span class="stream-field-label">Unit</span>
             <select data-stream-field="unit" data-stream-id="${sid}">${optionHtml(streamUnits, stream.unit)}</select>
           </label>
+          ${actualRole === "input" ? `
+            <label class="stream-field">
+              <span class="stream-field-label">Reaction role</span>
+              <select data-stream-field="reactionRole" data-stream-id="${sid}" title="Only reagent/reactant enters conversion stoichiometry. Solvent, catalyst, auxiliary, and inert are tracked but not consumed.">
+                ${streamReactionRoleOptions(streamReactionRole(stream))}
+              </select>
+            </label>
+          ` : ""}
           ${showConversionShortcut ? `
             <div class="stream-conversion-shortcut span-2">
               <span>Quantity should come from conversion/yield for this reaction stream.</span>
@@ -10911,53 +12093,6 @@
             <span class="stream-field-label">Data status</span>
             <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
           </label>
-          <label class="stream-field">
-            <span class="stream-field-label">Timing</span>
-            <select data-stream-field="timing" data-stream-id="${sid}">${optionHtml(streamTimingOptions, stream.timing)}</select>
-          </label>
-          <label class="stream-field">
-            <span class="stream-field-label">Scaling</span>
-            <select data-stream-field="scalingMode" data-stream-id="${sid}">${optionHtml(streamScalingModes, stream.scalingMode)}</select>
-          </label>
-          <details class="stream-advanced span-2" ${hasAdvanced ? "open" : ""}>
-            <summary>Fate, recycle & notes${hasAdvanced ? " •" : ""}</summary>
-            <div class="stream-advanced-grid">
-              ${actualRole === "input" ? `
-                <label class="stream-field">
-                  <span class="stream-field-label">Fate</span>
-                  <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions, stream.fate)}</select>
-                </label>
-              ` : ""}
-              <label class="stream-field">
-                <span class="stream-field-label">Recovery %</span>
-                <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="90" inputmode="decimal">
-              </label>
-              <label class="stream-field">
-                <span class="stream-field-label">Purge %</span>
-                <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="5" inputmode="decimal">
-              </label>
-              <label class="stream-field">
-                <span class="stream-field-label">Loop id</span>
-                <input data-stream-field="loopId" data-stream-id="${sid}" value="${escapeAttr(stream.loopId)}" placeholder="e.g. CYHX">
-              </label>
-              <label class="stream-field span-2">
-                <span class="stream-field-label">Destination</span>
-                <input data-stream-field="destinationGroup" data-stream-id="${sid}" value="${escapeAttr(stream.destinationGroup)}" placeholder="destination group, treatment, recovery...">
-              </label>
-              <label class="stream-field span-2">
-                <span class="stream-field-label">Make-up</span>
-                <input data-stream-field="makeupRequired" data-stream-id="${sid}" value="${escapeAttr(stream.makeupRequired)}" placeholder="make-up amount or basis...">
-              </label>
-              <label class="stream-field span-2">
-                <span class="stream-field-label">Accumulation risk</span>
-                <input data-stream-field="accumulationRisk" data-stream-id="${sid}" value="${escapeAttr(stream.accumulationRisk)}" placeholder="impurity build-up concern...">
-              </label>
-              <label class="stream-field span-2">
-                <span class="stream-field-label">Note</span>
-                <input data-stream-field="note" data-stream-id="${sid}" value="${escapeAttr(stream.note)}" placeholder="assumption, source, balance note...">
-              </label>
-            </div>
-          </details>
           <details class="stream-advanced stream-chemical span-2" ${hasChemical ? "open" : ""}>
             <summary>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</summary>
             <div class="stream-advanced-grid">
@@ -10979,7 +12114,7 @@
                 <span class="stream-field-label">PubChem CID</span>
                 <input data-stream-field="pubchemCid" data-stream-id="${sid}" value="${escapeAttr(stream.pubchemCid)}" placeholder="optional">
               </label>
-              <label class="stream-field span-2">
+              <label class="stream-field span-4">
                 <span class="stream-field-label">Property source</span>
                 <input data-stream-field="propertySource" data-stream-id="${sid}" value="${escapeAttr(stream.propertySource)}" placeholder="manual, PubChem, supplier SDS...">
               </label>
@@ -11041,6 +12176,7 @@
               data-suggestion-quantity="${escapeAttr(item.quantity || "")}"
               data-suggestion-unit="${escapeAttr(item.unit || "")}"
               data-suggestion-phase="${escapeAttr(item.phase || "")}"
+              data-suggestion-reaction-role="${escapeAttr(item.reactionRole || "")}"
               title="${escapeAttr(item.reason || "Use this stream name")}">
               ${escapeHtml(item.name)}
             </button>
@@ -11060,7 +12196,7 @@
         candidates.push({
           ...item,
           tone: role === "input" ? "input" : "",
-          reason: item.quantity ? `Detected in source text: ${item.quantity} ${item.unit}` : "Detected in source text"
+          reason: item.reason || (item.quantity ? `Detected in source text: ${item.quantity} ${item.unit}` : "Detected in source text")
         });
       });
       phraseRoles.forEach(phraseRole => {
@@ -11114,13 +12250,35 @@
       const regex = new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*${unitPattern}\\s+(?:of\\s+)?([^,.;]+?)(?=\\s+(?:and|to|into|in|with|at|under|for|from|as|until|using)\\b|[,.;]|$)`, "gi");
       let match;
       while ((match = regex.exec(text))) {
-        const raw = match[3]
+        const rawMention = match[3];
+        const roleHint = inferReactionRoleFromTextMention(text, match.index, rawMention);
+        const raw = rawMention
           .replace(/\b(?:catalyst|solvent|feed|solution|mixture)\b/gi, "")
           .trim();
         const name = cleanSubstanceName(raw) || raw;
-        if (name) results.push({ name, quantity: match[1].replace(",", "."), unit: match[2] });
+        if (name) {
+          results.push({
+            name,
+            quantity: match[1].replace(",", "."),
+            unit: match[2],
+            reactionRole: roleHint.role,
+            reason: roleHint.role
+              ? `Detected in source text: ${match[1].replace(",", ".")} ${match[2]}; proposed as ${streamReactionRoleLabel(roleHint.role)} because ${roleHint.reason}.`
+              : `Detected in source text: ${match[1].replace(",", ".")} ${match[2]}`
+          });
+        }
       }
       return results;
+    }
+
+    function inferReactionRoleFromTextMention(text, mentionStart, rawMention = "") {
+      const before = String(text || "").slice(Math.max(0, mentionStart - 36), mentionStart).toLowerCase();
+      const mention = String(rawMention || "").toLowerCase();
+      if (/\b(catalyst|catalytic|pd\/c)\b/.test(mention)) return { role: "catalyst", reason: "the mention contains a catalyst label" };
+      if (/\b(solvent|cosolvent)\b/.test(mention)) return { role: "solvent", reason: "the mention contains a solvent label" };
+      if (/\b(?:in|with|using|dissolved in|solution in)\s*$/.test(before)) return { role: "solvent", reason: "it follows an in/with/using solvent phrase" };
+      if (/\b(?:under)\s*$/.test(before)) return { role: "inert", reason: "it follows an inert-atmosphere phrase" };
+      return { role: "", reason: "" };
     }
 
     function phraseSuggestionsFromText(text, role) {
@@ -11159,10 +12317,19 @@
       if (!stream) return;
       pushUndo();
       stream.name = dataset.suggestionName || stream.name;
+      if (stream.role === "input") {
+        const suggestedReactionRole = String(dataset.suggestionReactionRole || "").trim().toLowerCase();
+        const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
+        const nextReactionRole = streamReactionRoles.includes(suggestedReactionRole) ? suggestedReactionRole : inferredReactionRole;
+        if (stream.reactionRole === "reactant" && nextReactionRole !== "reactant") {
+          stream.reactionRole = nextReactionRole;
+        }
+      }
       if (!String(stream.quantity || "").trim() && dataset.suggestionQuantity) stream.quantity = dataset.suggestionQuantity;
       if ((!String(stream.unit || "").trim() || stream.unit === "kg") && dataset.suggestionUnit) stream.unit = dataset.suggestionUnit;
       if ((!stream.phase || stream.phase === "unknown") && dataset.suggestionPhase) stream.phase = dataset.suggestionPhase;
       if (!stream.status || stream.status === "missing") stream.status = "estimated";
+      state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
       invalidateAiRefine();
       renderStepFlowInspector();
@@ -11177,8 +12344,13 @@
       if (!stream || !name) return;
       pushUndo();
       stream.name = name;
+      const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
+      if (stream.role === "input" && stream.reactionRole === "reactant" && inferredReactionRole !== "reactant") {
+        stream.reactionRole = inferredReactionRole;
+      }
       stream.status = stream.status === "missing" ? "estimated" : stream.status;
       delete state.pubchemStreamSuggestions?.[streamId];
+      state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
       invalidateAiRefine();
       renderStepFlowInspector();
@@ -11233,6 +12405,7 @@
             candidates: data.suggestions || [],
             message: data.suggestions?.length ? "Choose a candidate name, then fetch again." : data.error || "PubChem lookup failed."
           };
+          state.pendingStepStreamFocusId = stream.id;
           renderStepFlowInspector();
           if (!data.suggestions?.length) await alertModal(data.error || "PubChem lookup failed.");
           return;
@@ -11241,6 +12414,7 @@
         applyPubChemLookup(stream, data);
         stream.status = stream.status === "missing" ? "estimated" : stream.status;
         delete state.pubchemStreamSuggestions?.[streamId];
+        state.pendingStepStreamFocusId = stream.id;
         syncLegacyStreamLists(current);
         invalidateAiRefine();
         renderStepFlowInspector();
@@ -11268,10 +12442,12 @@
           stream
         ])
         .filter(([key]) => key));
+      let lastOutputId = "";
       inputs.forEach(input => {
         const key = cleanSubstanceName(input.name).toLowerCase() || String(input.name || "").trim().toLowerCase();
         if (existing.has(key)) {
           mergeMissingStreamChemicalProperties(existing.get(key), input, true);
+          lastOutputId = existing.get(key).id || lastOutputId;
           return;
         }
         const output = createStream("output", {
@@ -11289,7 +12465,12 @@
         });
         block.streams.push(output);
         existing.set(key, output);
+        lastOutputId = output.id;
       });
+      if (lastOutputId) {
+        state.pendingStepStreamFocusId = lastOutputId;
+        state.pendingStepStreamScrollRole = "outlet";
+      }
       syncLegacyStreamLists(block);
       invalidateAiRefine();
       renderStepFlowInspector();
@@ -11312,6 +12493,8 @@
         mergeMissingStreamChemicalProperties(existing, input, true);
         existing.editing = true;
         state.menuStreamId = existing.id;
+        state.pendingStepStreamFocusId = existing.id;
+        state.pendingStepStreamScrollRole = "outlet";
       } else {
         const stream = createStream("output", {
           id: nextStreamId(block),
@@ -11328,6 +12511,8 @@
           editing: true
         });
         block.streams.push(stream);
+        state.pendingStepStreamFocusId = stream.id;
+        state.pendingStepStreamScrollRole = "outlet";
       }
       syncLegacyStreamLists(block);
       invalidateAiRefine();
@@ -11349,6 +12534,9 @@
       const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
       const canCopyToOutput = block && stream.role === "input" && String(stream.name || "").trim();
       const propertyBadges = streamChemicalSummaryHtml(stream);
+      const reactionRoleBadge = stream.role === "input"
+        ? `<span class="pill blue" title="Reaction role used by conversion balance">${escapeHtml(streamReactionRoleLabel(streamReactionRole(stream)))}</span>`
+        : "";
       return `
         <article class="mfa-label-card role-${escapeAttr(streamTone(stream))}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
           <div class="mfa-label-top">
@@ -11358,6 +12546,7 @@
           <div class="mfa-label-meta">
             <span>${escapeHtml(amount)}</span>
             <span class="pill">${escapeHtml(stream.scalingMode)}</span>
+            ${reactionRoleBadge}
             <span class="pill">${escapeHtml(stream.timing)}</span>
             <span class="pill">${escapeHtml(phaseLabel(stream.phase))}</span>
             <span class="pill ${stream.fate === "unknown" ? "warn" : "green"}">${escapeHtml(stream.fate)}</span>
@@ -11419,6 +12608,10 @@
       invalidateAiRefine();
       stream[event.target.dataset.streamField] = event.target.value;
       if (event.target.dataset.streamField === "name") {
+        const inferredReactionRole = defaultStreamReactionRole(stream.name, stream.role, stream.fate, stream.note);
+        if (stream.role === "input" && stream.reactionRole === "reactant" && inferredReactionRole !== "reactant") {
+          stream.reactionRole = inferredReactionRole;
+        }
         scheduleStreamPubChemSuggestions(stream.id, stream.name);
       }
       if (event.target.dataset.streamField === "unit" && ["kg/kg product", "L/kg product"].includes(stream.unit) && stream.scalingMode === "auto") {
@@ -11435,6 +12628,11 @@
       }
       if (event.target.dataset.streamField === "fate" && ["recycled input", "recovered solvent"].includes(stream.fate) && stream.scalingMode === "auto") {
         stream.scalingMode = "recycle loop";
+      }
+      if (event.target.dataset.streamField === "reactionRole" && stream.reactionRole !== "reactant") {
+        stream.stoichCoeff = "";
+        ensureConversionDetail(current).stagedResidualStreamIds = ensureConversionDetail(current).stagedResidualStreamIds
+          .filter(id => conversionReactantStreams(current).some(item => item.id === id));
       }
       if (event.target.dataset.streamField === "phase") sanitizeBlockPhenomena(current);
       syncLegacyStreamLists(current);
