@@ -203,6 +203,23 @@ It demonstrates:
 - heuristic review;
 - scale-up/Gantt bottleneck screening.
 
+## Data Sources
+
+The optional pure-component property lookup (compound search/autocomplete and
+property prefill) queries the [PubChem](https://pubchem.ncbi.nlm.nih.gov/)
+PUG-REST/PUG-View API live, per compound, on user request. PubChem is
+maintained by the National Library of Medicine (NLM), part of the US National
+Institutes of Health (NIH). Data returned is shown with its PubChem CID and a
+link back to the source record; nothing is bulk-downloaded or redistributed as
+a standalone dataset.
+
+If you reuse or publish results derived from that data, PubChem requests
+acknowledgment of NLM, e.g.:
+
+> Kim S, Chen J, Cheng T, Gindulyte A, He J, He S, Li Q, Shoemaker BA,
+> Thiessen PA, Yu B, Zaslavsky L, Zhang J, Bolton EE. PubChem 2025 update.
+> Nucleic Acids Res. 2025;53(D1):D1516-D1525. https://doi.org/10.1093/nar/gkae1059
+
 ## Code Layout
 
 ```text
