@@ -4600,33 +4600,14 @@
           if (!loops.has(key)) loops.set(key, []);
           loops.get(key).push(stream);
         }
-        if (["recycled input", "recovered solvent"].includes(fate) && !stream.recoveryPercent.trim()) {
-          warnings.push({
-            severity: "medium",
-            blockId: stream.blockId,
-            streamId: stream.id,
-            streamName: stream.name,
-            issue: "Recovery percent missing for recycled/recovered stream."
-          });
-        }
-        if (fate === "purge" && !stream.purgePercent.trim()) {
-          warnings.push({
-            severity: "medium",
-            blockId: stream.blockId,
-            streamId: stream.id,
-            streamName: stream.name,
-            issue: "Purge percent missing for purge stream."
-          });
-        }
-        if (stream.accumulationRisk.trim() && !stream.purgePercent.trim() && !["purge", "wastewater", "solid waste", "vent", "loss"].includes(fate)) {
-          warnings.push({
-            severity: "low",
-            blockId: stream.blockId,
-            streamId: stream.id,
-            streamName: stream.name,
-            issue: "Accumulation risk noted without purge/loss destination."
-          });
-        }
+        // recoveryPercent/purgePercent/accumulationRisk used to be settable per stream (a "Fate,
+        // recycle & notes" panel), so a missing value was something a user could go fill in. That
+        // panel was deliberately removed from the stream editor (see
+        // scripts/check_complete_separation_flow.js's "should not expose the old noisy routing
+        // section" assertions) and nothing else writes these fields for a new/edited stream, so a
+        // "missing" warning here is now unresolvable for any stream created going forward - it only
+        // still fires for data carried over from before the field was removed (e.g. the demo
+        // project). Dropped rather than leave a check nobody can act on.
       });
       const closures = streams
         .map(stream => recycleClosureEntry(stream, scaledByStreamId.get(stream.id)))
@@ -12966,12 +12947,23 @@
           }
           if (["recovered solvent", "recycled input"].includes(stream.fate)) {
             const dest = String(stream.destinationGroup || "").trim().toUpperCase();
-            if (!dest) {
-              issues.push({ groupId: owner || block.id, text: `${name}: recycle without destination group` });
-            } else if (/^G\d+$/.test(dest) && !state.groups[dest]) {
-              issues.push({ groupId: owner || block.id, text: `${name}: declared destination ${dest} no longer exists` });
-            } else if (/^G\d+$/.test(dest) && state.groups[dest] && owner && !hasLinkBetween(owner, dest)) {
-              issues.push({ groupId: owner, text: `${name}: recycle to ${dest} declared but arrow missing (use Auto-Connect)` });
+            if (dest) {
+              // Legacy/demo streams that already carry an explicit destination (the stream editor
+              // no longer exposes a field to set this, but old data and the demo project still
+              // have it) - validate it exactly as before.
+              if (/^G\d+$/.test(dest) && !state.groups[dest]) {
+                issues.push({ groupId: owner || block.id, text: `${name}: declared destination ${dest} no longer exists` });
+              } else if (/^G\d+$/.test(dest) && state.groups[dest] && owner && !hasLinkBetween(owner, dest)) {
+                issues.push({ groupId: owner, text: `${name}: recycle to ${dest} declared but arrow missing (use Auto-Connect)` });
+              }
+            } else if (owner) {
+              // No destination text available (nothing in the current UI can set it) - fall back
+              // to checking the board topology directly instead of a dead-end "declare a
+              // destination" prompt: does this group have any backward/recycle arrow at all?
+              const hasRecycleArrow = state.links.some(link => resolvedEndpointId(link.from) === owner && isBackwardLink(link));
+              if (!hasRecycleArrow) {
+                issues.push({ groupId: owner, text: `${name}: recycle/recovered stream but no backward arrow drawn from this group (drag a connect handle, or use Auto-Connect)` });
+              }
             }
           }
         });
