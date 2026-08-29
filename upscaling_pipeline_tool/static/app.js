@@ -1,4 +1,4 @@
-    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal. [Industrial addition, no laboratory counterpart] Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column. [Industrial addition, no laboratory counterpart] Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage. [Industrial addition, no laboratory counterpart] Route the aqueous wash effluent and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.`;
+    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 °C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 °C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal. [Industrial addition, no laboratory counterpart] Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column. [Industrial addition, no laboratory counterpart] Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage. [Industrial addition, no laboratory counterpart] Route the aqueous wash effluent and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.`;
     // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
     // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
     // of 0.05h) and a relative margin (avoids flagging trivial % differences on long processes) before
@@ -338,10 +338,10 @@
     };
 
     const conditionPromptCatalog = [
-      { id: "initial_temperature", label: "Initial temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "20", unit: "C", kind: "number" },
-      { id: "target_temperature", label: "Target / final temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "85-90", unit: "C", kind: "number" },
+      { id: "initial_temperature", label: "Initial temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "20", unit: "°C", kind: "number" },
+      { id: "target_temperature", label: "Target / final temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)"], placeholder: "85-90", unit: "°C", kind: "number" },
       { id: "holding_time", label: "Holding time", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
-      { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "C", kind: "number" },
+      { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "°C", kind: "number" },
       { id: "thermal_ramp", label: "Ramp / cooling time", phenomena: ["ES(H)", "ES(C)"], placeholder: "0.5", unit: "h", kind: "number", hint: "How long it takes to ramp up to the target/heating temperature, or to cool down toward the holding/final temperature." },
       { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", disabled: true, hint: "Not wired into scaling calculations yet - placeholder for a future heating/cooling equipment model." },
       { id: "initial_pressure", label: "Initial pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "1", units: ["atm", "bar", "mbar"], defaultUnit: "atm", kind: "number" },
@@ -370,10 +370,10 @@
     ];
 
     const propertyPromptCatalog = [
-      { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
+      { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "°C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
       { id: "vapor_pressure", label: "Vapor pressure", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "mbar", placeholder: "at operating T", reason: "Clarifies vacuum operation, vent load, and volatile losses." },
       { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
-      { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
+      { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
       { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
       { id: "density_difference", label: "Density difference", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)"], unit: "kg/m3", placeholder: "organic vs aqueous", reason: "Needed for decanting and interface-settling plausibility." },
       { id: "partition_coefficient", label: "Partition coefficient", phenomena: ["PT(LL)", "PC(LL)"], unit: "", placeholder: "K or logP", reason: "Helps rank liquid-liquid extraction or washing intensity." },
@@ -814,7 +814,7 @@
       ensureBlockConditionFields(block);
       if (options.temperature) {
         block.conditions.target_temperature = options.temperature;
-        block.conditionUnits.target_temperature = block.conditionUnits.target_temperature || "C";
+        block.conditionUnits.target_temperature = block.conditionUnits.target_temperature || "°C";
       }
       if (options.time) {
         block.conditions.holding_time = options.time;
@@ -910,7 +910,7 @@
       const temperatureMatch = text.match(/(\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*C|\d+(?:\.\d+)?\s*°?\s*C)/i);
       if (hasThermal && temperatureMatch) {
         conditions.target_temperature = temperatureMatch[1].replace(/°?\s*C/ig, "").replace(/\s+/g, " ").trim();
-        units.target_temperature = "C";
+        units.target_temperature = "°C";
       }
       const hasMixing = phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("));
       const hasSeparation = phenomena.some(code => code.startsWith("PS("));
@@ -1038,7 +1038,9 @@
       if (!text) return "";
       const escapedUnit = unit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       text = text.replace(new RegExp(`\\s*${escapedUnit}\\s*$`, "i"), "").trim();
-      if (unit === "C") text = text.replace(/\s*°\s*$/i, "").trim();
+      // The generic strip above only catches a trailing "°C" exactly; also strip "85 C" or "85°"
+      // typed without the full unit string, so a bare value is stored either way.
+      if (unit === "°C") text = text.replace(/\s*(°C|°|C)\s*$/i, "").trim();
       return text;
     }
 
@@ -1116,13 +1118,13 @@
         ),
         makeBlock(
           "B2",
-          "Heat the stirred mixture to reflux at 85 C.",
+          "Heat the stirred mixture to reflux at 85 °C.",
           "G1",
           "heat/cool",
           ["ES(H)", "M(L)"],
           [],
           { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", agitation_note: "stirred mixture, heated to reflux" },
-          { initial_temperature: "C", target_temperature: "C" }
+          { initial_temperature: "°C", target_temperature: "°C" }
         ),
         makeBlock(
           "B3",
@@ -1138,17 +1140,17 @@
             { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
           ],
           { reaction_time: "21", holding_temperature: "85", conversion_yield: "90", agitation_note: "refluxing stirred liquid", transfer_endpoint: "no further water separates in the Dean-Stark trap" },
-          { reaction_time: "h", holding_temperature: "C", conversion_yield: "%" }
+          { reaction_time: "h", holding_temperature: "°C", conversion_yield: "%" }
         ),
         makeBlock(
           "B4",
-          "Cool the crude reaction mixture to 40 C.",
+          "Cool the crude reaction mixture to 40 °C.",
           "G3",
           "heat/cool",
           ["ES(C)"],
           [],
           { initial_temperature: "85", target_temperature: "40" },
-          { initial_temperature: "C", target_temperature: "C" }
+          { initial_temperature: "°C", target_temperature: "°C" }
         ),
         makeBlock(
           "B5",
@@ -1259,10 +1261,10 @@
       state.groups = {
         G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", selectionBasis: "combined charge/mixing and heat-up in the same stirred jacketed reactor; preserves the protocol step while industrial feed tanks only support charging (paper U1, SI Table S3)", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge from feed tanks (paper U1) plus heat to reflux; receives recovered cyclohexane loop CYHX. Duration per SI Table S1 B2: ramp to reflux 0.5-1 h, plus charge time - set to 1.5 h so the single-train Gantt sums to the SI's stated ~28 h makespan (SI Step 6)." }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
         G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "liquid-phase reaction plus reflux/Dean-Stark removal; selected as the scale-up reactor class in paper U2 and SI Step 6", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value (SI Step 6: limiting cycle time CT = max(tau/N) is set by U2 at approx. 20 h, kinetics-bound); kinetic bottleneck, cannot be relieved by parallelization within one unit. Reactor sizing per SI Step 6: stoichiometric charge (1512 kg benzophenone + 1637 kg 2-EH cyanoacetate, approx. 3.2 m3) plus cyclohexane at 2.5 L/kg product (7.5 m3 for a 3000 kg batch) gives a 10.7 m3 total charge; at 70% working fill this requires an approx. 15 m3 reactor, matching the paper exactly." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
-        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", selectionBasis: "cooling is heat-transfer limited at scale; external loop is kept as a conservative equipment-dependent cooling option rather than only jacket cooling", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3. Duration per SI Table S1 B4: 'Cool to room temperature; To 25 C; 1 h'." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
+        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", selectionBasis: "cooling is heat-transfer limited at scale; external loop is kept as a conservative equipment-dependent cooling option rather than only jacket cooling", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3. Duration per SI Table S1 B4: 'Cool to room temperature; To 25 °C; 1 h'." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
         G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "two-stage counter-current liquid-liquid contact plus settling maps directly to mixer-settler/liquid-liquid extraction (paper U3)", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
         G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "fixed-bed molecular-sieve column: not derivable from protocol phenomena, chosen by drying/adsorption heuristic", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection. Third recycle loop per SI Step 4: periodic regeneration of this molecular-sieve bed (water desorbed, bed returned to service) replaces the single-use lab desiccant and avoids a continuous wet-solid waste stream. Duration close to B7's stated contact_time of 1 h plus loading/unloading margin; sized so the single-train Gantt sums to the SI's ~28 h makespan." }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
-        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", selectionBasis: "thin-film evaporator over flash: heat-sensitivity heuristic H33 for the ester product", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); overhead condensate sent to the cyclohexane recovery column (paper U8), not recycled directly. Duration close to B8's stated phase_change_time of 2 h plus vacuum draw margin; sized so the single-train Gantt sums to the SI's ~28 h makespan." }, properties: { boiling_point: { value: "81", unit: "C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
+        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", selectionBasis: "thin-film evaporator over flash: heat-sensitivity heuristic H33 for the ester product", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); overhead condensate sent to the cyclohexane recovery column (paper U8), not recycled directly. Duration close to B8's stated phase_change_time of 2 h plus vacuum draw margin; sized so the single-train Gantt sums to the SI's ~28 h makespan." }, properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
         G7: { id: "G7", task: "final purification", selectedUnit: "Distillation", selectionBasis: "short-path molecular distillation at 1.5 mbar: heat-sensitivity heuristic, minimize thermal exposure", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at 1.5 mbar chosen by heat-sensitivity heuristic (paper U6); secondary bottleneck (SI Step 6: 3-5 h, relievable by parallelization); heavies to incineration/boiler fuel" }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3980, y: 90 },
         G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "not derivable from protocol phenomena alone: industrial addition with no laboratory counterpart (paper U8, SI 3.iv)", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "principal recycle loop (SI Step 4): standard distillation column combining the U2 reflux/decanter purge (G2), the U5 evaporator overhead (G6), and the U7 TSA vent return (G10); recovers cyclohexane at >=98% and returns it to U1 (G1)" }, properties: {}, propertiesEditing: false, x: 3420, y: 520 },
         G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "not derivable from protocol phenomena alone: compliance interface with no laboratory counterpart (paper U9, SI 3.iv)", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "neutralization tank + bio-WWT inlet (paper U9); collects the reactor condensation water (G2) and the aqueous/brine wash effluent (G4, including the NH4OAc catalyst, which is not recovered - SI Table S3 task T6)" }, properties: {}, propertiesEditing: false, x: 1740, y: 520 },
@@ -1329,7 +1331,7 @@
     }
 
     function loadTripleReactantExampleProject() {
-      const text = "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 C for 3 h to form benzyl acetate at 90 percent yield. After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
+      const text = "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate at 90 percent yield. After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
       const makeBlock = (id, phrase, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}) => {
         const start = text.indexOf(phrase);
         return {
@@ -1355,7 +1357,7 @@
       state.blocks = [
         makeBlock(
           "B1",
-          "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 C for 3 h to form benzyl acetate at 90 percent yield.",
+          "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate at 90 percent yield.",
           "G1",
           "reaction",
           ["R(L)", "M(L)", "ES(H)"],
@@ -1366,7 +1368,7 @@
             { role: "output", name: "benzyl acetate", quantity: "1.39", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", note: "Theoretical product basis from limiting benzyl alcohol; conversion popup makes 90%, approx. 1.25 kg." }
           ],
           { conversion_yield: "90", target_temperature: "65", reaction_time: "3", mixing_mode: "stirred liquid phase" },
-          { conversion_yield: "%", target_temperature: "C", reaction_time: "h" }
+          { conversion_yield: "%", target_temperature: "°C", reaction_time: "h" }
         ),
         makeBlock(
           "B2",
@@ -1381,7 +1383,7 @@
             { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" }
           ],
           { separation_efficiency: "90", transfer_endpoint: "benzyl acetate product", target_temperature: "80" },
-          { separation_efficiency: "%", target_temperature: "C" }
+          { separation_efficiency: "%", target_temperature: "°C" }
         )
       ];
       const reactionBlock = state.blocks.find(block => block.id === "B1");
