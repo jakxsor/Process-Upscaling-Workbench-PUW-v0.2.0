@@ -378,11 +378,6 @@
         if (isBackwardLink(link)) recycleLinks.push({ from, to });
         else forwardLinks.push({ from, to });
       });
-      if (!state.links.length && groups.length > 1) {
-        for (let i = 0; i < groups.length - 1; i += 1) {
-          forwardLinks.push({ from: groups[i].id, to: groups[i + 1].id });
-        }
-      }
       const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 34;
@@ -582,7 +577,8 @@
       const forwardPaths = forwardGroups.join("");
 
       let recycleIndex = 0;
-      const recyclePaths = model.recycleLinks.map(link => {
+      const showAuxiliaryArrows = state.flowsheetShowAuxiliaryArrows === true;
+      const recyclePaths = (showAuxiliaryArrows ? model.recycleLinks : []).map(link => {
         const from = model.byId.get(link.from);
         const to = model.byId.get(link.to);
         const laneY = model.recycleLaneBaseY + recycleIndex * 34;
@@ -678,7 +674,7 @@
       const boxes = model.groups.map(box => {
         const style = flowsheetCategoryStyle[box.category];
         const center = flowsheetBoxCenter(box);
-        const wasteVentHtml = [...box.wasteStreams.map(s => ({ ...s, kind: "waste" })), ...box.ventStreams.map(s => ({ ...s, kind: "vent" }))]
+        const wasteVentHtml = (showAuxiliaryArrows ? [...box.wasteStreams.map(s => ({ ...s, kind: "waste" })), ...box.ventStreams.map(s => ({ ...s, kind: "vent" }))] : [])
           .map((stream, i) => {
             const color = stream.kind === "waste" ? { line: "#965d00", marker: "url(#fsArrowOrange)" } : { line: "#657480", marker: "url(#fsArrowGrey)" };
             const leftSide = i % 2 === 1;
@@ -697,7 +693,7 @@
         // previously had no arrow anywhere on the diagram, even though they exist in the MFA data -
         // draw a small labeled inlet stub for those. Restricted to the top row (stageRow 0) since
         // that's the only row with guaranteed free space above the box to route into.
-        const extraInlets = box.id !== firstGroupId && box.stageRow === 0
+        const extraInlets = showAuxiliaryArrows && box.id !== firstGroupId && box.stageRow === 0
           ? flowsheetExternalInputStreams(box, model.groups).slice(0, 2)
           : [];
         const inletHtml = extraInlets.map((stream, i) => {
@@ -755,7 +751,7 @@
           <rect x="0" y="0" width="${model.width}" height="${drawingHeight}" fill="#ffffff"></rect>
           <rect x="18" y="18" width="${model.width - 36}" height="${drawingHeight - 36}" fill="none" stroke="#172027" stroke-width="1.2"></rect>
           <text x="36" y="48" font-size="18" font-weight="900" fill="#172027">Generated Process Flowsheet</text>
-          <text x="36" y="68" font-size="11" fill="#657480">Draft PFD generated from the current block/group model. Hover units and streams for MFA and condition details.</text>
+          <text x="36" y="68" font-size="11" fill="#657480">Draft PFD generated from declared task links. Auxiliary feed/waste arrows are optional.</text>
           ${feedBoxMarkup}
           ${forwardPaths}
           ${recyclePaths}
@@ -784,7 +780,15 @@
           </g>
         </svg>
       `;
-      return { svg, empty: false, width: model.width, height: drawingHeight };
+      return {
+        svg,
+        empty: false,
+        width: model.width,
+        height: drawingHeight,
+        groupCount: model.groups.length,
+        forwardLinkCount: model.forwardLinks.length,
+        recycleLinkCount: model.recycleLinks.length
+      };
     }
 
     function wrapSvgText(text, maxChars) {
@@ -821,7 +825,7 @@
       const editable = $("flowsheetEditableMode");
       const technical = $("flowsheetTechnicalMode");
       if (state.flowsheetMode === "technical" && !technical) state.flowsheetMode = "editable";
-      if (editable) editable.classList.add("primary");
+      if (editable) editable.classList.toggle("primary", state.flowsheetMode !== "technical");
       if (technical) technical.classList.toggle("primary", state.flowsheetMode === "technical");
       const fit = $("fitFlowsheetView");
       if (fit) {
@@ -834,6 +838,8 @@
       $("resetFlowsheetLayout").disabled = false;
       const labelToggle = $("flowsheetShowStreamLabels");
       if (labelToggle) labelToggle.checked = state.flowsheetShowStreamLabels !== false;
+      const auxToggle = $("flowsheetShowAuxiliaryArrows");
+      if (auxToggle) auxToggle.checked = state.flowsheetShowAuxiliaryArrows === true;
     }
 
     async function renderFlowsheetModal() {
@@ -846,9 +852,12 @@
       host.classList.toggle("fit-mode", state.flowsheetFit && state.flowsheetMode !== "technical");
       const result = buildFlowsheetSvg();
       if (state.flowsheetMode !== "technical") {
+        const linkNote = !result.empty && !state.links.length && result.groupCount > 1
+          ? `<div class="flowsheet-render-status warn">No declared process arrows yet. The flowsheet is showing units, feed, and product only; use board arrows or Auto-Connect, then review the links.</div>`
+          : "";
         host.innerHTML = result.empty
           ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-          : `<div class="flowsheet-render-status ok">Editable flowsheet board. Drag units, double-click unit labels, and hover arrows/units for details.</div>${result.svg}`;
+          : `${linkNote}<div class="flowsheet-render-status ok">Editable flowsheet board. Drag units, double-click unit labels, and hover arrows/units for details.</div>${result.svg}`;
         if (!result.empty) wireFlowsheetInteractions(host);
         if (!result.empty) requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
         return;

@@ -519,6 +519,7 @@
       focusEndpoint: null,
       flowsheetMode: "editable",
       flowsheetFit: true,
+      flowsheetShowAuxiliaryArrows: false,
       drag: null,
       boardPan: null
     };
@@ -2375,6 +2376,37 @@
       setGroupBoardMode(groupId, true);
     }
 
+    function groupTaskEditBlock(group) {
+      if (!group?.blocks?.length) return null;
+      return group.blocks.find(block => state.selectedBlockId === block.id)
+        || group.blocks.find(block => (block.streams || []).some(stream => String(stream.name || "").trim()))
+        || group.blocks[0];
+    }
+
+    function addGroupTaskStream(groupId, role) {
+      const group = groupModel(groupId);
+      const target = groupTaskEditBlock(group);
+      if (!target) return;
+      ensureBlockFlowFields(target);
+      pushUndo();
+      const streamRole = role === "outlet" ? "output" : role;
+      const stream = createStream(streamRole, {
+        id: nextStreamId(target),
+        editing: true,
+        status: "missing",
+        note: `Added from task-level Material & Conditions editor for ${groupId}.`
+      });
+      target.streams.push(stream);
+      state.selectedGroupId = groupId;
+      state.selectedBlockId = target.id;
+      state.selectedIds = [target.id];
+      state.pendingStepStreamFocusId = stream.id;
+      state.pendingStepStreamScrollRole = role;
+      syncLegacyStreamLists(target);
+      invalidateAiRefine();
+      renderAll();
+    }
+
     function renderGroupFlow() {
       const root = $("groupFlow");
       $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
@@ -2426,7 +2458,7 @@
                 <span class="muted small">${escapeHtml(group.task)}</span>
                 <span class="compact-meta">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"} · ${group.phenomena.length} phenomena</span>
                 ${groupUnitSuggestionGateHtml(group, { board: true })}
-                <button type="button" class="compact-open-hint" data-open-group-board="${escapeAttr(group.id)}">Open detailed group</button>
+                <button type="button" class="compact-open-hint" data-open-group-board="${escapeAttr(group.id)}">Edit task materials</button>
               </div>
             </section>
           `;
@@ -2510,7 +2542,7 @@
 
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
-          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board]") || event.target.closest("[data-suggest-unit-operation]")) return;
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
           if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
             addConnection(state.connectingFrom, box.dataset.groupBox);
             return;
@@ -3260,7 +3292,7 @@
           <strong>${escapeHtml(block.id)}</strong>
           <span>${escapeHtml(block.behavior)}</span>
           ${body ? `<small>${escapeHtml(body)}</small>` : ""}
-          ${meta ? `<em>${escapeHtml(meta)}</em>` : ""}
+          <em>source block${meta ? ` · ${escapeHtml(meta)}` : ""}</em>
         </button>
       `;
     }
@@ -3329,6 +3361,7 @@
       const total = item.totalText ? item.totalText : "not summed";
       const pillLabel = item.override ? `${escapeHtml(item.override.value)} ${escapeHtml(item.totalUnit || "")}`.trim() : escapeHtml(total);
       const tone = role === "outlet" ? streamTone({ role: item.role, fate: item.fates?.[0] }, role) : role;
+      const sourceIds = [...new Set((item.entries || []).map(entry => entry.blockId).filter(Boolean))];
       return `
         <div class="group-mfa-item ${tone ? `role-${escapeAttr(tone)}` : ""}">
           <div class="group-mfa-item-head">
@@ -3336,6 +3369,12 @@
             <span class="pill ${item.override ? "blue" : item.totalText ? "blue" : "warn"}">${pillLabel}</span>
           </div>
           ${item.fates?.length ? `<div class="mfa-label-meta">${item.fates.slice(0, 3).map(fate => `<span class="pill ${streamTone({ role: item.role, fate }) === "waste" ? "warn" : streamTone({ role: item.role, fate }) === "product" ? "green" : "blue"}">${escapeHtml(fate)}</span>`).join("")}</div>` : ""}
+          ${sourceIds.length ? `
+            <div class="group-mfa-source-row">
+              <span>source</span>
+              ${sourceIds.map(blockId => `<button type="button" class="source-chip" data-open-block-from-group="${escapeAttr(blockId)}" title="Edit the source block that stores this task material">${escapeHtml(blockId)}</button>`).join("")}
+            </div>
+          ` : ""}
           <div class="group-mfa-lines">
             ${item.lines.slice(0, 4).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
             ${item.lines.length > 4 ? `<span>+${item.lines.length - 4} more entries</span>` : ""}
@@ -3390,7 +3429,7 @@
         <div class="group-mfa-item">
           <div class="group-mfa-item-head">
             <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.override ? "blue" : item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(pillLabel)}</span>
+            <span class="pill ${item.override ? "blue" : ["summed_numeric_same_unit", "common_value", "phase_labeled"].includes(item.status) ? "green" : "warn"}">${escapeHtml(pillLabel)}</span>
           </div>
           <div class="group-mfa-lines">
             ${item.lines.slice(0, 3).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
@@ -3451,7 +3490,7 @@
         <article class="condition-label-card group-condition-card tip" data-tip="${escapeAttr(source || "No source condition lines.")}">
           <strong>${escapeHtml(item.label)} ${item.overrideApplied ? `<span class="pill blue">edited</span>` : ""}</strong>
           <span>${escapeHtml(item.effectiveDisplay || item.display)}</span>
-          <span class="pill ${item.status === "summed_numeric_same_unit" || item.status === "common_value" ? "green" : "warn"}">${escapeHtml(groupConditionStatusLabel(item))}</span>
+          <span class="pill ${["summed_numeric_same_unit", "common_value", "phase_labeled"].includes(item.status) ? "green" : "warn"}">${escapeHtml(groupConditionStatusLabel(item))}</span>
         </article>
       `;
     }
@@ -3480,6 +3519,7 @@
       if (item.overrideApplied) return "edited group value";
       if (item.status === "summed_numeric_same_unit") return "summed";
       if (item.status === "common_value") return "same value";
+      if (item.status === "phase_labeled") return "heating/cooling split";
       return "combined";
     }
 
@@ -3488,7 +3528,8 @@
         ensureBlockConditionFields(block);
         return conditionValuesForBlock(block).map(item => ({
           ...item,
-          blockId: block.id
+          blockId: block.id,
+          blockPhenomena: block.phenomena || []
         }));
       });
       const byCondition = new Map();
@@ -3530,6 +3571,28 @@
         };
       }
       const uniqueDisplays = Array.from(new Set(items.map(formatConditionValue)));
+      // A heating block and a cooling block in the same task (e.g. reflux then cool down) both
+      // report e.g. target_temperature, but the two values mean different things and aren't
+      // summable - label each by its thermal phase instead of the ambiguous "85 degC + 40 degC"
+      // below, and only when every item resolves to a distinct phase so this never mislabels a
+      // genuine conflict (two blocks that are both heating, or neither) as a clean sequence.
+      if (uniqueDisplays.length > 1 && thermalConditionIds().has(first.id)) {
+        const phaseLabels = items.map(item => thermalPhaseLabel(item.blockPhenomena));
+        if (phaseLabels.every(Boolean) && new Set(phaseLabels).size > 1) {
+          const display = items.map((item, index) => `${phaseLabels[index]}: ${formatConditionValue(item)}`).join(", ");
+          return {
+            id: first.id,
+            label: first.label,
+            unit,
+            display,
+            value: display,
+            status: "phase_labeled",
+            aggregationMode: "heating_cooling_phase_split",
+            lines,
+            entries: items.map(exportConditionEntry)
+          };
+        }
+      }
       const status = uniqueDisplays.length === 1 ? "common_value" : "sequence_or_conflict";
       const combinedDisplay = uniqueDisplays.length === 1 ? uniqueDisplays[0] : uniqueDisplays.join(" + ");
       return {
@@ -3555,6 +3618,23 @@
         "phase_change_time",
         "settling_time"
       ]);
+    }
+
+    // Temperature fields where two blocks in the same group (e.g. a heat-up block and a separate
+    // cool-down block, both ES(H)/ES(C) but not both) legitimately carry different values that
+    // aren't summable like a duration - see thermalPhaseLabel below.
+    function thermalConditionIds() {
+      return new Set(["initial_temperature", "target_temperature", "holding_temperature"]);
+    }
+
+    // "Heating" or "Cooling" when a block's phenomena unambiguously say which one it is (has
+    // exactly one of ES(H)/ES(C)); "" when it's both, neither, or otherwise not distinguishable.
+    function thermalPhaseLabel(phenomena = []) {
+      const hasHeat = phenomena.includes("ES(H)");
+      const hasCool = phenomena.includes("ES(C)");
+      if (hasHeat && !hasCool) return "Heating";
+      if (hasCool && !hasHeat) return "Cooling";
+      return "";
     }
 
     function exportConditionEntry(item) {
@@ -11503,6 +11583,8 @@
       const separationModel = separationSimulatorModel(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
       const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
+      const taskEditBlock = groupTaskEditBlock(group);
+      const taskEditBlockLabel = taskEditBlock ? `new rows are stored on ${taskEditBlock.id}` : "no source block available";
       root.className = "step-flow-inspector";
       applyStepFlowEditorSize(root, true, "group");
       root.innerHTML = `
@@ -11526,7 +11608,17 @@
         </div>
         <div class="group-drawer-work-grid">
           <div class="group-drawer-section-label">
-            <strong>Material & Conditions</strong>
+            <div>
+              <strong>Material & Conditions</strong>
+              <span>Task-level editor; source blocks remain editable for evidence and fine corrections.</span>
+            </div>
+            <div class="group-task-actions">
+              <span>${escapeHtml(taskEditBlockLabel)}</span>
+              ${taskEditBlock ? `
+                <button type="button" class="mini-button" data-add-group-task-stream="input" data-group-task-stream-group="${escapeAttr(group.id)}">+ Task input</button>
+                <button type="button" class="mini-button" data-add-group-task-stream="outlet" data-group-task-stream-group="${escapeAttr(group.id)}">+ Task outlet</button>
+              ` : ""}
+            </div>
           </div>
           <div class="mfa-grid group-mfa-grid">
             ${mfaByRole.map(roleGroup => `
@@ -11596,6 +11688,13 @@
           const target = ensureGroup(button.dataset.suggestUnitOperation);
           target.unitSuggestionsExpanded = true;
           renderStepFlowInspector();
+        });
+      });
+      root.querySelectorAll("[data-add-group-task-stream]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          addGroupTaskStream(button.dataset.groupTaskStreamGroup, button.dataset.addGroupTaskStream);
         });
       });
       root.querySelectorAll("[data-open-block-from-group]").forEach(button => {
@@ -12729,7 +12828,7 @@
       if (!added) dropLastUndo();
       renderAll();
       $("connectionStatus").textContent = added
-        ? `Auto-connect: ${added} arrow${added === 1 ? "" : "s"} added (text order + declared recycle destinations).`
+        ? `Auto-connect: ${added} draft arrow${added === 1 ? "" : "s"} added. Review and remove any link that is not a true process connection.`
         : "Auto-connect: nothing to add — network already connected.";
     }
 
@@ -14768,6 +14867,10 @@
     });
     $("flowsheetShowStreamLabels")?.addEventListener("change", event => {
       state.flowsheetShowStreamLabels = event.target.checked;
+      renderFlowsheetModal();
+    });
+    $("flowsheetShowAuxiliaryArrows")?.addEventListener("change", event => {
+      state.flowsheetShowAuxiliaryArrows = event.target.checked;
       renderFlowsheetModal();
     });
     if ($("flowsheetTechnicalMode")) {

@@ -375,6 +375,9 @@ APP_HTML = r"""<!doctype html>
           <label class="flowsheet-toolbar-check" title="Print substance + quantity on each stream arrow, not just on hover - matters once the diagram leaves the browser (e.g. downloaded as SVG for a figure)">
             <input type="checkbox" id="flowsheetShowStreamLabels" checked> Stream labels
           </label>
+          <label class="flowsheet-toolbar-check" title="Show secondary feed, waste, and vent stubs. Keep this off for a clean process-sequence diagram.">
+            <input type="checkbox" id="flowsheetShowAuxiliaryArrows"> Aux arrows
+          </label>
           <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
           <span class="flowsheet-toolbar-divider"></span>
           <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
