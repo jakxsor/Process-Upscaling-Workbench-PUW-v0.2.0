@@ -138,6 +138,16 @@
       "fixed loss %",
       "manual"
     ];
+    const conversionProductAmountModes = [
+      { value: "actual", label: "Actual produced amount" },
+      { value: "theoretical", label: "100% theoretical basis" },
+      { value: "from reactants", label: "Calculate from reactants" }
+    ];
+    const conversionOutletBasisModes = [
+      { value: "actual", label: "Actual amount" },
+      { value: "product basis %", label: "% of theoretical product" },
+      { value: "residual pool %", label: "% of unconverted reagent pool" }
+    ];
 
     const heuristicRuleLibrary = [
       { id: "H01", area: "reaction path", title: "Avoid hazardous route inventory", tags: ["hazard", "reaction"], severity: "medium", recommendation: "Prefer routes and operating policies that reduce toxic or hazardous storage and residence inventory." },
@@ -1378,6 +1388,7 @@
       if (reactionBlock) {
         reactionBlock.conversionDetail = {
           productStreamId: "B1-S4",
+          productAmountMode: "theoretical",
           byproducts: []
         };
       }
@@ -6873,9 +6884,34 @@
         block.conversionDetail = { productStreamId: "", byproducts: [] };
       }
       if (!Array.isArray(block.conversionDetail.byproducts)) block.conversionDetail.byproducts = [];
+      block.conversionDetail.byproducts = block.conversionDetail.byproducts.map(normalizeConversionOutlet);
       block.conversionDetail.productBasisQuantity = String(block.conversionDetail.productBasisQuantity || "");
+      if (!conversionProductAmountModes.some(mode => mode.value === block.conversionDetail.productAmountMode)) {
+        block.conversionDetail.productAmountMode = "";
+      }
       block.conversionDetail.lastGeneratedSummary = String(block.conversionDetail.lastGeneratedSummary || "");
       return block.conversionDetail;
+    }
+
+    function normalizeConversionOutlet(row = {}) {
+      const basis = conversionOutletBasisModes.some(mode => mode.value === row.basis)
+        ? row.basis
+        : "residual pool %";
+      return {
+        id: row.id || `co${Math.random().toString(36).slice(2, 8)}`,
+        name: String(row.name || ""),
+        basis,
+        percent: String(row.percent || ""),
+        amount: String(row.amount || ""),
+        unit: String(row.unit || ""),
+        role: ["coproduct", "byproduct", "residual"].includes(row.role) ? row.role : (basis === "residual pool %" ? "residual" : "byproduct")
+      };
+    }
+
+    function conversionOutletBasisOptions(selected) {
+      return conversionOutletBasisModes
+        .map(mode => `<option value="${escapeAttr(mode.value)}" ${mode.value === selected ? "selected" : ""}>${escapeHtml(mode.label)}</option>`)
+        .join("");
     }
 
     function conversionReactantStreams(block) {
@@ -6900,6 +6936,68 @@
       return conversionNumber(product?.quantity);
     }
 
+    function conversionProductAmountMode(block, product) {
+      const detail = ensureConversionDetail(block);
+      if (conversionProductAmountModes.some(mode => mode.value === detail.productAmountMode)) return detail.productAmountMode;
+      if (conversionNumber(detail.productBasisQuantity) > 0 || conversionNumber(product?.conversionBaseQuantity) > 0) return "theoretical";
+      if (!String(product?.quantity || "").trim()) return "from reactants";
+      return "actual";
+    }
+
+    function conversionProductModeLabel(value) {
+      return conversionProductAmountModes.find(mode => mode.value === value)?.label || "Actual produced amount";
+    }
+
+    function conversionProductModeOptions(selected) {
+      return conversionProductAmountModes
+        .map(mode => `<option value="${escapeAttr(mode.value)}" ${mode.value === selected ? "selected" : ""}>${escapeHtml(mode.label)}</option>`)
+        .join("");
+    }
+
+    function streamMolesForConversion(stream) {
+      const qty = conversionNumber(stream?.quantity);
+      const mw = conversionNumber(stream?.mw);
+      const unit = String(stream?.unit || "").toLowerCase();
+      if (!Number.isFinite(qty)) return NaN;
+      if (unit === "mol") return qty;
+      if (unit === "kmol") return qty * 1000;
+      if (!Number.isFinite(mw) || mw <= 0) return NaN;
+      if (unit === "kg") return qty * 1000 / mw;
+      if (unit === "g") return qty / mw;
+      return NaN;
+    }
+
+    function productAmountFromReactants(product, reactants) {
+      const reactantMoles = reactants.map(streamMolesForConversion).filter(Number.isFinite);
+      const limitingMol = reactantMoles.length ? Math.min(...reactantMoles) : NaN;
+      if (!Number.isFinite(limitingMol) || limitingMol <= 0) return { value: NaN, source: "missing reactant MW/amount" };
+      const unit = String(product?.unit || "kg").toLowerCase();
+      const productMw = conversionNumber(product?.mw);
+      if (unit === "mol") return { value: limitingMol, source: "limiting reactant, 1:1 stoichiometry assumed" };
+      if (unit === "kmol") return { value: limitingMol / 1000, source: "limiting reactant, 1:1 stoichiometry assumed" };
+      if (!Number.isFinite(productMw) || productMw <= 0) return { value: NaN, source: "missing product MW" };
+      const productKg = limitingMol * productMw / 1000;
+      if (unit === "kg") return { value: productKg, source: "limiting reactant and product MW, 1:1 stoichiometry assumed" };
+      if (unit === "g") return { value: productKg * 1000, source: "limiting reactant and product MW, 1:1 stoichiometry assumed" };
+      return { value: NaN, source: "unsupported product unit for reactant calculation" };
+    }
+
+    function conversionOutletMass(row, context) {
+      const normalized = normalizeConversionOutlet(row);
+      const unit = normalized.unit || context.fallbackUnit;
+      const percent = conversionNumber(normalized.percent);
+      const amount = conversionNumber(normalized.amount);
+      if (normalized.basis === "actual") {
+        return { ...normalized, unit, mass: amount, displayBasis: `${formatNumber(amount)} ${unit} actual`, subtractsResidualWaste: false };
+      }
+      if (normalized.basis === "product basis %") {
+        const mass = context.productQty * percent / 100;
+        return { ...normalized, unit, mass, displayBasis: `${formatNumber(percent)}% of theoretical product basis`, subtractsResidualWaste: false };
+      }
+      const mass = context.pooledLeftover * percent / 100;
+      return { ...normalized, unit, mass, displayBasis: `${formatNumber(percent)}% of unconverted reagent pool`, subtractsResidualWaste: true };
+    }
+
     function conversionCalculationModel(block) {
       ensureBlockConditionFields(block);
       const detail = ensureConversionDetail(block);
@@ -6916,14 +7014,35 @@
         pooledLeftover += leftover;
         return { stream, qty, used, leftover };
       });
-      const productQty = product ? conversionProductBasisQuantity(block, product) : 0;
-      const productMade = productQty * percent / 100;
-      const productShortfall = productQty * leftoverPercent / 100;
-      const byproductTotalPercent = detail.byproducts.reduce((sum, bp) => sum + conversionNumber(bp.percent), 0);
-      const byproductRows = detail.byproducts.map(bp => ({ ...bp, mass: pooledLeftover * (conversionNumber(bp.percent) / 100) }));
-      const wastePercent = Math.max(0, 100 - byproductTotalPercent);
-      const wasteMass = pooledLeftover * (wastePercent / 100);
+      const productMode = product ? conversionProductAmountMode(block, product) : "actual";
+      const productInputQty = conversionNumber(product?.quantity);
+      const fromReactants = product ? productAmountFromReactants(product, reactants) : { value: NaN, source: "" };
+      let productQty = product ? conversionProductBasisQuantity(block, product) : 0;
+      let productMade = productQty * percent / 100;
+      let productBasisSource = "100% theoretical product basis";
+      if (productMode === "actual") {
+        productMade = Number.isFinite(productInputQty) ? productInputQty : 0;
+        productQty = percent > 0 ? productMade / (percent / 100) : productMade;
+        productBasisSource = "actual produced amount; theoretical basis back-calculated from yield";
+      } else if (productMode === "from reactants") {
+        if (Number.isFinite(fromReactants.value)) {
+          productQty = fromReactants.value;
+          productMade = productQty * percent / 100;
+          productBasisSource = fromReactants.source;
+        } else {
+          productQty = conversionProductBasisQuantity(block, product);
+          productMade = productQty * percent / 100;
+          productBasisSource = `${fromReactants.source}; using entered product basis`;
+        }
+      }
+      const productShortfall = Math.max(0, productQty - productMade);
       const fallbackUnit = product?.unit || reactants[0]?.unit || "kg";
+      const byproductRows = detail.byproducts.map(bp => conversionOutletMass(bp, { productQty, pooledLeftover, fallbackUnit }));
+      const residualAllocatedPercent = byproductRows
+        .filter(row => row.subtractsResidualWaste)
+        .reduce((sum, row) => sum + conversionNumber(row.percent), 0);
+      const wastePercent = Math.max(0, 100 - residualAllocatedPercent);
+      const wasteMass = pooledLeftover * (wastePercent / 100);
       return {
         detail,
         percent,
@@ -6931,12 +7050,16 @@
         reactants,
         outputs,
         product,
+        productMode,
+        productInputQty,
+        productBasisSource,
         reactantRows,
         productQty,
         productMade,
         productShortfall,
         pooledLeftover,
-        byproductTotalPercent,
+        byproductTotalPercent: residualAllocatedPercent,
+        residualAllocatedPercent,
         byproductRows,
         wastePercent,
         wasteMass,
@@ -7054,13 +7177,14 @@
       if (calc.product) {
         const basis = calc.productQty || conversionNumber(calc.product.quantity);
         calc.detail.productBasisQuantity = String(basis || "");
+        calc.detail.productAmountMode = calc.productMode;
         calc.product.conversionBaseQuantity = String(basis || "");
         calc.product.quantity = formatNumber(calc.productMade);
         calc.product.status = "calculated";
         calc.product.fate = "product";
         calc.product.note = [
           calc.product.note,
-          `Balanced from conversion popup: ${formatNumber(calc.percent)}% of ${formatNumber(basis)} ${calc.product.unit || "kg"} product basis gives ${formatNumber(calc.productMade)} ${calc.product.unit || "kg"}.`
+          `Balanced from conversion popup: ${conversionProductModeLabel(calc.productMode)}; ${formatNumber(calc.percent)}% yield on ${formatNumber(basis)} ${calc.product.unit || "kg"} theoretical basis gives ${formatNumber(calc.productMade)} ${calc.product.unit || "kg"}.`
         ].filter(Boolean).join(" ");
         if (block.groupId) {
           const productSubstance = upsertSeparationSubstanceForConversion(block.groupId, calc.product, "product", "product", block.id);
@@ -7093,18 +7217,19 @@
       calc.byproductRows.forEach((row, index) => {
         const name = String(row.name || "").trim();
         if (!name || !(row.mass > 0)) return;
+        const role = row.role === "coproduct" ? "coproduct" : "byproduct";
         const stream = upsertConversionStream(block, "output", conversionGeneratedStreamId(block, `byproduct-${index + 1}`), {
           name,
           quantity: formatNumber(row.mass),
-          unit: calc.fallbackUnit,
+          unit: row.unit || calc.fallbackUnit,
           phase: "unknown",
           status: "calculated",
           timing: "in-process intermediate",
-          fate: "intermediate",
+          fate: row.role === "coproduct" ? "co-product" : "intermediate",
           scalingMode: "per batch",
-          note: `Auto-generated by Conversion balance as coproduct/byproduct: ${formatNumber(conversionNumber(row.percent))}% of the unconverted reagent pool.`
+          note: `Auto-generated by Conversion balance as ${role}: ${row.displayBasis}.`
         });
-        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, "byproduct", "recover", block.id);
+        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, role, "recover", block.id);
       });
       if (calc.wasteMass > 0) {
         upsertConversionStream(block, "waste", conversionGeneratedStreamId(block, "unassigned-waste"), {
@@ -7124,7 +7249,7 @@
         ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
       }
       syncLegacyStreamLists(block);
-      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover > 0).length} residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} coproduct/byproduct stream(s), ${calc.wasteMass > 0 ? "1" : "0"} waste stream.`;
+      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover > 0).length} residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct or residual outlet stream(s), ${calc.wasteMass > 0 ? "1" : "0"} unassigned waste stream.`;
       invalidateAiRefine();
       renderConversionModal();
       renderStepFlowInspector();
@@ -7210,7 +7335,7 @@
       }
       ensureBlockConditionFields(block);
       const calc = conversionCalculationModel(block);
-      const { detail, percent, leftoverPercent, reactants, outputs, product, reactantRows, productQty, productMade, productShortfall, pooledLeftover, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
+      const { detail, percent, leftoverPercent, reactants, outputs, product, productMode, productBasisSource, reactantRows, productQty, productMade, productShortfall, pooledLeftover, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
 
       body.innerHTML = `
         <div class="conversion-modal-body">
@@ -7223,7 +7348,7 @@
                 <span class="unit-badge">%</span>
               </div>
             </label>
-            <div class="muted small">At ${percent}% conversion, ${percent}% of every reagent below reacts and ${percent}% of the product basis is made — the remaining ${leftoverPercent}% shows up as waste or byproducts.</div>
+            <div class="muted small">At ${percent}% conversion, ${percent}% of each reagent reacts. Unreacted residuals are normalized on the reagent pool, not subtracted from the selected product twice.</div>
           </div>
 
           <div class="conversion-section">
@@ -7243,25 +7368,40 @@
                 <button type="button" class="mini-button" id="addConversionProduct">+ Product</button>
               </div>
             </div>
+            ${product ? `
+              <label class="conversion-product-mode">
+                <span class="label">Product amount means</span>
+                <select id="conversionProductMode">${conversionProductModeOptions(productMode)}</select>
+                <span class="muted small">${escapeHtml(productBasisSource)}</span>
+              </label>
+            ` : ""}
             ${product
               ? conversionStreamRowHtml(product.name || "(unnamed output)", productQty, productMade, productShortfall, product.unit, "made")
               : `<div class="muted small">No output stream to treat as the product yet — add one in MFA/streams.</div>`}
           </div>
 
           <div class="conversion-section">
-            <div class="conversion-section-head">Waste / byproducts <span class="muted small">(split of the unconverted ${leftoverPercent}%, ${pooledLeftover.toFixed(2)} ${escapeHtml(fallbackUnit)})</span></div>
+            <div class="conversion-section-head">Co/byproducts & residual outlets <span class="muted small">(unconverted reagent pool: ${pooledLeftover.toFixed(2)} ${escapeHtml(fallbackUnit)}; unassigned residual: ${wastePercent}%)</span></div>
             <div class="conversion-summary-bar">
-              ${byproductRows.map((row, i) => `<span class="conversion-bar-seg byproduct" style="width:${pooledLeftover ? (row.mass / pooledLeftover * 100) : 0}%; background:${byproductColor(i)}" title="${escapeAttr(row.name || "byproduct")}: ${row.mass.toFixed(2)} ${escapeAttr(fallbackUnit)}"></span>`).join("")}
+              ${byproductRows.filter(row => row.subtractsResidualWaste).map((row, i) => `<span class="conversion-bar-seg byproduct" style="width:${pooledLeftover ? (row.mass / pooledLeftover * 100) : 0}%; background:${byproductColor(i)}" title="${escapeAttr(row.name || "residual outlet")}: ${row.mass.toFixed(2)} ${escapeAttr(row.unit || fallbackUnit)}"></span>`).join("")}
               <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Waste: ${wasteMass.toFixed(2)} ${escapeAttr(fallbackUnit)}"></span>
             </div>
             <div class="conversion-byproduct-rows">
               ${detail.byproducts.map((bp, i) => `
                 <div class="conversion-byproduct-row">
                   <span class="conversion-byproduct-swatch" style="background:${byproductColor(i)}"></span>
-                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="byproduct name">
-                  <input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}">
-                  <span class="unit-badge">% of leftover</span>
-                  <span class="conversion-byproduct-mass muted small">${byproductRows[i].mass.toFixed(2)} ${escapeHtml(fallbackUnit)}</span>
+                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name">
+                  <select data-conversion-byproduct-role="${i}">
+                    ${optionHtml(["byproduct", "coproduct", "residual"], bp.role)}
+                  </select>
+                  <select data-conversion-byproduct-basis="${i}">
+                    ${conversionOutletBasisOptions(bp.basis)}
+                  </select>
+                  ${bp.basis === "actual"
+                    ? `<input type="number" min="0" step="0.001" data-conversion-byproduct-amount="${i}" value="${escapeAttr(bp.amount)}" placeholder="amount">`
+                    : `<input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}" placeholder="%">`}
+                  <input type="text" data-conversion-byproduct-unit="${i}" value="${escapeAttr(bp.unit || fallbackUnit)}" placeholder="${escapeAttr(fallbackUnit)}">
+                  <span class="conversion-byproduct-mass muted small">${byproductRows[i].mass.toFixed(2)} ${escapeHtml(byproductRows[i].unit || fallbackUnit)}</span>
                   <button type="button" class="mini-button" data-remove-conversion-byproduct="${i}">Remove</button>
                 </div>
               `).join("")}
@@ -7272,7 +7412,7 @@
                 <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(fallbackUnit)}</span>
               </div>
             </div>
-            <button type="button" class="mini-button" id="addConversionByproduct">+ Add byproduct</button>
+            <button type="button" class="mini-button" id="addConversionByproduct">+ Add residual outlet</button>
           </div>
 
           <div class="row between" style="margin-top:12px">
@@ -7285,6 +7425,13 @@
 
       $("conversionPercentSlider")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
       $("conversionPercentNumber")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
+      $("conversionProductMode")?.addEventListener("change", event => {
+        const detail = ensureConversionDetail(block);
+        detail.productAmountMode = event.target.value;
+        if (detail.productAmountMode === "actual") detail.productBasisQuantity = "";
+        invalidateAiRefine();
+        renderConversionModal();
+      });
       $("conversionProductSelect")?.addEventListener("change", event => {
         const detail = ensureConversionDetail(block);
         detail.productStreamId = event.target.value;
@@ -7314,12 +7461,46 @@
           invalidateAiRefine();
         });
       });
+      body.querySelectorAll("[data-conversion-byproduct-role]").forEach(input => {
+        input.addEventListener("change", event => {
+          const i = Number(event.target.dataset.conversionByproductRole);
+          ensureConversionDetail(block).byproducts[i].role = event.target.value;
+          invalidateAiRefine();
+          renderConversionModal();
+        });
+      });
+      body.querySelectorAll("[data-conversion-byproduct-basis]").forEach(input => {
+        input.addEventListener("change", event => {
+          const i = Number(event.target.dataset.conversionByproductBasis);
+          const row = ensureConversionDetail(block).byproducts[i];
+          row.basis = event.target.value;
+          if (row.basis === "actual") row.percent = "";
+          else row.amount = "";
+          invalidateAiRefine();
+          renderConversionModal();
+        });
+      });
       body.querySelectorAll("[data-conversion-byproduct-percent]").forEach(input => {
         input.addEventListener("input", event => {
           const i = Number(event.target.dataset.conversionByproductPercent);
           ensureConversionDetail(block).byproducts[i].percent = event.target.value;
           invalidateAiRefine();
           renderConversionModal();
+        });
+      });
+      body.querySelectorAll("[data-conversion-byproduct-amount]").forEach(input => {
+        input.addEventListener("input", event => {
+          const i = Number(event.target.dataset.conversionByproductAmount);
+          ensureConversionDetail(block).byproducts[i].amount = event.target.value;
+          invalidateAiRefine();
+          renderConversionModal();
+        });
+      });
+      body.querySelectorAll("[data-conversion-byproduct-unit]").forEach(input => {
+        input.addEventListener("input", event => {
+          const i = Number(event.target.dataset.conversionByproductUnit);
+          ensureConversionDetail(block).byproducts[i].unit = event.target.value;
+          invalidateAiRefine();
         });
       });
       body.querySelectorAll("[data-remove-conversion-byproduct]").forEach(button => {
@@ -7331,7 +7512,7 @@
         });
       });
       $("addConversionByproduct")?.addEventListener("click", () => {
-        ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", percent: "0" });
+        ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", basis: "actual", amount: "", unit: fallbackUnit, role: "byproduct" });
         invalidateAiRefine();
         renderConversionModal();
       });

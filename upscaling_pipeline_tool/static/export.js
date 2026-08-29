@@ -140,6 +140,7 @@
         behavior: block.behavior,
         phenomena: block.phenomena,
         streams: block.streams.map(stream => exportStream(stream)),
+        conversionDetail: block.conversionDetail || null,
         conditions: conditionValuesForBlock(block).map(item => exportCondition(item)),
         inputs: block.inputs,
         outputs: block.outputs,

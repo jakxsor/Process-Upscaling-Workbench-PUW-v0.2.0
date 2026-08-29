@@ -210,8 +210,52 @@ assert.strictEqual(loadedScale.reactorSizing.autoGroupId, "G1", "3-reagent auto-
 assert(Math.abs(conversionNumber(loadedScale.reactorSizing.reactorVolumeM3) - 0.005) < 0.002, "3-reagent demo should calculate a working-fill reactor volume from MFA inputs");
 assert.strictEqual(conversionReactantStreams(loadedReactionBlock).length, 3, "Top-level 3-reagent case should expose three selectable conversion reagents");
 assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4", "Top-level 3-reagent case should preselect the product in Conversion");
+assert.strictEqual(loadedReactionBlock.conversionDetail.productAmountMode, "theoretical", "Demo product amount should be marked as a 100% theoretical basis");
 assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");
 assert(Math.abs(conversionNumber(conversionProductStream(loadedReactionBlock).quantity) * 0.9 - 1.25) < 0.01, "Conversion popup should derive the 90% product amount from the theoretical product basis");
+const actualProductBlock = {
+  id: "BT",
+  behavior: "reaction",
+  phenomena: ["R(L)"],
+  streams: [
+    createStream("input", { id: "BT-S1", name: "reactant A", quantity: "1", unit: "kg", phase: "L" }),
+    createStream("output", { id: "BT-S2", name: "actual product", quantity: "0.90", unit: "kg", phase: "L", fate: "product" })
+  ],
+  conditions: { conversion_yield: "90" },
+  conditionUnits: { conversion_yield: "%" },
+  conversionDetail: { productStreamId: "BT-S2", productAmountMode: "actual", byproducts: [] }
+};
+let actualCalc = conversionCalculationModel(actualProductBlock);
+assert(Math.abs(actualCalc.productMade - 0.9) < 0.0001, "Actual produced product amount should not be multiplied by yield again");
+assert(Math.abs(actualCalc.productQty - 1.0) < 0.0001, "Actual produced amount should back-calculate the theoretical product basis");
+actualProductBlock.conversionDetail.productAmountMode = "theoretical";
+actualCalc = conversionCalculationModel(actualProductBlock);
+assert(Math.abs(actualCalc.productMade - 0.81) < 0.0001, "Theoretical product basis should still be multiplied by yield");
+actualProductBlock.conversionDetail = {
+  productStreamId: "BT-S2",
+  productAmountMode: "actual",
+  byproducts: [
+    { id: "bp-actual", name: "formed side product", basis: "actual", amount: "0.20", unit: "kg", role: "byproduct" },
+    { id: "bp-residual", name: "recoverable residual fraction", basis: "residual pool %", percent: "20", role: "residual" }
+  ]
+};
+actualCalc = conversionCalculationModel(actualProductBlock);
+assert(Math.abs(actualCalc.byproductRows.find(row => row.id === "bp-actual").mass - 0.2) < 0.0001, "Actual byproduct amount should be independent from the unconverted reagent pool");
+assert(Math.abs(actualCalc.byproductRows.find(row => row.id === "bp-residual").mass - 0.02) < 0.0001, "Residual outlet percent should be normalized on the unconverted reagent pool");
+assert(Math.abs(actualCalc.wasteMass - 0.08) < 0.0001, "Only residual-pool allocations should reduce unassigned waste");
+const fromReactantsBlock = {
+  ...actualProductBlock,
+  streams: [
+    createStream("input", { id: "BR-S1", name: "reactant A", quantity: "1", unit: "kg", phase: "L", mw: "100" }),
+    createStream("output", { id: "BR-S2", name: "product B", quantity: "", unit: "kg", phase: "L", fate: "product", mw: "200" })
+  ],
+  conversionDetail: { productStreamId: "BR-S2", productAmountMode: "from reactants", byproducts: [] }
+};
+const fromReactantsCalc = conversionCalculationModel(fromReactantsBlock);
+assert(Math.abs(fromReactantsCalc.productQty - 2.0) < 0.0001, "Reactant-derived mode should estimate 100% product basis from limiting reactant and MW");
+assert(Math.abs(fromReactantsCalc.productMade - 1.8) < 0.0001, "Reactant-derived mode should apply yield only after calculating theoretical basis");
+fromReactantsBlock.conversionDetail.productAmountMode = "";
+assert.strictEqual(conversionProductAmountMode(fromReactantsBlock, fromReactantsBlock.streams[1]), "from reactants", "Blank product quantity should default to reactant-derived calculation rather than actual zero product");
 assert(blockLutzeReactionSeparationLaunchHtml(loadedReactionBlock).includes("Simulate Lutze Substance Separation"), "Grouped reaction task block should expose the Lutze simulator launcher");
 const draftInputStream = createStream("input", { id: "B1-SD", name: "", editing: true });
 assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("benzyl alcohol"), "Input editor should not suggest materials already present as inputs in this step");
