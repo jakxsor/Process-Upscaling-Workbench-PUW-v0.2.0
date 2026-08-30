@@ -911,27 +911,34 @@
       // never appear in plain text, so the bare imperative verb form ("Cool the mixture",
       // "Heat to reflux" - extremely common protocol phrasing) never matched; only the other
       // alternatives in each list (cooled/cooling, heated/heating, etc.) did.
+      const hasCooling = /\bcool|cooled|cooling|quench|chilled|chill|room temperature|ambient/.test(t);
+      const hasHeating = /\bheat|heated|heating|reflux|boil|boiling|warm|warmed|evaporat|distill/.test(t);
+
       if (behavior === "heat/cool") {
-        const hasCooling = /\bcool|cooled|cooling|quench|room temperature/.test(t);
-        const hasHeating = /\bheat|heated|heating|reflux|boil|boiling|warm|evaporat|distill/.test(t);
         if (hasCooling && !hasHeating) return ["ES(C)"];
         if (hasHeating && !hasCooling) return ["ES(H)"];
+        return [...preset.phenomena];
       }
+
+      // inferBehavior only picks ONE dominant preset per block, so a sentence that combines a
+      // thermal step with something else - "Cool to room temperature and wash the organic layer",
+      // "The batch is cooled and then filtered" - used to silently drop the thermal side entirely:
+      // a thermal phenomenon only ever got added when the WHOLE block was classified as "heat/cool"
+      // itself. Add ES(C)/ES(H) on top of whatever preset applies whenever the text separately
+      // mentions cooling/heating, unless that preset already carries the phenomenon (e.g. "reaction"
+      // already implies ES(H); "solvent evaporation" already implies ES(H)).
+      const basePhenomena = [...preset.phenomena];
       // "Charge and mix" alone carries no thermal phenomenon, so a temperature stated in the same
       // sentence (e.g. "Charge the reagents at 25 C") previously had no condition field to land in
       // at all - not even to record that the charge happens at a controlled, non-ambient temperature.
-      // Add a thermal phenomenon only when the text actually mentions temperature, so a plain
-      // "Charge the reagents to the reactor" without any thermal detail doesn't get one for free.
-      if (behavior === "charge and mix") {
-        const hasCooling = /\bcool|cooled|cooling|chilled|chill|room temperature|ambient/.test(t);
-        const hasHeating = /\bheat|heated|heating|warm|warmed/.test(t);
-        const hasTemperatureValue = /\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*c\b|\d+(?:\.\d+)?\s*°?\s*c\b/i.test(text);
-        if (hasCooling || hasHeating || hasTemperatureValue) {
-          const thermal = hasCooling && !hasHeating ? "ES(C)" : "ES(H)";
-          return [...preset.phenomena, thermal];
-        }
-      }
-      return [...preset.phenomena];
+      // Only default to heating from a bare number (no explicit heat/cool word) for this behavior,
+      // so a plain "Charge the reagents to the reactor" without any thermal detail doesn't get one.
+      const hasTemperatureValue = behavior === "charge and mix"
+        && /\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*c\b|\d+(?:\.\d+)?\s*°?\s*c\b/i.test(text);
+      const additions = [];
+      if (hasCooling && !basePhenomena.includes("ES(C)")) additions.push("ES(C)");
+      if ((hasHeating || (hasTemperatureValue && !hasCooling)) && !basePhenomena.includes("ES(H)")) additions.push("ES(H)");
+      return additions.length ? [...basePhenomena, ...additions] : basePhenomena;
     }
 
     function inferInitialConditions(text, phenomena) {
@@ -11812,15 +11819,14 @@
             <div class="label">Group Aggregate View</div>
             <strong>${escapeHtml(group.id)}</strong>
             <span class="pill blue">${escapeHtml(group.task)}</span>
-            <div class="drawer-head-phenomena">
-              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena assigned.</span>`}
-            </div>
           </div>
           <div class="mfa-summary-strip">
             <span class="pill">${group.blocks.length} blocks</span>
-            <span class="pill green">${group.phenomena.length} phenomena</span>
             <span class="pill blue">${mfaCount} MFA groups</span>
             <span class="pill warn">${conditions.length} conditions</span>
+            <span class="drawer-head-phenomena drawer-head-phenomena-inline">
+              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena assigned.</span>`}
+            </span>
           </div>
         </div>
         <div class="group-drawer-work-grid">
