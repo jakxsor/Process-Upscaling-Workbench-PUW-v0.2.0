@@ -2144,6 +2144,12 @@
       overflow: auto;
     }
 
+    .step-flow-inspector.resizable .stream-editor-grid .mfa-rows,
+    .step-flow-inspector.resizable .group-mfa-grid .mfa-rows {
+      min-height: 108px;
+      max-height: 260px;
+    }
+
     .mfa-row {
       display: grid;
       grid-template-columns: repeat(4, minmax(86px, 1fr));
@@ -3341,6 +3347,17 @@
       min-height: 27px;
       padding: 4px 6px;
       font-size: 11px;
+    }
+
+    .conversion-stoich-fields {
+      display: grid;
+      grid-template-columns: minmax(46px, 0.8fr) minmax(58px, 1fr);
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .conversion-stoich-fields input {
+      min-width: 0;
     }
 
     .conversion-byproduct-swatch {
