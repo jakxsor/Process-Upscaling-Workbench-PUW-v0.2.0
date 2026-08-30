@@ -6561,6 +6561,7 @@
       });
       processSequenceChecks().forEach(issue => issues.push(issue));
       energyRecoveryChecks().forEach(issue => issues.push(issue));
+      reactorCapacityConsistencyIssues().forEach(issue => issues.push(issue));
       if (!state.links.length && state.blocks.length > 1) {
         issues.push(ruleIssue("low", "Process connectivity missing", "The checker cannot validate sequence, recycle, purge, or branch logic without arrows.", "board", "Draw arrows between blocks or groups."));
       }
@@ -6775,6 +6776,33 @@
         "Screening match only (temperature + schedule overlap, standard 10 C minimum approach) - check whether a practical heat-exchanger route exists before counting on it.",
         "sequence"
       ));
+    }
+
+    // Reactor sizing (working fill % + recipe loadings -> required vessel volume) and the Gantt
+    // "Capacity" field used for the Bottleneck/utilization check are two independent, manually
+    // entered numbers for the same thing (this reactor's volume) - nothing keeps them in sync, so
+    // changing the working-fill % or recipe loadings silently leaves Capacity stale, and the
+    // bottleneck/utilization check keeps comparing against the old number with no warning.
+    function reactorCapacityConsistencyIssues(scale = scaleModel()) {
+      const sizing = scale.reactorSizing;
+      const requiredM3 = parseStreamQuantity(sizing?.reactorVolumeM3);
+      if (!sizing?.ready || !Number.isFinite(requiredM3) || requiredM3 <= 0) return [];
+      const reference = inferReferenceStream(scale.basis);
+      const groupId = reactorSizingGroupId(scale.basis, reference);
+      if (!groupId || !state.groups[groupId]) return [];
+      const group = ensureGroup(groupId);
+      const capacityM3 = volumeToM3(group.schedule?.capacityAmount, group.schedule?.capacityUnit);
+      if (!Number.isFinite(capacityM3) || capacityM3 <= 0) return [];
+      const diffPercent = Math.abs(capacityM3 - requiredM3) / requiredM3 * 100;
+      if (diffPercent < 15) return [];
+      return [ruleIssue(
+        "medium",
+        "Reactor capacity out of sync with sizing calculation",
+        `${groupId}'s Gantt capacity (${formatNumber(capacityM3)} m3) differs from the calculated required reactor volume (${formatNumber(requiredM3)} m3, from working fill + recipe loadings in Reactor sizing) by ${formatNumber(diffPercent)}%.`,
+        groupId,
+        "Update the Gantt Capacity field to match the reactor sizing result, or adjust working fill/recipe loadings until they agree - these don't sync automatically, so the Bottleneck/utilization check can silently compare against a stale vessel size.",
+        "scale"
+      )];
     }
 
     function phaseHandoffIssues(from, to) {
@@ -7168,10 +7196,20 @@
         <section class="predictor-card lutze-launch-card">
           <div class="predictor-head">
             <div>
-              <div class="label">Lutze Reaction-Separation</div>
-              <div class="muted small">Open a draft pathway canvas for substance-separation moves. The main flowchart changes only when you apply the pathway.</div>
+              <div class="label">Optional post-reaction separation support</div>
+              <strong>Lutze Reaction-Separation</strong>
+              <div class="muted small">Use this when the reaction leaves a product mixed with residual reagents, byproducts, solvent, or recoverable streams.</div>
             </div>
             <span class="pill ${missing.length ? "warn" : "green"}">${escapeHtml(status)}</span>
+          </div>
+          <div class="lutze-launch-copy">
+            <span>Builds a draft separation pathway from this task's MFA, conversion balance, phases, and chemical properties.</span>
+            <span>The main flowchart is unchanged until you apply one pathway.</span>
+          </div>
+          <div class="lutze-launch-facts">
+            <span><strong>${model.substances.length}</strong> substances</span>
+            <span><strong>${model.pairs.length}</strong> binary pairs</span>
+            <span><strong>${path.nextOptions.length}</strong> next moves</span>
           </div>
           <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">Simulate Lutze Substance Separation</button>
         </section>
@@ -8994,10 +9032,8 @@
       if (eyebrow) eyebrow.textContent = pathwayMode ? "Substance pathway simulation" : "Optional KB3.1 sandbox";
       const tabs = pathwayMode
         ? [
-          ["pathway", "1. Simulation"],
-          ["substances", "2. Substances"],
-          ["binary", "3. Binary Data"],
-          ["balance", "4. Balance"]
+          ["pathway", "Simulation"],
+          ["substances", "Substances"]
         ]
         : [
           ["balance", "1. Reaction Balance"],
@@ -10316,7 +10352,6 @@
             <div class="sep-unit-actions">
               <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync Substances</button>
               <button data-pubchem-autofill="${escapeAttr(group.id)}">Fetch PubChem</button>
-              <button data-sep-sim-tab="binary">Binary Data</button>
               <button data-pathway-undo="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Undo Last</button>
               <button data-pathway-reset="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Reset</button>
               <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.steps.length && path.editIndex < 0 ? "" : "disabled"}>Apply Pathway to Main Flowsheet</button>
@@ -10326,6 +10361,7 @@
             <strong>${escapeHtml(path.mainProduct ? `Main product: ${path.mainProduct.name}` : "Main product not selected")}</strong>
             <span>${escapeHtml(path.active.length ? `${path.active.length} component${path.active.length === 1 ? "" : "s"} remain in the draft mixture.` : "No active mixture components remain.")}</span>
           </div>
+          ${pathwayStepperHtml(path, readiness)}
           ${pathwayRouteReferenceHtml(group.id, path)}
           <div class="pathway-layout">
             <div class="pathway-canvas-panel">
@@ -10348,13 +10384,62 @@
             </div>
           </div>
           <details class="pathway-secondary-details">
-            <summary>Binary matrix and balance details</summary>
+            <summary>Advanced data: Binary matrix and balance details</summary>
+            <div class="pathway-advanced-actions">
+              <button data-sep-sim-tab="balance">Reaction balance</button>
+              <button data-sep-sim-tab="binary">Binary data</button>
+            </div>
             <div class="pathway-balance-strip">
               ${reactionBalanceRecognitionHtml(path.balance)}
             </div>
             ${pathwayPairPriorityHtml(path)}
           </details>
         </section>
+      `;
+    }
+
+    function pathwayStepperHtml(path, readiness) {
+      const hasTarget = Boolean(path.mainProduct);
+      const hasMixture = path.active.length > 0 || path.steps.length > 0;
+      const hasPairs = path.pairPriorities.length > 0;
+      const hasNextRoute = path.nextOptions.length > 0;
+      const hasPreview = path.steps.length > 0;
+      const canApply = path.steps.length > 0 && path.editIndex < 0;
+      const activeIndex = path.editIndex >= 0
+        ? 4
+        : !hasTarget
+          ? 1
+          : !hasMixture
+            ? 2
+            : !hasPairs && !hasPreview
+              ? 3
+              : !hasNextRoute && !hasPreview
+                ? 4
+                : !hasPreview
+                  ? 4
+                  : canApply
+                    ? 6
+                    : 5;
+      const steps = [
+        { id: 1, label: "Target", done: hasTarget, note: hasTarget ? path.mainProduct.name : "select product" },
+        { id: 2, label: "Mixture", done: hasMixture, note: hasMixture ? `${path.active.length} active` : "sync substances" },
+        { id: 3, label: "Binary pairs", done: hasPairs || hasPreview, note: hasPairs ? `${path.pairPriorities.length} ranked` : "needs data" },
+        { id: 4, label: "Next route", done: hasPreview, note: hasNextRoute ? `${path.nextOptions.length} options` : readiness.status },
+        { id: 5, label: "Preview", done: hasPreview, note: hasPreview ? `${path.steps.length} step${path.steps.length === 1 ? "" : "s"}` : "try a route" },
+        { id: 6, label: "Apply", done: Boolean(path.pathway.appliedAt), note: canApply ? "ready" : "not ready" }
+      ];
+      return `
+        <div class="pathway-stepper" aria-label="Lutze simulation workflow">
+          ${steps.map(step => `
+            <div class="pathway-step ${step.done ? "done" : ""} ${activeIndex === step.id ? "active" : ""}">
+              <span class="pathway-step-dot">${step.id}</span>
+              <span class="pathway-step-text">
+                <strong>${escapeHtml(step.label)}</strong>
+                <small>${escapeHtml(step.note || "")}</small>
+              </span>
+            </div>
+          `).join("")}
+        </div>
       `;
     }
 

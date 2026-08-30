@@ -4752,6 +4752,92 @@
       gap: 8px;
     }
 
+    .pathway-stepper {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 6px;
+      padding: 7px;
+      border: 1px solid #d8e6ee;
+      border-radius: 8px;
+      background: #fbfdfe;
+    }
+
+    .pathway-step {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding: 5px 6px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .pathway-step.active {
+      border-color: #9fc3d9;
+      background: var(--info-blue-soft);
+      color: var(--blue);
+    }
+
+    .pathway-step.done {
+      color: #18704f;
+      background: #f4fbf6;
+    }
+
+    .pathway-step.active.done {
+      border-color: #97c9ad;
+      background: #edf9f1;
+    }
+
+    .pathway-step-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 22px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      color: #587080;
+      background: #edf2f5;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .pathway-step.active .pathway-step-dot {
+      color: #fff;
+      background: var(--blue);
+    }
+
+    .pathway-step.done .pathway-step-dot {
+      color: #fff;
+      background: #17845f;
+    }
+
+    .pathway-step-text {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+      line-height: 1.12;
+    }
+
+    .pathway-step-text strong,
+    .pathway-step-text small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pathway-step-text strong {
+      font-size: 11px;
+      color: inherit;
+    }
+
+    .pathway-step-text small {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
     .pathway-route-reference {
       display: grid;
       grid-template-columns: minmax(280px, 1fr) auto;
@@ -4808,6 +4894,19 @@
       color: var(--ink-3);
       font-size: 12px;
       font-weight: 800;
+    }
+
+    .pathway-advanced-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pathway-advanced-actions button {
+      min-height: 24px;
+      padding: 2px 8px;
+      font-size: 11px;
     }
 
     .binary-math-summary {
@@ -4954,6 +5053,51 @@
       gap: 9px;
       border-color: #b9d8c2;
       background: #f8fcf9;
+    }
+
+    .lutze-launch-card .predictor-head strong {
+      display: block;
+      margin-top: 2px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .lutze-launch-copy {
+      display: grid;
+      gap: 2px;
+      padding: 7px 8px;
+      border: 1px solid #d8e8dd;
+      border-radius: 7px;
+      color: var(--ink-3);
+      background: #fff;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .lutze-launch-facts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .lutze-launch-facts span {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      min-width: 0;
+      padding: 5px 6px;
+      border: 1px solid #d8e8dd;
+      border-radius: 999px;
+      color: var(--ink-3);
+      background: #fff;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .lutze-launch-facts strong {
+      color: #17845f;
+      font-size: 12px;
     }
 
     .lutze-launch-button {
@@ -5549,6 +5693,7 @@
       .group-drawer-section-label { align-items: flex-start; flex-direction: column; gap: 2px; }
       .sep-recognition-grid { grid-template-columns: 1fr; }
       .pathway-layout { grid-template-columns: 1fr; }
+      .pathway-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .pathway-route-reference { grid-template-columns: 1fr; }
       .pathway-route-reference-meta { justify-content: flex-start; }
       .sep-paper-chain { grid-template-columns: 1fr; }
