@@ -690,7 +690,11 @@
     function inferBehavior(text) {
       const t = text.toLowerCase();
       if (t.includes("dean-stark") || t.includes("water formed") || t.includes("equilibrium")) return "reaction with in-situ removal";
-      if (t.includes("wash") || t.includes("brine") || t.includes("organic phase") || t.includes("organic layer")) return "liquid-liquid wash";
+      // "organic phase"/"organic layer" used to trigger this on their own, but they just name what
+      // material a step handles, not what's done to it - "Dry the organic phase over molecular
+      // sieves" was matching here (via "organic phase") before it ever reached the drying check
+      // below. Only the genuinely wash-specific words trigger this now.
+      if (t.includes("wash") || t.includes("brine")) return "liquid-liquid wash";
       if (t.includes("dry") || t.includes("mgso4") || t.includes("na2so4")) return "solid-liquid drying";
       if (t.includes("filter")) return "filtration";
       if (t.includes("remove cyclohexane") || t.includes("evaporat")) return "solvent evaporation";
@@ -5259,7 +5263,7 @@
               <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.51">
             </label>
             <label>
-              ${fieldLabel("Working fill, %", "Standard design fill fraction for the reactor (70-80% typical for stirred batch/semi-batch vessels), leaving headspace for reflux/agitation.")}
+              ${fieldLabel("Working fill, %", "Screening default: 70%. Literature/vendor guidance commonly uses 70-80% working volume for stirred vessels to keep headspace for foam, gas disengagement, reflux, thermal expansion, and agitation. SuperPro/Intelligen uses 90% as a max allowable working/vessel-volume default constraint, so >85-90% should be treated as a warning, not a routine design point.")}
               <input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70">
             </label>
             <label>
@@ -5431,7 +5435,7 @@
           </div>
 
           <div class="scale-metric">
-            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Preferred path: enter reactants and solvent L/kg product from the recipe, then reactor volume = ((reactants + solvent) x product kg/batch / 1000) / working fill. If those recipe loading fields are blank, the tool tries an automatic MFA path: find the reaction/reactor group, scale its input streams to the production target, convert direct L/mL/m3 streams or mass streams with group density, then divide total charge by working fill. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. This is a screening minimum; real vessel selection adds design margin and rounds up to standard sizes.")}</span>
+            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Preferred path: enter reactants and solvent L/kg product from the recipe, then reactor volume = ((reactants + solvent) x product kg/batch / 1000) / working fill. If those recipe loading fields are blank, the tool tries an automatic MFA path: find the reaction/reactor group, scale its input streams to the production target, convert direct L/mL/m3 streams or mass streams with group density, then divide total charge by working fill. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. Working fill citation basis: stirred-tank/bioreactor guidance typically reports 70-80% working volume; SuperPro/Intelligen batch-vessel docs use 90% as max allowable working/vessel-volume default. This is a screening minimum; real vessel selection adds design margin and rounds up to standard sizes.")}</span>
             ${reactorSizingHtml(model.reactorSizing)}
           </div>
 
@@ -12409,6 +12413,18 @@
             <label class="stream-field">
               <span class="stream-field-label">Outlet type</span>
               <select data-stream-field="fate" data-stream-id="${sid}">${optionHtml(streamFateOptions.filter(item => item !== "fresh input"), stream.fate)}</select>
+            </label>
+          ` : ""}
+          ${["recycled input", "recovered solvent"].includes(stream.fate) ? `
+            <label class="stream-field">
+              <span class="stream-field-label">Recovery %</span>
+              <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="e.g. 98" inputmode="decimal" title="Fraction of this stream actually recovered/recycled - used by the Recycle / fate summary (Scale-Up tab) to compute recovered vs. lost mass.">
+            </label>
+          ` : ""}
+          ${stream.fate === "purge" ? `
+            <label class="stream-field">
+              <span class="stream-field-label">Purge %</span>
+              <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="e.g. 5" inputmode="decimal" title="Fraction of the loop purged here - used by the Recycle / fate summary (Scale-Up tab) to compute purge mass.">
             </label>
           ` : ""}
           <label class="stream-field">
