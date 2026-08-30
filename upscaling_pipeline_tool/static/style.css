@@ -1983,6 +1983,12 @@
       cursor: not-allowed;
     }
 
+    .unit-action-tooltip {
+      display: inline-flex;
+      justify-self: end;
+      max-width: 100%;
+    }
+
     .board-unit-picker {
       display: grid;
       gap: 4px;

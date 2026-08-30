@@ -1977,6 +1977,23 @@
       };
     }
 
+    function unitOperationGateTooltip(readiness, group = null) {
+      if (readiness?.ready) {
+        const action = group?.selectedUnit ? "switch" : "assign";
+        return `Ready to ${action}: the task has a task definition, material streams, phase labels, and at least one condition. Suggestions are ranked from task class, MFA/phase transition, conditions, and Lutze review when available.`;
+      }
+      const missing = readiness?.missing?.length ? readiness.missing.join(", ") : "task data";
+      const details = [];
+      if (!readiness?.taskReady) details.push("set the task type/name first");
+      if (!readiness?.mfaReady) details.push("add at least one input and one outlet/waste stream");
+      if (!readiness?.phaseReady) {
+        const phaseDetail = readiness?.missingPhaseCount ? `${readiness.missingPhaseCount} stream phase label${readiness.missingPhaseCount === 1 ? "" : "s"} missing` : "phase labels are missing";
+        details.push(phaseDetail);
+      }
+      if (!readiness?.conditionsReady) details.push("add at least one operating condition such as temperature, pressure, time, pH, mixing, or phase-change evidence");
+      return `Unit-operation assignment is locked because ${missing} are incomplete. ${details.length ? `To unlock it: ${details.join("; ")}.` : "Complete the task-level data first."} This prevents choosing equipment before the material/phase/condition basis is auditable.`;
+    }
+
     function groupUnitSuggestionGateHtml(group, options = {}) {
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
@@ -1984,23 +2001,26 @@
       const alternatives = showSuggestions ? unitOperationCandidatesForGroup(group).slice(0, 5) : [];
       const label = group.selectedUnit ? "Switch Unit Operation" : "Assign Unit Operation";
       const status = group.selectedUnit || (readiness.ready ? "ready to assign" : `needs ${readiness.missing.join(", ") || "task data"}`);
+      const gateTip = unitOperationGateTooltip(readiness, group);
       if (options.board) {
         return `
-          <button class="unit-action-button ${readiness.ready ? "ready" : ""}" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}
-            title="${escapeAttr(readiness.ready ? "Assign or switch the task unit operation from completed MFA, phase, and condition data." : `Complete ${readiness.missing.join(", ") || "task data"} before assigning a unit operation.`)}">
-            ${escapeHtml(label)}
-          </button>
+          <span class="unit-action-tooltip tip" data-tip="${escapeAttr(gateTip)}">
+            <button class="unit-action-button ${readiness.ready ? "ready" : ""}" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}
+              title="${escapeAttr(gateTip)}">
+              ${escapeHtml(label)}
+            </button>
+          </span>
         `;
       }
       return `
-        <div class="unit-suggest-gate compact ${readiness.ready ? "ready" : "blocked"}">
+        <div class="unit-suggest-gate compact tip ${readiness.ready ? "ready" : "blocked"}" data-tip="${escapeAttr(gateTip)}">
           <div class="unit-suggest-main">
             <div>
               <strong>Unit Operation</strong>
               <span class="muted small">${escapeHtml(status)}</span>
             </div>
             <button class="unit-action-button ${readiness.ready ? "ready" : ""}" data-suggest-unit-operation="${escapeAttr(group.id)}" ${readiness.ready ? "" : "disabled"}
-              title="${escapeAttr(readiness.ready ? "Assign or switch the task unit operation from completed MFA, phase, and condition data." : `Complete ${readiness.missing.join(", ") || "task data"} before assigning a unit operation.`)}">
+              title="${escapeAttr(gateTip)}">
               ${escapeHtml(label)}
             </button>
           </div>
@@ -2618,7 +2638,7 @@
           const group = groupModel(button.dataset.suggestUnitOperation);
           const readiness = group ? groupUnitSuggestionReadiness(group) : null;
           if (!group || !readiness?.ready) {
-            await alertModal(`Complete ${readiness?.missing.join(", ") || "task data"} before assigning a unit operation.`);
+            await alertModal(unitOperationGateTooltip(readiness, group));
             return;
           }
           ensureGroup(group.id).unitSuggestionsExpanded = true;
@@ -5246,6 +5266,7 @@
             <label>
               ${fieldLabel("Equipment fill limit, %", "How full a single piece of equipment (e.g. reactor working volume) is allowed to run - used only to flag over-capacity tasks in the Bottleneck classification below. Distinct from OEE above, which is about time availability, not fill level.")}
               <input data-scale-field="allowableCapacityUtilizationPercent" value="${escapeAttr(basis.allowableCapacityUtilizationPercent)}" inputmode="decimal" placeholder="85">
+              <div class="muted small">Alarm threshold for the Bottleneck check, not a design value. Different from "Working fill, %" in Reactor sizing below, which sizes the vessel in the first place - the two are entered separately and don't sync automatically.</div>
             </label>
         `)}
 
@@ -5265,6 +5286,7 @@
             <label>
               ${fieldLabel("Working fill, %", "Screening default: 70%. Literature/vendor guidance commonly uses 70-80% working volume for stirred vessels to keep headspace for foam, gas disengagement, reflux, thermal expansion, and agitation. SuperPro/Intelligen uses 90% as a max allowable working/vessel-volume default constraint, so >85-90% should be treated as a warning, not a routine design point.")}
               <input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70">
+              <div class="muted small">Sizes the required reactor volume below (charge / working fill). Changing this recalculates that volume but does NOT update the Gantt "Capacity" field used by the Bottleneck check - update Capacity to match, or a mismatch warning will appear in Heuristics/Review Results.</div>
             </label>
             <label>
               ${fieldLabel("Product MW, g/mol", "Product molecular weight, used only to estimate stoichiometric condensation water below.")}
@@ -12019,7 +12041,7 @@
           const group = groupModel(groupId);
           const readiness = group ? groupUnitSuggestionReadiness(group) : null;
           if (!readiness?.ready) {
-            await alertModal(`Complete ${readiness?.missing.join(", ") || "task data"} before selecting a unit operation.`);
+            await alertModal(unitOperationGateTooltip(readiness, group));
             return;
           }
           if (!(await confirmModal(`Set the selected unit for ${groupId} to "${unit}"? This overrides the current unit choice.`))) return;
@@ -13088,7 +13110,7 @@
       const readiness = groupUnitSuggestionReadiness(group);
       if (!readiness.ready) {
         $("groupAlternatives").innerHTML = `
-          <div class="mfa-empty">
+          <div class="mfa-empty tip" data-tip="${escapeAttr(unitOperationGateTooltip(readiness, group))}">
             Unit-operation suggestions are locked until ${escapeHtml(readiness.missing.join(", ") || "task data")} are complete.
           </div>
         `;
