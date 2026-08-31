@@ -67,11 +67,7 @@ APP_HTML = r"""<!doctype html>
           <div>
             <h2>Laboratory Protocol Description</h2>
             <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
-            <span class="muted small">Text first, board controls when needed</span>
-          </div>
-          <div class="source-panel-tabs" role="tablist" aria-label="Source and board controls">
-            <button class="source-panel-tab active" data-source-tab="protocol" role="tab">Protocol</button>
-            <button class="source-panel-tab" data-source-tab="board" role="tab">Board<span id="boardTabAuditBadge" class="tab-badge" hidden></span></button>
+            <span class="muted small">Select text, then create a block</span>
           </div>
         </div>
       </div>
@@ -86,30 +82,6 @@ APP_HTML = r"""<!doctype html>
           <div id="selectionInfo" class="muted">No active text selection.</div>
           <div id="annotatedText" class="text-surface"></div>
         </div>
-        <div id="sourceBoardTab" class="source-tab-view stack" hidden>
-          <div class="graph-controls">
-            <div class="board-control-head">
-              <div class="label">Board Controls</div>
-              <div class="muted small">Drag boxes to move them. Right-click a group, start an arrow, then click the target group.</div>
-            </div>
-            <div class="board-control-section">
-              <div class="label">Step 1-3 Audit</div>
-              <div class="muted small">Block data, phenomena, task grouping, and unit-operation evidence.</div>
-              <div id="stepAuditPanel" class="step-audit-panel"></div>
-            </div>
-            <div class="board-control-section">
-              <div class="label">Network</div>
-              <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
-              <div id="connectionStatus" class="connection-status"></div>
-              <div id="linkSummary"></div>
-              <div id="networkClosure" class="closure-strip"></div>
-            </div>
-            <div class="board-control-section">
-              <div class="label tip" data-tip="Per group: sums input-stream mass against everything that leaves the group (output + waste/vent streams), both converted to kg. A coarse screening check on entered/estimated quantities, not a validated balance - groups without enough mass-unit (kg/g/t) data on both sides are skipped rather than flagged.">Mass Balance</div>
-              <div id="massBalanceCheck" class="closure-strip"></div>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -121,6 +93,14 @@ APP_HTML = r"""<!doctype html>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
           <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Auto-Layout</button>
+          <div class="header-dropdown">
+            <button id="connectionsToggle" aria-haspopup="true" aria-expanded="false" title="Auto-connect groups, or review/remove individual arrows">Connections ▾</button>
+            <div id="connectionsMenu" class="header-dropdown-menu connections-dropdown-menu" hidden role="menu">
+              <button id="autoConnect" class="primary" title="Connect task groups in text order and add recycle arrows from declared stream destinations">Auto-Connect</button>
+              <div id="connectionStatus" class="connection-status"></div>
+              <div id="linkSummary"></div>
+            </div>
+          </div>
           <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset</button>
           <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center</button>
           <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit</button>
@@ -199,6 +179,11 @@ APP_HTML = r"""<!doctype html>
           </section>
 
           <div class="scale-scroll-body stack">
+            <section class="card stack">
+              <div class="label">Step 1-3 Audit</div>
+              <div class="muted small">Block data, phenomena, task grouping, and unit-operation evidence.</div>
+              <div id="stepAuditPanel" class="step-audit-panel"></div>
+            </section>
             <section class="card stack">
               <div id="heuristicsPanel"></div>
               <div class="card-divider">

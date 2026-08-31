@@ -427,56 +427,6 @@
       letter-spacing: 0.02em;
     }
 
-    .source-panel-tabs {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 3px;
-      padding: 3px;
-      border: 1px solid #d9e4ec;
-      border-radius: 8px;
-      background: var(--info-blue-soft);
-    }
-
-    .source-panel-tab {
-      min-height: 28px;
-      border: 0;
-      border-radius: 6px;
-      color: var(--ink-3);
-      background: transparent;
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .source-panel-tab.active {
-      color: #fff;
-      background: var(--blue);
-      box-shadow: 0 1px 2px rgba(23, 32, 39, 0.12);
-    }
-
-    .source-tab-view[hidden] {
-      display: none;
-    }
-
-    .tab-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 16px;
-      height: 16px;
-      margin-left: 5px;
-      padding: 0 4px;
-      border-radius: 999px;
-      background: var(--red);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 800;
-      vertical-align: middle;
-    }
-
-    .tab-badge[hidden] {
-      display: none;
-    }
-
     .label {
       margin-bottom: 4px;
       color: var(--muted);
@@ -906,6 +856,14 @@
       min-height: 22px;
       padding: 0 7px;
       font-size: 10px;
+    }
+
+    /* Softer than the solid --accent fill used elsewhere - a whole row of compact cards each
+       showing a loud green button was too visually dominant for what's a secondary action here. */
+    .compact-body .unit-action-button.ready {
+      background: var(--green-soft);
+      color: var(--green);
+      border-color: var(--green-soft);
     }
 
     .compact-body strong {
@@ -1471,6 +1429,16 @@
     .header-dropdown-menu[hidden] { display: none; }
     .header-dropdown-menu button { width: 100%; text-align: left; white-space: nowrap; }
 
+    .connections-dropdown-menu {
+      width: 300px;
+      max-width: 80vw;
+    }
+
+    .connections-dropdown-menu .connection-list button {
+      width: auto;
+      white-space: normal;
+    }
+
     .context-menu {
       position: fixed;
       z-index: 500;
@@ -1486,37 +1454,6 @@
 
     .context-menu[hidden] { display: none; }
     .context-menu button { width: 100%; margin-top: 6px; text-align: left; }
-
-    .graph-controls {
-      display: grid;
-      gap: 9px;
-      padding: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      overflow: hidden;
-    }
-
-    .board-control-head,
-    .board-control-section {
-      display: grid;
-      gap: 7px;
-      padding: 9px;
-    }
-
-    .board-control-head {
-      border-bottom: 1px solid var(--line);
-      background: var(--info-blue-soft);
-    }
-
-    .board-control-section + .board-control-section {
-      border-top: 1px solid var(--line);
-    }
-
-    .board-control-section button {
-      width: 100%;
-      justify-content: center;
-    }
 
     .board-zoom-row {
       display: grid;
@@ -6216,36 +6153,6 @@
       color: var(--red);
       background: var(--red-soft);
       border-color: #efc6c6;
-    }
-
-    .closure-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-      margin-top: 7px;
-    }
-
-    .closure-chip {
-      display: inline-flex;
-      align-items: center;
-      min-height: 22px;
-      padding: 0 7px;
-      border-radius: 6px;
-      background: var(--orange-soft);
-      color: var(--orange);
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .closure-chip.ok {
-      background: var(--green-soft);
-      color: var(--green);
-    }
-
-    .closure-chip.high {
-      background: var(--red-soft);
-      color: var(--red);
     }
 
     .selection-basis-row {

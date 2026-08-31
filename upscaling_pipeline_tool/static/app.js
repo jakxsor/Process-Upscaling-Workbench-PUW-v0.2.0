@@ -483,7 +483,6 @@
       groupStepEditorHeight: 400,
       boardCompact: false,
       pendingSplitGroupId: null,
-      sourcePanelTab: "protocol",
       processRuleOptions: {
         sequence: true,
         mfa: true,
@@ -544,7 +543,7 @@
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
     const pubchemStreamSuggestTimers = new Map();
-    const flowsheetLayoutVersion = "editable-train-v6";
+    const flowsheetLayoutVersion = "publishable-lanes-v1";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -2092,6 +2091,10 @@
       `;
     }
 
+    // Pairs with the [data-unit] click handler in renderGroupFlow. Was defined but never
+    // rendered anywhere, so "Switch/Assign Unit Operation" on the board set unitSuggestionsExpanded
+    // with no UI ever reading it back - clicking it looked like it did nothing. Now called from
+    // both board box variants right after groupUnitSuggestionGateHtml's button.
     function boardUnitOperationPickerHtml(group, limit = 4) {
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
@@ -2554,6 +2557,7 @@
                 <span class="muted small">${escapeHtml(group.task)}</span>
                 <span class="compact-meta">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"} · ${group.phenomena.length} phenomena</span>
                 ${groupUnitSuggestionGateHtml(group, { board: true })}
+                ${boardUnitOperationPickerHtml(group)}
                 <button type="button" class="compact-open-hint" data-open-group-board="${escapeAttr(group.id)}">Edit task materials</button>
               </div>
             </section>
@@ -3357,6 +3361,7 @@
           <span class="label">Unit operation</span>
           <strong>${escapeHtml(unit)}</strong>
           ${groupUnitSuggestionGateHtml(group, { board: true })}
+          ${boardUnitOperationPickerHtml(group)}
         </div>
       `;
     }
@@ -5455,7 +5460,6 @@
       state.selectedIds = group.blocks.map(block => block.id);
       state.focusEndpoint = groupId;
       setInspectorTab("inspect");
-      setSourcePanelTab("board");
       renderAll();
     }
     function infoIconHtml(tip) {
@@ -7041,14 +7045,6 @@
       root.querySelectorAll("[data-step-audit-kind]").forEach(button => {
         button.addEventListener("click", () => focusStepAuditTarget(button.dataset.stepAuditKind, button.dataset.stepAuditId));
       });
-      // The audit panel lives in the "Board" source-tab, which isn't the default tab (Protocol is) -
-      // surface the open-issue count on the tab button itself so it's not silently missed.
-      const badge = $("boardTabAuditBadge");
-      if (badge) {
-        const openCount = cards.reduce((sum, card) => sum + card.issues.filter(issue => !issue.warningOnly).length, 0);
-        badge.hidden = !openCount;
-        badge.textContent = openCount;
-      }
     }
 
     function focusStepAuditTarget(kind, id) {
@@ -7078,7 +7074,6 @@
         state.focusEndpoint = block.groupId || block.id;
       }
       setInspectorTab("inspect");
-      setSourcePanelTab("board");
       renderAll();
     }
 
@@ -13370,89 +13365,6 @@
       });
     }
 
-    function renderNetworkClosure() {
-      const root = $("networkClosure");
-      if (!root) return;
-      if (!state.blocks.length) {
-        root.innerHTML = "";
-        return;
-      }
-      const issues = networkClosureModel();
-      if (!issues.length) {
-        root.innerHTML = `<span class="closure-chip ok">✓ Network closed: every outlet has a destination</span>`;
-        return;
-      }
-      const shown = issues.slice(0, 4);
-      root.innerHTML = `
-        <span class="label" style="margin:0">Network closure</span>
-        ${shown.map(issue => `<span class="closure-chip">${escapeHtml(issue.groupId)}: ${escapeHtml(issue.text)}</span>`).join("")}
-        ${issues.length > shown.length ? `<span class="muted small">+${issues.length - shown.length} more</span>` : ""}
-      `;
-    }
-
-    // Deterministic, local mass-balance screen: per group, sums input-role stream mass against
-    // everything that leaves the group (output + waste roles, i.e. outletRoles - covers product,
-    // intermediate, recycle, and waste/vent alike) in kg, using the same massToKg conversion the
-    // rest of the MFA views use. Streams in non-mass units (L, mol, %, ...) can't be summed this
-    // way and are excluded from both sides rather than treated as zero - this is a coarse
-    // screening check on whatever quantities are entered/estimated, not a validated balance, so a
-    // group is only judged once both sides have at least one convertible stream.
-    function massBalanceModel() {
-      return groupIdsInTextOrder().map(groupId => {
-        const group = groupModel(groupId);
-        const streams = group.blocks.flatMap(block => (block.streams || []).filter(stream => stream.name.trim()));
-        const inputStreams = streams.filter(stream => stream.role === "input");
-        const outputStreams = streams.filter(stream => streamIsOutlet(stream));
-        const convertibleInputs = inputStreams.filter(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)));
-        const convertibleOutputs = outputStreams.filter(stream => Number.isFinite(massToKg(stream.quantity, stream.unit)));
-        const sumKg = list => list.reduce((sum, stream) => sum + massToKg(stream.quantity, stream.unit), 0);
-        const inputKg = sumKg(convertibleInputs);
-        const outputKg = sumKg(convertibleOutputs);
-        const base = {
-          groupId,
-          inputKg,
-          outputKg,
-          inputCount: inputStreams.length,
-          outputCount: outputStreams.length,
-          convertibleInputCount: convertibleInputs.length,
-          convertibleOutputCount: convertibleOutputs.length
-        };
-        if (!convertibleInputs.length || !convertibleOutputs.length || inputKg <= 0) {
-          return { ...base, status: "no-data" };
-        }
-        const diffKg = outputKg - inputKg;
-        const diffPercent = Math.abs(diffKg) / inputKg * 100;
-        const status = diffPercent >= 25 ? "high" : diffPercent >= 10 ? "warn" : "ok";
-        return { ...base, diffKg, diffPercent, status };
-      });
-    }
-
-    function massBalanceChipTooltip(item) {
-      return `${item.groupId}: ${formatNumber(item.inputKg)} kg input (${item.convertibleInputCount}/${item.inputCount} streams in mass units) vs ${formatNumber(item.outputKg)} kg output (${item.convertibleOutputCount}/${item.outputCount} streams in mass units). Screening check on entered/estimated quantities, not a validated balance. A large gap often just means the bulk material carried over from an upstream group isn't re-declared as an explicit input stream here - only this group's own newly-added inputs count on the input side, so add an input stream for the incoming intermediate if you want this group's balance to close.`;
-    }
-
-    function renderMassBalance() {
-      const root = $("massBalanceCheck");
-      if (!root) return;
-      if (!state.blocks.length || !groupIdsInTextOrder().length) {
-        root.innerHTML = "";
-        return;
-      }
-      const results = massBalanceModel();
-      const flagged = results.filter(item => item.status === "warn" || item.status === "high");
-      const noData = results.filter(item => item.status === "no-data");
-      if (!flagged.length) {
-        const note = noData.length
-          ? ` (${noData.length} group${noData.length === 1 ? "" : "s"} skipped: not enough mass-unit data)`
-          : "";
-        root.innerHTML = `<span class="closure-chip ok">✓ Mass balance within ±10% for every group with enough data${escapeHtml(note)}</span>`;
-        return;
-      }
-      root.innerHTML = flagged.map(item => `
-        <span class="closure-chip ${escapeAttr(item.status)}" title="${escapeAttr(massBalanceChipTooltip(item))}">${escapeHtml(item.groupId)}: ${formatNumber(item.inputKg)} kg in vs ${formatNumber(item.outputKg)} kg out (${item.diffKg >= 0 ? "+" : "-"}${formatNumber(item.diffPercent)}%)</span>
-      `).join("");
-    }
-
     function cleanupGroupIfEmpty(groupId) {
       if (!groupId) return;
       if (blocksForGroup(groupId).length) return;
@@ -14596,17 +14508,6 @@
       updateProtocolToggleIcon();
     }
 
-    function setSourcePanelTab(tab) {
-      state.sourcePanelTab = tab === "board" ? "board" : "protocol";
-      $("sourceProtocolTab").hidden = state.sourcePanelTab !== "protocol";
-      $("sourceBoardTab").hidden = state.sourcePanelTab !== "board";
-      document.querySelectorAll("[data-source-tab]").forEach(button => {
-        const selected = button.dataset.sourceTab === state.sourcePanelTab;
-        button.classList.toggle("active", selected);
-        button.setAttribute("aria-selected", selected ? "true" : "false");
-      });
-    }
-
     // Tutorial (guided tour) functions moved to static/tutorial.js, loaded before this file.
 
     function setInspectorTab(tab) {
@@ -14726,7 +14627,7 @@
           if (unconnected.length) parts.push(`${unconnected.length} group${unconnected.length === 1 ? "" : "s"} without arrows (try Auto-Connect)`);
           set(4, "partial", parts.join("; ") + ".");
         } else if (closureIssues.length) {
-          set(4, "partial", `${closureIssues.length} outlet${closureIssues.length === 1 ? "" : "s"} not closed — see Network closure under Board Controls.`);
+          set(4, "partial", `${closureIssues.length} outlet${closureIssues.length === 1 ? "" : "s"} not closed — try Auto-Connect or draw the missing arrow.`);
         } else {
           set(4, "done", "Network closed: every outlet routed, recycles connected, product outlet present.");
         }
@@ -15213,12 +15114,9 @@
       renderStepFlowInspector();
       renderInspector();
       renderContextMenuOptions();
-      setSourcePanelTab(state.sourcePanelTab);
       renderInspectorTabs();
       renderWorkflowStepper();
       renderDataReadiness();
-      renderNetworkClosure();
-      renderMassBalance();
       renderSeparationSimulatorModal();
     }
 
@@ -15250,7 +15148,7 @@
       $("loadExampleToggle").setAttribute("aria-expanded", String(willOpen));
     });
     document.addEventListener("click", event => {
-      if (!$("loadExampleMenu").hidden && !event.target.closest(".header-dropdown")) closeLoadExampleMenu();
+      if (!$("loadExampleMenu").hidden && !event.composedPath().some(el => el.classList?.contains("header-dropdown"))) closeLoadExampleMenu();
     });
     $("loadSample").addEventListener("click", async () => {
       closeLoadExampleMenu();
@@ -15263,6 +15161,26 @@
       if (state.blocks.length && !(await confirmModal("Load the 3-reagent reaction-separation case? This replaces all current blocks, groups, and arrows."))) return;
       if (state.blocks.length) pushUndo();
       loadTripleReactantExampleProject();
+    });
+
+    // Auto-Connect and the arrow list/removal used to live in a left-column "Board" sub-tab that
+    // was easy to miss (buried under Protocol, the default tab) - moved into the main board
+    // toolbar as a dropdown next to Auto-Layout, same open/close pattern as loadExampleMenu above.
+    function closeConnectionsMenu() {
+      $("connectionsMenu").hidden = true;
+      $("connectionsToggle").setAttribute("aria-expanded", "false");
+    }
+    $("connectionsToggle").addEventListener("click", () => {
+      const willOpen = $("connectionsMenu").hidden;
+      $("connectionsMenu").hidden = !willOpen;
+      $("connectionsToggle").setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", event => {
+      // composedPath(), not event.target.closest() - clicking "Show connections" inside the menu
+      // triggers renderLinkControls(), which replaces #linkSummary's innerHTML and so detaches the
+      // very button just clicked. A detached node's .closest() can no longer find .header-dropdown,
+      // which made this listener think the click landed outside and closed the menu it was in.
+      if (!$("connectionsMenu").hidden && !event.composedPath().some(el => el.classList?.contains("header-dropdown"))) closeConnectionsMenu();
     });
     function currentTheme() {
       const saved = document.documentElement.getAttribute("data-theme");
@@ -15321,9 +15239,6 @@
       renderAll();
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
-    document.querySelectorAll("[data-source-tab]").forEach(button => {
-      button.addEventListener("click", () => setSourcePanelTab(button.dataset.sourceTab));
-    });
     $("openTutorial").addEventListener("click", () => openTutorial());
     $("tutorialSkip").addEventListener("click", closeTutorial);
     $("tutorialPrev").addEventListener("click", () => {
