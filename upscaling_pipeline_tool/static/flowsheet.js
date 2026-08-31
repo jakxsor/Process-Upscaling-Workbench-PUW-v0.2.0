@@ -249,7 +249,11 @@
       return String(id || "").replace(/-P\d+$/i, "");
     }
 
-    function flowsheetAutoLayout(groupIds) {
+    // Topological stage/row assignment shared by the Flowsheet View (flowsheetAutoLayout) and the
+    // interactive board's "Auto-Layout" (autoLayoutGroups, in app.js) - both want the same
+    // left-to-right process order, they just turn stage/row into different pixel gaps afterwards.
+    // Returns levels/order only, not absolute coordinates - callers own gapX/gapY/origin.
+    function topologicalGroupOrder(groupIds) {
       const baseIds = [];
       groupIds.forEach(groupId => {
         const baseId = flowsheetStageBaseId(groupId);
@@ -316,6 +320,10 @@
         rowById.set(groupId, row);
       });
       return { stageById, rowById, rowByStage };
+    }
+
+    function flowsheetAutoLayout(groupIds) {
+      return topologicalGroupOrder(groupIds);
     }
 
     // Picks the single most representative output stream to print on a connector arrow (by mass,

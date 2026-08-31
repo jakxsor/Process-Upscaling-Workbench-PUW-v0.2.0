@@ -1,4 +1,4 @@
-    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 °C. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap. Cool the crude reaction mixture to 40 °C. Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact. Separate and discard the aqueous layer. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal. [Industrial addition, no laboratory counterpart] Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column. [Industrial addition, no laboratory counterpart] Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage. [Industrial addition, no laboratory counterpart] Route the aqueous wash effluent and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.`;
+    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 to 90 °C under nitrogen. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap and benzophenone concentration ceases to decrease. Cool the crude reaction mixture to 25 °C. Wash the organic phase with 2.0 kg of water in the first counter-current mixer-settler stage, allowing the phases to settle after contact. Wash the organic phase with saturated brine in the second mixer-settler stage, allowing the phases to settle, then separate and discard the aqueous layers. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mmHg, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal. [Industrial addition, no laboratory counterpart] Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column. [Industrial addition, no laboratory counterpart] Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage. [Industrial addition, no laboratory counterpart] Route the aqueous wash effluent, brine effluent, and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.`;
     // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
     // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
     // of 0.05h) and a relative margin (avoids flagging trivial % differences on long processes) before
@@ -1116,6 +1116,7 @@
         makeupRequired: values.makeupRequired || "",
         accumulationRisk: values.accumulationRisk || "",
         note: values.note || "",
+        pubchemQuery: values.pubchemQuery || values.compoundName || "",
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, values[field] || values.chemicalProperties?.[field] || ""])),
         editing: Boolean(values.editing)
       });
@@ -1152,10 +1153,10 @@
           "charge and mix",
           ["M(L)", "2phM(LS)"],
           [
-            { role: "input", name: "benzophenone", quantity: "1.82", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "2-ethylhexyl cyanoacetate", quantity: "1.97", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "ammonium acetate catalyst", quantity: "0.15", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
+            { role: "input", name: "benzophenone", quantity: "1.82", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", note: "reactive limiting-screen candidate; endpoint in SI: benzophenone below detection/low residual" },
+            { role: "input", name: "2-ethylhexyl cyanoacetate", quantity: "1.97", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", note: "reactive co-reagent for 1:1 Knoevenagel product screening" },
+            { role: "input", name: "ammonium acetate catalyst", quantity: "0.15", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "catalyst", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", note: "non-stoichiometric catalyst; removed with aqueous work-up, not consumed in conversion balance" },
+            { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "solvent", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
             { role: "output", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
           { agitation_note: "stirred jacketed reactor" },
@@ -1163,62 +1164,75 @@
         ),
         makeBlock(
           "B2",
-          "Heat the stirred mixture to reflux at 85 °C.",
-          "G1",
+          "Heat the stirred mixture to reflux at 85 to 90 °C under nitrogen.",
+          "G2",
           "heat/cool",
-          ["ES(H)", "M(L)"],
-          [],
-          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", agitation_note: "stirred mixture, heated to reflux" },
+          ["ES(H)", "M(L)", "PT(LS)"],
+          [
+            { role: "input", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "reflux-ready reaction solution", quantity: "7.44", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", note: "benzophenone dissolves as the cyclohexane reaction mixture reaches reflux" }
+          ],
+          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", agitation_note: "stirred mixture, heated to reflux under nitrogen blanket" },
           { initial_temperature: "°C", target_temperature: "°C" }
         ),
         makeBlock(
           "B3",
-          "Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap.",
+          "Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap and benzophenone concentration ceases to decrease.",
           "G2",
           "reaction with in-situ removal",
-          ["R(L)", "M(L)", "ES(H)", "PT(VL)", "PS(VL)", "PS(LL)"],
+          ["M(L)", "2phM(VL)", "R(L)", "ES(H)", "PC(VL)", "PT(VL)", "PS(LL)"],
           [
-            { role: "input", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "crude octocrylene mixture", quantity: "7.21", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "water of condensation", quantity: "0.18", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", note: "azeotropic removal via Dean-Stark decanter; sent to wastewater treatment interface (paper U9, SI Step 4: approx. 0.05 kg water/kg product, i.e. 18.0/361.5 stoichiometric)" },
-            { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "route to vent abatement train (paper U7): condenser + activated carbon polishing (VOC compliance)" },
-            { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
+            { role: "input", name: "reflux-ready reaction solution", quantity: "7.44", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", stoichCoeff: "1", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "main product component in the crude organic phase; final purification still occurs in U6" },
+            { role: "output", name: "cyclohexane in crude organic phase", quantity: "3.15", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "solvent retained in the organic phase before thin-film evaporation" },
+            { role: "output", name: "ammonium acetate in crude organic phase", quantity: "0.15", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", note: "catalyst/additive retained until aqueous work-up" },
+            { role: "waste", id: "B3-CB-byproduct-1", name: "water of condensation", quantity: "0.15", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997", note: "azeotropic removal via Dean-Stark decanter; sent to wastewater treatment interface (paper U9, SI Step 4: approx. 0.05 kg water/kg product, i.e. 18.0/361.5 stoichiometric)" },
+            { role: "waste", id: "B3-CB-unreacted-benzophenone", name: "unreacted benzophenone", quantity: "0.308", unit: "kg", phase: "S", status: "calculated", timing: "waste purge", fate: "purge", scalingMode: "per batch", residualOf: "benzophenone", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", note: "Auto-generated by Conversion balance: reported 3.00 kg octocrylene at 90% yield back-calculates a 3.333 kg theoretical product basis; stoichiometric residual 1.689 mol benzophenone remains for recovery/purge screening." },
+            { role: "waste", id: "B3-CB-unreacted-2-ethylhexyl-cyanoacetate", name: "unreacted 2-ethylhexyl cyanoacetate", quantity: "0.333", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "purge", scalingMode: "per batch", residualOf: "2-ethylhexyl cyanoacetate", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", note: "Auto-generated by Conversion balance: reported 3.00 kg octocrylene at 90% yield back-calculates a 3.333 kg theoretical product basis; stoichiometric residual 1.687 mol 2-ethylhexyl cyanoacetate remains for recovery/purge screening." },
+            { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G7", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "route to vent abatement train (paper U7): condenser + activated carbon polishing (VOC compliance)" },
+            { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
           ],
           { reaction_time: "21", holding_temperature: "85", conversion_yield: "90", agitation_note: "refluxing stirred liquid", transfer_endpoint: "no further water separates in the Dean-Stark trap" },
           { reaction_time: "h", holding_temperature: "°C", conversion_yield: "%" }
         ),
         makeBlock(
           "B4",
-          "Cool the crude reaction mixture to 40 °C.",
-          "G3",
+          "Cool the crude reaction mixture to 25 °C.",
+          "G2",
           "heat/cool",
           ["ES(C)"],
-          [],
-          { initial_temperature: "85", target_temperature: "40" },
+          [
+            { role: "input", name: "reactor organic phase before cooling", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", note: "octocrylene + residual reactants + cyclohexane + ammonium acetate after Dean-Stark water removal and solvent purge" },
+            { role: "output", name: "cooled reactor organic phase", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+          ],
+          { initial_temperature: "85", target_temperature: "25" },
           { initial_temperature: "°C", target_temperature: "°C" }
         ),
         makeBlock(
           "B5",
-          "Wash the organic phase with 2.0 kg of water in two counter-current stages, allowing the phases to settle after each contact.",
-          "G4",
+          "Wash the organic phase with 2.0 kg of water in the first counter-current mixer-settler stage, allowing the phases to settle after contact.",
+          "G3",
           "liquid-liquid wash",
-          ["2phM(LL)", "PC(LL)", "M(L)"],
+          ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"],
           [
-            { role: "input", name: "wash water", quantity: "2.0", unit: "kg", phase: "L", status: "reported", timing: "later addition", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "washed two-phase mixture", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
+            { role: "input", name: "cooled reactor organic phase", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "input", name: "wash water", quantity: "2.0", unit: "kg", phase: "L", status: "reported", timing: "later addition", fate: "fresh input", scalingMode: "per batch", reactionRole: "auxiliary", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997" },
+            { role: "output", name: "water-washed organic/aqueous dispersion", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
           ],
           { mixing_time: "0.5", settling_time: "0.5", phase_ratio: "organic:aqueous approx. 7.2:2.0" },
           { mixing_time: "h", settling_time: "h" }
         ),
         makeBlock(
           "B6",
-          "Separate and discard the aqueous layer.",
-          "G4",
+          "Wash the organic phase with saturated brine in the second mixer-settler stage, allowing the phases to settle, then separate and discard the aqueous layers.",
+          "G3",
           "liquid-liquid wash",
-          ["PS(LL)", "PT(LL)"],
+          ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"],
           [
+            { role: "input", name: "water-washed organic/aqueous dispersion", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "input", name: "saturated sodium chloride brine", quantity: "0.50", unit: "kg", phase: "L", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch", reactionRole: "auxiliary", pubchemQuery: "sodium chloride", pubchemCid: "5234", mw: "58.44", note: "screening placeholder for brine wash; exact brine dose not specified in SI" },
             { role: "output", name: "washed organic phase", quantity: "7.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "aqueous waste", quantity: "2.16", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", note: "sent to wastewater treatment interface (paper U9); compliance unit, heuristic addition" }
+            { role: "waste", name: "aqueous/brine wash effluent", quantity: "2.66", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", note: "water/brine effluent carries ammonium acetate catalyst and soluble impurities to wastewater treatment interface (paper U9); ethyl acetate extraction is intentionally not carried into the industrial flowsheet" }
           ],
           { separation_efficiency: "95", settling_time: "0.5", transfer_endpoint: "clear organic/aqueous split" },
           { separation_efficiency: "%", settling_time: "h" }
@@ -1226,12 +1240,13 @@
         makeBlock(
           "B7",
           "Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent.",
-          "G5",
+          "G4",
           "solid-liquid drying",
-          ["PC(LS)", "PT(LS)"],
+          ["M(L)", "PC(LS)", "PS(LS)"],
           [
+            { role: "input", name: "washed organic phase", quantity: "7.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
             { role: "input", name: "molecular sieves 4A", quantity: "0.10", unit: "kg", phase: "S", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch", note: "regenerable fixed-bed column at industrial scale" },
-            { role: "output", name: "dry organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "dried organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
             { role: "waste", name: "spent sieves with adsorbed water", quantity: "0.15", unit: "kg", phase: "S", status: "estimated", timing: "waste purge", fate: "solid waste", scalingMode: "per batch", note: "regenerated on-site at scale; lab-scale disposal" }
           ],
           { transfer_endpoint: "water content below 0.1 percent", contact_time: "1" },
@@ -1240,39 +1255,42 @@
         makeBlock(
           "B8",
           "Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse.",
-          "G6",
+          "G5",
           "solvent evaporation",
           ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"],
           [
-            { role: "output", name: "recovered cyclohexane condensate", quantity: "3.15", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "sent to the dedicated solvent-recovery column (paper U8) rather than direct reuse" },
-            { role: "output", name: "crude octocrylene", quantity: "3.50", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "cyclohexane loss", quantity: "0.35", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G10", note: "evaporator vent to abatement train (paper U7); make-up fresh cyclohexane required" }
+            { role: "input", name: "dried organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "recovered cyclohexane condensate", quantity: "3.00", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "sent to the dedicated solvent-recovery column (paper U8) rather than direct reuse" },
+            { role: "output", name: "octocrylene-rich distillation feed", quantity: "3.85", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "product-rich concentrate containing octocrylene plus residual reactants/heavies before short-path distillation" },
+            { role: "waste", name: "cyclohexane loss", quantity: "0.15", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G7", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "evaporator vent to abatement train (paper U7); make-up fresh cyclohexane required" }
           ],
           { target_pressure: "150", phase_change_time: "2", phase_change_fraction: "90", transfer_endpoint: "cyclohexane evaporated to target (90% phase-change fraction)" },
           { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
         ),
         makeBlock(
           "B9",
-          "Purify the crude octocrylene by short-path distillation at 1.5 mbar, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.",
-          "G7",
+          "Purify the crude octocrylene by short-path distillation at 1.5 mmHg, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.",
+          "G6",
           "distillation purification",
           ["PT(VL)", "PS(VL)", "ES(H)"],
           [
-            { role: "output", name: "purified octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "reported", timing: "final output", fate: "product", scalingMode: "per kg product" },
-            { role: "waste", name: "heavy residue", quantity: "0.35", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "heavies to incineration / off-site disposal" }
+            { role: "input", name: "octocrylene-rich distillation feed", quantity: "3.85", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+            { role: "output", name: "octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "reported", timing: "final output", fate: "product", scalingMode: "per kg product", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "purified final product, at least 98 percent purity" },
+            { role: "waste", name: "short-path distillation residue", quantity: "0.85", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "heavy ends plus residual benzophenone and 2-ethylhexyl cyanoacetate; sent to incineration / off-site disposal unless a Lutze recovery route is applied" }
           ],
-          { target_pressure: "1.5", separation_efficiency: "95", phase_change_time: "1.5", transfer_endpoint: "at least 98 percent purity" },
+          { target_pressure: "2", separation_efficiency: "95", phase_change_time: "1.5", transfer_endpoint: "at least 98 percent purity" },
           { target_pressure: "mbar", separation_efficiency: "%", phase_change_time: "h" }
         ),
         makeBlock(
           "B10",
           "Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column.",
-          "G10",
+          "G7",
           "vent gas treatment",
           ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"],
           [
-            { role: "output", name: "recovered VOC (cyclohexane-rich, TSA)", quantity: "0.36", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", note: "SI Step 4, second loop: temperature-swing adsorption recovers cyclohexane from the U7 vent and returns it to U8 (the recovery column), not directly to U1; capture fraction assumed 90%, not quantified in the SI" },
-            { role: "waste", name: "uncaptured VOC to atmosphere", quantity: "0.04", unit: "kg", phase: "V", status: "assumed", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", note: "residual emission after abatement; compliance limit dependent, assumed value" }
+            { role: "input", name: "cyclohexane-rich vent stream", quantity: "0.20", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87" },
+            { role: "output", name: "recovered VOC (cyclohexane-rich, TSA)", quantity: "0.18", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "SI Step 4, second loop: temperature-swing adsorption recovers cyclohexane from the U7 vent and returns it to U8 (the recovery column), not directly to U1; capture fraction assumed 90%, not quantified in the SI" },
+            { role: "waste", name: "uncaptured VOC to atmosphere", quantity: "0.02", unit: "kg", phase: "V", status: "assumed", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", note: "residual emission after abatement; compliance limit dependent, assumed value" }
           ],
           { capture_efficiency: "90", contact_time: "0.5", transfer_endpoint: "VOC captured to target (90% capture efficiency)" },
           { capture_efficiency: "%", contact_time: "h" }
@@ -1284,36 +1302,62 @@
           "solvent recovery distillation",
           ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"],
           [
-            { role: "output", name: "purified cyclohexane", quantity: "3.73", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "98", scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "SI Step 4, first loop: 'A recovery efficiency of at least 98% is targeted'; column combines the U2 decanter purge (0.30 kg, B3) + U5 evaporator overhead (3.15 kg, B8) + U7 TSA return (0.36 kg, B10) = 3.81 kg feed x 98% before recycling to U1" },
-            { role: "waste", name: "column bottoms / heavies", quantity: "0.08", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "minor heavies purge from the recovery-column reboiler (2% of the 3.81 kg combined feed)" }
+            { role: "input", name: "crude cyclohexane recovery feed", quantity: "3.48", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "combined U2 decanter purge, U5 condensate, and U7 TSA return" },
+            { role: "output", name: "purified cyclohexane", quantity: "3.41", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "98", scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "SI Step 4, first loop: recovery efficiency of at least 98% is targeted; purified cyclohexane returns to U1" },
+            { role: "waste", name: "column bottoms / heavies", quantity: "0.07", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "minor heavies purge from the recovery-column reboiler, assumed as 2% of combined recovery feed" }
           ],
           { reflux_ratio: "2", column_stages: "8", agitation_note: "staged reflux in solvent-recovery column" },
           {}
         ),
         makeBlock(
           "B12",
-          "Route the aqueous wash effluent and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.",
+          "Route the aqueous wash effluent, brine effluent, and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.",
           "G9",
           "wastewater treatment",
           ["M(L)"],
           [
-            { role: "output", name: "treated effluent", quantity: "2.34", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "combines organic-wash aqueous waste (B6) and condensation water (B3); neutralized before off-site WWT discharge" }
+            { role: "input", name: "reaction water", quantity: "0.15", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997" },
+            { role: "input", name: "aqueous/brine wash effluent", quantity: "2.66", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" },
+            { role: "output", name: "neutralized aqueous effluent", quantity: "2.81", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "combines water/brine wash effluent (B6) and condensation water (B3); neutralized before off-site WWT discharge" }
           ],
           { neutralization_ph_target: "7", residence_time: "1", agitation_note: "neutralization tank, pH-controlled" },
           { residence_time: "h" }
         )
       ];
+      const octocryleneReactionBlock = state.blocks.find(block => block.id === "B3");
+      if (octocryleneReactionBlock) {
+        octocryleneReactionBlock.conversionDetail = {
+          productStreamId: "B3-S2",
+          productAmountMode: "actual",
+          productBasisQuantity: "",
+          balanceMethod: "stoichiometric",
+          stagedResidualStreamIds: [],
+          byproducts: [
+            {
+              id: "octo-water",
+              name: "water of condensation",
+              basis: "generated by stoichiometry",
+              amount: "",
+              percent: "",
+              stoichCoeff: "1",
+              mw: "18.015",
+              unit: "kg",
+              role: "byproduct"
+            }
+          ],
+          lastGeneratedSummary: "Preloaded from SI: 90% reported yield, 1:1 Knoevenagel stoichiometry, water as stoichiometric byproduct; solvent and catalyst excluded from reactive balance."
+        };
+      }
       state.groups = {
-        G1: { id: "G1", task: "feed preparation and heat-up", selectedUnit: "Jacketed vessel heat/cool step", selectionBasis: "combined charge/mixing and heat-up in the same stirred jacketed reactor; preserves the protocol step while industrial feed tanks only support charging (paper U1, SI Table S3)", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "charge from feed tanks (paper U1) plus heat to reflux; receives recovered cyclohexane loop CYHX. Duration per SI Table S1 B2: ramp to reflux 0.5-1 h, plus charge time - set to 1.5 h so the single-train Gantt sums to the SI's stated ~28 h makespan (SI Step 6)." }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 620, y: 90 },
-        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "liquid-phase reaction plus reflux/Dean-Stark removal; selected as the scale-up reactor class in paper U2 and SI Step 6", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark internal loop (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value (SI Step 6: limiting cycle time CT = max(tau/N) is set by U2 at approx. 20 h, kinetics-bound); kinetic bottleneck, cannot be relieved by parallelization within one unit. Reactor sizing per SI Step 6: stoichiometric charge (1512 kg benzophenone + 1637 kg 2-EH cyanoacetate, approx. 3.2 m3) plus cyclohexane at 2.5 L/kg product (7.5 m3 for a 3000 kg batch) gives a 10.7 m3 total charge; at 70% working fill this requires an approx. 15 m3 reactor, matching the paper exactly." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1180, y: 90 },
-        G3: { id: "G3", task: "cooling before work-up", selectedUnit: "External loop heat exchanger", selectionBasis: "cooling is heat-transfer limited at scale; external loop is kept as a conservative equipment-dependent cooling option rather than only jacket cooling", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cooling duty scales with V/A ratio; jacket alone may be insufficient at 5 m3. Duration per SI Table S1 B4: 'Cool to room temperature; To 25 °C; 1 h'." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 1740, y: 90 },
-        G4: { id: "G4", task: "counter-current water wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "two-stage counter-current liquid-liquid contact plus settling maps directly to mixer-settler/liquid-liquid extraction (paper U3)", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "2-stage counter-current mixer-settler train (paper U3); emulsion and settling risk at scale; aqueous to WWT interface (paper U9)" }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 2300, y: 90 },
-        G5: { id: "G5", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "fixed-bed molecular-sieve column: not derivable from protocol phenomena, chosen by drying/adsorption heuristic", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "fixed-bed 4A molecular-sieve column, regenerable (paper U4); not derivable from protocol phenomena alone - heuristic selection. Third recycle loop per SI Step 4: periodic regeneration of this molecular-sieve bed (water desorbed, bed returned to service) replaces the single-use lab desiccant and avoids a continuous wet-solid waste stream. Duration close to B7's stated contact_time of 1 h plus loading/unloading margin; sized so the single-train Gantt sums to the SI's ~28 h makespan." }, properties: {}, propertiesEditing: false, x: 2860, y: 90 },
-        G6: { id: "G6", task: "cyclohexane evaporation and recovery", selectedUnit: "Evaporation", selectionBasis: "thin-film evaporator over flash: heat-sensitivity heuristic H33 for the ester product", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator chosen over flash by heat-sensitivity heuristic H33 (paper U5); overhead condensate sent to the cyclohexane recovery column (paper U8), not recycled directly. Duration close to B8's stated phase_change_time of 2 h plus vacuum draw margin; sized so the single-train Gantt sums to the SI's ~28 h makespan." }, properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 3420, y: 90 },
-        G7: { id: "G7", task: "final purification", selectedUnit: "Distillation", selectionBasis: "short-path molecular distillation at 1.5 mbar: heat-sensitivity heuristic, minimize thermal exposure", schedule: { durationH: "2", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at 1.5 mbar chosen by heat-sensitivity heuristic (paper U6); secondary bottleneck (SI Step 6: 3-5 h, relievable by parallelization); heavies to incineration/boiler fuel" }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3980, y: 90 },
-        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "not derivable from protocol phenomena alone: industrial addition with no laboratory counterpart (paper U8, SI 3.iv)", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "principal recycle loop (SI Step 4): standard distillation column combining the U2 reflux/decanter purge (G2), the U5 evaporator overhead (G6), and the U7 TSA vent return (G10); recovers cyclohexane at >=98% and returns it to U1 (G1)" }, properties: {}, propertiesEditing: false, x: 3420, y: 520 },
-        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "not derivable from protocol phenomena alone: compliance interface with no laboratory counterpart (paper U9, SI 3.iv)", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "neutralization tank + bio-WWT inlet (paper U9); collects the reactor condensation water (G2) and the aqueous/brine wash effluent (G4, including the NH4OAc catalyst, which is not recovered - SI Table S3 task T6)" }, properties: {}, propertiesEditing: false, x: 1740, y: 520 },
-        G10: { id: "G10", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "condenser plus activated-carbon polishing: not derivable from protocol phenomena alone, VOC compliance heuristic (paper U7, SI 3.iv)", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "cold-trap condenser and activated-carbon bed treating cyclohexane/NH3 vents from the reactor (G2) and evaporator (G6) (paper U7); second recycle loop (SI Step 4): cyclohexane recovered by temperature-swing adsorption (TSA) returns to G8, not directly to G1" }, properties: {}, propertiesEditing: false, x: 2280, y: 520 }
+        G1: { id: "G1", task: "feed preparation and dosing", selectedUnit: "Feed tank and dosing skid", selectionBasis: "paper U1: benzophenone, 2-EH cyanoacetate, cyclohexane, and ammonium acetate are charged/dosed before the shared T1 reaction step", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "feed tanks and solid feeder support charging to U2; receives recovered cyclohexane loop CYHX. Duration includes conservative charging/pre-mix allowance so the single-train schedule remains close to the SI ~28 h makespan." }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 560, y: 90 },
+        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "paper U2 / T1 core: B2 heat-up, B3 liquid-phase Knoevenagel reaction, Dean-Stark water removal, and B4 cool-down remain one reactor operation", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark side decanter (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value. Reactor sizing per SI Step 6: stoichiometric charge (1512 kg benzophenone + 1637 kg 2-EH cyanoacetate, approx. 3.2 m3) plus cyclohexane at 2.5 L/kg product (7.5 m3 for a 3000 kg batch) gives a 10.7 m3 total charge; at 70% working fill this requires an approx. 15 m3 reactor." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1120, y: 90 },
+        G3: { id: "G3", task: "aqueous and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "paper U3: two-stage mixer-settler train replaces lab wash/separation and removes ammonium acetate/soluble impurities without adding ethyl acetate extraction", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "water wash followed by brine wash; U3 2-3 h secondary task below the parallelization threshold in SI Step 6. Aqueous/brine effluent is routed to U9." }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 1680, y: 90 },
+        G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "paper U4: fixed-bed 4A molecular-sieve drying is the industrial replacement for lab drying salts", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "regenerable molecular-sieve bed. Third SI recycle loop: water is desorbed during regeneration and the bed returns to service, avoiding a continuous spent-salt waste stream." }, properties: {}, propertiesEditing: false, x: 2240, y: 90 },
+        G5: { id: "G5", task: "cyclohexane solvent removal", selectedUnit: "Evaporation", selectionBasis: "paper U5: wiped/thin-film evaporator under vacuum removes cyclohexane with short residence and sends overhead to U8 recovery", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator at 100-200 mbar and around 50 C jacket. Duration close to B8 phase-change time plus vacuum draw margin." }, properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 2800, y: 90 },
+        G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "paper U6: short-path molecular distillation is selected for high-boiling, thermally sensitive octocrylene purification", schedule: { durationH: "4", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at approx. 1.5 mmHg (~2 mbar), 190-210 C, residence <1 min. SI Step 6 treats U6 as a 3-5 h secondary bottleneck that can be relieved through parallelization/pre-emptive duplication; represented here as 2 parallel lanes." }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3360, y: 90 },
+        G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "paper U7: condenser plus activated-carbon polishing handles cyclohexane-rich VOC vents from U2 and U5", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "second SI recycle loop: cyclohexane recovered by temperature-swing adsorption (TSA) returns to U8, not directly to U1." }, properties: {}, propertiesEditing: false, x: 1680, y: 520 },
+        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "paper U8: dedicated solvent-recovery column combines U2 decanter purge, U5 overhead, and U7 TSA return before recycle to U1", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "principal recycle loop: targets >=98% cyclohexane recovery and returns purified cyclohexane to U1 feed preparation." }, properties: {}, propertiesEditing: false, x: 2800, y: 520 },
+        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "paper U9: compliance interface for reaction water plus aqueous/brine wash effluent", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "neutralization tank + bio-WWT inlet; collects Dean-Stark condensation water and U3 effluent containing ammonium acetate catalyst/soluble salts." }, properties: {}, propertiesEditing: false, x: 1120, y: 520 }
       };
       state.links = [
         { from: "G1", to: "G2" },
@@ -1321,16 +1365,19 @@
         { from: "G3", to: "G4" },
         { from: "G4", to: "G5" },
         { from: "G5", to: "G6" },
-        { from: "G6", to: "G7" },
         { from: "G2", to: "G8" },
-        { from: "G6", to: "G8" },
+        { from: "G5", to: "G8" },
         { from: "G8", to: "G1" },
-        { from: "G4", to: "G9" },
+        { from: "G3", to: "G9" },
         { from: "G2", to: "G9" },
-        { from: "G2", to: "G10" },
-        { from: "G6", to: "G10" },
-        { from: "G10", to: "G8" }
+        { from: "G2", to: "G7" },
+        { from: "G5", to: "G7" },
+        { from: "G7", to: "G8" }
       ];
+      if (octocryleneReactionBlock && state.groups.G2) {
+        syncSeparationSimulatorSubstances(state.groups.G2);
+        syncGroupReactionBalanceFromConversionBlock(octocryleneReactionBlock);
+      }
       state.scaleBasis = {
         targetProduct: "octocrylene",
         targetAmount: "750",
@@ -1358,7 +1405,7 @@
       state.aiRefine = null;
       state.selectedBlockId = null;
       state.selectedGroupId = "G2";
-      state.selectedIds = ["B3"];
+      state.selectedIds = ["B2", "B3", "B4"];
       state.menuBlockId = null;
       state.menuGroupId = null;
       state.menuStreamId = null;
@@ -1529,6 +1576,7 @@
         makeupRequired: String(stream?.makeupRequired || ""),
         accumulationRisk: String(stream?.accumulationRisk || ""),
         note: String(stream?.note || ""),
+        pubchemQuery: String(stream?.pubchemQuery || stream?.compoundName || ""),
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, String(stream?.[field] || stream?.chemicalProperties?.[field] || "")])),
         thermalSensitivity: separationThermalOptions.includes(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
           ? String(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
@@ -7290,8 +7338,35 @@
         .join("");
     }
 
+    function findStreamById(streamId) {
+      const id = String(streamId || "");
+      if (!id) return null;
+      for (const block of state.blocks || []) {
+        const stream = (block.streams || []).find(item => item.id === id);
+        if (stream) return stream;
+      }
+      return null;
+    }
+
     function conversionInputStreams(block) {
-      return (block.streams || []).filter(stream => stream.role === "input");
+      const directInputs = (block.streams || []).filter(stream => stream.role === "input");
+      const specificDirectInputs = directInputs.filter(stream => cleanSubstanceName(stream.name));
+      if (specificDirectInputs.length || !block?.groupId) return specificDirectInputs.length ? specificDirectInputs : directInputs;
+      const upstreamGroupIds = new Set(state.links
+        .filter(link => link.to === block.groupId && state.groups[link.from])
+        .map(link => link.from));
+      const seen = new Set();
+      const upstreamInputs = blocksInOrder()
+        .filter(candidateBlock => upstreamGroupIds.has(candidateBlock.groupId))
+        .flatMap(candidateBlock => candidateBlock.streams || [])
+        .filter(stream => stream.role === "input" && cleanSubstanceName(stream.name))
+        .filter(stream => {
+          const key = stream.id || `${cleanSubstanceName(stream.name)}-${stream.quantity}-${stream.unit}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      return upstreamInputs.length ? upstreamInputs : directInputs;
     }
 
     function conversionReactantStreams(block) {
@@ -8032,6 +8107,19 @@
       return stream;
     }
 
+    function conversionGeneratedOutletIsWaste(row) {
+      const text = String(row?.name || "").toLowerCase();
+      return /\b(water|condensation|brine|salt|waste|effluent)\b/.test(text);
+    }
+
+    function wastewaterDestinationGroupId() {
+      const entry = Object.values(state.groups || {}).find(group => {
+        const text = `${group.task || ""} ${group.selectedUnit || ""}`.toLowerCase();
+        return text.includes("wastewater");
+      });
+      return entry?.id || "";
+    }
+
     function stagedConversionResidualRows(calc) {
       const stagedIds = new Set(calc.detail.stagedResidualStreamIds || []);
       const fraction = calc.unroutedResidualFraction ?? 1;
@@ -8135,17 +8223,19 @@
         const name = String(row.name || "").trim();
         if (!name || !(row.mass > 0)) return;
         const isResidualOutlet = row.role === "residual";
+        const isGeneratedWaste = !isResidualOutlet && conversionGeneratedOutletIsWaste(row);
         const role = isResidualOutlet ? "impurity" : row.role === "coproduct" ? "coproduct" : "byproduct";
-        const streamRole = isResidualOutlet ? "waste" : "output";
+        const streamRole = isResidualOutlet || isGeneratedWaste ? "waste" : "output";
         const stream = upsertConversionStream(block, streamRole, conversionGeneratedStreamId(block, `${isResidualOutlet ? "residual-outlet" : "byproduct"}-${index + 1}`), {
           name,
           quantity: formatNumber(row.mass),
           unit: row.unit || calc.fallbackUnit,
           phase: "unknown",
           status: "calculated",
-          timing: isResidualOutlet ? "waste purge" : "in-process intermediate",
-          fate: isResidualOutlet ? "purge" : row.role === "coproduct" ? "co-product" : "intermediate",
+          timing: isResidualOutlet || isGeneratedWaste ? "waste purge" : "in-process intermediate",
+          fate: isResidualOutlet ? "purge" : isGeneratedWaste ? "wastewater" : row.role === "coproduct" ? "co-product" : "intermediate",
           scalingMode: "per batch",
+          destinationGroup: isGeneratedWaste ? wastewaterDestinationGroupId() : "",
           note: `Auto-generated by Conversion balance as ${isResidualOutlet ? "named residual outlet" : role}: ${row.displayBasis}.`
         });
         if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, role, "recover", block.id);
@@ -8768,7 +8858,7 @@
       });
       body.querySelectorAll("[data-conversion-input-reaction-role]").forEach(select => {
         select.addEventListener("change", event => {
-          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionInputReactionRole);
+          const stream = findStreamById(event.target.dataset.conversionInputReactionRole);
           if (!stream) return;
           stream.reactionRole = event.target.value;
           stream.reactionRoleManual = true;
@@ -8782,7 +8872,7 @@
       });
       body.querySelectorAll("[data-conversion-reagent-stoich]").forEach(input => {
         input.addEventListener("input", event => {
-          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionReagentStoich);
+          const stream = findStreamById(event.target.dataset.conversionReagentStoich);
           if (!stream) return;
           stream.stoichCoeff = event.target.value;
           invalidateAiRefine();
@@ -8794,7 +8884,7 @@
       });
       body.querySelectorAll("[data-conversion-reagent-mw]").forEach(input => {
         input.addEventListener("input", event => {
-          const stream = (block.streams || []).find(item => item.id === event.target.dataset.conversionReagentMw);
+          const stream = findStreamById(event.target.dataset.conversionReagentMw);
           if (!stream) return;
           stream.mw = event.target.value;
           invalidateAiRefine();
@@ -8808,7 +8898,7 @@
         button.addEventListener("click", async event => {
           event.preventDefault();
           event.stopPropagation();
-          const stream = (block.streams || []).find(item => item.id === button.dataset.conversionFetchMw);
+          const stream = findStreamById(button.dataset.conversionFetchMw);
           if (!stream || !String(stream.name || "").trim()) {
             await alertModal("Add a material name before fetching PubChem properties.");
             return;
@@ -9157,15 +9247,19 @@
         const key = candidate.chemicalKey || canonicalChemicalKey(candidate.name);
         const current = existing.get(key);
         if (current) {
+          const currentSources = new Set(String(current.source || "").split(/\s*,\s*/).filter(Boolean));
+          const candidateSources = String(candidate.source || "").split(/\s*,\s*/).filter(Boolean);
+          const hasNewSource = candidateSources.some(source => !currentSources.has(source));
           current.role = preferredSubstanceRole(current.role, candidate.role);
           current.phase = mergeSubstanceText(current.phase, candidate.phase, "unknown");
           current.fate = candidate.residualOf ? candidate.fate : mergeSubstanceText(current.fate, candidate.fate, "unknown");
-          mergeCandidateQuantityByChemicalState(current, candidate);
-          current.source = mergeSubstanceText(current.source, candidate.source, "");
+          if (hasNewSource) mergeCandidateQuantityByChemicalState(current, candidate, candidateHasOutletQuantity(candidate));
+          candidateSources.forEach(source => currentSources.add(source));
+          current.source = Array.from(currentSources).join(", ");
           current.residualOf = current.residualOf || candidate.residualOf || "";
           current.residualSourceId = current.residualSourceId || candidate.residualSourceId || "";
           current.chemicalKey = key;
-          if (candidate.note && !String(current.note || "").includes(candidate.note)) {
+          if (hasNewSource && candidate.note && !String(current.note || "").includes(candidate.note)) {
             current.note = [current.note, candidate.note].filter(Boolean).join(" | ");
           }
           propagateSeparationChemicalProperties(group.id, current);
@@ -9180,7 +9274,7 @@
     }
 
     function inferredSeparationSubstances(group) {
-      const ignored = /^(reaction mixture|crude reaction mixture|organic phase|aqueous phase|aqueous layer|organic layer|crude product|purified product|treated effluent|aqueous waste|column bottoms|heavies|uncaptured voc|wash water|water content|spent sieves|condensed solvent|recovered voc|heated reaction feed|washed organic phase|dried organic phase)$/i;
+      const ignored = /^(reaction mixture|crude reaction mixture|organic phase|aqueous phase|aqueous layer|organic layer|crude product|purified product|treated effluent|neutralized aqueous effluent|aqueous waste|column bottoms|heavies|uncaptured voc|wash water|water content|spent sieves|condensed solvent|recovered voc|heated reaction feed|reflux-ready reaction solution|reactor organic phase before cooling|cooled reactor organic phase|water-washed organic\/aqueous dispersion|washed organic phase|dried organic phase|octocrylene-rich distillation feed|crude cyclohexane recovery feed)$/i;
       const candidates = [];
       substanceSourceBlocksForGroup(group).forEach(block => {
         ensureBlockFlowFields(block);
@@ -9199,6 +9293,7 @@
             residualSourceId: residual ? stream.id || "" : "",
             chemicalKey: canonicalChemicalKey(name),
             source: `${block.id}/${stream.id || stream.role || "stream"}`,
+            sourceStreamRole: stream.role || "",
             note: stream.note || "",
             ...streamChemicalPropertyPayload(stream)
           });
@@ -9236,14 +9331,18 @@
       candidates.forEach(candidate => {
         const key = candidate.chemicalKey || candidate.name.toLowerCase();
         if (!byName.has(key)) {
-          byName.set(key, { ...candidate, sourceList: candidate.source ? [candidate.source] : [] });
+          byName.set(key, {
+            ...candidate,
+            sourceList: candidate.source ? [candidate.source] : [],
+            hasOutletQuantity: candidateHasOutletQuantity(candidate)
+          });
           return;
         }
         const current = byName.get(key);
         current.role = preferredSubstanceRole(current.role, candidate.role);
         current.phase = mergeSubstanceText(current.phase, candidate.phase, "unknown");
         current.fate = candidate.residualOf ? candidate.fate : mergeSubstanceText(current.fate, candidate.fate, "unknown");
-        mergeCandidateQuantityByChemicalState(current, candidate);
+        mergeCandidateQuantityByChemicalState(current, candidate, candidateHasOutletQuantity(candidate));
         if (candidate.note && !String(current.note || "").includes(candidate.note)) {
           current.note = [current.note, candidate.note].filter(Boolean).join(" | ");
         }
@@ -9254,7 +9353,7 @@
         if (candidate.source) current.sourceList.push(candidate.source);
         current.source = current.sourceList.join(", ");
       });
-      return Array.from(byName.values()).map(({ sourceList, ...item }) => ({ ...item, source: sourceList.join(", ") }));
+      return Array.from(byName.values()).map(({ sourceList, hasOutletQuantity, sourceStreamRole, ...item }) => ({ ...item, source: sourceList.join(", ") }));
     }
 
     function mergeCandidateChemicalProperties(current, candidate) {
@@ -9265,13 +9364,25 @@
       });
     }
 
-    function mergeCandidateQuantityByChemicalState(current, candidate) {
+    function candidateHasOutletQuantity(candidate) {
+      return outletRoles.includes(candidate?.sourceStreamRole) && String(candidate?.quantity || "").trim();
+    }
+
+    function mergeCandidateQuantityByChemicalState(current, candidate, candidateOutletQuantity = false) {
       if (candidate.residualOf) {
         current.quantity = candidate.quantity || current.quantity;
         current.unit = candidate.unit || current.unit;
+        current.hasOutletQuantity = true;
         return;
       }
       if (current.residualOf) return;
+      if (candidateOutletQuantity && !current.hasOutletQuantity) {
+        current.quantity = candidate.quantity || current.quantity;
+        current.unit = candidate.unit || current.unit;
+        current.hasOutletQuantity = true;
+        return;
+      }
+      if (!candidateOutletQuantity && current.hasOutletQuantity) return;
       const mergedQuantity = mergeQuantity(current.quantity, current.unit, candidate.quantity, candidate.unit);
       current.quantity = mergedQuantity.quantity;
       current.unit = mergedQuantity.unit;
@@ -9337,13 +9448,13 @@
 
     function cleanSubstanceName(value) {
       const raw = String(value || "").toLowerCase();
-      if (/charged reaction|reaction feed|reaction mixture|organic phase|aqueous phase|crude reaction|washed organic|dried organic/.test(raw)) return "";
       if (raw.includes("cyclohexane")) return "cyclohexane";
       if (raw.includes("octocrylene")) return "octocrylene";
       if (raw.includes("benzophenone")) return "benzophenone";
       if (raw.includes("2-ethylhexyl cyanoacetate")) return "2-ethylhexyl cyanoacetate";
       if (raw.includes("ammonium acetate")) return "ammonium acetate";
       if (raw.includes("water")) return "water";
+      if (/charged reaction|reaction feed|reaction mixture|reaction solution|organic phase|aqueous phase|organic\/aqueous dispersion|distillation feed|recovery feed|crude reaction|washed organic|dried organic|effluent/.test(raw)) return "";
       return String(value || "")
         .replace(/\([^)]*\)/g, "")
         .replace(/\b(crude|purified|recovered|condensed|unreacted|residual|vapor|rich|loss|purge|mixture|condensate|final|reactor|decanter|to vent)\b/gi, "")
@@ -9357,6 +9468,7 @@
       if (reactionRole === "catalyst") return "catalyst";
       if (["auxiliary", "inert"].includes(reactionRole)) return "auxiliary";
       if (reactionRole === "reactant" && stream.role === "input") return "reactant";
+      if (isUnreactedOrResidualName(stream.name)) return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
       if (/catalyst|nh4oac|ammonium acetate/.test(text)) return "catalyst";
       if (/solvent|cyclohexane/.test(text)) return "solvent";
@@ -12564,6 +12676,10 @@
                 <span class="stream-field-label">PubChem CID</span>
                 <input data-stream-field="pubchemCid" data-stream-id="${sid}" value="${escapeAttr(stream.pubchemCid)}" placeholder="optional">
               </label>
+              <label class="stream-field span-2">
+                <span class="stream-field-label">PubChem lookup name</span>
+                <input data-stream-field="pubchemQuery" data-stream-id="${sid}" value="${escapeAttr(stream.pubchemQuery)}" placeholder="${escapeAttr(cleanSubstanceName(stream.name) || "pure compound name")}">
+              </label>
               <label class="stream-field span-4">
                 <span class="stream-field-label">Property source</span>
                 <input data-stream-field="propertySource" data-stream-id="${sid}" value="${escapeAttr(stream.propertySource)}" placeholder="manual, PubChem, supplier SDS...">
@@ -12837,13 +12953,18 @@
       }, 450));
     }
 
+    function streamPubChemLookupName(stream) {
+      return String(stream?.pubchemQuery || cleanSubstanceName(stream?.name) || stream?.name || "").trim();
+    }
+
     async function fetchPubChemForStream(streamId, button = null) {
       const current = selectedBlock();
       if (!current || typeof lookupPubChem !== "function" || typeof applyPubChemLookup !== "function") return;
       ensureBlockFlowFields(current);
       const stream = current.streams.find(item => item.id === streamId);
-      if (!stream || !String(stream.name || "").trim()) {
-        await alertModal("Add a compound name before fetching PubChem properties.");
+      const lookupName = streamPubChemLookupName(stream);
+      if (!stream || !lookupName) {
+        await alertModal("Add a PubChem lookup name for this stream, or use a pure compound name.");
         return;
       }
       const previousText = button?.textContent;
@@ -12852,7 +12973,7 @@
         button.textContent = "Fetching...";
       }
       try {
-        const data = await lookupPubChem(stream.name);
+        const data = await lookupPubChem(lookupName);
         if (!data.ok) {
           state.pubchemStreamSuggestions[streamId] = {
             status: data.suggestions?.length ? "ready" : "error",
@@ -14257,15 +14378,19 @@
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
       if (!ids.length && !draftBlocks.length) return;
       pushUndo();
-      const columns = ids.length <= 5 ? ids.length || 1 : Math.min(5, Math.ceil(Math.sqrt(ids.length * 1.45)));
+      // Same topological stage/row order the Flowsheet View uses (topologicalGroupOrder, in
+      // flowsheet.js) instead of a blind index%columns grid - follows state.links direction, so
+      // Auto-Layout produces a left-to-right process order with far fewer crossed arrows to begin
+      // with, rather than one that connectionRoute has to detour around after the fact.
+      const layout = topologicalGroupOrder(ids);
       const gapX = state.boardCompact ? 340 : 560;
       const gapY = state.boardCompact ? 245 : 330;
       const startX = draftBlocks.length ? 520 : 80;
       const startY = 90;
-      ids.forEach((id, index) => {
+      ids.forEach(id => {
         const group = ensureGroup(id);
-        group.x = startX + (index % columns) * gapX;
-        group.y = startY + Math.floor(index / columns) * gapY;
+        group.x = startX + (layout.stageById.get(id) || 0) * gapX;
+        group.y = startY + (layout.rowById.get(id) || 0) * gapY;
       });
       if (draftBlocks.length) state.draftPos = { x: 24, y: 90 };
       state.focusEndpoint = ids[0] || null;

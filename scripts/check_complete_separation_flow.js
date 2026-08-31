@@ -454,7 +454,7 @@ assert(!conversionValidationIssues(esterificationClosure).some(issue => issue.te
 const esterificationApplyBlock = JSON.parse(JSON.stringify(esterificationClosureBlock));
 applyConversionBalanceStreams(esterificationApplyBlock);
 const generatedWater = esterificationApplyBlock.streams.find(stream => stream.name === "water");
-assert(generatedWater && generatedWater.role === "output", "Stoichiometric byproduct should be written as an output stream on apply");
+assert(generatedWater && generatedWater.role === "waste" && generatedWater.fate === "wastewater", "Stoichiometric water byproduct should be written as a wastewater outlet on apply");
 assert(Math.abs(conversionNumber(generatedWater.quantity) - 0.0162135) < 0.001, "Applied stoichiometric byproduct stream should use the calculated mass rounded for MFA display");
 const esterificationMissingWaterBlock = {
   ...esterificationClosureBlock,

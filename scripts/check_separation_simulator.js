@@ -34,22 +34,40 @@ renderAll = () => {};
 renderExport = () => {};
 
 loadBaseExampleProject();
+assert.strictEqual(Object.keys(state.groups).length, 9, "Octocrylene example should map to paper U1-U9");
+assert(!state.groups.G10, "Octocrylene example should not create a tenth unit operation");
+assert.deepStrictEqual(state.blocks.filter(block => ["B2", "B3", "B4"].includes(block.id)).map(block => block.groupId), ["G2", "G2", "G2"], "heat, reaction, and cooling should stay in the paper U2 reactor group");
+assert.strictEqual(state.groups.G3.task, "aqueous and brine wash", "G3 should be the paper U3 mixer-settler wash train");
+state.blocks.forEach(block => {
+  assert((block.streams || []).some(stream => stream.role === "input"), block.id + " should have at least one input stream in the Octocrylene example");
+  assert((block.streams || []).some(stream => stream.role !== "input"), block.id + " should have at least one outlet stream in the Octocrylene example");
+});
 let group = groupModel("G2");
+syncSeparationSimulatorSubstances(group);
 syncSeparationSimulatorSubstances(group);
 let model = separationSimulatorModel(group);
 let names = model.substances.map(item => item.name);
-assert(names.includes("benzophenone"), "G2 should include upstream benzophenone");
-assert(names.includes("2-ethylhexyl cyanoacetate"), "G2 should include upstream 2-ethylhexyl cyanoacetate");
+assert(names.includes("benzophenone"), "G2 should include post-conversion benzophenone residual");
+assert(names.includes("2-ethylhexyl cyanoacetate"), "G2 should include post-conversion 2-ethylhexyl cyanoacetate residual");
 assert(names.includes("cyclohexane"), "G2 should include cyclohexane");
 assert(names.includes("octocrylene"), "G2 should include octocrylene");
 assert(names.includes("water"), "G2 should include water");
 assert(!names.includes("charged reaction"), "G2 should not treat charged reaction mixture as a pure substance");
 assert.strictEqual(model.substances.find(item => item.name === "water").role, "byproduct", "water should be inferred as byproduct");
-assert.strictEqual(model.substances.find(item => item.name === "benzophenone").quantity, "1.82", "benzophenone quantity should be prefilled");
-assert.strictEqual(model.substances.find(item => item.name === "benzophenone").unit, "kg", "benzophenone unit should be prefilled");
-assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").quantity, "1.97", "2-ethylhexyl cyanoacetate quantity should be prefilled");
-assert.strictEqual(model.substances.find(item => item.name === "water").quantity, "0.18", "water byproduct quantity should be prefilled");
+assert.strictEqual(model.substances.find(item => item.name === "benzophenone").quantity, "0.308", "benzophenone residual quantity should be prefilled");
+assert.strictEqual(model.substances.find(item => item.name === "benzophenone").unit, "kg", "benzophenone residual unit should be prefilled");
+assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").quantity, "0.333", "2-ethylhexyl cyanoacetate residual quantity should be prefilled");
+assert.strictEqual(model.substances.find(item => item.name === "benzophenone").residualOf, "benzophenone", "benzophenone should be tagged as a residual of the original chemical");
+assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").residualOf, "2-ethylhexyl cyanoacetate", "2-ethylhexyl cyanoacetate should be tagged as a residual of the original chemical");
+assert.strictEqual(model.substances.find(item => item.name === "water").quantity, "0.15", "water byproduct quantity should be prefilled");
 assert(model.substances.find(item => item.name === "cyclohexane").source.includes("B1"), "cyclohexane should keep source stream traceability");
+const ventStream = state.blocks.find(block => block.id === "B10").streams.find(stream => stream.name === "cyclohexane-rich vent stream");
+assert.strictEqual(streamPubChemLookupName(ventStream), "cyclohexane", "Process stream labels should fetch PubChem through a pure-compound lookup name");
+assert(streamRowHtml({ ...ventStream, editing: true }, "material", "input", state.blocks.find(block => block.id === "B10")).includes("PubChem lookup name"), "Stream editor should expose the PubChem lookup name field");
+const octoConversion = conversionCalculationModel(state.blocks.find(block => block.id === "B3"));
+assert.strictEqual(octoConversion.stoichReady, true, "Octocrylene conversion should resolve stoichiometry from upstream reagent inputs");
+assert.strictEqual(octoConversion.stoichLimitingName, "2-ethylhexyl cyanoacetate", "Octocrylene conversion should identify the limiting reagent from MW and coefficients");
+assert(Math.abs(octoConversion.reactantRows.find(row => row.stream.name === "benzophenone").leftoverKg - 0.3077) < 0.001, "Octocrylene conversion should compute benzophenone residual in kg");
 
 state.blocks = [{ id: "B99", start: 0, end: 1, groupId: "GT", streams: [], phenomena: [], conditions: {} }];
 state.groups = {

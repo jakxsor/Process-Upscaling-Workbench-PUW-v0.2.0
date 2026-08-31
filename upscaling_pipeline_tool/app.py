@@ -120,7 +120,7 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
-          <button id="autoLayout" title="Rearrange task groups into a compact left-to-right grid without changing block/group content">Auto-Layout</button>
+          <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Auto-Layout</button>
           <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset</button>
           <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center</button>
           <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit</button>
