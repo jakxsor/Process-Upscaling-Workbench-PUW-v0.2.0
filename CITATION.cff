@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the repository and the associated methodology paper."
+title: "Process Upscaling Workbench"
+type: software
+repository-code: "https://github.com/jakxsor/upscaling-pipeline-tool"
+license: MIT
+authors:
+  - family-names: "Sorani"
+    given-names: "Jacopo"
+  - family-names: "Majo"
+    given-names: "M."
+abstract: >-
+  Local browser-based implementation of a phenomena-based scale-up workflow for
+  translating laboratory synthesis protocols into traceable process blocks,
+  task groups, material-flow assumptions, unit-operation candidates, optional
+  post-reaction separation screening, and preliminary scale-up checks.
+preferred-citation:
+  type: article
+  title: "Generalized Scale-Up Methodology for Chemicals and Materials in Prospective LCA"
+  authors:
+    - family-names: "Majo"
+      given-names: "M."
+    - family-names: "Sorani"
+      given-names: "J."
+    - family-names: "Nowack"
+      given-names: "B."
+    - family-names: "Hischier"
+      given-names: "R."
+  notes: "Publication venue, year, pages, and DOI should be added once available."

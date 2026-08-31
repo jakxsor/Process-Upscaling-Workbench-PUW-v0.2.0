@@ -1,0 +1,39 @@
+name: Validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  regression-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check upscaling_pipeline_tool/static/app.js
+          node --check upscaling_pipeline_tool/static/flowsheet.js
+
+      - name: Run workflow regression checks
+        run: |
+          node scripts/check_complete_separation_flow.js
+          node scripts/check_separation_simulator.js
+          node scripts/check_property_screening.js
+          node scripts/check_flowsheet_view.js
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pyflowsheet_renderer.py

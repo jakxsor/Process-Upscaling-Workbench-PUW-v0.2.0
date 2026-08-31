@@ -3828,6 +3828,11 @@
         hoursPerDay: "16",
         batchesPerDay: "1",
         batchDuration: "",
+        // Was missing from this defaults object entirely (unlike every other scaleBasis field),
+        // so ensureScaleBasis's {...defaults, ...existing} merge left it undefined for any project
+        // whose state.scaleBasis never set it explicitly - rendered as the literal text "undefined"
+        // in the Gantt margin input.
+        scheduleMarginPercent: "0",
         oeePercent: "80",
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
@@ -12612,18 +12617,19 @@
       const suggestions = streamSuggestionCandidates(block, role, stream);
       if (!suggestions.length) return "";
       return `
-        <div class="stream-suggestion-rail">
-          <span>From description</span>
+        <div class="stream-suggestion-rail prefill" aria-label="Pre-fill suggestions detected from the block description">
+          <span>Pre-fill from text</span>
           ${suggestions.map(item => `
-            <button type="button" class="stream-suggestion-chip ${escapeAttr(item.tone || "")}"
+            <button type="button" class="stream-suggestion-chip prefill ${escapeAttr(item.tone || "")}"
               data-apply-stream-suggestion="${escapeAttr(stream.id)}"
               data-suggestion-name="${escapeAttr(item.name)}"
               data-suggestion-quantity="${escapeAttr(item.quantity || "")}"
               data-suggestion-unit="${escapeAttr(item.unit || "")}"
               data-suggestion-phase="${escapeAttr(item.phase || "")}"
               data-suggestion-reaction-role="${escapeAttr(item.reactionRole || "")}"
-              title="${escapeAttr(item.reason || "Use this stream name")}">
-              ${escapeHtml(item.name)}
+              title="${escapeAttr(`${item.reason || "Detected from block description"}. Click to pre-fill this editable row; save it only after checking.`)}">
+              <span class="stream-suggestion-name">${escapeHtml(item.name)}</span>
+              ${item.quantity ? `<span class="stream-suggestion-meta">${escapeHtml(item.quantity)} ${escapeHtml(item.unit || "")}</span>` : ""}
             </button>
           `).join("")}
         </div>

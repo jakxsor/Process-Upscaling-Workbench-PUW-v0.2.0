@@ -2232,6 +2232,12 @@
       background: rgba(255, 255, 255, 0.72);
     }
 
+    .stream-suggestion-rail.prefill {
+      border-style: dashed;
+      border-color: #cad8e1;
+      background: #fbfdfe;
+    }
+
     .stream-suggestion-rail > span {
       color: var(--muted);
       font-size: 10px;
@@ -2254,6 +2260,40 @@
       white-space: nowrap;
     }
 
+    .stream-suggestion-chip.prefill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-style: dashed;
+      background: #fff;
+      color: #536878;
+      font-style: italic;
+      font-weight: 700;
+      box-shadow: none;
+    }
+
+    .stream-suggestion-chip.prefill:hover {
+      border-style: solid;
+      color: var(--blue);
+      background: #f4f9fd;
+    }
+
+    .stream-suggestion-name,
+    .stream-suggestion-meta {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stream-suggestion-meta {
+      flex: 0 0 auto;
+      padding-left: 6px;
+      border-left: 1px solid #d6e2e9;
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 800;
+    }
+
     .stream-suggestion-chip.input {
       border-color: #cbdff0;
       background: var(--blue-soft);
@@ -2271,6 +2311,14 @@
       border-color: #ead9be;
       background: var(--orange-soft);
       color: var(--orange);
+    }
+
+    .stream-suggestion-chip.prefill.input,
+    .stream-suggestion-chip.prefill.output,
+    .stream-suggestion-chip.prefill.pass,
+    .stream-suggestion-chip.prefill.waste {
+      background: #fff;
+      color: #536878;
     }
 
     .stream-name-row {

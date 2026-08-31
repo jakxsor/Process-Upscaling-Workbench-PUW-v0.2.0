@@ -1,16 +1,20 @@
 # Process Upscaling Workbench
 
-Local web app for turning a laboratory synthesis protocol into a traceable
-early-stage scale-up workflow.
+[![Validation](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml/badge.svg)](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml)
+
+A local browser-based implementation of a phenomena-based scale-up workflow for
+translating laboratory synthesis protocols into traceable process blocks, task
+groups, material-flow assumptions, unit-operation candidates, and preliminary
+scale-up checks.
 
 ## About This Repository
 
 This repository implements the phenomena-based upscaling framework described
 in:
 
-> Majó, M., Sorani, J., Nowack, B., Hischier, R. "Generalized Scale-Up
+> Majo, M., Sorani, J., Nowack, B., Hischier, R. "Generalized Scale-Up
 > Methodology for Chemicals and Materials in Prospective LCA." [journal,
-> status: in review]
+> publication details to be added]
 
 The built-in octocrylene example reproduces the case study in Section 3 and
 the Supplementary Information of that paper (nine unit operations, three
@@ -31,16 +35,17 @@ and low-confidence scale-up risks.
 
 - Create annotated protocol blocks from selected text.
 - Assign behaviour presets and phenomena to each block.
-- Add quantified MFA streams: inputs, outputs, waste/emissions, phase, quantity,
-  unit, timing, data status, recycle/purge/fate, and notes.
+- Add quantified MFA streams: inputs and outlets, including products,
+  intermediate streams, waste, emissions, recoveries, and recycle candidates.
 - Combine blocks into task groups while preserving block-level information.
 - Aggregate group-level MFA and operating conditions.
 - Use phase categories to avoid incompatible phenomenon/unit-operation choices.
 - Suggest industrial unit-operation alternatives from grouped phenomena.
 - Show heuristic-rule checks before numerical scale-up.
-- Add optional property refinement only when it helps separation, energy,
-  mixing, or ambiguous alternatives.
-- Screen separation alternatives with a property-based keep/weak/reject layer.
+- Add optional property refinement only when it helps separation, energy, mixing,
+  sizing, or ambiguous alternatives.
+- Run an optional Lutze-inspired post-reaction separation sandbox using
+  pairwise substance comparisons, property evidence, and phase compatibility.
 - Define a scale-up basis: target product, production target, yield, recovery,
   design margin, OEE, operating schedule, and parallel units.
 - Scale MFA quantities to batch, hourly, and annual views.
@@ -66,7 +71,28 @@ The current version is not intended to:
 - replace reactor, filter, dryer, distillation, or heat-exchanger design;
 - automatically convert lab durations into validated industrial durations;
 - infer physical properties or kinetic data without user-provided evidence;
+- claim a fully optimized separation train from limited property data;
 - apply proposed AI changes automatically.
+
+## Methodological Scope
+
+The software is intended as a paper-companion and screening implementation. It
+keeps assumptions visible and separates entered, calculated, estimated, and
+assumed values. The output should be interpreted as a traceable scale-up
+proposal, not as validated process design.
+
+The unit-operation suggestion layer is deterministic. It uses the task class,
+MFA role/phase context, operating conditions, and optional Lutze-style
+separation evidence when available. Suggestions are gated until the task has
+enough material streams, phase labels, and conditions to make the choice
+auditable.
+
+The Lutze Reaction-Separation sandbox is optional. It compares active
+post-reaction substances pairwise and proposes draft separation moves from
+property contrasts and phase compatibility. The main flowchart is unchanged
+until the user explicitly applies a selected pathway. The sandbox does not
+perform rigorous thermodynamic modelling, equipment sizing, or economic
+optimization.
 
 For scheduling, the tool uses:
 
@@ -76,6 +102,17 @@ effective duration = adjusted duration / parallel units
 bottleneck = task with the largest effective duration
 cycle time = sum of non-overlapping effective durations
 ```
+
+For campaign scheduling, the UI also shows an overlapped scenario:
+
+```text
+plant cycle time = max(task effective duration)
+overlapped batches/year = 8760 x OEE / plant cycle time
+```
+
+The overlapped scenario is an upper-throughput screening case. It assumes that
+equipment, buffers, cleaning, operators, and material stability allow staggered
+batches.
 
 If operation-specific data are missing, the Gantt keeps the input duration and
 reports the missing data needed for quantitative correction.
@@ -108,7 +145,13 @@ http://127.0.0.1:8787
 You can still choose a specific port manually:
 
 ```bash
-python3 run_upscaling_tool.py --port 8787
+python3 start.py --port 8787
+```
+
+For headless or remote checks:
+
+```bash
+python3 start.py --no-browser
 ```
 
 ## Windows Instructions
@@ -186,11 +229,32 @@ Do not commit API keys to the repository.
 3. Assign behaviour presets, phenomena, phases, conditions, and MFA streams.
 4. Combine related blocks into task groups.
 5. Choose unit-operation alternatives and record the selection basis.
-6. Run heuristic checks and property-based separation screening where useful.
+6. Run heuristic checks and optional Lutze separation screening where useful.
 7. Define the scale-up basis and review scaled MFA results.
 8. Use the Gantt panel to inspect cycle time, bottlenecks, schedule margin, and
    missing operation-specific scale-up data.
 9. Export JSON for traceability or downstream analysis.
+
+## Validation Checks
+
+The repository includes lightweight regression checks for the current
+paper-support workflow. They can be run from the repository root without a
+Node package install:
+
+```bash
+node --check upscaling_pipeline_tool/static/app.js
+node --check upscaling_pipeline_tool/static/flowsheet.js
+node scripts/check_complete_separation_flow.js
+node scripts/check_separation_simulator.js
+node scripts/check_property_screening.js
+node scripts/check_flowsheet_view.js
+python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pyflowsheet_renderer.py
+```
+
+These checks cover the built-in example, conversion balance propagation,
+Lutze-style pathway generation, binary-pair ranking, applied separation route
+insertion, and flowsheet rendering. They are regression checks for the software
+workflow, not experimental validation of the chemical process.
 
 ## Built-In Example
 
@@ -199,9 +263,16 @@ It demonstrates:
 
 - grouped reaction and work-up operations;
 - cyclohexane recovery/recycle;
+- reaction conversion balance with product, byproduct, and unreacted reagent
+  streams;
+- optional post-reaction Lutze pathway screening;
 - scaled MFA from a lab basis to annual production;
 - heuristic review;
 - scale-up/Gantt bottleneck screening.
+
+Pre-filled values are a mix of paper/case-study values and labelled engineering
+screening assumptions. They should be reviewed before using exported results in
+new studies.
 
 ## Data Sources
 

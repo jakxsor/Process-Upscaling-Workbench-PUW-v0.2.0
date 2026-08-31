@@ -9,20 +9,22 @@ The app supports a phenomena-based scale-up workflow from protocol text to:
 
 - annotated blocks;
 - grouped phenomena and task logic;
-- quantified MFA inputs, outputs, waste, phases, and fates;
+- quantified MFA inputs and outlets, including products, intermediates, waste,
+  emissions, recoveries, and recycle candidates;
 - unit-operation alternatives;
 - heuristic-rule review;
-- optional property-based separation screening;
+- optional Lutze-inspired post-reaction separation pathway screening;
 - production scale-up assumptions;
 - schematic Gantt bottleneck analysis with scale-behaviour evidence.
 
-It is intended for early-stage framework support and transparent screening, not
-for final equipment design.
+It is intended as a paper-companion implementation for early-stage framework
+support and transparent screening, not for final equipment design.
 
-The property-based separation screen is an optional refinement layer. The current
-implementation provides a qualitative keep/weak/reject screen from entered
-properties and explicitly flags missing evidence. The `Binary-ratio` mode is
-reserved for a future component-level property matrix and threshold set.
+The separation simulator is an optional refinement layer. It reads substances
+from the task MFA/conversion balance, compares active components pairwise, ranks
+binary separation priorities, and lets the user draft a separation pathway before
+applying it to the main flowsheet. It explicitly flags missing property evidence
+and should not be treated as rigorous thermodynamic or equipment design.
 
 ## Run From Repository Root
 
@@ -52,6 +54,25 @@ The launcher opens the browser automatically. If needed, open:
 ```text
 http://127.0.0.1:8787
 ```
+
+For headless runs:
+
+```bash
+python3 start.py --no-browser
+```
+
+## Validation
+
+From the repository root:
+
+```bash
+node --check upscaling_pipeline_tool/static/app.js
+node scripts/check_complete_separation_flow.js
+node scripts/check_separation_simulator.js
+python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py
+```
+
+The broader validation commands are listed in the root `README.md`.
 
 ## Files
 
