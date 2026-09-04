@@ -5,6 +5,7 @@ const fs = require("fs");
 const assert = require("assert");
 
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
+const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const cssSource = fs.readFileSync("upscaling_pipeline_tool/static/style.css", "utf8");
 assert(cssSource.includes(".stream-editor-grid {\n      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);"), "Stream editor should give Inputs and Outlets equal horizontal space");
@@ -686,4 +687,4 @@ assert(state.links.some(link => link.from === "G5" && link.to === "G2"), "Applie
 console.log("Complete separation flow check passed.");
 `;
 
-eval(`${core}\n${source}`);
+eval(`${core}\n${workflowReadinessSource}\n${source}`);

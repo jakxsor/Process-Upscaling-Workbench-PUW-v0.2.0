@@ -256,6 +256,7 @@ node --check upscaling_pipeline_tool/static/app.js
 node --check upscaling_pipeline_tool/static/flowsheet.js
 node --check upscaling_pipeline_tool/static/flowsheet_ui.js
 node --check upscaling_pipeline_tool/static/lca_bridge.js
+node --check upscaling_pipeline_tool/static/workflow_readiness.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js
 node scripts/check_property_screening.js

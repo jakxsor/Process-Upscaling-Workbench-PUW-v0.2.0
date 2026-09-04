@@ -174,6 +174,12 @@ APP_HTML = r"""<!doctype html>
             </div>
             <div id="dataReadinessPanel" hidden></div>
           </div>
+
+          <div class="card stack">
+            <div class="label">Data Provenance</div>
+            <div class="muted small">How much of the declared streams is real vs. assumed - a different axis from Data Readiness above, which only checks whether a value is present at all.</div>
+            <div id="dataProvenanceSummary"></div>
+          </div>
         </div>
 
         <div id="heuristicsPanelTab" class="tab-view scale-tab" hidden>
@@ -503,6 +509,7 @@ APP_HTML = r"""<!doctype html>
   <script src="/pubchem.js"></script>
   <script src="/tutorial.js"></script>
   <script src="/lca_bridge.js"></script>
+  <script src="/workflow_readiness.js"></script>
   <script src="/export.js"></script>
   <script src="/project_persistence.js"></script>
   <script src="/separation_core.js"></script>
@@ -516,6 +523,7 @@ STATIC_ROUTES = {
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
     "/lca_bridge.js": ("lca_bridge.js", "application/javascript; charset=utf-8"),
+    "/workflow_readiness.js": ("workflow_readiness.js", "application/javascript; charset=utf-8"),
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
     "/project_persistence.js": ("project_persistence.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),

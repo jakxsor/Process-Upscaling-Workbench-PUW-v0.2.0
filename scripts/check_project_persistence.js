@@ -6,6 +6,7 @@ const assert = require("assert");
 
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 const lcaBridgeSource = fs.readFileSync("upscaling_pipeline_tool/static/lca_bridge.js", "utf8");
+const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
 const exportSource = fs.readFileSync("upscaling_pipeline_tool/static/export.js", "utf8");
 const persistenceSource = fs.readFileSync("upscaling_pipeline_tool/static/project_persistence.js", "utf8");
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
@@ -15,6 +16,7 @@ assert(appHtml.includes("workMenuToggle"), "Header should expose the Work persis
 assert(appHtml.includes("importJsonFile"), "Work menu should include a JSON file input");
 assert(appHtml.includes('src="/project_persistence.js"'), "project_persistence.js should be wired into the page");
 assert(appHtml.includes('src="/lca_bridge.js"'), "lca_bridge.js should be wired into the page");
+assert(appHtml.includes('src="/workflow_readiness.js"'), "workflow_readiness.js should be wired into the page");
 assert(exportSource.includes("projectState: buildProjectStateExport()"), "Project JSON should include a reloadable projectState");
 assert(persistenceSource.includes("function applyProjectStateSnapshot("), "Project persistence should be able to restore snapshots");
 
@@ -102,4 +104,4 @@ assert.strictEqual(reconstructed.groups.G1.properties.density.value, "1");
 console.log("Project persistence regression check passed.");
 `;
 
-eval(`${core}\n${lcaBridgeSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);
+eval(`${core}\n${lcaBridgeSource}\n${workflowReadinessSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);

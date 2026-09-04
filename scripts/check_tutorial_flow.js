@@ -6,6 +6,7 @@ const assert = require("assert");
 
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const coreSource = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
+const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
 const tutorialSource = fs.readFileSync("upscaling_pipeline_tool/static/tutorial.js", "utf8");
 const appHtml = fs.readFileSync("upscaling_pipeline_tool/app.py", "utf8");
 const cssSource = fs.readFileSync("upscaling_pipeline_tool/static/style.css", "utf8");
@@ -304,4 +305,4 @@ async function flushTutorialStart() {
 });
 `;
 
-eval(`${coreSource}\n${setupSource}\n${appSource}\n${tutorialSource}\n${testSource}`);
+eval(`${coreSource}\n${workflowReadinessSource}\n${setupSource}\n${appSource}\n${tutorialSource}\n${testSource}`);

@@ -3963,6 +3963,154 @@
       background: var(--orange);
     }
 
+    .gantt-timeline {
+      margin: 10px 0;
+      padding: 10px 10px 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .gantt-timeline-axis {
+      position: relative;
+      height: 16px;
+      margin-left: 64px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .gantt-timeline-axis span {
+      position: absolute;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    .gantt-timeline-axis span:first-child {
+      transform: translateX(0);
+    }
+
+    .gantt-timeline-axis span:last-child {
+      transform: translateX(-100%);
+    }
+
+    .gantt-timeline-body {
+      position: relative;
+      display: grid;
+      gap: 4px;
+    }
+
+    .gantt-timeline-grid {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 64px;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .gantt-timeline-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .gantt-timeline-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--ink-2);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gantt-timeline-track {
+      position: relative;
+      height: 14px;
+    }
+
+    .gantt-timeline-bar {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-radius: 3px;
+      background: var(--blue);
+      min-width: 3px;
+    }
+
+    .gantt-timeline-bar.critical {
+      background: var(--accent);
+    }
+
+    .gantt-timeline-bar.bottleneck {
+      background: var(--orange);
+    }
+
+    .data-provenance-bar {
+      display: flex;
+      height: 10px;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .data-provenance-seg {
+      min-width: 3px;
+    }
+
+    .data-provenance-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      margin-top: 6px;
+      font-size: 10.5px;
+    }
+
+    .data-provenance-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .data-provenance-chip::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    .status-reported.data-provenance-seg,
+    .data-provenance-chip.status-reported::before {
+      background: var(--green);
+    }
+
+    .status-calculated.data-provenance-seg,
+    .data-provenance-chip.status-calculated::before {
+      background: var(--blue);
+    }
+
+    .status-estimated.data-provenance-seg,
+    .data-provenance-chip.status-estimated::before {
+      background: var(--accent);
+    }
+
+    .status-assumed.data-provenance-seg,
+    .data-provenance-chip.status-assumed::before {
+      background: var(--orange);
+    }
+
+    .status-manual-override.data-provenance-seg,
+    .data-provenance-chip.status-manual-override::before {
+      background: var(--ink-3);
+    }
+
+    .status-missing.data-provenance-seg,
+    .data-provenance-chip.status-missing::before {
+      background: var(--red);
+    }
+
     .time-concurrency-panel {
       display: grid;
       gap: 6px;
