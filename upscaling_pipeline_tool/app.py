@@ -8,8 +8,14 @@ import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
-from .pubchem_lookup import lookup_pubchem
-from .pyflowsheet_renderer import render_pyflowsheet_svg
+if __package__:
+    from .pptx_renderer import render_flowsheet_pptx
+    from .pubchem_lookup import lookup_pubchem
+    from .xlsx_renderer import render_lci_workbook_xlsx
+else:
+    from pptx_renderer import render_flowsheet_pptx
+    from pubchem_lookup import lookup_pubchem
+    from xlsx_renderer import render_lci_workbook_xlsx
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -26,14 +32,7 @@ APP_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Process Upscaling Workbench</title>
   <link rel="stylesheet" href="/style.css">
-  <script>
-    (function () {
-      try {
-        var saved = localStorage.getItem("theme");
-        if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
-      } catch (e) {}
-    })();
-  </script>
+  <link rel="stylesheet" href="/flowsheet.css">
 </head>
 <body>
   <header>
@@ -42,8 +41,20 @@ APP_HTML = r"""<!doctype html>
       <div class="subtitle">Lab protocol to industrial flowsheet: blocks, phenomena, unit operations, network, heuristics, and scale-up schedule.</div>
     </div>
     <div class="row">
-      <button id="themeToggle" class="eye-button" title="Toggle dark/light theme">◐</button>
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
+      <div class="header-dropdown work-dropdown">
+        <button id="workMenuToggle" aria-haspopup="true" aria-expanded="false" title="Save, restore, import, or export project work">File ▾</button>
+        <div id="workMenu" class="header-dropdown-menu saved-work-menu" hidden role="menu">
+          <button id="saveLocalProject" class="primary" role="menuitem" title="Save the current project state in this browser">Save Snapshot</button>
+          <button id="restoreAutosaveProject" role="menuitem" title="Restore the last autosaved state from this browser">Restore Autosave</button>
+          <button id="importJsonProject" role="menuitem" title="Load a previously exported upscaling-project.json file">Import JSON</button>
+          <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
+          <button id="exportJson" class="export-json-button" role="menuitem" title="Download the full project data as a JSON file">&#8595; Export JSON</button>
+          <button id="exportLciExcel" class="export-json-button" role="menuitem" title="Download an ordered LCI workbook for audit and openLCA mapping">&#8595; LCI Excel</button>
+          <div id="savedWorkStatus" class="muted small"></div>
+          <div id="savedProjectList" class="saved-project-list"></div>
+        </div>
+      </div>
       <button id="openTutorial" title="Open a short guided tour of the main workflow">Tutorial</button>
       <div class="header-dropdown">
         <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
@@ -53,7 +64,6 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <button id="openFlowsheet" class="flowsheet-view-button" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>
-      <button id="exportJson" class="export-json-button" title="Download the full project data as a JSON file">&#8595; Export JSON</button>
     </div>
   </header>
 
@@ -180,11 +190,6 @@ APP_HTML = r"""<!doctype html>
 
           <div class="scale-scroll-body stack">
             <section class="card stack">
-              <div class="label">Step 1-3 Audit</div>
-              <div class="muted small">Block data, phenomena, task grouping, and unit-operation evidence.</div>
-              <div id="stepAuditPanel" class="step-audit-panel"></div>
-            </section>
-            <section class="card stack">
               <div id="heuristicsPanel"></div>
               <div class="card-divider">
                 <div class="label">Review Results</div>
@@ -281,6 +286,7 @@ APP_HTML = r"""<!doctype html>
 
   <div id="tutorialOverlay" class="tutorial-overlay" hidden>
     <div id="tutorialSpotlight" class="tutorial-spotlight"></div>
+    <div id="tutorialArrow" class="tutorial-arrow" aria-hidden="true" hidden></div>
     <section id="tutorialCard" class="tutorial-card" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
       <div class="tutorial-progress" id="tutorialProgress">1 / 7</div>
       <h2 id="tutorialTitle">Tutorial</h2>
@@ -352,33 +358,31 @@ APP_HTML = r"""<!doctype html>
           <h2 id="flowsheetTitle">Flowsheet View</h2>
         </div>
         <div class="row flowsheet-toolbar">
-          <button id="flowsheetEditableMode" class="mini-button primary" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
-          <button id="flowsheetTechnicalMode" class="mini-button" title="Server-rendered technical PFD with formal equipment symbols (falls back to the editable board if unavailable)">Technical PFD</button>
-          <span class="flowsheet-toolbar-divider"></span>
-          <button id="fitFlowsheetView" class="mini-button primary" title="Fit the generated flowsheet inside the modal for overview">Fit View</button>
-          <button id="resetFlowsheetLayout" class="mini-button" title="Move every unit back to the automatic left-to-right layout">Reset Layout</button>
-          <button id="downloadFlowsheet" class="mini-button">Download SVG</button>
-          <span class="flowsheet-toolbar-divider"></span>
+          <button id="downloadFlowsheetPptx" class="mini-button primary" title="Download an editable PowerPoint slide made from native shapes, lines, and text boxes">Export PowerPoint</button>
+          <div class="header-dropdown flowsheet-options-dropdown">
+            <button id="flowsheetOptionsToggle" class="mini-button" aria-haspopup="true" aria-expanded="false" title="Show secondary flowsheet view and export actions">Options ▾</button>
+            <div id="flowsheetOptionsMenu" class="header-dropdown-menu flowsheet-options-menu" hidden role="menu">
+              <button id="flowsheetEditableMode" class="mini-button primary" role="menuitem" title="Interactive board with draggable units, hover details, and editable labels">Editable Board</button>
+              <button id="fitFlowsheetView" class="mini-button primary" role="menuitem" title="Fit the generated flowsheet inside the modal for overview">Fit View</button>
+              <button id="downloadFlowsheet" class="mini-button" role="menuitem">Export SVG</button>
+            </div>
+          </div>
           <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
       <div class="flowsheet-hint">
-        <span>PFD-style board generated from declared group links. Drag units to refine the layout; double-click a unit label to edit it.</span>
+        <span>PFD-style board generated from declared group links. Click a unit for details; double-click a unit label to edit it.</span>
         <div class="flowsheet-layer-controls" aria-label="Flowsheet view layers">
-          <span>View layers</span>
-          <label title="Print substance + quantity on each stream arrow, not just on hover.">
-            <input type="checkbox" id="flowsheetShowStreamLabels" checked> labels
-          </label>
-          <label title="Show recycle-loop arrows and waste/vent stubs. Turn this off only for a clean process-sequence diagram - it hides the streams most relevant to a waste/safety review.">
-            <input type="checkbox" id="flowsheetShowAuxiliaryArrows" checked> aux
-          </label>
-          <label title="Show compact unit size, main input materials, and main outlets inside each flowsheet block.">
-            <input type="checkbox" id="flowsheetShowUnitDetails"> unit details
-          </label>
+          <span>View</span>
+          <button id="flowsheetCleanPreset" class="mini-button" title="Clean presentation view: main units and process arrows only">Clean</button>
+          <button id="flowsheetAuditPreset" class="mini-button primary" title="Audit view: labels, recycle/waste/vent arrows, and unit details">Audit</button>
         </div>
       </div>
       <div class="modal-body">
-        <div id="flowsheetHost" class="flowsheet-host"></div>
+        <div class="flowsheet-workspace">
+          <div id="flowsheetHost" class="flowsheet-host"></div>
+          <aside id="flowsheetDetailsPanel" class="flowsheet-details-panel"></aside>
+        </div>
       </div>
     </section>
   </div>
@@ -475,7 +479,7 @@ APP_HTML = r"""<!doctype html>
                   </select>
                 </label>
                 <label>
-                  <div class="label">Endpoint</div>
+                  <div class="label">Advanced endpoint</div>
                   <input id="aiEndpoint" type="text" value="https://api.openai.com/v1/responses">
                 </label>
                 <label class="external-toggle-row">
@@ -483,7 +487,7 @@ APP_HTML = r"""<!doctype html>
                   <span>Use web references when supported</span>
                 </label>
               </div>
-              <div class="muted small">Leave the endpoint unchanged unless you intentionally want another OpenAI-compatible route. Blank key uses server OPENAI_API_KEY. Web references are used only for review evidence; proposed changes are not applied automatically.</div>
+              <div class="muted small">Leave the endpoint unchanged unless you intentionally want another OpenAI-compatible route. Any temporary key entered above is sent to that endpoint. Blank key uses server OPENAI_API_KEY. Web references are used only for review evidence; proposed changes are not applied automatically.</div>
               <button id="runExternalAiRefine" class="primary">Run External Process Check</button>
               <div id="externalAiResult" class="external-ai-result mfa-empty">No external analysis run yet.</div>
             </section>
@@ -494,10 +498,13 @@ APP_HTML = r"""<!doctype html>
   </div>
 
   <script src="/flowsheet.js"></script>
+  <script src="/flowsheet_ui.js"></script>
   <script src="/pubchem_core.js"></script>
   <script src="/pubchem.js"></script>
   <script src="/tutorial.js"></script>
+  <script src="/lca_bridge.js"></script>
   <script src="/export.js"></script>
+  <script src="/project_persistence.js"></script>
   <script src="/separation_core.js"></script>
   <script src="/app.js"></script>
 </body>
@@ -508,10 +515,14 @@ STATIC_ROUTES = {
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/tutorial.js": ("tutorial.js", "application/javascript; charset=utf-8"),
+    "/lca_bridge.js": ("lca_bridge.js", "application/javascript; charset=utf-8"),
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
+    "/project_persistence.js": ("project_persistence.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
     "/pubchem_core.js": ("pubchem_core.js", "application/javascript; charset=utf-8"),
     "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
+    "/flowsheet_ui.js": ("flowsheet_ui.js", "application/javascript; charset=utf-8"),
+    "/flowsheet.css": ("flowsheet.css", "text/css; charset=utf-8"),
     "/pubchem.js": ("pubchem.js", "application/javascript; charset=utf-8"),
 }
 
@@ -547,7 +558,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ("/api/refine", "/api/flowsheet", "/api/pubchem"):
+        if self.path not in ("/api/refine", "/api/flowsheet-pptx", "/api/lci-xlsx", "/api/pubchem"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0") or "0")
@@ -555,8 +566,28 @@ class AppHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if self.path == "/api/pubchem":
                 result = self._lookup_pubchem(payload)
-            elif self.path == "/api/flowsheet":
-                result = render_pyflowsheet_svg(payload.get("project", payload))
+            elif self.path == "/api/flowsheet-pptx":
+                try:
+                    body = render_flowsheet_pptx(payload)
+                except ValueError as exc:
+                    self._send_json(400, {"ok": False, "error": str(exc)})
+                    return
+                self._send_binary(
+                    200,
+                    body,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    "flowsheet.pptx",
+                )
+                return
+            elif self.path == "/api/lci-xlsx":
+                body = render_lci_workbook_xlsx(payload.get("project", payload))
+                self._send_binary(
+                    200,
+                    body,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "lci-workbook.xlsx",
+                )
+                return
             else:
                 result = self._run_external_refine(payload)
             self._send_json(200, result)
@@ -567,6 +598,14 @@ class AppHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_binary(self, status, body, content_type, filename):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

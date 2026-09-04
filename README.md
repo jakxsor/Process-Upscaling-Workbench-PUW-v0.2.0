@@ -120,12 +120,11 @@ reports the missing data needed for quantitative correction.
 ## Requirements
 
 - Python 3.9 or newer is recommended.
-- Python packages listed in `upscaling_pipeline_tool/requirements.txt`.
+- Python packages listed in `upscaling_pipeline_tool/requirements.txt` when present.
 - A modern browser.
 
-The Flowsheet View uses the built-in editable SVG renderer. A legacy
-`pyflowsheet` endpoint is still present for experimentation, but it is not the
-main user-facing view.
+The Flowsheet View uses the built-in editable SVG renderer and editable
+PowerPoint export path.
 
 ## Quick Start
 
@@ -233,7 +232,18 @@ Do not commit API keys to the repository.
 7. Define the scale-up basis and review scaled MFA results.
 8. Use the Gantt panel to inspect cycle time, bottlenecks, schedule margin, and
    missing operation-specific scale-up data.
-9. Export JSON for traceability or downstream analysis.
+9. Save snapshots from the Work menu, or export JSON as a portable reloadable
+   project backup.
+10. Export LCI Excel for review/openLCA mapping, or downstream JSON for custom
+   tooling.
+
+## Saving And Exporting
+
+The Work menu stores autosave and manual snapshots in the current browser.
+`Export JSON` downloads a portable `upscaling-project.json` file with both the
+derived analysis tables and a reloadable `projectState` section; use `Import
+JSON` to reopen that file later. `LCI Excel` is a review workbook for inventory
+mapping and is not a direct openLCA JSON-LD package.
 
 ## Validation Checks
 
@@ -244,11 +254,17 @@ Node package install:
 ```bash
 node --check upscaling_pipeline_tool/static/app.js
 node --check upscaling_pipeline_tool/static/flowsheet.js
+node --check upscaling_pipeline_tool/static/flowsheet_ui.js
+node --check upscaling_pipeline_tool/static/lca_bridge.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js
 node scripts/check_property_screening.js
 node scripts/check_flowsheet_view.js
-python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pyflowsheet_renderer.py
+node scripts/check_project_persistence.js
+node scripts/check_tutorial_flow.js
+python3 scripts/check_flowsheet_pptx_export.py
+python3 scripts/check_lci_xlsx_export.py
+python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pptx_renderer.py upscaling_pipeline_tool/xlsx_renderer.py
 ```
 
 These checks cover the built-in example, conversion balance propagation,

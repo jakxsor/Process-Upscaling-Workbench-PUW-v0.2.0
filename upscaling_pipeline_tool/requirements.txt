@@ -1,3 +1,0 @@
-pyflowsheet==0.2.2
-pathfinding==1.0.1
-svgwrite>=1.4

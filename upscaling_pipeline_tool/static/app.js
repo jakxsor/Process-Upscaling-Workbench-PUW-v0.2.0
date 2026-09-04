@@ -356,7 +356,7 @@
       { id: "holding_time", label: "Holding time", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
       { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "°C", kind: "number" },
       { id: "thermal_ramp", label: "Ramp / cooling time", phenomena: ["ES(H)", "ES(C)"], placeholder: "0.5", unit: "h", kind: "number", hint: "How long it takes to ramp up to the target/heating temperature, or to cool down toward the holding/final temperature." },
-      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", disabled: true, hint: "Not wired into scaling calculations yet - placeholder for a future heating/cooling equipment model." },
+      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", hint: "Documents the thermal-control equipment or utility basis used for scale-up review." },
       { id: "initial_pressure", label: "Initial pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "1", units: ["atm", "bar", "mbar"], defaultUnit: "atm", kind: "number" },
       { id: "target_pressure", label: "Target / final pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "50", units: ["mbar", "bar", "atm"], defaultUnit: "mbar", kind: "number" },
       { id: "mixing_time", label: "Mixing time", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "0.5", unit: "h", kind: "number" },
@@ -388,18 +388,9 @@
       { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
       { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
       { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
-      { id: "density_difference", label: "Density difference", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)"], unit: "kg/m3", placeholder: "organic vs aqueous", reason: "Needed for decanting and interface-settling plausibility." },
-      { id: "partition_coefficient", label: "Partition coefficient", phenomena: ["PT(LL)", "PC(LL)"], unit: "", placeholder: "K or logP", reason: "Helps rank liquid-liquid extraction or washing intensity." },
-      { id: "emulsion_risk", label: "Emulsion risk", phenomena: ["PS(LL)", "2phM(LL)", "PC(LL)"], unit: "", placeholder: "low, medium, high", reason: "Flags scale-up risk in liquid-liquid mixing and decanting." },
-      { id: "solubility", label: "Solubility", phenomena: ["PT(LS)", "PS(LS)", "PCh(L->S)", "PCh(S->L)"], unit: "g/L", placeholder: "vs temperature if known", reason: "Supports crystallization, precipitation, and dissolution choices." },
-      { id: "particle_size", label: "Particle size", phenomena: ["PS(LS)", "PC(LS)", "2phM(LS)"], unit: "um", placeholder: "d50 or range", reason: "Relevant for filtration, drying, suspension, and cake behavior." },
-      { id: "cake_resistance", label: "Cake resistance / compressibility", phenomena: ["PS(LS)", "PC(LS)"], unit: "", placeholder: "low, medium, high", reason: "Flags solid-liquid separation scale-up difficulty." },
-      { id: "separation_selectivity", label: "Selectivity / affinity", phenomena: ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"], unit: "", placeholder: "selectivity, affinity, sorption preference", reason: "Supports membrane, adsorption, extraction, drying-agent, and other property-based separations when simple phase split is weak." },
-      { id: "separating_agent", label: "Separating agent", phenomena: ["PT(VL)", "PS(VL)", "PT(LL)", "PC(LL)", "PT(MLL)", "PT(MVL)"], unit: "", placeholder: "entrainer, extractant, adsorbent, membrane", reason: "Documents the extra agent or material that makes an otherwise weak separation feasible." },
       { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
       { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed only when mixing, residence volume, settling, or equipment sizing depends on volume rather than just mass." },
-      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." },
-      { id: "hazard_note", label: "Hazard / compatibility note", phenomena: ["ES(H)", "PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)"], unit: "", placeholder: "flammable, toxic, corrosive, incompatible...", reason: "Supports purge, vent, solvent recovery, and safety review." }
+      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." }
     ];
 
     const separationCore = globalThis.ProcessUpscalingSeparationCore;
@@ -517,7 +508,8 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetMode: "editable",
+      flowsheetViewPreset: "audit",
+      selectedFlowsheetGroupId: "",
       flowsheetFit: true,
       // Recycle arrows and waste/vent stubs used to always be drawn; defaulting this off hid the
       // streams most relevant to a waste/safety review behind a checkbox nobody knew to look for.
@@ -530,7 +522,6 @@
     const $ = id => document.getElementById(id);
 
     const undoStack = [];
-    let flowsheetRequestSeq = 0;
     let boardDragFrame = null;
     let boardReflowDepth = 0;
     // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
@@ -727,6 +718,12 @@
       } else {
         state.groups[groupId].schedule = { ...scheduleDefaults(), ...state.groups[groupId].schedule };
       }
+      if (!Array.isArray(state.groups[groupId].schedule.predecessorIds)) {
+        state.groups[groupId].schedule.predecessorIds = [];
+      }
+      if (!["auto", "manual"].includes(state.groups[groupId].schedule.dependencyMode)) {
+        state.groups[groupId].schedule.dependencyMode = "auto";
+      }
       state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
       state.groups[groupId].conditionsEditing = Boolean(state.groups[groupId].conditionsEditing);
       if (typeof state.groups[groupId].selectionBasis !== "string") state.groups[groupId].selectionBasis = "";
@@ -745,6 +742,9 @@
       }
       if (!state.groups[groupId].mfaOverrides || typeof state.groups[groupId].mfaOverrides !== "object") {
         state.groups[groupId].mfaOverrides = {};
+      }
+      if (!state.groups[groupId].timeConcurrency || typeof state.groups[groupId].timeConcurrency !== "object" || Array.isArray(state.groups[groupId].timeConcurrency)) {
+        state.groups[groupId].timeConcurrency = {};
       }
       state.groups[groupId].separationSimulator = normalizeSeparationSimulator(state.groups[groupId].separationSimulator);
       if (typeof state.groups[groupId].openOverrideKey !== "string") state.groups[groupId].openOverrideKey = "";
@@ -803,6 +803,9 @@
         operationClass: "auto",
         scaleSensitivity: "unknown",
         dependency: "previous",
+        // "auto" follows text order; "manual" uses explicit predecessorIds.
+        dependencyMode: "auto",
+        predecessorIds: [],
         notes: ""
       };
     }
@@ -910,10 +913,6 @@
     function phenomenaForBehaviorAndText(behavior, text) {
       const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
       const t = String(text || "").toLowerCase();
-      // Was "\\bcool|..." / "\\bheat|..." - a literal backslash before "cool"/"heat" that can
-      // never appear in plain text, so the bare imperative verb form ("Cool the mixture",
-      // "Heat to reflux" - extremely common protocol phrasing) never matched; only the other
-      // alternatives in each list (cooled/cooling, heated/heating, etc.) did.
       const hasCooling = /\bcool|cooled|cooling|quench|chilled|chill|room temperature|ambient/.test(t);
       const hasHeating = /\bheat|heated|heating|reflux|boil|boiling|warm|warmed|evaporat|distill/.test(t);
 
@@ -923,19 +922,9 @@
         return [...preset.phenomena];
       }
 
-      // inferBehavior only picks ONE dominant preset per block, so a sentence that combines a
-      // thermal step with something else - "Cool to room temperature and wash the organic layer",
-      // "The batch is cooled and then filtered" - used to silently drop the thermal side entirely:
-      // a thermal phenomenon only ever got added when the WHOLE block was classified as "heat/cool"
-      // itself. Add ES(C)/ES(H) on top of whatever preset applies whenever the text separately
-      // mentions cooling/heating, unless that preset already carries the phenomenon (e.g. "reaction"
-      // already implies ES(H); "solvent evaporation" already implies ES(H)).
+      // Add explicit thermal phenomena when text mentions heating/cooling.
       const basePhenomena = [...preset.phenomena];
-      // "Charge and mix" alone carries no thermal phenomenon, so a temperature stated in the same
-      // sentence (e.g. "Charge the reagents at 25 C") previously had no condition field to land in
-      // at all - not even to record that the charge happens at a controlled, non-ambient temperature.
-      // Only default to heating from a bare number (no explicit heat/cool word) for this behavior,
-      // so a plain "Charge the reagents to the reactor" without any thermal detail doesn't get one.
+      // For charge/mix, a stated temperature should still create a thermal condition slot.
       const hasTemperatureValue = behavior === "charge and mix"
         && /\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*c\b|\d+(?:\.\d+)?\s*°?\s*c\b/i.test(text);
       const additions = [];
@@ -1392,7 +1381,7 @@
         oeePercent: "80",
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
-        productKgPerBatch: "",
+        productKgPerBatch: "3000",
         reactantsLoadingLPerKgProduct: "1.067",
         solventLoadingLPerKgProduct: "2.5",
         reactorWorkingFillPercent: "70",
@@ -1490,8 +1479,8 @@
           id: "G1",
           task: "three-reactant benzyl acetate reaction at 90 percent yield",
           selectedUnit: "Batch / semi-batch reactor",
-          selectionBasis: "secondary demo: reaction group used to test multi-reactant residual handling and sequential Lutze separation pathways",
-          schedule: { ...scheduleDefaults(), durationH: "3", scaleSensitivity: "kinetics-bound", notes: "demo only; verify stoichiometry before design use" },
+          selectionBasis: "secondary example: reaction group used to illustrate multi-reactant residual handling and sequential Lutze separation pathways",
+          schedule: { ...scheduleDefaults(), durationH: "3", scaleSensitivity: "kinetics-bound", notes: "example dataset; verify stoichiometry before design use" },
           properties: { density: { value: "930", unit: "kg/m3", status: "assumed", note: "demo mixture density for automatic reactor sizing from MFA mass" } },
           propertiesEditing: false,
           x: 620,
@@ -1501,8 +1490,8 @@
           id: "G2",
           task: "sequential residual reagent recovery",
           selectedUnit: "Distillation",
-          selectionBasis: "secondary demo: staged recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from benzyl acetate",
-          schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "demo only" },
+          selectionBasis: "secondary example: staged recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from benzyl acetate",
+          schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "example dataset" },
           properties: {},
           propertiesEditing: false,
           x: 1180,
@@ -1976,19 +1965,6 @@
       return `${candidate.rationale}${feed}${outlet} Use this when ${basis}.`;
     }
 
-    function proposalBasisHtml(group, alternatives) {
-      const context = groupPhaseContext(group);
-      const phases = Array.from(context.effectiveRaw || []);
-      return `
-        <div class="proposal-basis">
-          <span><strong>Ranking</strong> task class + MFA phase transition + conditions</span>
-          <span><strong>Refinement</strong> Lutze phenomena and phase compatibility, when reviewed</span>
-          <span><strong>Group phases</strong> ${escapeHtml(phases.length ? phases.join(", ") : "unknown")}</span>
-          <span><strong>Candidates</strong> ${alternatives.length}</span>
-        </div>
-      `;
-    }
-
     function groupUnitSuggestionReadiness(group) {
       const streams = group.blocks.flatMap(block => {
         ensureBlockFlowFields(block);
@@ -2135,21 +2111,6 @@
       if (/paper|SI |Table|U\d+|KB|H\d+/i.test(text)) return { label: "paper-linked", className: "blue" };
       if (/heuristic|assum|not derivable|screen|property|scale/i.test(text)) return { label: "heuristic", className: "green" };
       return { label: "recorded", className: "green" };
-    }
-
-    function selectionBasisHtml(group) {
-      if (!group.selectedUnit) return "";
-      const status = selectionBasisStatus(group);
-      return `
-        <div class="selection-basis-row">
-          <div class="row between">
-            <div class="label">Selection basis - why ${escapeHtml(group.selectedUnit)}?</div>
-            <span class="pill ${status.className}">${escapeHtml(status.label)}</span>
-          </div>
-          <input data-selection-basis="${escapeAttr(group.id)}" value="${escapeAttr(group.selectionBasis || "")}"
-            placeholder="paper unit, heuristic rule, property screen, or scale-up assumption">
-        </div>
-      `;
     }
 
     function selectedUnitInCurrentRanking(group) {
@@ -2640,6 +2601,7 @@
         });
       });
 
+      bindLinkRemovalHandlers(root);
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
           if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
@@ -2776,6 +2738,35 @@
       return { points: [fromCenter, toCenter] };
     }
 
+    // Walks the orthogonal route's straight segments to find the point half the total path length in,
+    // used to place the arrow's remove-marker roughly at its visual middle regardless of how many
+    // bends the route has (a plain average of the vertices would skew toward whichever segment has
+    // the most bends, not the geometric middle of the line actually drawn).
+    function pointAtPathMidpoint(points) {
+      if (!points.length) return { x: 0, y: 0 };
+      if (points.length === 1) return points[0];
+      const segLengths = [];
+      let total = 0;
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const dx = points[i + 1].x - points[i].x;
+        const dy = points[i + 1].y - points[i].y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        segLengths.push(len);
+        total += len;
+      }
+      let target = total / 2;
+      for (let i = 0; i < segLengths.length; i += 1) {
+        if (target <= segLengths[i] || i === segLengths.length - 1) {
+          const t = segLengths[i] > 0 ? Math.min(1, Math.max(0, target / segLengths[i])) : 0;
+          const a = points[i];
+          const b = points[i + 1];
+          return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        }
+        target -= segLengths[i];
+      }
+      return points[0];
+    }
+
     function renderLinksSvg(board, fastMode = false) {
       const nodeMasks = allNodeRects().map(rect => {
         const masked = shrinkRect(rect, 7);
@@ -2790,18 +2781,31 @@
           placedSegments.push({ a: points[index], b: points[index + 1] });
         }
       };
-      const links = state.links.map(link => {
+      // Every arrow gets an invisible, fat "hit" path (pointer-events re-enabled via CSS despite the
+      // whole .link-layer being pointer-events:none) purely so hovering it (anywhere along the line)
+      // highlights the arrow and reveals a small "x" marker at its midpoint - that marker, not the
+      // line itself, is the actual click target for removal (see .link-remove-marker below and its
+      // [data-link-index] click handler set up alongside each place that renders this SVG).
+      const links = state.links.map((link, index) => {
         if (isBackwardLink(link)) {
           const route = recycleLaneRoute(link, recycleLane++);
           if (!route) return "";
           claimSegments(route.points);
           const path = orthogonalPath(route.points);
           const start = route.points[0];
+          const mid = pointAtPathMidpoint(route.points);
           return `
-            <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
-            <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)"></path>
-            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
-            <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
+            <g class="link-group">
+              <path class="link-hit" d="${path}" stroke="transparent" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path class="link-visible" d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path class="link-visible" d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)"></path>
+              <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+              <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
+              <g class="link-remove-marker" data-link-index="${index}" data-tip="Remove this arrow (${escapeAttr(link.from)} → ${escapeAttr(link.to)})">
+                <circle class="link-remove-bg" cx="${round(mid.x)}" cy="${round(mid.y)}" r="8"></circle>
+                <text class="link-remove-x" x="${round(mid.x)}" y="${round(mid.y)}" text-anchor="middle" dominant-baseline="central">×</text>
+              </g>
+            </g>
           `;
         }
         const route = fastMode ? fastConnectionRoute(link.from, link.to) : connectionRoute(link.from, link.to, placedSegments);
@@ -2809,10 +2813,18 @@
         if (!fastMode) claimSegments(route.points);
         const path = orthogonalPath(route.points);
         const start = route.points[0];
+        const mid = pointAtPathMidpoint(route.points);
         return `
-          <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
-          <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
-          <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+          <g class="link-group">
+            <path class="link-hit" d="${path}" stroke="transparent" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+            <path class="link-visible" d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
+            <path class="link-visible" d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
+            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+            <g class="link-remove-marker" data-link-index="${index}" data-tip="Remove this arrow (${escapeAttr(link.from)} → ${escapeAttr(link.to)})">
+              <circle class="link-remove-bg" cx="${round(mid.x)}" cy="${round(mid.y)}" r="8"></circle>
+              <text class="link-remove-x" x="${round(mid.x)}" y="${round(mid.y)}" text-anchor="middle" dominant-baseline="central">×</text>
+            </g>
+          </g>
         `;
       }).join("");
       return `
@@ -2893,7 +2905,28 @@
       });
       if (!changed) return;
       const svg = canvas.querySelector(".link-layer");
-      if (svg) svg.outerHTML = renderLinksSvg(board);
+      if (svg) {
+        svg.outerHTML = renderLinksSvg(board);
+        bindLinkRemovalHandlers(canvas);
+      }
+    }
+
+    // Click-to-remove for arrows on the canvas: each <g data-link-index> in renderLinksSvg's output
+    // carries a fat invisible hit-path (see there) so this works without requiring a pixel-perfect
+    // click on the thin visible line. Re-bind after every outerHTML replacement of .link-layer.
+    function bindLinkRemovalHandlers(root) {
+      root.querySelectorAll(".link-remove-marker").forEach(marker => {
+        marker.addEventListener("click", async event => {
+          event.stopPropagation();
+          const index = Number(marker.dataset.linkIndex);
+          const link = state.links[index];
+          if (!link) return;
+          if (!(await confirmModal(`Remove the arrow ${link.from} → ${link.to}?`))) return;
+          pushUndo();
+          state.links.splice(index, 1);
+          renderAll();
+        });
+      });
     }
 
     // Detailed (non-compact) group boxes render their full content (block cards, phenomena,
@@ -3331,20 +3364,6 @@
       };
     }
 
-    function groupCompositeSummaryHtml(group) {
-      const summary = groupProcessSummary(group);
-      return `
-        <button class="group-composite-summary" data-select-group="${escapeAttr(group.id)}" title="Open the aggregated process view for ${escapeAttr(group.id)}">
-          <span>
-            <strong>Combined Process</strong>
-            <span>${escapeHtml(summary.title)}</span>
-          </span>
-          <span class="group-composite-meta">${escapeHtml(summary.meta.join(" / "))}</span>
-          ${summary.conditions.length ? `<span class="group-composite-conditions">${escapeHtml(summary.conditions.join(" / "))}</span>` : ""}
-        </button>
-      `;
-    }
-
     function groupBoardMetaHtml(group) {
       const summary = groupProcessSummary(group);
       const conditions = aggregateGroupConditions(group).length;
@@ -3441,23 +3460,6 @@
       return `${name} - ${quantity}${phase}${timing}${fate}${status}${block}`;
     }
 
-    function groupMfaSummaryHtml(group) {
-      const aggregates = mfaGroupsForDisplay(aggregateGroupStreams(group)).filter(roleGroup => roleGroup.items.length);
-      if (!aggregates.length) return "";
-      return `
-        <div class="group-mfa">
-          <div class="label">Group MFA</div>
-          ${aggregates.map(roleGroup => `
-            <div class="group-mfa-role role-${escapeAttr(roleGroup.role)}">
-              <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
-              ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item, group.id, false, roleGroup.role)).join("")}
-              ${roleGroup.items.length > 3 ? `<span class="muted small">+${roleGroup.items.length - 3} more material groups</span>` : ""}
-            </div>
-          `).join("")}
-        </div>
-      `;
-    }
-
     function groupMfaItemHtml(item, groupId, editable, role = "") {
       const total = item.totalText ? item.totalText : "not summed";
       const pillLabel = item.override ? `${escapeHtml(item.override.value)} ${escapeHtml(item.totalUnit || "")}`.trim() : escapeHtml(total);
@@ -3512,35 +3514,6 @@
       `;
     }
 
-    function groupConditionSummaryHtml(group) {
-      const aggregates = aggregateGroupConditions(group);
-      if (!aggregates.length) return "";
-      return `
-        <div class="group-mfa">
-          <div class="label">Group Conditions</div>
-          ${aggregates.slice(0, 4).map(item => groupConditionItemHtml(item, group.id, false)).join("")}
-          ${aggregates.length > 4 ? `<span class="muted small">+${aggregates.length - 4} more conditions</span>` : ""}
-        </div>
-      `;
-    }
-
-    function groupConditionItemHtml(item, groupId, editable) {
-      const pillLabel = item.effectiveDisplay || (item.override ? `${item.override.value} ${item.unit || ""}`.trim() : item.display);
-      return `
-        <div class="group-mfa-item">
-          <div class="group-mfa-item-head">
-            <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.override ? "blue" : ["summed_numeric_same_unit", "common_value", "phase_labeled"].includes(item.status) ? "green" : "warn"}">${escapeHtml(pillLabel)}</span>
-          </div>
-          <div class="group-mfa-lines">
-            ${item.lines.slice(0, 3).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
-            ${item.lines.length > 3 ? `<span>+${item.lines.length - 3} more entries</span>` : ""}
-          </div>
-          ${overrideControlHtml(item, groupId, editable, "condition", item.display)}
-        </div>
-      `;
-    }
-
     function groupConditionProfileHtml(group, conditions) {
       const groupState = ensureGroup(group.id);
       if (!conditions.length) return `<div class="mfa-empty">No saved group conditions yet.</div>`;
@@ -3580,6 +3553,47 @@
           `).join("")}
           <div class="condition-actions">
             <button data-edit-group-conditions="${escapeAttr(group.id)}">${conditions.some(item => item.overrideApplied) ? "Edit Group Conditions" : "Edit Aggregated Conditions"}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function groupTimeConcurrencyHtml(group) {
+      const entries = groupTimeEntries(group);
+      if (entries.length < 2) return "";
+      const groupId = group.id;
+      const concurrency = ensureGroup(groupId).timeConcurrency || {};
+      const clusters = groupTimeClusters(group);
+      const totalH = clusters.reduce((sum, cluster) => sum + cluster.totalH, 0);
+      return `
+        <div class="time-concurrency-panel">
+          <div class="condition-family-head">
+            <span>Phenomena timeline</span>
+            <span class="pill">${formatNumber(totalH)} h total, ${clusters.length} step${clusters.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="muted small">Mark a phenomenon as "contemporaneo a" (concurrent with) another one on this task so its time nests inside the longer one instead of adding to it.</div>
+          <div class="time-concurrency-rows">
+            ${entries.map(entry => `
+              <div class="time-concurrency-row">
+                <span class="time-concurrency-label" title="${escapeAttr(entry.phenomena.join(", "))}">${escapeHtml(entry.label)} (${escapeHtml(entry.blockId)}) — ${formatNumber(entry.durationH)} h</span>
+                <select data-time-concurrency-entry="${escapeAttr(entry.key)}" data-time-concurrency-group="${escapeAttr(groupId)}">
+                  <option value="">not concurrent</option>
+                  ${entries.filter(other => other.key !== entry.key).map(other => `<option value="${escapeAttr(other.key)}" ${concurrency[entry.key] === other.key ? "selected" : ""}>contemporaneo a: ${escapeHtml(other.label)} (${escapeHtml(other.blockId)})</option>`).join("")}
+                </select>
+              </div>
+            `).join("")}
+          </div>
+          <div class="time-concurrency-timeline">
+            ${clusters.map(cluster => `
+              <div class="time-concurrency-cluster" style="flex-grow:${Math.max(cluster.totalH, 0.1)}">
+                ${cluster.members.map(member => `
+                  <div class="gantt-bar-track" title="${escapeAttr(member.label)} (${escapeAttr(member.blockId)}): ${formatNumber(member.durationH)} h">
+                    <div class="gantt-bar" style="width:${Math.max(4, member.durationH / cluster.totalH * 100)}%"></div>
+                  </div>
+                `).join("")}
+                <span class="muted small">${formatNumber(cluster.totalH)} h</span>
+              </div>
+            `).join("")}
           </div>
         </div>
       `;
@@ -4017,39 +4031,160 @@
       return number ? Number(number[0]) : NaN;
     }
 
+    // Resolves each task's predecessor(s). "auto" tasks implicitly branch off the nearest earlier
+    // *blocking* task (canOverlap !== "yes") in text order - this exactly reproduces the legacy
+    // cursor-sum behavior when nobody has customized anything, and - unlike simply chaining every
+    // task to the one immediately before it - correctly treats consecutive canOverlap: yes tasks
+    // (e.g. several side branches listed one after another, such as vent abatement / solvent
+    // recovery / wastewater interface) as independent siblings off that same blocking task rather
+    // than as a fabricated sequential chain between them. "manual" tasks use the explicit
+    // predecessorIds the user picked instead, so real branches and recycle loops can be modeled.
+    function resolveTaskPredecessors(tasks) {
+      const idSet = new Set(tasks.map(task => task.groupId));
+      let lastBlockingId = null;
+      tasks.forEach(task => {
+        if (task.dependencyMode === "manual") {
+          task.resolvedPredecessorIds = task.predecessorIds.filter(id => id !== task.groupId && idSet.has(id));
+        } else {
+          task.resolvedPredecessorIds = lastBlockingId ? [lastBlockingId] : [];
+          if (task.canOverlap !== "yes") lastBlockingId = task.groupId;
+        }
+      });
+    }
+
+    // Manual predecessorIds can form a cycle (e.g. A waits on B and B waits on A). Cut every
+    // loop-closing edge *before* the forward/backward passes run, rather than detecting it inline
+    // during their recursion: a task can be reached along more than one path (it can be both a
+    // predecessor of, and a successor to, other members of a diamond-shaped graph), so an inline
+    // "currently visiting" check fires on ordinary shared-ancestor graphs too, not just true cycles,
+    // and once it fires there is no safe placeholder value to hand back mid-recursion - whatever is
+    // written gets silently clobbered the moment the recursion unwinds back through the real edge.
+    // Pruning first guarantees resolvedPredecessorIds is a DAG by the time either pass touches it, so
+    // both passes can do a plain memoized walk with no special-casing.
+    function pruneCyclicPredecessors(tasks) {
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const state = new Map();
+      const stack = [];
+      const cyclicIds = new Set();
+      function visit(task) {
+        if (state.get(task.groupId) === "done") return;
+        state.set(task.groupId, "visiting");
+        stack.push(task.groupId);
+        const keep = [];
+        task.resolvedPredecessorIds.forEach(predId => {
+          if (state.get(predId) === "visiting") {
+            const loopStart = stack.indexOf(predId);
+            stack.slice(loopStart).forEach(id => cyclicIds.add(id));
+            return;
+          }
+          keep.push(predId);
+          const pred = byId.get(predId);
+          if (pred) visit(pred);
+        });
+        task.resolvedPredecessorIds = keep;
+        stack.pop();
+        state.set(task.groupId, "done");
+      }
+      tasks.forEach(visit);
+      tasks.forEach(task => { task.cyclicDependency = cyclicIds.has(task.groupId); });
+    }
+
+    // Forward pass over the dependency graph (a simple activity-on-node network). Each task starts
+    // once every predecessor has reached its "gating" point: a blocking predecessor (canOverlap !==
+    // "yes" in auto mode, or any predecessor in manual mode) gates on its own finish; an
+    // auto-mode overlap predecessor gates on its own start, since it is explicitly allowed to still
+    // be running once the next task begins. A task's real finishH (start + its own duration) is
+    // tracked separately and always counts toward the overall makespan below - so a long side branch
+    // (e.g. a solvent-recovery column marked canOverlap: yes) can no longer silently run past the
+    // point where the main chain says the batch is "done", which the old cursor-only sum allowed.
+    // Assumes resolvedPredecessorIds is already a DAG (see pruneCyclicPredecessors above).
+    function computeTaskTimes(tasks) {
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const done = new Set();
+      function resolve(task) {
+        if (done.has(task.groupId)) return;
+        done.add(task.groupId);
+        const preds = task.resolvedPredecessorIds.map(id => byId.get(id)).filter(Boolean);
+        preds.forEach(resolve);
+        const start = preds.length ? Math.max(...preds.map(pred => pred.gatingFinishH)) : 0;
+        const finish = start + (Number.isFinite(task.effectiveTimeH) ? task.effectiveTimeH : 0);
+        task.startH = start;
+        task.finishH = finish;
+        task.gatingFinishH = task.dependencyMode !== "manual" && task.canOverlap === "yes" ? start : finish;
+      }
+      tasks.forEach(resolve);
+    }
+
+    // Backward CPM pass: zero-slack tasks are the true batch-makespan critical path.
+    function computeCriticalPath(tasks, totalEnd) {
+      if (!Number.isFinite(totalEnd)) {
+        tasks.forEach(task => { task.slackH = NaN; task.onCriticalPath = false; });
+        return;
+      }
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const successorIds = new Map(tasks.map(task => [task.groupId, []]));
+      tasks.forEach(task => task.resolvedPredecessorIds.forEach(predId => {
+        if (successorIds.has(predId)) successorIds.get(predId).push(task.groupId);
+      }));
+      const gateDuration = task => task.gatingFinishH - task.startH;
+      const realDuration = task => Number.isFinite(task.effectiveTimeH) ? task.effectiveTimeH : 0;
+      const done = new Set();
+      function resolve(task) {
+        if (done.has(task.groupId)) return;
+        done.add(task.groupId);
+        const succTasks = (successorIds.get(task.groupId) || []).map(id => byId.get(id)).filter(Boolean);
+        succTasks.forEach(resolve);
+        const selfConstraint = totalEnd - realDuration(task) + gateDuration(task);
+        const successorConstraints = succTasks.map(succ => succ.lateGateH - gateDuration(succ));
+        task.lateGateH = Math.min(selfConstraint, ...successorConstraints);
+      }
+      tasks.forEach(resolve);
+      tasks.forEach(task => {
+        const lateStartRealH = task.lateGateH - gateDuration(task);
+        task.slackH = lateStartRealH - task.startH;
+        task.onCriticalPath = Number.isFinite(task.slackH) && Math.abs(task.slackH) < 1e-4;
+      });
+    }
+
     function taskScheduleModel() {
       const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
       const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
+      resolveTaskPredecessors(tasks);
+      pruneCyclicPredecessors(tasks);
+      computeTaskTimes(tasks);
+
+      // Plant cycle is the slowest single stage; batch makespan follows dependencies.
       const ranked = [...timed].sort((a, b) => b.effectiveTimeH - a.effectiveTimeH);
       const maxEffective = ranked.length ? ranked[0].effectiveTimeH : NaN;
-      const secondEffective = ranked[1]?.effectiveTimeH ?? 0;
-      const bottleneckGapH = Number.isFinite(maxEffective) ? maxEffective - secondEffective : NaN;
-      const bottleneckGapPercent = Number.isFinite(maxEffective) && maxEffective > 0 ? bottleneckGapH / maxEffective * 100 : NaN;
-      const criticalBottleneck = ranked.length === 1
-        ? Number.isFinite(maxEffective) && maxEffective >= bottleneckThresholds.minGapH
+
+      const finishValues = tasks.filter(task => Number.isFinite(task.finishH)).map(task => task.finishH);
+      const estimatedCycleTimeH = timed.length && finishValues.length ? Math.max(...finishValues) : NaN;
+      computeCriticalPath(tasks, estimatedCycleTimeH);
+
+      // Bottleneck is the longest task on the dependency critical path.
+      const criticalRanked = timed.filter(task => task.onCriticalPath).sort((a, b) => b.effectiveTimeH - a.effectiveTimeH);
+      const maxCritical = criticalRanked.length ? criticalRanked[0].effectiveTimeH : NaN;
+      const secondCritical = criticalRanked[1]?.effectiveTimeH ?? 0;
+      const bottleneckGapH = Number.isFinite(maxCritical) ? maxCritical - secondCritical : NaN;
+      const bottleneckGapPercent = Number.isFinite(maxCritical) && maxCritical > 0 ? bottleneckGapH / maxCritical * 100 : NaN;
+      const criticalBottleneck = criticalRanked.length === 1
+        ? Number.isFinite(maxCritical) && maxCritical >= bottleneckThresholds.minGapH
         : Number.isFinite(bottleneckGapH)
           && bottleneckGapH >= bottleneckThresholds.minGapH
           && Number.isFinite(bottleneckGapPercent)
           && bottleneckGapPercent >= bottleneckThresholds.minGapPercent;
-      const bottleneck = criticalBottleneck ? ranked[0] : null;
+      const bottleneck = criticalBottleneck ? criticalRanked[0] : null;
       const bottleneckStatus = timed.length
         ? criticalBottleneck
           ? "critical"
           : "balanced"
         : "missing";
-      let cursor = 0;
       tasks.forEach(task => {
-        task.startH = Number.isFinite(task.effectiveTimeH) ? cursor : NaN;
         task.widthPercent = Number.isFinite(task.effectiveTimeH) && Number.isFinite(maxEffective) && maxEffective > 0
           ? Math.max(4, Math.min(100, task.effectiveTimeH / maxEffective * 100))
           : 0;
         task.isBottleneck = Boolean(bottleneck && task.groupId === bottleneck.groupId);
-        if (Number.isFinite(task.effectiveTimeH) && task.canOverlap !== "yes") cursor += task.effectiveTimeH;
       });
-      const estimatedCycleTimeH = timed.length ? tasks.reduce((sum, task) => {
-        if (!Number.isFinite(task.effectiveTimeH) || task.canOverlap === "yes") return sum;
-        return sum + task.effectiveTimeH;
-      }, 0) : NaN;
       const oee = percentFactor(ensureScaleBasis().oeePercent, 100);
       const batchesPerYear = Number.isFinite(estimatedCycleTimeH) && estimatedCycleTimeH > 0 && Number.isFinite(oee)
         ? 8760 * oee / estimatedCycleTimeH
@@ -4057,7 +4192,7 @@
       return {
         tasks,
         bottleneck,
-        bottleneckCandidate: ranked[0] || null,
+        bottleneckCandidate: criticalRanked[0] || null,
         bottleneckStatus,
         bottleneckGapH,
         bottleneckGapPercent,
@@ -4065,7 +4200,8 @@
         plantCycleTimeH: maxEffective,
         batchesPerYear,
         ready: timed.length > 0,
-        missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length
+        missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length,
+        cyclicDependencyGroupIds: tasks.filter(task => task.cyclicDependency).map(task => task.groupId)
       };
     }
 
@@ -4100,6 +4236,8 @@
         durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
         parallelUnits: parallel,
         canOverlap: scheduleOverlapOptions.includes(schedule.canOverlap) ? schedule.canOverlap : "no",
+        dependencyMode: schedule.dependencyMode === "manual" ? "manual" : "auto",
+        predecessorIds: Array.isArray(schedule.predecessorIds) ? schedule.predecessorIds.slice() : [],
         capacityAmount: schedule.capacityAmount || "",
         capacityUnit: capacityUnitOptions.includes(schedule.capacityUnit) && schedule.capacityUnit
           ? schedule.capacityUnit
@@ -4137,19 +4275,71 @@
     }
 
     function inferGroupDurationInfo(group) {
-      const conditionDurations = aggregateGroupConditions(group)
-        .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
-        .flatMap(item => item.entries || [])
-        .map(entry => parseDurationHoursValue(entry.value))
-        .filter(value => Number.isFinite(value) && value > 0);
-      if (conditionDurations.length) {
-        return { durationH: conditionDurations.reduce((sum, value) => sum + value, 0), source: "condition sum" };
+      const clusters = groupTimeClusters(group);
+      if (clusters.length) {
+        return { durationH: clusters.reduce((sum, cluster) => sum + cluster.totalH, 0), source: "condition sum" };
       }
       const textDurations = extractDurationHoursAll(group.text);
       if (textDurations.length) {
         return { durationH: textDurations.reduce((sum, value) => sum + value, 0), source: "text duration" };
       }
       return { durationH: NaN, source: "missing" };
+    }
+
+    // Every additive time entry (mixing_time, holding_time, ...) on every block in the group is its
+    // own timeline "phenomenon" by default, so with no concurrency links set this reproduces the old
+    // plain sum. Marking two entries "contemporaneo a" each other merges them (via the entryKey graph
+    // below) into one cluster whose contribution to the task duration is the slowest member only -
+    // the others run nested inside it rather than adding on top.
+    function groupTimeEntries(group) {
+      return aggregateGroupConditions(group)
+        .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
+        .flatMap(item => item.entries || [])
+        .map(entry => ({
+          key: `${entry.blockId}::${entry.id}`,
+          blockId: entry.blockId,
+          id: entry.id,
+          label: entry.label,
+          phenomena: entry.phenomena || [],
+          durationH: parseDurationHoursValue(entry.value)
+        }))
+        .filter(entry => Number.isFinite(entry.durationH) && entry.durationH > 0);
+    }
+
+    function groupTimeClusters(group) {
+      const entries = groupTimeEntries(group);
+      if (!entries.length) return [];
+      const concurrency = ensureGroup(group.id).timeConcurrency || {};
+      const entryKeys = new Set(entries.map(entry => entry.key));
+      const parent = new Map(entries.map(entry => [entry.key, entry.key]));
+      const find = key => {
+        let root = key;
+        while (parent.get(root) !== root) root = parent.get(root);
+        let cursor = key;
+        while (parent.get(cursor) !== root) {
+          const next = parent.get(cursor);
+          parent.set(cursor, root);
+          cursor = next;
+        }
+        return root;
+      };
+      entries.forEach(entry => {
+        const partnerKey = concurrency[entry.key];
+        if (!partnerKey || !entryKeys.has(partnerKey) || partnerKey === entry.key) return;
+        const rootA = find(entry.key);
+        const rootB = find(partnerKey);
+        if (rootA !== rootB) parent.set(rootA, rootB);
+      });
+      const clusters = new Map();
+      entries.forEach(entry => {
+        const root = find(entry.key);
+        if (!clusters.has(root)) clusters.set(root, []);
+        clusters.get(root).push(entry);
+      });
+      return Array.from(clusters.values()).map(members => ({
+        members: members.slice().sort((a, b) => b.durationH - a.durationH),
+        totalH: Math.max(...members.map(m => m.durationH))
+      }));
     }
 
     function extractDurationHoursAll(text) {
@@ -4220,7 +4410,7 @@
         if (group.phenomena.some(code => ["ES(H)", "ES(C)"].includes(code))) need("heat-removal/thermal control note", Boolean(conditionMap.thermal_mode || conditionMap.thermal_ramp));
       } else if (operationClass === "filtration") {
         need("solid loading", Boolean(conditionMap.solid_loading));
-        need("particle/cake behaviour", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size") || propertyHasValue(group, "cake_resistance")));
+        need("particle/cake behaviour", Boolean(conditionMap.cake_or_particle_note));
         missing.push("filter area / cake resistance if quantitative correction is needed");
       } else if (operationClass === "drying") {
         need("wet inventory", hasStreams);
@@ -4230,9 +4420,8 @@
         need("transfer volume or mass", hasStreams);
         need("flow rate / transfer time", Boolean(conditionMap.contact_time || conditionMap.transfer_endpoint));
       } else if (operationClass === "crystallization") {
-        need("solubility", propertyHasValue(group, "solubility"));
         need("cooling/supersaturation profile", Boolean(conditionMap.thermal_ramp || conditionMap.transfer_endpoint));
-        need("seed/particle target", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size")));
+        need("seed/particle target", Boolean(conditionMap.cake_or_particle_note));
       } else if (operationClass === "cleaning_turnaround") {
         need("cleaning/turnaround duration", Boolean(conditionMap.contact_time || conditionMap.holding_time));
         missing.push("surface/CIP basis if quantitative correction is needed");
@@ -4542,19 +4731,29 @@
           : { value: NaN, unit: "kg/h", source: "missing load or time" };
       }
       if (capacityUnit === "m3") {
+        const reference = inferReferenceStream(scale.basis);
+        const sizingGroupId = reactorSizingGroupId(scale.basis, reference);
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        if (task.groupId === sizingGroupId && Number.isFinite(charge)) {
+          return { value: charge, unit: "m3", source: "reactor sizing total charge" };
+        }
         const group = groupModel(task.groupId) || ensureGroup(task.groupId);
         const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
         if (Number.isFinite(groupVolume.value)) return groupVolume;
-        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
         return Number.isFinite(charge)
           ? { value: charge, unit: "m3", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
           : groupVolume;
       }
       if (capacityUnit === "L") {
+        const reference = inferReferenceStream(scale.basis);
+        const sizingGroupId = reactorSizingGroupId(scale.basis, reference);
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        if (task.groupId === sizingGroupId && Number.isFinite(charge)) {
+          return { value: charge * 1000, unit: "L", source: "reactor sizing total charge" };
+        }
         const group = groupModel(task.groupId) || ensureGroup(task.groupId);
         const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
         if (Number.isFinite(groupVolume.value)) return { ...groupVolume, value: groupVolume.value * 1000, unit: "L" };
-        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
         return Number.isFinite(charge)
           ? { value: charge * 1000, unit: "L", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
           : { ...groupVolume, unit: "L" };
@@ -4847,16 +5046,12 @@
           const missing = [];
           if (!conditions.settling_time) missing.push("settling time");
           if (!conditions.separation_efficiency) missing.push("separation efficiency");
-          if (!properties.has("density_difference")) missing.push("density difference");
           if (!properties.has("miscibility")) missing.push("miscibility");
-          if (!properties.has("emulsion_risk")) missing.push("emulsion risk");
           cards.push(scaleRiskCard(group, "Liquid-liquid scale-up", missing.length ? "high" : "medium", missing, "Check phase disengagement, interface control, emulsion risk, wash/extraction volume, and decanter feasibility."));
         }
         if ([...phenomena].some(code => ["PS(LS)", "PT(LS)", "PC(LS)", "2phM(LS)"].includes(code))) {
           const missing = [];
           if (!conditions.solid_loading) missing.push("solid loading");
-          if (!properties.has("particle_size")) missing.push("particle size");
-          if (!properties.has("cake_resistance")) missing.push("cake resistance/compressibility");
           cards.push(scaleRiskCard(group, "Solid-liquid scale-up", missing.length ? "medium" : "low", missing, "Check filtration/drying behavior, cake handling, salt loading, and solids transfer."));
         }
         if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
@@ -4979,7 +5174,7 @@
       const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
       const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
-      const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText) || properties.has("hazard_note");
+      const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText);
       const hasHeatSensitive = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText) || properties.has("degradation_temperature");
       const hasReversible = /reversible|equilibrium|dean-stark|water removal|azeotrope|drive.*right|in-situ removal/.test(allText);
       const hasExotherm = /exotherm|heat release|cooling jacket|quench|cold shot/.test(allText);
@@ -5399,6 +5594,17 @@
       root.querySelectorAll("[data-schedule-field]").forEach(field => {
         field.addEventListener("input", updateGroupScheduleField);
         field.addEventListener("change", rerenderScaleAfterEdit);
+      });
+      root.querySelectorAll("[data-predecessor-toggle]").forEach(checkbox => {
+        checkbox.addEventListener("change", () => {
+          const groupState = ensureGroup(checkbox.dataset.predecessorTask);
+          const predecessorId = checkbox.dataset.predecessorToggle;
+          const ids = new Set(groupState.schedule.predecessorIds);
+          if (checkbox.checked) ids.add(predecessorId); else ids.delete(predecessorId);
+          groupState.schedule.predecessorIds = Array.from(ids);
+          invalidateAiRefine();
+          renderScaleBasisPanel();
+        });
       });
       root.querySelectorAll("[data-load-schedule-example]").forEach(button => {
         button.addEventListener("click", applyScheduleExample);
@@ -5881,7 +6087,7 @@
         </div>
         ${gantt.bottleneck ? bottleneckActionHtml(gantt.bottleneck) : balancedGanttActionHtml(gantt)}
         <div class="scale-results">
-          ${gantt.tasks.map(ganttRowHtml).join("")}
+          ${gantt.tasks.map(task => ganttRowHtml(task, gantt.tasks)).join("")}
         </div>
       `;
     }
@@ -5892,7 +6098,7 @@
         <div class="rule-card low" style="margin:8px 0">
           <span class="severity-pill">balanced</span>
           <strong>No critical bottleneck detected</strong>
-          <span>${escapeHtml(gantt.bottleneckCandidate.groupId)} is currently the longest task, but it is too close to the next task to flag as a critical bottleneck.</span>
+          <span>${escapeHtml(gantt.bottleneckCandidate.groupId)} is currently the longest task on the critical path, but it is too close to the next one to flag as a critical bottleneck.</span>
           <span class="muted small">Use this state as a rough balanced schedule. Split only if you have equipment/capacity evidence, not just because one bar is slightly longer.</span>
         </div>
       `;
@@ -5955,7 +6161,7 @@
       `;
     }
 
-    function ganttRowHtml(task) {
+    function ganttRowHtml(task, allTasks = []) {
       const duration = Number.isFinite(task.durationH) ? `${formatNumber(task.durationH)} h` : "missing duration";
       const adjusted = Number.isFinite(task.adjustedDurationH) && Math.abs(task.adjustedDurationH - task.durationH) > 0.0001
         ? `; adjusted ${formatNumber(task.adjustedDurationH)} h with ${formatNumber(task.scheduleMarginPercent)}% margin`
@@ -5996,7 +6202,9 @@
                 <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
                 <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
                 <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
+                <label><span>Starts after</span><select data-schedule-field="dependencyMode" data-schedule-group="${escapeAttr(task.groupId)}" title="Auto: this task follows the previous one in text order (legacy behavior). Manual: pick exactly which task(s) this one must wait on below.">${dependencyModeOptionHtml(task.dependencyMode)}</select></label>
               </div>
+              ${dependencyPickerHtml(task, allTasks)}
               <div class="gantt-scale-note">
                 <strong>${escapeHtml(profile.label)}</strong>
                 <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
@@ -6005,6 +6213,33 @@
               </div>
             </div>
           ` : ""}
+        </div>
+      `;
+    }
+
+    function dependencyModeOptionHtml(selected) {
+      const options = [
+        { value: "auto", label: "Auto (previous task)" },
+        { value: "manual", label: "Manual (pick below)" }
+      ];
+      return options.map(opt => `<option value="${escapeAttr(opt.value)}" ${opt.value === selected ? "selected" : ""}>${escapeHtml(opt.label)}</option>`).join("");
+    }
+
+    function dependencyPickerHtml(task, allTasks) {
+      if (task.dependencyMode !== "manual") return "";
+      const others = allTasks.filter(other => other.groupId !== task.groupId);
+      return `
+        <div class="dependency-picker">
+          <div class="muted small">Predecessors - ${escapeHtml(task.groupId)} waits until all checked tasks finish.</div>
+          <div class="dependency-picker-list">
+            ${others.map(other => `
+              <label class="dependency-picker-item">
+                <input type="checkbox" data-predecessor-toggle="${escapeAttr(other.groupId)}" data-predecessor-task="${escapeAttr(task.groupId)}" ${task.predecessorIds.includes(other.groupId) ? "checked" : ""}>
+                <span>${escapeHtml(other.groupId)} - ${escapeHtml(other.task)}</span>
+              </label>
+            `).join("")}
+          </div>
+          ${task.cyclicDependency ? `<div class="muted small" style="color:var(--orange)">Circular dependency involving ${escapeHtml(task.groupId)} - the loop-closing link was ignored for scheduling until fixed.</div>` : ""}
         </div>
       `;
     }
@@ -6169,6 +6404,7 @@
       state.scaleBasis.scheduleMarginPercent = "0";
       state.scaleBasis.batchDuration = "";
       state.scaleBasis.allowableCapacityUtilizationPercent = "85";
+      state.scaleBasis.productKgPerBatch = "3000";
       state.scaleBasis.reactantsLoadingLPerKgProduct = "1.067";
       state.scaleBasis.solventLoadingLPerKgProduct = "2.5";
       state.scaleBasis.reactorWorkingFillPercent = "70";
@@ -6558,6 +6794,9 @@
       if (state.blocks.length && groupIdsInTextOrder().length && gantt.missingDurationCount) {
         issues.push(ruleIssue("medium", "Task durations missing", `${gantt.missingDurationCount} grouped task${gantt.missingDurationCount === 1 ? "" : "s"} lack duration data for bottleneck analysis.`, "Gantt schedule", "Add duration h in group conditions or directly in the Gantt rows."));
       }
+      if (gantt.cyclicDependencyGroupIds && gantt.cyclicDependencyGroupIds.length) {
+        issues.push(ruleIssue("medium", "Circular task dependency", `${gantt.cyclicDependencyGroupIds.join(", ")} form a dependency loop; the loop-closing link was ignored for scheduling.`, "Gantt schedule", "Open \"Starts after\" on each listed task and remove whichever predecessor closes the loop."));
+      }
       if (gantt.bottleneck && ["increases with scale", "equipment dependent"].includes(gantt.bottleneck.scaleSensitivity)) {
         issues.push(ruleIssue("medium", "Scale-sensitive bottleneck", `${gantt.bottleneck.groupId} controls cycle time and is ${gantt.bottleneck.scaleSensitivity}.`, gantt.bottleneck.groupId, "Review equipment capacity, split into parallel units, or revise the selected unit operation."));
       }
@@ -6942,7 +7181,6 @@
       $("blockText").value = block?.text || "";
       renderPhenomenaGrid(block);
 
-      renderStepAuditPanel();
       renderHeuristicsPanel();
       renderScaleBasisPanel();
       refreshReviewPanels();
@@ -6958,131 +7196,6 @@
         <span>${escapeHtml(preset.description || "No preset description available.")}</span>
         <span class="pill">${escapeHtml(preset.phenomena.length ? preset.phenomena.join(", ") : "no phenomena")}</span>
       `;
-    }
-
-    function step13AuditModel() {
-      const blocks = blocksInOrder();
-      const groups = groupIdsInTextOrder().map(groupId => groupModel(groupId));
-      const allStreams = blocks.flatMap(block => {
-        ensureBlockFlowFields(block);
-        return block.streams || [];
-      });
-      const missingPurpose = blocks.filter(block => !blockHasAssignedPurpose(block));
-      const missingOutput = blocks.filter(block => blockExpectsStreams(block) && !streamCounts(block).output);
-      const missingPhase = allStreams.filter(stream => !String(stream.phase || "").trim() || stream.phase === "unknown");
-      const missingPhenomena = blocks.filter(block => !(block.phenomena || []).length);
-      const ungrouped = blocks.filter(block => !block.groupId);
-      const missingTaskOrUnit = groups.filter(group => !group.task || group.task === "unassigned" || !group.selectedUnit);
-      const incompatibleUnit = groups.filter(group => group.selectedUnit && !selectedUnitSupportedByEvidence(group));
-      const missingSelectionBasis = groups.filter(group => group.selectedUnit && unitOperationCandidatesForGroup(group).length > 1 && !String(group.selectionBasis || "").trim());
-
-      const statusFor = issues => !blocks.length ? "todo" : issues.length ? "partial" : "done";
-      return [
-        {
-          step: 1,
-          title: "Block Data",
-          status: statusFor([...missingPurpose, ...missingOutput, ...missingPhase]),
-          summary: blocks.length
-            ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}, ${allStreams.length} stream${allStreams.length === 1 ? "" : "s"}`
-            : "No blocks yet.",
-          issues: [
-            ...missingPurpose.map(block => ({ text: `${block.id}: purpose preset missing`, kind: "block", id: block.id })),
-            ...missingOutput.map(block => ({ text: `${block.id}: output stream missing`, kind: "block", id: block.id })),
-            ...missingPhase.map(stream => ({ text: `${stream.id || "stream"}: phase missing`, kind: "stream", id: stream.id }))
-          ]
-        },
-        {
-          step: 2,
-          title: "Phenomena",
-          status: statusFor(missingPhenomena),
-          summary: blocks.length
-            ? `${blocks.length - missingPhenomena.length}/${blocks.length} blocks mapped`
-            : "Create blocks first.",
-          issues: missingPhenomena.map(block => ({ text: `${block.id}: no phenomena assigned`, kind: "block", id: block.id }))
-        },
-        {
-          step: 3,
-          title: "Tasks & Unit Ops",
-          status: !groups.length ? "todo" : [...ungrouped, ...missingTaskOrUnit, ...incompatibleUnit].length ? "partial" : "done",
-          summary: groups.length
-            ? `${groups.length} task group${groups.length === 1 ? "" : "s"}`
-            : "No task groups yet.",
-          issues: [
-            ...ungrouped.map(block => ({ text: `${block.id}: not assigned to a group`, kind: "block", id: block.id })),
-            ...missingTaskOrUnit.map(group => ({ text: `${group.id}: task or selected unit missing`, kind: "group", id: group.id })),
-            ...incompatibleUnit.map(group => ({ text: `${group.id}: selected unit not supported by evidence`, kind: "group", id: group.id })),
-            ...missingSelectionBasis.map(group => ({ text: `${group.id}: selection basis missing`, kind: "group", id: group.id, warningOnly: true }))
-          ]
-        }
-      ];
-    }
-
-    function renderStepAuditPanel() {
-      const root = $("stepAuditPanel");
-      if (!root) return;
-      const cards = step13AuditModel();
-      root.innerHTML = cards.map(card => {
-        const blockingIssues = card.issues.filter(issue => !issue.warningOnly);
-        const first = card.issues[0];
-        const statusLabel = card.status === "done" ? "done" : card.status === "partial" ? "needs work" : "todo";
-        return `
-          <article class="step-audit-card ${card.status}">
-            <div class="step-audit-head">
-              <strong>Step ${card.step}. ${escapeHtml(card.title)}</strong>
-              <span class="pill ${card.status === "done" ? "green" : card.status === "partial" ? "warn" : ""}">${escapeHtml(statusLabel)}</span>
-            </div>
-            <div class="muted small">${escapeHtml(card.summary)}</div>
-            <div class="step-audit-issues">
-              ${card.issues.length
-                ? card.issues.slice(0, 3).map(issue => `<button class="step-audit-issue ${issue.warningOnly ? "warning-only" : ""}" data-step-audit-kind="${escapeAttr(issue.kind)}" data-step-audit-id="${escapeAttr(issue.id)}">${escapeHtml(issue.text)}</button>`).join("")
-                : `<span class="pill green">No open issue</span>`}
-              ${card.issues.length > 3 ? `<span class="muted small">+${card.issues.length - 3} more</span>` : ""}
-            </div>
-            ${first ? `<button class="mini-button" data-step-audit-kind="${escapeAttr(first.kind)}" data-step-audit-id="${escapeAttr(first.id)}">${blockingIssues.length ? "Open first gap" : "Open warning"}</button>` : ""}
-          </article>
-        `;
-      }).join("");
-      root.querySelectorAll("[data-step-audit-kind]").forEach(button => {
-        button.addEventListener("click", () => focusStepAuditTarget(button.dataset.stepAuditKind, button.dataset.stepAuditId));
-      });
-    }
-
-    function focusStepAuditTarget(kind, id) {
-      if (!id) return;
-      if (kind === "group") {
-        const group = groupModel(id);
-        if (!group) return;
-        state.selectedGroupId = id;
-        state.selectedBlockId = null;
-        state.selectedIds = group.blocks.map(block => block.id);
-        state.focusEndpoint = id;
-      } else if (kind === "stream") {
-        const block = blocksInOrder().find(item => (item.streams || []).some(stream => stream.id === id));
-        if (!block) return;
-        state.selectedBlockId = block.id;
-        state.selectedGroupId = null;
-        state.selectedIds = [block.id];
-        state.focusEndpoint = block.groupId || block.id;
-        const stream = block.streams.find(item => item.id === id);
-        if (stream) stream.editing = true;
-      } else {
-        const block = state.blocks.find(item => item.id === id);
-        if (!block) return;
-        state.selectedBlockId = block.id;
-        state.selectedGroupId = null;
-        state.selectedIds = [block.id];
-        state.focusEndpoint = block.groupId || block.id;
-      }
-      setInspectorTab("inspect");
-      renderAll();
-    }
-
-
-    function renderGroupProperties(group) {
-      const root = $("groupProperties");
-      if (!root) return;
-      root.innerHTML = groupPropertiesPanelHtml(group);
-      if (group) bindGroupPropertiesControls(root, group.id);
     }
 
     function groupPropertiesPanelHtml(group) {
@@ -7128,26 +7241,6 @@
           ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No property data entered yet. The tool will still run, but separation decisions remain lower-confidence.</div>`}
         </section>
       `;
-    }
-
-    function bindGroupPropertiesControls(root, groupId) {
-      bindPropertyPredictorControls(root, groupId);
-      root.querySelectorAll("[data-edit-properties]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(button.dataset.editProperties).propertiesEditing = true;
-          renderAll();
-        });
-      });
-      root.querySelectorAll("[data-save-properties]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(button.dataset.saveProperties).propertiesEditing = false;
-          renderAll();
-        });
-      });
-      root.querySelectorAll("[data-property-field]").forEach(field => {
-        field.addEventListener("input", updateGroupPropertyField);
-        field.addEventListener("change", updateGroupPropertyField);
-      });
     }
 
     function propertyPredictorPanelHtml(group) {
@@ -7217,6 +7310,26 @@
           `).join("")}
         </div>
       `;
+    }
+
+    function bindGroupPropertiesControls(root, groupId) {
+      bindPropertyPredictorControls(root, groupId);
+      root.querySelectorAll("[data-edit-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.editProperties).propertiesEditing = true;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-save-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.saveProperties).propertiesEditing = false;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-property-field]").forEach(field => {
+        field.addEventListener("input", updateGroupPropertyField);
+        field.addEventListener("change", updateGroupPropertyField);
+      });
     }
 
     function bindPropertyPredictorControls(root, groupId) {
@@ -8175,7 +8288,6 @@
       renderStepFlowInspector();
       if (typeof flowsheetUnitCategory === "function") {
         renderGroupFlow();
-        renderStepAuditPanel();
       } else {
         renderAll();
       }
@@ -8246,7 +8358,6 @@
       renderStepFlowInspector();
       if (typeof flowsheetUnitCategory === "function") {
         renderGroupFlow();
-        renderStepAuditPanel();
       } else {
         renderAll();
       }
@@ -8300,28 +8411,6 @@
       // block has 3+ declared byproducts/residual outlets.
       const palette = ["#7c9cff", "#f2b84b", "#4bc9a8", "#e07a9e", "#9b8bf4"];
       return palette[index % palette.length];
-    }
-
-    function conversionStreamRowHtml(name, total, usedOrMade, leftover, unit, usedLabel) {
-      const basis = total || (usedOrMade + leftover) || 1;
-      const usedPct = basis ? Math.min(100, Math.max(0, (usedOrMade / basis) * 100)) : 0;
-      const label = usedLabel === "made" ? "Made" : "Used";
-      return `
-        <div class="conversion-stream-row">
-          <div class="conversion-stream-row-head">
-            <strong>${escapeHtml(name)}</strong>
-            <span class="muted small">${total ? total.toFixed(2) : "0"} ${escapeHtml(unit || "kg")} total</span>
-          </div>
-          <div class="conversion-bar">
-            <span class="conversion-bar-seg used" style="width:${usedPct}%" title="${label}: ${usedOrMade.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
-            <span class="conversion-bar-seg leftover" style="width:${100 - usedPct}%" title="Leftover: ${leftover.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
-          </div>
-          <div class="conversion-stream-row-numbers muted small">
-            <span>${label}: ${usedOrMade.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
-            <span>Leftover: ${leftover.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
-          </div>
-        </div>
-      `;
     }
 
     function conversionInfoIcon(text) {
@@ -9223,7 +9312,7 @@
             ${item("KB3.1 PBB screen", kb31.length ? "partial" : "waiting", kb31.length ? `${kb31.length} PBB trigger(s) found from available properties.` : "No KB3.1 trigger yet.")}
             ${item("Feasibility gate", gated.length ? "done" : "waiting", gated.length ? `${gated.length} route(s) passed phase/phenomena checks.` : "No route has passed the gate yet.")}
             ${item("KB3.2 unit translation", translated.length ? "partial" : "waiting", translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No translated unit candidates yet.")}
-            ${item("EI ranking", "not implemented", "Enthalpy Index ranking requires mass and energy balance data.")}
+            ${item("EI ranking", "requires balance data", "Enthalpy Index ranking requires mass and energy balance data.")}
           </div>
         </div>
       `;
@@ -12029,6 +12118,7 @@
       const conditions = aggregateGroupConditions(group);
       const separationModel = separationSimulatorModel(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
+      const propertiesHtml = groupPropertiesPanelHtml(group);
       const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
       const taskEditBlock = groupTaskEditBlock(group);
       const taskEditBlockLabel = taskEditBlock ? `new rows are stored on ${taskEditBlock.id}` : "no source block available";
@@ -12088,8 +12178,16 @@
             </div>
             <div class="condition-body">
               ${groupConditionProfileHtml(group, conditions)}
+              ${groupTimeConcurrencyHtml(group)}
             </div>
           </div>
+          <div class="group-drawer-section-label">
+            <div>
+              <strong>Properties & Screening</strong>
+              <span>Use only when properties affect separation choice, scale-up, energy handoff, or safety.</span>
+            </div>
+          </div>
+          ${propertiesHtml}
           ${showPostReactionSupport ? `
             <div class="group-drawer-section-label post-reaction-support-label">
               <div>
@@ -12106,7 +12204,6 @@
           ensureGroup(input.dataset.groupTaskAggregate).task = input.value;
           invalidateAiRefine();
           renderGroupFlow();
-          renderStepAuditPanel();
           renderExport();
         });
         input.addEventListener("change", renderAll);
@@ -12187,6 +12284,15 @@
       root.querySelectorAll("[data-group-condition-value], [data-group-condition-note]").forEach(input => {
         input.addEventListener("input", updateGroupConditionOverrideField);
         input.addEventListener("change", updateGroupConditionOverrideField);
+      });
+      root.querySelectorAll("[data-time-concurrency-entry]").forEach(select => {
+        select.addEventListener("change", () => {
+          const groupState = ensureGroup(select.dataset.timeConcurrencyGroup);
+          const key = select.dataset.timeConcurrencyEntry;
+          if (select.value) groupState.timeConcurrency[key] = select.value;
+          else delete groupState.timeConcurrency[key];
+          renderAll();
+        });
       });
       root.querySelectorAll("[data-open-override]").forEach(button => {
         button.addEventListener("click", () => {
@@ -12495,7 +12601,7 @@
       if (prompt.disabled) {
         return `
           <label class="condition-edit-card condition-edit-card-disabled">
-            <div class="label">${escapeHtml(prompt.label)} <span class="pill">coming soon</span></div>
+            <div class="label">${escapeHtml(prompt.label)} <span class="pill">documented only</span></div>
             <div class="condition-input-row">
               <input value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" disabled title="${escapeAttr(prompt.hint || "")}">
               ${conditionUnitControlHtml(prompt, unit)}
@@ -12528,15 +12634,6 @@
 
     function defaultConditionUnit(prompt) {
       return prompt.defaultUnit || prompt.unit || "";
-    }
-
-    function conditionLabelHtml(item) {
-      return `
-        <article class="condition-label-card" data-condition-label="${escapeAttr(item.id)}" title="Right-click to edit conditions">
-          <strong>${escapeHtml(item.label)}</strong>
-          <span>${escapeHtml(formatConditionValue(item))}</span>
-        </article>
-      `;
     }
 
     function updateConditionField(event) {
@@ -13162,13 +13259,6 @@
       return `<span class="pill ${tone}" title="Time vs. scale">${escapeHtml(value)}</span>`;
     }
 
-    function scheduleOperationClassOptionHtml(selected) {
-      return scheduleOperationClassOptions.map(value => {
-        const label = value === "auto" ? "Auto" : operationScaleProfile(value).label;
-        return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
-      }).join("");
-    }
-
     function updateStreamField(event) {
       const current = selectedBlock();
       if (!current) return;
@@ -13221,49 +13311,6 @@
       block.inputs = streamNames(block, "input");
       block.outputs = streamNames(block, "output");
       block.wastes = streamNames(block, "waste");
-    }
-
-    function renderGroupAlternatives(group) {
-      if (!$("groupAlternatives")) return;
-      if (!group) {
-        $("groupAlternatives").innerHTML = `<span class="muted">No group selected.</span>`;
-        return;
-      }
-      const readiness = groupUnitSuggestionReadiness(group);
-      if (!readiness.ready) {
-        $("groupAlternatives").innerHTML = `
-          <div class="mfa-empty tip" data-tip="${escapeAttr(unitOperationGateTooltip(readiness, group))}">
-            Unit-operation suggestions are locked until ${escapeHtml(readiness.missing.join(", ") || "task data")} are complete.
-          </div>
-        `;
-        return;
-      }
-      const candidates = unitOperationCandidatesForGroup(group).slice(0, 6);
-      const basisNote = group.selectedUnit && candidates.length > 1 ? `
-        <div class="muted small" style="margin-top:6px">
-          ${group.selectionBasis
-            ? `Selection basis: "${escapeHtml(group.selectionBasis)}"`
-            : `Multiple candidates fit — open the group aggregate view above to record why ${escapeHtml(group.selectedUnit)} was chosen.`}
-        </div>
-      ` : "";
-      $("groupAlternatives").innerHTML = `
-        <div class="unit-suggest-result-head">
-          <strong>Data-Based Unit Operation Suggestions</strong>
-          <span class="muted small">${readiness.lutzeReady ? "after Lutze review" : "pre-Lutze"}</span>
-        </div>
-        ${candidates.length ? candidates.map(candidate => `
-          <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-            ${escapeHtml(candidate.name)}
-            <span class="pill ${candidate.preliminary ? "warn" : candidate.sameTask ? "blue" : "green"}">${candidate.preliminary ? "pre-Lutze" : candidate.sameTask ? "same task" : "Lutze fit"}</span>
-          </button>
-        `).join("") : `<span class="muted">No candidates match the completed task data.</span>`}
-      ` + basisNote;
-      document.querySelectorAll("[data-inspector-unit]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
-          renderAll();
-        });
-      });
     }
 
     function applyBehavior(behavior) {
@@ -13911,6 +13958,7 @@
       canvas.style.width = `${board.width}px`;
       canvas.style.height = `${board.height}px`;
       svg.outerHTML = renderLinksSvg(board, Boolean(state.drag));
+      bindLinkRemovalHandlers(canvas);
     }
 
     function scheduleDragRender() {
@@ -13960,7 +14008,7 @@
     }
 
     function boardPanBlockedTarget(target) {
-      return target?.closest?.("[data-block-card], [data-group-box], [data-draft-box], [data-connect-handle], button, input, textarea, select, summary, details, .context-menu, .step-flow-inspector");
+      return target?.closest?.("[data-block-card], [data-group-box], [data-draft-box], [data-connect-handle], [data-link-index], button, input, textarea, select, summary, details, .context-menu, .step-flow-inspector");
     }
 
     function startBoardPan(event) {
@@ -14809,297 +14857,8 @@
       `).join("");
     }
 
-    function buildLcaBridge(blocks, groups, scale, recycle, energyBridge) {
-      const entries = lcaStreamEntries(blocks, groups);
-      const product = lcaReferenceProduct(entries, scale);
-      const foregroundProcesses = groups.map(group => lcaForegroundProcess(group, entries));
-      const externalInputs = entries.filter(entry => entry.lcaRole === "technosphere_input").map(lcaExchange);
-      const internalFlows = entries.filter(entry => entry.lcaRole.startsWith("internal_") || entry.lcaRole === "foreground_intermediate").map(lcaExchange);
-      const emissions = entries.filter(entry => entry.lcaRole === "emission_to_air" || entry.lcaRole === "emission_unclassified").map(lcaExchange);
-      const wasteTreatments = entries.filter(entry => entry.lcaRole === "wastewater_treatment" || entry.lcaRole === "solid_waste_treatment" || entry.lcaRole === "purge_treatment" || entry.lcaRole === "waste_treatment_unclassified").map(lcaExchange);
-      const mappingCandidates = lcaMappingCandidates([...externalInputs, ...emissions, ...wasteTreatments]);
-      const issues = lcaBridgeIssues(product, entries, mappingCandidates, energyBridge);
-      return {
-        schemaVersion: "lca-bridge-v0.1",
-        status: "draft_mapping_only",
-        purpose: "Intermediate export for building a foreground LCA model. This is not openLCA JSON-LD yet.",
-        openLcaCompatibility: {
-          directImport: false,
-          reason: "openLCA needs its own JSON-LD/IPC objects with database UUIDs, flow types, units, providers, and locations.",
-          nextStep: "Use mappingCandidates to choose openLCA/ecoinvent flows, then generate openLCA JSON-LD or push through openLCA IPC."
-        },
-        namePolicy: {
-          rawNamePreserved: true,
-          canonicalNameIsSuggestion: true,
-          internalMixturesAreNotMappedToEcoinvent: true,
-          finalMappingRequiresManualDatasetChoice: true
-        },
-        referenceProduct: product,
-        foregroundProcesses,
-        externalInputs,
-        internalFlows,
-        emissions,
-        wasteTreatments,
-        utilityPlaceholders: lcaUtilityPlaceholders(energyBridge),
-        recycleSummary: recycle,
-        mappingCandidates,
-        readiness: {
-          canStartOpenLcaMapping: Boolean(product && mappingCandidates.length),
-          issueCount: issues.length,
-          issues
-        }
-      };
-    }
-
-    function lcaStreamEntries(blocks, groups) {
-      const groupById = new Map(groups.map(group => [group.groupId, group]));
-      const producedKeys = new Set();
-      blocks.forEach(block => {
-        (block.streams || [])
-          .filter(stream => stream.role === "output" && stream.name)
-          .forEach(stream => producedKeys.add(lcaNameKey(stream.name)));
-      });
-      return blocks.flatMap(block => (block.streams || []).filter(stream => stream.name).map(stream => {
-        const group = groupById.get(block.groupId) || {};
-        const nameInfo = lcaCanonicalName(stream.name);
-        const amount = lcaAmount(stream);
-        const entry = {
-          id: `${block.id}:${stream.id}`,
-          blockId: block.id,
-          groupId: block.groupId || "",
-          processName: block.groupId ? `${block.groupId} - ${group.task || "unassigned task"}` : `${block.id} - draft block`,
-          task: group.task || "",
-          selectedUnit: group.selectedUnit || "",
-          streamId: stream.id,
-          streamRole: stream.role,
-          rawName: stream.name,
-          canonicalName: nameInfo.name,
-          canonicalSource: nameInfo.source,
-          amount,
-          phase: stream.phase,
-          phaseLabel: stream.phaseLabel,
-          fate: stream.fate,
-          destinationGroup: stream.destinationGroup || "",
-          status: stream.status,
-          note: stream.note || "",
-          lcaRole: lcaRoleForStream(stream, producedKeys)
-        };
-        return {
-          ...entry,
-          openLcaHint: lcaOpenLcaHint(entry),
-          candidateQueries: lcaCandidateQueries(entry)
-        };
-      }));
-    }
-
-    function lcaNameKey(name) {
-      return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
-    }
-
-    function lcaCanonicalName(name) {
-      const raw = lcaNameKey(name);
-      const rules = [
-        [/methylbenzene|toluene/, "toluene"],
-        [/cyclohexane/, "cyclohexane"],
-        [/benzaldehyde/, "benzaldehyde"],
-        [/benzophenone/, "benzophenone"],
-        [/2-ethylhexyl cyanoacetate/, "2-ethylhexyl cyanoacetate"],
-        [/ammonium acetate/, "ammonium acetate"],
-        [/molecular sieves|sieve 4a|sieves 4a/, "molecular sieve, zeolite 4A"],
-        [/wash water|water of condensation|\bwater\b/, "water"],
-        [/wastewater|aqueous waste|treated effluent/, "wastewater"],
-        [/uncaptured voc|voc/, "volatile organic compounds"],
-        [/heavy residue|column bottoms|heavies|organic residue/, "organic residues"]
-      ];
-      const match = rules.find(([pattern]) => pattern.test(raw));
-      if (match) return { name: match[1], source: "rule" };
-      const cleaned = raw
-        .replace(/\b(crude|purified|recovered|residual|charged|product-rich|rich|liquid|vapor|condensate|mixture|phase|stream)\b/g, " ")
-        .replace(/\b(to vent|loss|purge|waste|final output|in-process intermediate)\b/g, " ")
-        .replace(/[()/,-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      return { name: cleaned || String(name || "").trim(), source: cleaned && cleaned !== raw ? "cleaned_name" : "raw_name" };
-    }
-
-    function lcaAmount(stream) {
-      const numeric = parseStreamQuantity(stream.quantity);
-      const kg = massToKg(stream.quantity, stream.unit);
-      return {
-        value: Number.isFinite(numeric) ? numeric : null,
-        unit: stream.unit || "",
-        kg: Number.isFinite(kg) ? kg : null,
-        basis: String(stream.unit || "").includes("/kg product") ? "per kg product" : "as entered",
-        status: Number.isFinite(numeric) ? (Number.isFinite(kg) ? "mass_kg_convertible" : "numeric_non_mass_or_relative") : "missing_or_non_numeric"
-      };
-    }
-
-    function lcaRoleForStream(stream, producedKeys) {
-      const fate = String(stream.fate || "").toLowerCase();
-      const role = stream.role;
-      const producedInternally = producedKeys.has(lcaNameKey(stream.name));
-      if (role === "input") {
-        if (["recycled input", "recovered solvent"].includes(fate)) return "internal_recycle_input";
-        if (fate === "intermediate" || producedInternally) return "internal_input";
-        return "technosphere_input";
-      }
-      if (role === "output") {
-        if (fate === "product") return "reference_product";
-        if (["recovered solvent", "recycled input", "recover", "recycle"].includes(fate)) return "internal_recycle_output";
-        if (fate === "intermediate") return "foreground_intermediate";
-        return "foreground_output_unclassified";
-      }
-      if (fate === "vent") return "emission_to_air";
-      if (fate === "wastewater") return "wastewater_treatment";
-      if (fate === "solid waste") return "solid_waste_treatment";
-      if (fate === "purge" || fate === "loss") return "purge_treatment";
-      return role === "waste" ? "waste_treatment_unclassified" : "unclassified";
-    }
-
-    function lcaOpenLcaHint(entry) {
-      if (entry.lcaRole === "emission_to_air" || entry.lcaRole === "emission_unclassified") {
-        return { flowType: "ELEMENTARY_FLOW", compartment: "air", providerNeeded: false };
-      }
-      if (entry.lcaRole.includes("waste") || entry.lcaRole.includes("treatment") || entry.lcaRole === "purge_treatment") {
-        return { flowType: "WASTE_FLOW", providerNeeded: true };
-      }
-      return { flowType: "PRODUCT_FLOW", providerNeeded: entry.lcaRole === "technosphere_input" };
-    }
-
-    function lcaCandidateQueries(entry) {
-      const name = entry.canonicalName || entry.rawName;
-      if (entry.lcaRole === "technosphere_input") {
-        return [`market for ${name}`, `${name} production`, name];
-      }
-      if (entry.lcaRole === "wastewater_treatment") {
-        return ["treatment of wastewater, average", "wastewater treatment"];
-      }
-      if (entry.lcaRole === "solid_waste_treatment") {
-        return [`treatment of spent ${name}`, `treatment of ${name}`];
-      }
-      if (entry.lcaRole === "purge_treatment" || entry.lcaRole === "waste_treatment_unclassified") {
-        return [`treatment of ${name}`, `market for waste ${name}`];
-      }
-      if (entry.lcaRole === "emission_to_air") {
-        return [`${name}, emission to air`, name];
-      }
-      return [];
-    }
-
-    function lcaExchange(entry) {
-      return {
-        id: entry.id,
-        groupId: entry.groupId,
-        blockId: entry.blockId,
-        processName: entry.processName,
-        rawName: entry.rawName,
-        canonicalName: entry.canonicalName,
-        canonicalSource: entry.canonicalSource,
-        amount: entry.amount,
-        phase: entry.phase,
-        fate: entry.fate,
-        lcaRole: entry.lcaRole,
-        openLcaHint: entry.openLcaHint,
-        candidateQueries: entry.candidateQueries,
-        destinationGroup: entry.destinationGroup,
-        status: entry.status,
-        note: entry.note
-      };
-    }
-
-    function lcaForegroundProcess(group, entries) {
-      const processEntries = entries.filter(entry => entry.groupId === group.groupId);
-      return {
-        processId: group.groupId,
-        processName: `${group.groupId} - ${group.task || "unassigned task"}`,
-        task: group.task,
-        selectedUnit: group.selectedUnit || "",
-        blocks: group.blocks,
-        phenomena: group.phenomena,
-        openLcaType: "foreground_process",
-        exchanges: processEntries.map(lcaExchange)
-      };
-    }
-
-    function lcaReferenceProduct(entries, scale) {
-      const products = entries.filter(entry => entry.lcaRole === "reference_product");
-      const preferred = products.find(entry => lcaNameKey(entry.rawName) === lcaNameKey(scale?.basis?.targetProduct)) || products[products.length - 1] || null;
-      if (!preferred) return null;
-      return {
-        rawName: preferred.rawName,
-        canonicalName: preferred.canonicalName,
-        amount: preferred.amount,
-        groupId: preferred.groupId,
-        blockId: preferred.blockId,
-        targetProductFromScaleBasis: scale?.basis?.targetProduct || "",
-        openLcaHint: { flowType: "PRODUCT_FLOW", providerNeeded: false }
-      };
-    }
-
-    function lcaMappingCandidates(exchanges) {
-      const byKey = new Map();
-      exchanges.forEach(exchange => {
-        const key = `${exchange.lcaRole}||${exchange.canonicalName}`;
-        if (!byKey.has(key)) {
-          byKey.set(key, {
-            canonicalName: exchange.canonicalName,
-            lcaRole: exchange.lcaRole,
-            openLcaHint: exchange.openLcaHint,
-            candidateQueries: exchange.candidateQueries,
-            occurrences: []
-          });
-        }
-        byKey.get(key).occurrences.push({
-          groupId: exchange.groupId,
-          blockId: exchange.blockId,
-          rawName: exchange.rawName,
-          amount: exchange.amount
-        });
-      });
-      return Array.from(byKey.values()).map(candidate => ({
-        ...candidate,
-        mappingStatus: "unmapped",
-        selectedOpenLcaFlowId: "",
-        selectedProviderId: "",
-        selectedLocation: ""
-      }));
-    }
-
-    function lcaUtilityPlaceholders(energyBridge) {
-      return (energyBridge || []).map(event => ({
-        groupId: event.groupId,
-        task: event.task,
-        eventType: event.eventType,
-        dataStatus: event.dataStatus,
-        massBasis: event.massBasis,
-        missing: event.missing,
-        lcaRole: "utility_placeholder",
-        mappingStatus: "needs utility calculation and provider mapping",
-        candidateQueries: lcaUtilityQueries(event.eventType)
-      }));
-    }
-
-    function lcaUtilityQueries(eventType) {
-      if (/cooling|condensation/i.test(eventType)) return ["market for cooling water", "cooling energy"];
-      if (/heating|evaporation|drying/i.test(eventType)) return ["market for heat, district or industrial", "steam production", "natural gas burned in industrial furnace"];
-      if (/mixing|vacuum|pressure/i.test(eventType)) return ["market for electricity, medium voltage", "electricity supply"];
-      return ["market for electricity, medium voltage"];
-    }
-
-    function lcaBridgeIssues(product, entries, mappingCandidates, energyBridge) {
-      const issues = [];
-      if (!product) issues.push("No reference product stream with fate 'product' was found.");
-      const missingAmounts = entries.filter(entry => ["technosphere_input", "reference_product", "emission_to_air", "wastewater_treatment", "solid_waste_treatment", "purge_treatment"].includes(entry.lcaRole) && entry.amount.status === "missing_or_non_numeric");
-      if (missingAmounts.length) issues.push(`${missingAmounts.length} LCA-relevant stream(s) have missing or non-numeric amounts.`);
-      const nonMass = entries.filter(entry => ["technosphere_input", "reference_product", "emission_to_air", "wastewater_treatment", "solid_waste_treatment", "purge_treatment"].includes(entry.lcaRole) && entry.amount.value !== null && entry.amount.kg === null);
-      if (nonMass.length) issues.push(`${nonMass.length} LCA-relevant stream(s) are not directly convertible to kg.`);
-      if (mappingCandidates.length) issues.push(`${mappingCandidates.length} external/waste/emission mapping candidate(s) still need openLCA/ecoinvent dataset choices.`);
-      const energyMissing = (energyBridge || []).filter(event => event.missing?.length);
-      if (energyMissing.length) issues.push(`${energyMissing.length} energy/utility placeholder(s) need duty calculation before LCA inventory export.`);
-      return issues;
-    }
-
-    // Project JSON export functions moved to static/export.js, loaded before this file.
+    // Project export, import, snapshots, and autosave live in static/export.js, which is loaded
+    // before this file (see app.py).
 
     function renderAll() {
       state.blocks.forEach(block => {
@@ -15118,6 +14877,7 @@
       renderWorkflowStepper();
       renderDataReadiness();
       renderSeparationSimulatorModal();
+      if (typeof scheduleProjectAutosave === "function") scheduleProjectAutosave();
     }
 
     function escapeHtml(value) {
@@ -15182,21 +14942,32 @@
       // which made this listener think the click landed outside and closed the menu it was in.
       if (!$("connectionsMenu").hidden && !event.composedPath().some(el => el.classList?.contains("header-dropdown"))) closeConnectionsMenu();
     });
-    function currentTheme() {
-      const saved = document.documentElement.getAttribute("data-theme");
-      if (saved === "dark" || saved === "light") return saved;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    function closeWorkMenu() {
+      $("workMenu").hidden = true;
+      $("workMenuToggle").setAttribute("aria-expanded", "false");
     }
-    function applyThemeToggleIcon() {
-      $("themeToggle").textContent = currentTheme() === "dark" ? "☾" : "☀";
-    }
-    $("themeToggle").addEventListener("click", () => {
-      const next = currentTheme() === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      try { localStorage.setItem("theme", next); } catch (e) {}
-      applyThemeToggleIcon();
+    // Wires the "File ▾" menu (id="workMenuToggle"/"workMenu", kept from before the label was renamed
+    // — Save Snapshot, Restore Autosave, Import JSON, Export JSON, LCI Excel) to their implementations.
+    // saveLocalProjectSnapshot, restoreAutosavedProject, importProjectJsonFile, handleSavedProjectListClick,
+    // and renderSavedWorkMenu are NOT defined in this file — they live in static/project_persistence.js
+    // (loaded before this file, see app.py), along with the autosave-on-edit logic.
+    $("workMenuToggle")?.addEventListener("click", () => {
+      const willOpen = $("workMenu").hidden;
+      $("workMenu").hidden = !willOpen;
+      $("workMenuToggle").setAttribute("aria-expanded", String(willOpen));
+      if (willOpen) renderSavedWorkMenu();
     });
-    applyThemeToggleIcon();
+    document.addEventListener("click", event => {
+      if (!$("workMenu").hidden && !event.composedPath().some(el => el.classList?.contains("work-dropdown"))) closeWorkMenu();
+    });
+    $("saveLocalProject")?.addEventListener("click", () => {
+      saveLocalProjectSnapshot();
+      renderSavedWorkMenu();
+    });
+    $("restoreAutosaveProject")?.addEventListener("click", restoreAutosavedProject);
+    $("importJsonProject")?.addEventListener("click", () => $("importJsonFile")?.click());
+    $("importJsonFile")?.addEventListener("change", importProjectJsonFile);
+    $("savedProjectList")?.addEventListener("click", handleSavedProjectListClick);
     updateProtocolToggleIcon();
     updateInspectorToggleIcon();
     $("loadTextSide").addEventListener("click", loadTextView);
@@ -15239,6 +15010,7 @@
       renderAll();
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
+    $("exportLciExcel")?.addEventListener("click", downloadLciExcel);
     $("openTutorial").addEventListener("click", () => openTutorial());
     $("tutorialSkip").addEventListener("click", closeTutorial);
     $("tutorialPrev").addEventListener("click", () => {
@@ -15270,44 +15042,38 @@
     $("conversionModal")?.addEventListener("click", event => {
       if (event.target === $("conversionModal")) { closeConversionModal(); renderAll(); }
     });
+    function closeFlowsheetOptionsMenu() {
+      if (!$("flowsheetOptionsMenu")) return;
+      $("flowsheetOptionsMenu").hidden = true;
+      $("flowsheetOptionsToggle")?.setAttribute("aria-expanded", "false");
+    }
+    $("flowsheetOptionsToggle")?.addEventListener("click", () => {
+      const menu = $("flowsheetOptionsMenu");
+      if (!menu) return;
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      $("flowsheetOptionsToggle")?.setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", event => {
+      if (!$("flowsheetOptionsMenu") || $("flowsheetOptionsMenu").hidden) return;
+      if (!event.composedPath().some(el => el.classList?.contains("flowsheet-options-dropdown"))) closeFlowsheetOptionsMenu();
+    });
     $("flowsheetEditableMode").addEventListener("click", () => {
-      state.flowsheetMode = "editable";
+      closeFlowsheetOptionsMenu();
       renderFlowsheetModal();
     });
     $("fitFlowsheetView").addEventListener("click", () => {
       state.flowsheetFit = !state.flowsheetFit;
+      closeFlowsheetOptionsMenu();
       renderFlowsheetModal();
     });
-    $("flowsheetShowStreamLabels")?.addEventListener("change", event => {
-      state.flowsheetShowStreamLabels = event.target.checked;
-      renderFlowsheetModal();
+    $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
+    $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    $("downloadFlowsheet").addEventListener("click", () => {
+      closeFlowsheetOptionsMenu();
+      downloadFlowsheetSvg();
     });
-    $("flowsheetShowAuxiliaryArrows")?.addEventListener("change", event => {
-      state.flowsheetShowAuxiliaryArrows = event.target.checked;
-      renderFlowsheetModal();
-    });
-    $("flowsheetShowUnitDetails")?.addEventListener("change", event => {
-      state.flowsheetShowUnitDetails = event.target.checked;
-      renderFlowsheetModal();
-    });
-    if ($("flowsheetTechnicalMode")) {
-      $("flowsheetTechnicalMode").addEventListener("click", () => {
-        state.flowsheetMode = "technical";
-        renderFlowsheetModal();
-      });
-    }
-    $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
-    $("resetFlowsheetLayout").addEventListener("click", () => {
-      pushUndo();
-      groupIdsInTextOrder().forEach(groupId => {
-        const groupState = ensureGroup(groupId);
-        delete groupState.flowsheetX;
-        delete groupState.flowsheetY;
-        delete groupState.flowsheetLayoutVersion;
-      });
-      state.flowsheetFit = true;
-      renderFlowsheetModal();
-    });
+    $("downloadFlowsheetPptx")?.addEventListener("click", downloadFlowsheetPptx);
     $("flowsheetModal").addEventListener("click", event => {
       if (event.target === $("flowsheetModal")) closeFlowsheetModal();
     });
@@ -15396,7 +15162,6 @@
       block.text = event.target.value;
       invalidateAiRefine();
       renderGroupFlow();
-      renderStepAuditPanel();
       renderExport();
     });
     $("groupTask")?.addEventListener("input", event => {
@@ -15542,6 +15307,9 @@
     document.addEventListener("mouseover", showHoverTip);
     document.addEventListener("mousemove", moveHoverTip);
     document.addEventListener("mouseout", hideHoverTip);
+    document.addEventListener("pointermove", dragMove);
+    document.addEventListener("pointerup", dragEnd);
+    document.addEventListener("pointercancel", dragEnd);
     document.addEventListener("mousemove", dragMove);
     document.addEventListener("mouseup", dragEnd);
     document.addEventListener("pointermove", boardPanMove);
@@ -15555,7 +15323,13 @@
     document.addEventListener("mousemove", connectDragMove);
     document.addEventListener("mouseup", connectDragEnd);
 
-    loadBaseExampleProject();
-    if (window.location.hash === "#flowsheet") {
-      requestAnimationFrame(openFlowsheetModal);
-    }
+    (async function bootProject() {
+      const restored = typeof maybeRestoreAutosavedProject === "function"
+        ? await maybeRestoreAutosavedProject()
+        : false;
+      if (!restored) loadBaseExampleProject();
+      renderSavedWorkMenu();
+      if (window.location.hash === "#flowsheet") {
+        requestAnimationFrame(openFlowsheetModal);
+      }
+    })();

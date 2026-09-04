@@ -67,9 +67,18 @@ From the repository root:
 
 ```bash
 node --check upscaling_pipeline_tool/static/app.js
+node --check upscaling_pipeline_tool/static/flowsheet.js
+node --check upscaling_pipeline_tool/static/flowsheet_ui.js
+node --check upscaling_pipeline_tool/static/lca_bridge.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js
-python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py
+node scripts/check_property_screening.js
+node scripts/check_flowsheet_view.js
+node scripts/check_project_persistence.js
+node scripts/check_tutorial_flow.js
+python3 scripts/check_flowsheet_pptx_export.py
+python3 scripts/check_lci_xlsx_export.py
+python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pptx_renderer.py upscaling_pipeline_tool/xlsx_renderer.py
 ```
 
 The broader validation commands are listed in the root `README.md`.
@@ -77,13 +86,16 @@ The broader validation commands are listed in the root `README.md`.
 ## Files
 
 ```text
-app.py            HTTP server and HTML shell
-pyflowsheet_renderer.py  Legacy optional renderer endpoint
-static/app.js     Client-side tool logic
-static/style.css  UI styling
+app.py              HTTP server and HTML shell
+pptx_renderer.py    Editable PowerPoint flowsheet export
+xlsx_renderer.py    LCI workbook export
+static/app.js       Client-side tool logic
+static/export.js    JSON persistence and export logic
+static/flowsheet.js Built-in editable flowsheet model/SVG renderer
+static/lca_bridge.js LCI/openLCA bridge model generation
+static/style.css    UI styling
 workshop.md       Workshop notes
 ```
 
-The user-facing Flowsheet View uses the built-in editable SVG renderer. The
-`pyflowsheet` endpoint is retained only as a legacy experiment and is not shown
-as a main UI mode.
+The user-facing Flowsheet View uses the built-in editable SVG renderer and the
+native editable PowerPoint export path.

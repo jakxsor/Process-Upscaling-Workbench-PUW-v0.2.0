@@ -8,9 +8,18 @@ const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js"
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const appHtml = fs.readFileSync("upscaling_pipeline_tool/app.py", "utf8");
 const flowsheetSource = fs.readFileSync("upscaling_pipeline_tool/static/flowsheet.js", "utf8");
+const flowsheetUiSource = fs.readFileSync("upscaling_pipeline_tool/static/flowsheet_ui.js", "utf8");
 assert(flowsheetSource.includes("translate(36, ${drawingHeight - 70})"), "Flowsheet legend should sit higher than the bottom border");
+assert(appHtml.includes("flowsheet.css") && appHtml.includes("flowsheet_ui.js"), "Flowsheet view should load split CSS and UI modules");
 assert(appHtml.includes("flowsheet-layer-controls"), "Flowsheet layer toggles should live in the compact layer-control row");
+assert(appHtml.includes("flowsheetCleanPreset") && appHtml.includes("flowsheetAuditPreset"), "Flowsheet view should expose Clean/Audit presets");
+assert(appHtml.includes("flowsheetDetailsPanel"), "Flowsheet view should include the click-through details panel");
+assert(!appHtml.includes("flowsheetTechnicalMode") && !appHtml.includes("Technical PFD"), "Technical PFD should not be exposed in the flowsheet options");
+assert(!appHtml.includes("resetFlowsheetLayout") && !appHtml.includes("Reset Layout"), "Reset Layout should not be exposed in the flowsheet options");
 assert(!appHtml.includes("flowsheet-toolbar-check"), "Flowsheet layer toggles should not clutter the modal toolbar");
+assert(appHtml.includes("downloadFlowsheetPptx"), "Flowsheet modal should expose editable PowerPoint export");
+assert(flowsheetUiSource.includes("function downloadFlowsheetPptx()"), "Flowsheet UI module should implement PowerPoint download");
+assert(appSource.includes("downloadFlowsheetPptx"), "PowerPoint download button should be wired");
 const marker = "$(\"behaviorSelect\").innerHTML";
 appSource = appSource.slice(0, appSource.indexOf(marker));
 
@@ -77,7 +86,12 @@ state.links = [
 model = buildFlowsheetModel();
 assert.strictEqual(model.forwardLinks.length, 1, "Flowsheet should deduplicate links that resolve to the same group pair");
 
+const pptxModel = buildFlowsheetPowerPointExport();
+assert.strictEqual(pptxModel.groups.length, model.groups.length, "PowerPoint export should include editable unit groups");
+assert.strictEqual(pptxModel.forwardLinks.length, model.forwardLinks.length, "PowerPoint export should preserve process links");
+assert(pptxModel.width > 0 && pptxModel.height > 0, "PowerPoint export should include diagram dimensions");
+
 console.log("Flowsheet view regression check passed.");
 `;
 
-eval(`${core}\n${appSource}\n${flowsheetSource}\n${setupSource}\n${testSource}`);
+eval(`${core}\n${appSource}\n${flowsheetSource}\n${flowsheetUiSource}\n${setupSource}\n${testSource}`);

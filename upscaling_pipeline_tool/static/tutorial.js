@@ -1,174 +1,914 @@
-    // Guided tour of the main workflow. Split out of app.js for navigability; loaded as a plain
-    // <script> before app.js (see app.py) so these functions share the same global scope as the
-    // rest of the app. Depends on: $, state, escapeHtml, confirmModal, pushUndo, renderAll,
-    // blocksForGroup, fitBoard, centerSelection, ensureGroup, selectGroup, groupModel,
-    // groupIdsInTextOrder, separationSimulatorModel, binaryRouteVariants, insertSeparationRoute,
-    // openSeparationSimulator, closeSeparationSimulator, renderSeparationSimulatorModal,
-    // closeFlowsheetModal, openFlowsheetModal, setSourcePanelTab, setInspectorTab, runRuleChecks,
-    // loadMethylbenzeneExampleProject — all defined in app.js.
+// Guided block-building tutorial. Loaded as a plain <script> before app.js so these helpers share
+// the same global scope as the app state and render functions.
 
-    function tutorialCenterFlowchart(groupId = "G1") {
-      closeSeparationSimulator();
-      closeFlowsheetModal();
-      state.boardCompact = true;
-      if (state.groups[groupId]) {
-        state.selectedGroupId = groupId;
-        state.selectedBlockId = null;
-        state.selectedIds = blocksForGroup(groupId).map(block => block.id);
-        state.focusEndpoint = groupId;
+const tutorialProtocolText = [
+  "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor.",
+  "Carry out the acetylation reaction at 65 C for 3 h to form benzyl acetate at 90 percent yield.",
+  "After reaction, recover residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid."
+].join("\n");
+
+const tutorialSelectionText = "Carry out the acetylation reaction at 65 C for 3 h to form benzyl acetate at 90 percent yield.";
+const tutorialRecoveryText = "After reaction, recover residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
+const tutorialResumeStorageKey = "upscalingPipelineTutorialResume";
+
+const tutorialMaterialRows = [
+  { role: "input", name: "benzyl alcohol", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "benzyl alcohol", pubchemCid: "244", molecularFormula: "C7H8O", thermalSensitivity: "low", mw: "108.14", tb: "478.15", pvap: "13", density: "1045", solubilityParameter: "24.8", molarVolume: "103.8" },
+  { role: "input", name: "acetic anhydride", quantity: "0.95", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "acetic anhydride", pubchemCid: "7918", molecularFormula: "C4H6O3", thermalSensitivity: "medium", mw: "102.09", tb: "412.95", pvap: "520", density: "1080", solubilityParameter: "20.3", molarVolume: "94.5" },
+  { role: "input", name: "triethylamine", quantity: "1.10", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "triethylamine", pubchemCid: "8471", molecularFormula: "C6H15N", thermalSensitivity: "low", mw: "101.19", tb: "362.25", pvap: "7200", density: "726", solubilityParameter: "18.7", molarVolume: "139.0" },
+  { role: "output", name: "benzyl acetate", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch", stoichCoeff: "1", pubchemQuery: "benzyl acetate", pubchemCid: "8785", molecularFormula: "C9H10O2", thermalSensitivity: "medium", mw: "150.18", tb: "485.95", pvap: "20", density: "1054", solubilityParameter: "19.1", molarVolume: "148.0" }
+];
+
+const tutorialRecoveryRows = [
+  { role: "input", name: "benzyl acetate product-rich liquid", quantity: "3.25", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
+  { role: "output", name: "triethylamine overhead recovery", quantity: "0.20", unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "95" },
+  { role: "output", name: "acetic anhydride recovery cut", quantity: "0.08", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch", destinationGroup: "G1", recoveryPercent: "90" },
+  { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" },
+  { role: "waste", name: "benzyl alcohol residue", quantity: "0.10", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "purge", scalingMode: "per batch", purgePercent: "100" }
+];
+
+function tutorialRevealPanels() {
+  const main = $("appMain");
+  if (main) {
+    main.classList.remove("protocol-collapsed", "inspector-collapsed");
+    main.classList.remove("scale-focused", "heuristic-focused");
+  }
+  if (typeof updateProtocolToggleIcon === "function") updateProtocolToggleIcon();
+  if (typeof updateInspectorToggleIcon === "function") updateInspectorToggleIcon();
+  if (typeof closeConversionModal === "function") closeConversionModal();
+  closeSeparationSimulator();
+  closeFlowsheetModal();
+  setInspectorTab("inspect");
+}
+
+function tutorialStoredResume() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(tutorialResumeStorageKey) || "null");
+    if (!parsed || !Number.isInteger(parsed.index)) return null;
+    if (parsed.index <= 0 || parsed.index >= tutorialSteps.length - 1) return null;
+    return parsed;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function tutorialSaveResume() {
+  if (state.tutorialIndex <= 0 || state.tutorialIndex >= tutorialSteps.length - 1) {
+    tutorialClearResume();
+    return;
+  }
+  try {
+    const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
+    localStorage.setItem(tutorialResumeStorageKey, JSON.stringify({
+      index: state.tutorialIndex,
+      title: step.title,
+      savedAt: new Date().toISOString()
+    }));
+  } catch (_err) {
+    // Private browsing or locked storage should not break closing the tutorial.
+  }
+}
+
+function tutorialClearResume() {
+  try {
+    localStorage.removeItem(tutorialResumeStorageKey);
+  } catch (_err) {
+    // Ignore storage failures; resume is a convenience only.
+  }
+}
+
+function tutorialProjectIsLoaded() {
+  return state.text === tutorialProtocolText && state.blocks.some(block => block.text === tutorialSelectionText);
+}
+
+function tutorialSelectionOffsets() {
+  const start = tutorialProtocolText.indexOf(tutorialSelectionText);
+  return { start, end: start + tutorialSelectionText.length, source: "annotated" };
+}
+
+function tutorialRecoveryOffsets() {
+  const start = tutorialProtocolText.indexOf(tutorialRecoveryText);
+  return { start, end: start + tutorialRecoveryText.length, source: "annotated" };
+}
+
+function tutorialResetProject() {
+  tutorialRevealPanels();
+  state.text = "";
+  state.blocks = [];
+  state.groups = {};
+  state.links = [];
+  state.selectedBlockId = null;
+  state.selectedGroupId = null;
+  state.selectedIds = [];
+  state.connectingFrom = null;
+  state.lastSelection = null;
+  state.focusEndpoint = null;
+  state.aiRefine = null;
+  state.ruleChecks = [];
+  state.zoom = 0.78;
+  state.draftPos = { x: 24, y: 24 };
+  state.boardCompact = false;
+  $("sourceInput").value = tutorialProtocolText;
+  renderAll();
+}
+
+function tutorialLoadTextView() {
+  tutorialRevealPanels();
+  $("sourceInput").value = tutorialProtocolText;
+  if (state.text !== tutorialProtocolText) {
+    state.text = tutorialProtocolText;
+    state.blocks = [];
+    state.groups = {};
+    state.links = [];
+    state.selectedBlockId = null;
+    state.selectedGroupId = null;
+    state.selectedIds = [];
+    state.lastSelection = null;
+    state.focusEndpoint = null;
+    state.zoom = 0.78;
+    state.draftPos = { x: 24, y: 24 };
+    renderAll();
+  } else {
+    renderAll();
+  }
+}
+
+function tutorialHighlightText() {
+  tutorialLoadTextView();
+  const offsets = tutorialSelectionOffsets();
+  storeTextSelection(offsets);
+  requestAnimationFrame(() => restoreTextSelection(offsets));
+}
+
+function tutorialHighlightRecoveryText() {
+  tutorialLoadTextView();
+  const offsets = tutorialRecoveryOffsets();
+  storeTextSelection(offsets);
+  requestAnimationFrame(() => restoreTextSelection(offsets));
+}
+
+async function tutorialEnsureBlock() {
+  tutorialHighlightText();
+  let block = state.blocks.find(item => item.text === tutorialSelectionText);
+  if (!block) {
+    const offsets = tutorialSelectionOffsets();
+    await createBlock(offsets.start, offsets.end);
+    block = state.blocks.find(item => item.text === tutorialSelectionText);
+  }
+  if (block) {
+    state.phenomenaGridExpanded = true;
+    selectBlock(block.id, false);
+    requestAnimationFrame(() => restoreTextSelection(tutorialSelectionOffsets()));
+  }
+}
+
+async function tutorialEnsureTask() {
+  await tutorialEnsureBlock();
+  const block = state.blocks.find(item => item.text === tutorialSelectionText);
+  if (!block) return;
+  if (!block.groupId) {
+    state.selectedBlockId = block.id;
+    state.selectedIds = [block.id];
+    splitSelectedToNewGroup();
+  } else {
+    selectGroup(block.groupId);
+  }
+  state.boardCompact = false;
+  requestAnimationFrame(() => {
+    fitBoard();
+    window.setTimeout(() => centerSelection(), 120);
+  });
+}
+
+function tutorialReactionBlock() {
+  return state.blocks.find(item => item.text === tutorialSelectionText) || state.blocks[0] || null;
+}
+
+async function tutorialOpenGroupDrawer() {
+  await tutorialEnsureTask();
+  const block = tutorialReactionBlock();
+  if (!block?.groupId) return;
+  selectGroup(block.groupId);
+}
+
+async function tutorialEnsureMaterials({ editRows = false } = {}) {
+  await tutorialEnsureTask();
+  const block = tutorialReactionBlock();
+  if (!block) return;
+  ensureBlockFlowFields(block);
+  block.behavior = "reaction";
+  block.phenomena = ["M(L)", "R(L)", "ES(H)"];
+  block.conditions = {
+    ...block.conditions,
+    conversion_yield: "90",
+    target_temperature: "65",
+    reaction_time: "3",
+    mixing_mode: "stirred liquid phase"
+  };
+  block.conditionUnits = {
+    ...block.conditionUnits,
+    conversion_yield: "%",
+    target_temperature: "°C",
+    reaction_time: "h"
+  };
+  const preservedGeneratedStreams = (block.streams || []).filter(stream => (
+    stream.residualOf ||
+    stream.status === "calculated" ||
+    /\bconversion balance|unreacted|residual\b/i.test(`${stream.name || ""} ${stream.note || ""}`)
+  ));
+  block.streams = [
+    ...tutorialMaterialRows.map((row, index) => createStream(row.role, {
+    id: `${block.id}-S${index + 1}`,
+    ...row,
+    editing: editRows
+    })),
+    ...preservedGeneratedStreams.filter(stream => !tutorialMaterialRows.some((_, index) => stream.id === `${block.id}-S${index + 1}`))
+  ];
+  block.conversionDetail = {
+    productStreamId: `${block.id}-S4`,
+    productAmountMode: "theoretical",
+    productBasisQuantity: "1.39",
+    balanceMethod: "stoichiometric",
+    byproducts: [],
+    stagedResidualStreamIds: [],
+    lastGeneratedSummary: "Tutorial example: 90% yield leaves residual reactants for Lutze screening."
+  };
+  syncLegacyStreamLists(block);
+  const group = ensureGroup(block.groupId || "G1", "reaction");
+  group.task = "benzyl acetate reaction at 90 percent yield";
+  group.selectionBasis = "tutorial example: reaction block with material rows, phase labels, conversion/yield, and chemical properties";
+  group.properties = {
+    ...group.properties,
+    density: { value: "930", unit: "kg/m3", status: "assumed", note: "tutorial mixture density for rough reactor sizing" }
+  };
+  if (typeof group.unitSuggestionsExpanded !== "boolean") group.unitSuggestionsExpanded = false;
+  group.separationSupportExpanded = true;
+  if (typeof group.selectedUnit !== "string") group.selectedUnit = "";
+  const simulator = ensureGroup(group.id).separationSimulator;
+  const needsLutzeDemo = !simulator?.substances?.length || simulator.substances.length < tutorialMaterialRows.length;
+  if (needsLutzeDemo && typeof loadTripleReactantSeparationDemo === "function") {
+    loadTripleReactantSeparationDemo(group.id);
+  } else if (typeof syncSeparationSimulatorSubstances === "function") {
+    syncSeparationSimulatorSubstances(groupModel(group.id) || group);
+  }
+  selectGroup(group.id);
+}
+
+async function tutorialEnsureRecoveryTask() {
+  await tutorialEnsureMaterials();
+  const reaction = tutorialReactionBlock();
+  if (!reaction?.groupId) return;
+  let block = state.blocks.find(item => item.text === tutorialRecoveryText);
+  if (!block) {
+    block = {
+      id: nextBlockId(),
+      groupId: "G2",
+      start: tutorialProtocolText.indexOf(tutorialRecoveryText),
+      end: tutorialProtocolText.indexOf(tutorialRecoveryText) + tutorialRecoveryText.length,
+      source: "protocol",
+      text: tutorialRecoveryText,
+      behavior: "distillation purification",
+      phenomena: ["M(L)", "PT(VL)", "PS(VL)", "PC(VL)", "ES(H)", "ES(C)"],
+      streams: [],
+      notes: "Tutorial recovery task added to compare multiple downstream separation options.",
+      conditions: { target_temperature: "80", target_pressure: "100", separation_efficiency: "90", phase_change_time: "1.5" },
+      conditionUnits: { target_temperature: "°C", target_pressure: "mbar", separation_efficiency: "%", phase_change_time: "h" },
+      conditionsEditing: false,
+      phase: "",
+      endpoint: "benzyl acetate product-rich liquid split into recovery and product streams",
+      status: "tutorial example"
+    };
+    ensureBlockFlowFields(block);
+    ensureBlockConditionFields(block);
+    state.blocks.push(block);
+  }
+  block.groupId = "G2";
+  block.behavior = "distillation purification";
+  block.phenomena = ["M(L)", "PT(VL)", "PS(VL)", "PC(VL)", "ES(H)", "ES(C)"];
+  block.streams = tutorialRecoveryRows.map((row, index) => createStream(row.role, {
+    id: `${block.id}-S${index + 1}`,
+    ...row,
+    editing: false
+  }));
+  syncLegacyStreamLists(block);
+  const group = ensureGroup("G2", "residual reagent recovery");
+  group.task = "residual reagent recovery";
+  group.selectionBasis = "tutorial example: downstream separation task used to compare multiple recovery options before committing to a flowsheet route";
+  group.unitSuggestionsExpanded = false;
+  group.selectedUnit = "";
+  group.properties = {
+    ...group.properties,
+    density: { value: "980", unit: "kg/m3", status: "assumed", note: "tutorial product-rich liquid density" }
+  };
+  if (!state.links.some(link => link.from === reaction.groupId && link.to === "G2")) {
+    state.links.push({ from: reaction.groupId, to: "G2" });
+  }
+  state.boardCompact = true;
+  selectGroup("G2");
+}
+
+async function tutorialShowMaterialRows() {
+  await tutorialEnsureMaterials();
+  selectGroup(tutorialReactionBlock()?.groupId || "G1");
+}
+
+async function tutorialShowChemicalProperties() {
+  await tutorialEnsureMaterials({ editRows: true });
+  const block = tutorialReactionBlock();
+  if (block) selectBlock(block.id, false);
+}
+
+async function tutorialShowG1UnitOptions() {
+  await tutorialEnsureMaterials();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  ensureGroup(groupId).unitSuggestionsExpanded = true;
+  selectGroup(groupId);
+}
+
+async function tutorialAssignG1Unit() {
+  await tutorialShowG1UnitOptions();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  const group = groupModel(groupId);
+  const candidates = group ? unitOperationCandidatesForGroup(group) : [];
+  const preferred = candidates.find(item => /batch|semi-batch/i.test(item.name)) || candidates[0];
+  if (preferred) {
+    ensureGroup(groupId).selectedUnit = preferred.name;
+    ensureGroup(groupId).unitSuggestionsExpanded = false;
+  }
+  selectGroup(groupId);
+  if (typeof renderAll === "function") renderAll();
+}
+
+async function tutorialSwitchG1UnitOptions() {
+  await tutorialAssignG1Unit();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  ensureGroup(groupId).unitSuggestionsExpanded = true;
+  selectGroup(groupId);
+}
+
+async function tutorialFocusReactionBlock() {
+  await tutorialAssignG1Unit();
+  const block = tutorialReactionBlock();
+  if (!block) return;
+  if (typeof closeConversionModal === "function") closeConversionModal();
+  state.selectedBlockId = block.id;
+  state.selectedGroupId = null;
+  state.selectedIds = [block.id];
+  state.focusEndpoint = block.groupId || block.id;
+  state.boardCompact = false;
+  if (typeof renderAll === "function") renderAll();
+  requestAnimationFrame(() => {
+    fitBoard();
+    window.setTimeout(() => centerSelection(), 120);
+  });
+}
+
+async function tutorialOpenReactionMenu() {
+  await tutorialFocusReactionBlock();
+  const block = tutorialReactionBlock();
+  if (!block) return;
+  if (typeof openConversionModal === "function") openConversionModal(block.id);
+}
+
+async function tutorialApplyReactionBalance() {
+  await tutorialOpenReactionMenu();
+  const block = tutorialReactionBlock();
+  if (!block) return;
+  if (typeof applyConversionBalanceStreams === "function") applyConversionBalanceStreams(block);
+  const hasResidual = block.streams?.some(stream => stream.residualOf || /\bunreacted|residual\b/i.test(`${stream.name || ""} ${stream.note || ""}`));
+  if (!hasResidual && block.groupId && typeof applyReactionResidualWasteStreams === "function") {
+    applyReactionResidualWasteStreams(block.groupId);
+  }
+  if (typeof openConversionModal === "function") openConversionModal(block.id);
+}
+
+async function tutorialShowUnitOptions() {
+  await tutorialEnsureRecoveryTask();
+  const groupId = "G2";
+  ensureGroup(groupId).unitSuggestionsExpanded = true;
+  selectGroup(groupId);
+}
+
+async function tutorialShowLutzeLaunch() {
+  await tutorialEnsureRecoveryTask();
+  if (typeof closeConversionModal === "function") closeConversionModal();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  ensureGroup(groupId).unitSuggestionsExpanded = false;
+  selectGroup(groupId);
+}
+
+async function tutorialOpenLutzeScene() {
+  await tutorialEnsureRecoveryTask();
+  if (typeof closeConversionModal === "function") closeConversionModal();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  openLutzeReactionSeparation(groupId);
+}
+
+async function tutorialTryFirstLutzeRoute() {
+  await tutorialOpenLutzeScene();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  const group = groupModel(groupId);
+  if (!group || typeof separationPathwayModel !== "function" || typeof tryPathwayRoute !== "function") return;
+  const path = separationPathwayModel(group);
+  if (!path.steps?.length && path.nextOptions?.length) {
+    tryPathwayRoute(groupId, path.nextOptions[0].id);
+  }
+  ensureGroup(groupId).separationSimulator.tab = "pathway";
+  if (typeof renderSeparationSimulatorModal === "function") renderSeparationSimulatorModal();
+}
+
+async function tutorialEnsureAppliedLutzePathway() {
+  await tutorialTryFirstLutzeRoute();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  const simulator = ensureGroup(groupId).separationSimulator;
+  if (!simulator.pathway?.appliedAt && typeof applyPathwayToMainFlowsheet === "function") {
+    applyPathwayToMainFlowsheet(groupId);
+  }
+  state.boardCompact = true;
+  if (typeof renderAll === "function") renderAll();
+}
+
+function tutorialScheduleForGroup(group, index) {
+  const text = `${group.task || ""} ${group.selectedUnit || ""}`.toLowerCase();
+  if (/reaction|reactor|acetylation/.test(text)) {
+    return { durationH: "3", capacityAmount: "6", capacityUnit: "m3", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", notes: "Tutorial schedule: reaction hold time from protocol; verify heat transfer and agitation at scale." };
+  }
+  if (/distill|evapor|flash|thermal|recovery/.test(text)) {
+    return { durationH: "2", capacityAmount: "4", capacityUnit: "m3", operationClass: "heating_cooling", scaleSensitivity: "equipment dependent", notes: "Tutorial schedule: recovery/separation placeholder for scale-up screening." };
+  }
+  return { durationH: index <= 1 ? "1" : "1.5", capacityAmount: "", capacityUnit: "", operationClass: "separation", scaleSensitivity: "equipment dependent", notes: "Tutorial schedule: draft pathway separator; replace with measured or vendor data before publication." };
+}
+
+async function tutorialPrepareHeuristics() {
+  await tutorialEnsureAppliedLutzePathway();
+  closeSeparationSimulator();
+  setInspectorTab("heuristics");
+  if (typeof runRuleChecks === "function") runRuleChecks();
+  else if (typeof renderAll === "function") renderAll();
+}
+
+async function tutorialPrepareScaleUp() {
+  await tutorialPrepareHeuristics();
+  const basis = ensureScaleBasis();
+  Object.assign(basis, {
+    targetProduct: "benzyl acetate",
+    targetAmount: "250",
+    targetUnit: "kg/batch",
+    referenceBlockId: tutorialRecoveryBlock()?.id || tutorialReactionBlock()?.id || "",
+    basisAmount: "1.25",
+    basisUnit: "kg",
+    mode: "batch",
+    scheduleMethod: "duration",
+    operatingDays: "250",
+    hoursPerDay: "16",
+    oeePercent: "80",
+    parallelUnits: "1",
+    allowableCapacityUtilizationPercent: "85",
+    productKgPerBatch: "250",
+    reactorWorkingFillPercent: "70",
+    productMolecularWeightGmol: "150.18",
+    confidence: "rough"
+  });
+  groupIdsInTextOrder().forEach((groupId, index) => {
+    const group = ensureGroup(groupId);
+    group.schedule = { ...scheduleDefaults(), ...group.schedule, ...tutorialScheduleForGroup(group, index) };
+  });
+  state.expandedScaleSections = { ...state.expandedScaleSections, referenceBasis: true, operatingSchedule: true, reactorSizing: true };
+  setInspectorTab("scale");
+  if (typeof renderAll === "function") renderAll();
+}
+
+function tutorialRecoveryBlock() {
+  return state.blocks.find(item => item.text === tutorialRecoveryText) || null;
+}
+
+const tutorialSteps = [
+  {
+    target: "#sourceInput",
+    title: "Part 1 · 1. Build From Text",
+    body: "Start by pasting or writing the lab protocol. The tool never replaces your judgement: it only helps turn written operations into editable process blocks.",
+    details: ["This example uses one short protocol so the full path is visible.", "Every automatic extraction should be checked before it becomes a task."],
+    action: tutorialResetProject,
+    cta: "Load example text",
+    ctaAction: tutorialLoadTextView
+  },
+  {
+    target: "#loadTextSide",
+    title: "Part 1 · 2. Load Text View",
+    body: "Load Text View copies the protocol into the annotated area below. That is the surface where selections become traceable blocks.",
+    details: ["You can still edit the source text first.", "Loading a different text intentionally starts a fresh block set."],
+    action: tutorialLoadTextView,
+    cta: "Load text",
+    ctaAction: tutorialLoadTextView
+  },
+  {
+    target: "#annotatedText",
+    title: "Part 1 · 3. Select One Operation",
+    body: "Select the sentence that describes one physical operation. Here the reaction sentence is highlighted because it should become a separate block.",
+    details: ["Keep blocks small enough to represent one operation.", "Overly long blocks make phenomena and mass-flow checks weaker."],
+    action: tutorialHighlightText
+  },
+  {
+    target: "#createBlockSide",
+    title: "Part 1 · 4. Create Block",
+    body: "Click Create Block From Selection to create the block. You can do the same thing with right click on the selected text and Create Block From Selection.",
+    details: ["The block keeps a link back to this exact text range.", "This is the point where text becomes structured process evidence."],
+    action: tutorialHighlightText,
+    cta: "Create block",
+    ctaAction: tutorialEnsureBlock
+  },
+  {
+    target: "[data-block-card]",
+    title: "Part 1 · 5. Automatic Reading",
+    body: "The block opens on the board and in the right panel. The tool has automatically guessed behavior, conditions, and phenomena from the selected sentence.",
+    details: ["Automatic guesses can be wrong or incomplete.", "Treat them as a first draft, not as final process knowledge."],
+    action: tutorialEnsureBlock
+  },
+  {
+    target: "#phenomenaGridSection",
+    title: "Part 1 · 6. Edit Phenomena",
+    body: "Use the right panel to change the preset or add and remove individual phenomena. This is where you correct the automatic reading before downstream logic uses it.",
+    details: ["For this step, reaction, liquid mixing, heating, temperature, time, and yield are detected from the selected sentence.", "If mixing, phase contact, reaction, filtration, or separation are missing, adjust them here."],
+    action: tutorialEnsureBlock
+  },
+  {
+    target: "[data-assign-task]",
+    title: "Part 1 · 7. Convert To Task",
+    body: "When you are confident the block and phenomena are correct, convert it to a task. A task is the unit the network, MFA, scale-up, and flowchart views can reason over.",
+    details: ["Use one block per task for simple cases.", "Combine multiple blocks only when they really belong to the same process operation."],
+    action: tutorialEnsureBlock,
+    cta: "Convert to task",
+    ctaAction: tutorialEnsureTask
+  },
+  {
+    target: "#groupFlow",
+    title: "Part 1 Complete",
+    body: "The created task is now part of the process graph. From here the next job is to add substances, quantities, phases, and product/reagent roles so the later views have real data.",
+    details: ["Part 1 order: text, block, verified phenomena, task.", "Part 2 starts from this task and adds the material basis used by unit-operation suggestions, scale-up, LCI, and Lutze."],
+    action: tutorialEnsureTask,
+    cta: "Center task",
+    ctaAction: () => centerSelection()
+  },
+  {
+    target: "[data-add-group-task-stream=\"input\"]",
+    title: "Part 2 · 1. Add Substances",
+    body: "Open the task drawer and add material rows. Inputs are reactants, solvent, catalyst, or auxiliary feeds; outlets are product, recovery, waste, purge, or intermediate streams.",
+    details: ["You can add rows one by one with + Task input and + Task outlet.", "For the tutorial, the next button fills a complete small reaction set so you can see the downstream logic."],
+    action: tutorialOpenGroupDrawer,
+    cta: "Add example substances",
+    ctaAction: tutorialShowMaterialRows
+  },
+  {
+    target: ".group-mfa-grid",
+    title: "Part 2 · 2. Material Basis",
+    body: "Now the task has named substances, amounts, units, phases, and reaction roles. This is the auditable MFA basis used by the rest of the tool.",
+    details: ["Benzyl alcohol, acetic anhydride, and triethylamine are inputs.", "Benzyl acetate is marked as the product outlet; 90 percent yield leaves residual reactants for recovery screening."],
+    action: tutorialShowMaterialRows
+  },
+  {
+    target: ".stream-chemical",
+    title: "Part 2 · 3. Properties",
+    body: "Chemical properties can be entered manually or helped by PubChem. Lutze and property screening need fields such as MW, boiling point, vapor pressure, density, and thermal sensitivity.",
+    details: ["Property values are evidence fields, not magic truth.", "Missing values stay visible so you know which route suggestions are weak."],
+    action: tutorialShowChemicalProperties
+  },
+  {
+    target: "[data-suggest-unit-operation=\"G1\"]",
+    title: "Part 2 · 4. Assign Unit In G1",
+    body: "A task can contain several pieces of evidence and still stay in G1 when they belong to the same physical operation. Here G1 has reaction text, materials, conditions, and product basis together.",
+    details: ["Assign Unit Operation unlocks only after the task has MFA, phase labels, and operating conditions.", "Use it to choose equipment for the current task before creating extra downstream tasks."],
+    action: tutorialEnsureMaterials,
+    cta: "Show G1 units",
+    ctaAction: tutorialShowG1UnitOptions
+  },
+  {
+    target: ".board-unit-picker",
+    title: "Part 2 · 5. Choose Reactor",
+    body: "The options are ranked from the task type, streams, phases, phenomena, and conditions. For this liquid reaction, a batch or semi-batch reactor is a credible first equipment class.",
+    details: ["This is still editable: it records the selected unit, not a final design.", "The same control later becomes Switch Unit Operation if you want to revise the choice."],
+    action: tutorialShowG1UnitOptions,
+    cta: "Assign reactor",
+    ctaAction: tutorialAssignG1Unit
+  },
+  {
+    target: "[data-suggest-unit-operation=\"G1\"]",
+    title: "Part 2 · 6. Switch G1 Unit",
+    body: "After one unit is selected, the button changes from assign to switch. Use this when better evidence suggests CSTR, PFR, packed bed, or another reactor class.",
+    details: ["Switching the unit does not delete the MFA or reaction data.", "It only changes the equipment hypothesis attached to G1."],
+    action: tutorialAssignG1Unit,
+    cta: "Show switch options",
+    ctaAction: tutorialSwitchG1UnitOptions
+  },
+  {
+    target: "[data-block-card]",
+    title: "Part 2 · 7. Reaction Menu",
+    body: "The reaction menu belongs to the reaction block inside G1. Open it when you want yield, product basis, reactant roles, byproducts, and residual outlets checked together.",
+    details: ["Only streams marked as reactants enter the stoichiometric conversion balance.", "Solvent, catalyst, auxiliary, and inert streams remain tracked but are not consumed as reagents."],
+    action: tutorialFocusReactionBlock,
+    cta: "Open reaction menu",
+    ctaAction: tutorialOpenReactionMenu
+  },
+  {
+    target: ".conversion-basis-section",
+    title: "Part 2 · 8. Yield Basis",
+    body: "The conversion popup binds the product amount to the reported 90 percent yield. The product can be actual, theoretical, or calculated from reactants, depending on what your source reports.",
+    details: ["Here benzyl acetate is the main product.", "The 90 percent yield is what creates unreacted residual reagents for the next screening steps."],
+    action: tutorialOpenReactionMenu
+  },
+  {
+    target: "#conversionApplyBalance",
+    title: "Part 2 · 9. Generate Residuals",
+    body: "The preview shows what remains after conversion. Balance & Create Streams writes the calculated product and residual reagents into the editable MFA and Lutze substance list.",
+    details: ["Residuals are not automatically final waste: they can become recovery, recycle, purge, or downstream separation feeds.", "This is the bridge between reaction accounting and later separation logic."],
+    action: tutorialOpenReactionMenu,
+    cta: "Balance streams",
+    ctaAction: tutorialApplyReactionBalance
+  },
+  {
+    target: "#annotatedText",
+    title: "Part 2 · 10. Same Group Or New Task",
+    body: "Do not create G2 by habit. Keep work in G1 when it is the same reactor operation; create a new task only when the text describes a separate downstream operation, equipment, or decision point.",
+    details: ["This protocol has a separate recovery sentence, so the tutorial creates a recovery task after G1.", "In another case, multiple source blocks can stay grouped in G1 if they represent one coherent unit operation."],
+    action: tutorialHighlightRecoveryText,
+    cta: "Create recovery task",
+    ctaAction: tutorialEnsureRecoveryTask
+  },
+  {
+    target: "[data-suggest-unit-operation=\"G2\"]",
+    title: "Part 2 · 11. Recovery Unit Options",
+    body: "Now the recovery task has enough evidence to compare real separation choices, not only reactor choices.",
+    details: ["It includes liquid feed, volatile recovery, product outlet, waste residue, pressure, temperature, and efficiency evidence.", "That richer basis unlocks several candidate unit operations."],
+    action: tutorialEnsureRecoveryTask,
+    cta: "Show unit options",
+    ctaAction: tutorialShowUnitOptions
+  },
+  {
+    target: ".board-unit-picker",
+    title: "Part 2 · 12. Compare Options",
+    body: "Now you should see several options for the recovery task. They are candidates, not final design choices: compare why each one was suggested before selecting equipment.",
+    details: ["Typical alternatives here include distillation/evaporation-style recovery and related thermal separation options.", "The purpose is to compare routes before committing them to the main flowsheet."],
+    action: tutorialShowUnitOptions
+  },
+  {
+    target: "[data-open-lutze-reaction-separation]",
+    title: "Part 3 · 1. Lutze Support",
+    body: "When a reaction leaves product mixed with residual reagents or recoverable components, open Lutze Reaction-Separation to test pathway variants before changing the main graph.",
+    details: ["The sandbox reads substances, conversion/yield, phases, binary evidence, and properties.", "The main flowchart changes only if you apply a pathway."],
+    action: tutorialShowLutzeLaunch,
+    cta: "Open Lutze",
+    ctaAction: tutorialOpenLutzeScene
+  },
+  {
+    target: "#separationSimulatorBody",
+    title: "Part 3 · 2. Lutze Scene",
+    body: "This view ranks separation moves around the main product. Review the target product, residual reactants, binary pairs, and route options before applying anything to the flowsheet.",
+    details: ["Use Simulation to inspect the pathway logic.", "Use Substances to correct roles, phases, quantities, and properties if the route ranking looks wrong."],
+    action: tutorialOpenLutzeScene
+  },
+  {
+    target: ".pathway-stepper",
+    title: "Part 3 · 3. Lutze Checklist",
+    body: "The checklist shows whether Lutze has a target product, a post-reaction mixture, ranked binary pairs, a next route, a preview, and an apply-ready pathway.",
+    details: ["If a checklist item is weak, correct substances or binary evidence before trusting the ranking.", "This is a screening workflow, not a final equipment design."],
+    action: tutorialOpenLutzeScene
+  },
+  {
+    target: ".pathway-options-panel",
+    title: "Part 3 · 4. Route Options",
+    body: "The right side lists several possible next moves. Each option shows the pair being separated, the retained stream, the evidence drivers, missing checks, and a score.",
+    details: ["Do not pick only the first option because it is first.", "Use the options as route hypotheses to compare before changing the main flowchart."],
+    action: tutorialOpenLutzeScene
+  },
+  {
+    target: "[data-pathway-try-option]",
+    title: "Part 3 · 5. Try A Route",
+    body: "Try Route draws a preview pathway. This is still reversible sandbox work: it does not create new process tasks in the main graph yet.",
+    details: ["The preview helps you see which component is separated and which mixture continues downstream.", "You can reset or try a different branch if the route logic is not credible."],
+    action: tutorialOpenLutzeScene,
+    cta: "Try first route",
+    ctaAction: tutorialTryFirstLutzeRoute
+  },
+  {
+    target: ".pathway-canvas",
+    title: "Part 3 · 6. Preview Pathway",
+    body: "The canvas now shows the draft separation sequence: post-reaction mixture, route step, separated outlet, and remaining stream.",
+    details: ["At this point the route is still a proposal.", "Check the selected unit, separated compounds, retained compounds, and missing property warnings."],
+    action: tutorialTryFirstLutzeRoute
+  },
+  {
+    target: "[data-pathway-apply]",
+    title: "Part 3 · 7. Apply Pathway",
+    body: "Apply Pathway converts the Lutze preview into editable separation tasks in the main process graph.",
+    details: ["This is the moment a sandbox route becomes process structure.", "After applying, review the inserted tasks, streams, and assumptions before using them in scale-up or export."],
+    action: tutorialTryFirstLutzeRoute,
+    cta: "Apply preview",
+    ctaAction: tutorialEnsureAppliedLutzePathway
+  },
+  {
+    target: "#groupFlow",
+    title: "Part 3 Complete",
+    body: "The applied Lutze route is back in the process graph as editable tasks. The remaining steps check whether the process evidence is coherent enough for reporting.",
+    details: ["Everything inserted from Lutze is deliberately labelled as proposed.", "Before publication, replace placeholders with experimental, literature, or vendor-backed values."],
+    action: tutorialEnsureAppliedLutzePathway
+  },
+  {
+    target: "#heuristicsPanel",
+    title: "Part 4 · 1. Heuristic Rules",
+    body: "Heuristic rules review the current graph for missing basis data, weak assumptions, scale-up risks, recycle logic, and export readiness.",
+    details: ["The first three audit-only prompts are intentionally skipped in this guided path.", "Use these findings as a structured review list before treating the model as publishable."],
+    action: tutorialPrepareHeuristics,
+    cta: "Run checks",
+    ctaAction: tutorialPrepareHeuristics
+  },
+  {
+    target: "#heuristicRuleCheckPanel",
+    title: "Part 4 · 2. Review Findings",
+    body: "The findings panel is where you decide what to accept, reject, override, or fix. Those decisions become part of the traceable work log.",
+    details: ["A warning is not automatically a design error.", "For publication, unresolved warnings should have a note explaining the evidence or limitation."],
+    action: tutorialPrepareHeuristics
+  },
+  {
+    target: "#scaleQuickPanel",
+    title: "Part 4 · 3. Scale-Up Target",
+    body: "Scale-up starts with a target product and production basis. The example uses benzyl acetate so the material rows, product basis, schedule, and bottleneck checks line up.",
+    details: ["Changing the target recalculates flows from the lab basis.", "Use batch, daily, or annual basis depending on what your study reports."],
+    action: tutorialPrepareScaleUp
+  },
+  {
+    target: "#scaleBasisPanel",
+    title: "Part 4 · 4. Schedule And Bottlenecks",
+    body: "The lower scale-up panel holds the reference basis, operating schedule, reactor sizing assumptions, Gantt durations, and bottleneck classification.",
+    details: ["Reaction time is kept kinetics-bound unless you have evidence that parallel equipment or intensified transfer reduces it.", "Separator durations here are placeholders until equipment data are entered."],
+    action: tutorialPrepareScaleUp
+  },
+  {
+    target: "#workMenuToggle",
+    title: "Tutorial Complete",
+    body: "You now have the full loop: text to block, block to task, material basis, recovery task, unit options, Lutze pathway, heuristic review, scale-up, and export-ready state.",
+    details: ["Save the project JSON when you want to reload the editable work later.", "Use the LCI/openLCA/PowerPoint exports only after checking assumptions and unresolved warnings."],
+    action: tutorialPrepareScaleUp
+  }
+];
+
+async function openTutorial(index = 0) {
+  try {
+    let startIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
+    const explicitIndex = arguments.length > 0;
+    const saved = explicitIndex ? null : tutorialStoredResume();
+    if (saved) {
+      const stepNumber = saved.index + 1;
+      const resume = await confirmModal(
+        `Continue the tutorial from step ${stepNumber} (${saved.title || "saved step"})? Choose Restart to start from the beginning.`,
+        { okLabel: "Continue", cancelLabel: "Restart" }
+      );
+      if (resume) {
+        startIndex = saved.index;
+      } else {
+        tutorialClearResume();
+        startIndex = 0;
       }
-      renderAll();
-      requestAnimationFrame(() => {
-        fitBoard();
-        window.setTimeout(() => centerSelection(), 120);
-      });
     }
-
-    function tutorialOpenSeparationSimulator(tab = "binary") {
-      closeFlowsheetModal();
-      state.boardCompact = true;
-      const groupId = "G1";
-      if (!state.groups[groupId]) return;
-      ensureGroup(groupId).separationSimulator.tab = tab;
-      selectGroup(groupId);
-      openSeparationSimulator(groupId);
-      ensureGroup(groupId).separationSimulator.tab = tab;
-      renderSeparationSimulatorModal();
+    const canReuseCurrentTutorialProject = startIndex > 0 && tutorialProjectIsLoaded();
+    if (state.blocks.length && !canReuseCurrentTutorialProject) {
+      if (!(await confirmModal("This tutorial will replace the current project with a short guided example. Continue?"))) return;
+      pushUndo();
     }
+    if (!canReuseCurrentTutorialProject || startIndex === 0) tutorialResetProject();
+    state.tutorialIndex = startIndex;
+    window.setTimeout(() => {
+      Promise.resolve()
+        .then(async () => {
+          $("tutorialOverlay").hidden = false;
+          await renderTutorialStep();
+        })
+        .catch(async error => {
+          console.error("Tutorial failed to start", error);
+          await alertModal("The tutorial could not start. Please refresh the page and try again.");
+        });
+    }, 0);
+  } catch (error) {
+    console.error("Tutorial failed to start", error);
+    await alertModal("The tutorial could not start. Please refresh the page and try again.");
+  }
+}
 
-    function tutorialInsertFirstSeparationRoute() {
-      closeFlowsheetModal();
-      closeSeparationSimulator();
-      const existing = groupIdsInTextOrder()
-        .map(groupModel)
-        .find(group => /volatility route|methylbenzene\s*\/\s*benzaldehyde|benzaldehyde\s*\/\s*methylbenzene/i.test(`${group.task} ${group.selectionBasis}`));
-      if (existing && existing.id !== "G1") {
-        tutorialCenterFlowchart(existing.id);
-        return;
-      }
-      const group = groupModel("G1");
-      if (!group) return;
-      const model = separationSimulatorModel(group);
-      const pair = model.pairs.find(item => binaryRouteVariants("G1", item).some(variant => variant.id === "volatility-route")) || model.pairs[0];
-      const variant = pair ? binaryRouteVariants("G1", pair).find(item => item.id === "volatility-route") || binaryRouteVariants("G1", pair)[0] : null;
-      if (!pair || !variant) {
-        tutorialCenterFlowchart("G1");
-        return;
-      }
-      insertSeparationRoute("G1", pair.key, variant.id);
-      state.boardCompact = true;
-      requestAnimationFrame(() => {
-        fitBoard();
-        window.setTimeout(() => centerSelection(), 120);
-      });
+function closeTutorial(options = {}) {
+  const complete = Boolean(options.complete) || state.tutorialIndex >= tutorialSteps.length - 1;
+  if (complete) tutorialClearResume();
+  else tutorialSaveResume();
+  $("tutorialOverlay").hidden = true;
+  const arrow = $("tutorialArrow");
+  if (arrow) arrow.hidden = true;
+  if (typeof closeConversionModal === "function") closeConversionModal();
+  closeFlowsheetModal();
+  closeSeparationSimulator();
+  if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
+  tutorialSettleFrame = null;
+}
+
+async function renderTutorialStep() {
+  const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
+  await Promise.resolve(step.action?.());
+  const target = document.querySelector(step.target);
+  tutorialScrollTargetIntoView(target);
+  positionTutorialStep(step);
+  watchTutorialScrollSettle(step);
+}
+
+function tutorialScrollTargetIntoView(target) {
+  if (!target) return;
+  const scroller = target.closest?.(".modal-body");
+  target.scrollIntoView?.({ block: "center", inline: "center", behavior: scroller ? "auto" : "smooth" });
+  if (!scroller) return;
+  const targetRect = target.getBoundingClientRect?.();
+  const scrollerRect = scroller.getBoundingClientRect?.();
+  if (!targetRect || !scrollerRect || !Number.isFinite(scroller.scrollTop)) return;
+  const delta = targetRect.top - scrollerRect.top - (scrollerRect.height - targetRect.height) / 2;
+  scroller.scrollTo?.({ top: Math.max(0, scroller.scrollTop + delta), behavior: "auto" });
+}
+
+let tutorialSettleFrame = null;
+function watchTutorialScrollSettle(step) {
+  if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
+  let lastRect = null;
+  let stableFrames = 0;
+  const tick = () => {
+    if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
+    const target = document.querySelector(step.target);
+    const rect = target ? target.getBoundingClientRect() : null;
+    const unchanged = lastRect && rect && rect.top === lastRect.top && rect.left === lastRect.left;
+    stableFrames = unchanged ? stableFrames + 1 : 0;
+    lastRect = rect;
+    positionTutorialStep(step);
+    if (stableFrames >= 4) { tutorialSettleFrame = null; return; }
+    tutorialSettleFrame = requestAnimationFrame(tick);
+  };
+  tutorialSettleFrame = requestAnimationFrame(tick);
+}
+
+function positionTutorialStep(step) {
+  const overlay = $("tutorialOverlay");
+  if (overlay.hidden) return;
+  const target = document.querySelector(step.target);
+  const card = $("tutorialCard");
+  const spotlight = $("tutorialSpotlight");
+  const arrow = $("tutorialArrow");
+  const rect = target ? target.getBoundingClientRect() : { left: 24, top: 90, width: 220, height: 90, right: 244, bottom: 180 };
+  const pad = 8;
+  const safeLeft = Math.max(8, rect.left - pad);
+  const safeTop = Math.max(8, rect.top - pad);
+  spotlight.style.left = `${safeLeft}px`;
+  spotlight.style.top = `${safeTop}px`;
+  spotlight.style.width = `${Math.min(window.innerWidth - 16, rect.width + pad * 2)}px`;
+  spotlight.style.height = `${Math.min(window.innerHeight - 16, rect.height + pad * 2)}px`;
+
+  $("tutorialProgress").textContent = `${state.tutorialIndex + 1} / ${tutorialSteps.length}`;
+  $("tutorialTitle").textContent = step.title;
+  $("tutorialBody").textContent = step.body;
+  $("tutorialDetail").innerHTML = (step.details || []).map(item => `<span>${escapeHtml(item)}</span>`).join("");
+  $("tutorialPrev").disabled = state.tutorialIndex === 0;
+  $("tutorialNext").textContent = state.tutorialIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
+
+  const actionButton = $("tutorialDo");
+  actionButton.hidden = !step.cta;
+  actionButton.textContent = step.cta || "Show";
+  actionButton.onclick = step.ctaAction
+    ? async () => {
+      await Promise.resolve(step.ctaAction());
+      window.setTimeout(() => positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]), 180);
     }
+    : null;
 
-    // Every step walks through the same loaded example (methylbenzene oxidation -> distillation,
-    // see loadMethylbenzeneExampleProject) so the tour shows real, populated panels instead of
-    // empty ones. Several panels (Heuristics, Scale-Up) are only rendered lazily by their own
-    // "Run Check"/"Apply Rules" actions rather than by the general renderAll(), so steps that land
-    // on those tabs carry an `action` that triggers the same render path a user would.
-    const tutorialSteps = [
-      { target: "header h1", title: "1. Worked Example", body: "This tutorial loads a small reaction and separation case: methylbenzene is oxidized to benzaldehyde at 90 percent yield, then residual methylbenzene is recovered.", details: ["The tour is interactive: some steps can center the board, open the simulator, or insert a candidate separation route.", "The inserted route is a hypothesis generated from property screening, not a paper-confirmed design."], action: () => tutorialCenterFlowchart("G1"), cta: "Center board", ctaAction: () => tutorialCenterFlowchart("G1") },
-      { target: "#sourceInput", title: "2. Source Protocol", body: "The workflow starts from editable text. The protocol text is kept larger here so it is easier to follow while blocks are created and audited.", details: ["Select text to create a protocol block.", "Use manual empty blocks when a required industrial step is not written in the protocol."], action: () => { closeSeparationSimulator(); setSourcePanelTab("protocol"); } },
-      { target: "#annotatedText", title: "3. Traceable Blocks", body: "B1 is the reaction evidence and B2 is the recovery/distillation evidence. The highlights let you move between source text, blocks, groups, MFA, and unit choices without losing traceability.", details: ["Click a highlight to select it.", "Right-click a highlight to create or manage blocks."], action: () => setSourcePanelTab("protocol") },
-      { target: "#groupFlow", title: "4. Before Simulation", body: "This is the current process graph before adding any simulated separation. G1 is the reaction; G2 is the residual methylbenzene recovery. The recycle arrow from G2 back to G1 means recovered methylbenzene is reused.", details: ["Compact view is useful for clicking and understanding task groups quickly.", "The blue/green aura marks the group currently selected."], action: () => tutorialCenterFlowchart("G1"), cta: "Fit flowchart", ctaAction: () => tutorialCenterFlowchart("G1") },
-      { target: "#stepFlowInspector", title: "5. Group Aggregate", body: "Clicking a group opens the aggregate drawer. Here the tool sums the selected group's block streams, phenomena, and conditions so you can edit missing words or quantities before trusting downstream suggestions.", details: ["This is where small text corrections matter: one missing material name can change the simulator inputs.", "The drawer remains editable; the board now has extra scroll room when it is open."], action: () => { closeSeparationSimulator(); setInspectorTab("inspect"); selectGroup("G1"); } },
-      { target: "#separationSimulatorBody", title: "6. Separation Simulator", body: "The simulator reads substances from the selected reaction group and asks whether property differences justify a candidate separation route.", details: ["For this demo it compares methylbenzene and benzaldehyde.", "The logic uses reaction balance, pure properties, binary screening, and KB3.1-style route rules."], action: () => tutorialOpenSeparationSimulator("balance"), cta: "Open binary screen", ctaAction: () => tutorialOpenSeparationSimulator("binary") },
-      { target: "#separationSimulatorBody", title: "7. Binary Screening", body: "Binary screening is where boiling point, vapor pressure, molecular weight, miscibility, azeotrope, or affinity data become route theories. The tool should suggest alternatives, not silently decide the flowsheet.", details: ["Supported routes show why they triggered.", "Missing fields remain visible so you know what is still assumption."], action: () => tutorialOpenSeparationSimulator("binary"), cta: "Show suggestions", ctaAction: () => tutorialOpenSeparationSimulator("suggestions") },
-      { target: "#separationSimulatorBody", title: "8. Apply As Candidate", body: "This step shows the after-state. Applying the route inserts a new candidate separation group into the graph, with its own block, phenomena, unit suggestion, streams, and selection basis.", details: ["This is deliberately a candidate route.", "You can delete or revise it later if the property data do not justify it."], action: () => tutorialOpenSeparationSimulator("suggestions"), cta: "Insert route", ctaAction: tutorialInsertFirstSeparationRoute },
-      { target: "#groupFlow", title: "9. After Simulation", body: "The graph now includes the inserted separator candidate. Compare this to the earlier before-state: the simulator has changed the process structure, not just written a note.", details: ["The new group remains clickable and editable like any other task.", "Review links, MFA quantities, and unit choice before using it in scale-up."], action: tutorialInsertFirstSeparationRoute, cta: "Center route", ctaAction: () => centerSelection() },
-      { target: "#inspectorPanel", title: "10. Phenomena/Group", body: "The right panel explains and edits what is selected. Use it to confirm phenomena, task assignment, unit alternatives, and why a group exists.", details: ["For inserted routes, check the selection basis first.", "If the evidence is weak, keep it as hypothesis or remove it."], action: () => { closeSeparationSimulator(); setInspectorTab("inspect"); } },
-      { target: "#heuristicsPanel", title: "11. Heuristic Rules", body: "Heuristics check the process before scale-up: missing data, unsupported unit choices, recycle/purge issues, and scale-sensitive assumptions.", details: ["The rules are filtered to the actual phenomena, phases, stream fates, and conditions in the project."], action: () => { closeSeparationSimulator(); setInspectorTab("heuristics"); runRuleChecks(); } },
-      { target: "#scaleQuickPanel", title: "12. Scale-Up Target", body: "The scale panel sets target product, amount, basis, Gantt timing, parallel units, and capacity hints. This is separate from the simulator: simulation proposes structure; scale-up checks whether that structure has usable numbers.", details: ["For the demo the target is 0.90 kg/batch benzaldehyde.", "Capacity and duration should be completed before quantitative LCA or equipment claims."], action: () => setInspectorTab("scale") },
-      { target: "#flowsheetHost", title: "13. Flowsheet View", body: "The flowsheet view turns the current groups and streams into a presentation diagram. Use it after you are happy with the graph structure.", details: ["It is generated from the current model, so inserted candidate routes appear here too."], action: () => { closeSeparationSimulator(); openFlowsheetModal(); } },
-      { target: "#exportJson", title: "14. Export", body: "Export writes the project JSON, including blocks, phenomena, network, separation simulator results, scale-up data, and the new LCA bridge draft.", details: ["The LCA bridge is mapping-ready, not direct openLCA JSON-LD.", "Use it later to connect foreground streams to ecoinvent/openLCA datasets."], action: () => closeFlowsheetModal() }
-    ];
+  const cardWidth = Math.min(410, window.innerWidth - 32);
+  const placeRight = rect.right + 18 + cardWidth < window.innerWidth;
+  const placeLeft = rect.left - 18 - cardWidth > 0;
+  card.style.width = `${cardWidth}px`;
+  card.style.left = `${placeRight ? rect.right + 18 : placeLeft ? rect.left - cardWidth - 18 : Math.max(16, (window.innerWidth - cardWidth) / 2)}px`;
+  card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - 260))}px`;
 
-    async function openTutorial(index = 0) {
-      if (state.blocks.length) {
-        if (!(await confirmModal("This tutorial walks through a worked example (methylbenzene oxidation, then distillation) and will replace the current project. Continue?"))) return;
-        pushUndo();
-      }
-      loadMethylbenzeneExampleProject();
-      tutorialCenterFlowchart("G1");
-      state.tutorialIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
-      $("tutorialOverlay").hidden = false;
-      renderTutorialStep();
-    }
+  positionTutorialArrow(target, card, arrow);
+}
 
-    function closeTutorial() {
-      $("tutorialOverlay").hidden = true;
-      closeFlowsheetModal();
-      if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
-      tutorialSettleFrame = null;
-    }
-
-    function renderTutorialStep() {
-      const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
-      step.action?.();
-      const target = document.querySelector(step.target);
-      if (target) target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-      positionTutorialStep(step);
-      watchTutorialScrollSettle(step);
-    }
-
-    // scrollIntoView({behavior:"smooth"}) has no completion event, and its duration varies with
-    // distance, so a single requestAnimationFrame after calling it (the previous approach) measured
-    // the target mid-scroll — the spotlight/card could land hundreds of px off from steps that
-    // needed to scroll far (e.g. the Phenomena/Group, Heuristics, or Scale-Up steps). Keep repositioning every
-    // frame until the target's rect stops moving for a few consecutive frames, which tracks a scroll
-    // of any length without depending on a fixed delay or on 'scrollend' support.
-    let tutorialSettleFrame = null;
-    function watchTutorialScrollSettle(step) {
-      if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
-      let lastRect = null;
-      let stableFrames = 0;
-      const tick = () => {
-        if ($("tutorialOverlay").hidden) { tutorialSettleFrame = null; return; }
-        const target = document.querySelector(step.target);
-        const rect = target ? target.getBoundingClientRect() : null;
-        const unchanged = lastRect && rect && rect.top === lastRect.top && rect.left === lastRect.left;
-        stableFrames = unchanged ? stableFrames + 1 : 0;
-        lastRect = rect;
-        positionTutorialStep(step);
-        if (stableFrames >= 4) { tutorialSettleFrame = null; return; }
-        tutorialSettleFrame = requestAnimationFrame(tick);
-      };
-      tutorialSettleFrame = requestAnimationFrame(tick);
-    }
-
-    function positionTutorialStep(step) {
-      const overlay = $("tutorialOverlay");
-      if (overlay.hidden) return;
-      const target = document.querySelector(step.target);
-      const card = $("tutorialCard");
-      const spotlight = $("tutorialSpotlight");
-      const rect = target ? target.getBoundingClientRect() : { left: 24, top: 90, width: 220, height: 90 };
-      const pad = 8;
-      spotlight.style.left = `${Math.max(8, rect.left - pad)}px`;
-      spotlight.style.top = `${Math.max(8, rect.top - pad)}px`;
-      spotlight.style.width = `${Math.min(window.innerWidth - 16, rect.width + pad * 2)}px`;
-      spotlight.style.height = `${Math.min(window.innerHeight - 16, rect.height + pad * 2)}px`;
-      $("tutorialProgress").textContent = `${state.tutorialIndex + 1} / ${tutorialSteps.length}`;
-      $("tutorialTitle").textContent = step.title;
-      $("tutorialBody").textContent = step.body;
-      $("tutorialDetail").innerHTML = (step.details || []).map(item => `<span>${escapeHtml(item)}</span>`).join("");
-      $("tutorialPrev").disabled = state.tutorialIndex === 0;
-      $("tutorialNext").textContent = state.tutorialIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
-      const actionButton = $("tutorialDo");
-      actionButton.hidden = !step.cta;
-      actionButton.textContent = step.cta || "Show";
-      actionButton.onclick = step.ctaAction
-        ? () => {
-          step.ctaAction();
-          window.setTimeout(() => positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]), 180);
-        }
-        : null;
-      const cardWidth = Math.min(410, window.innerWidth - 32);
-      const placeRight = rect.right + 18 + cardWidth < window.innerWidth;
-      const placeLeft = rect.left - 18 - cardWidth > 0;
-      card.style.width = `${cardWidth}px`;
-      card.style.left = `${placeRight ? rect.right + 18 : placeLeft ? rect.left - cardWidth - 18 : Math.max(16, (window.innerWidth - cardWidth) / 2)}px`;
-      card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - 260))}px`;
-    }
+function positionTutorialArrow(target, card, arrow) {
+  if (!target || !arrow) {
+    if (arrow) arrow.hidden = true;
+    return;
+  }
+  const cardRect = card.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const targetX = targetRect.left + targetRect.width / 2;
+  const targetY = targetRect.top + Math.min(targetRect.height / 2, 92);
+  const cardCenterX = cardRect.left + cardRect.width / 2;
+  const cardCenterY = cardRect.top + cardRect.height / 2;
+  const fromLeft = targetX < cardCenterX;
+  const startX = fromLeft ? cardRect.left : cardRect.right;
+  const startY = Math.max(cardRect.top + 36, Math.min(cardCenterY, cardRect.bottom - 36));
+  const deltaX = targetX - startX;
+  const deltaY = targetY - startY;
+  const length = Math.max(56, Math.hypot(deltaX, deltaY) - 18);
+  const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+  arrow.hidden = false;
+  arrow.style.left = `${startX}px`;
+  arrow.style.top = `${startY}px`;
+  arrow.style.width = `${length}px`;
+  arrow.style.transform = `rotate(${angle}deg)`;
+}

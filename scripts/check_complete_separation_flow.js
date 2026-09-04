@@ -117,7 +117,10 @@ state.boardCompact = false;
 ensureGroup("G2").separationSupportExpanded = true;
 renderGroupAggregateStepInspector(g2Root, g2);
 assert(g2Root.innerHTML.includes("Simulate Lutze Substance Separation"), "G2 drawer should keep the focused Lutze simulation button");
-assert(!g2Root.innerHTML.includes("Optional Property-Based Separation Screen"), "G2 drawer should not render the property screen");
+assert(g2Root.innerHTML.includes("Optional Property-Based Separation Screen"), "G2 drawer should render the property screen");
+assert(g2Root.innerHTML.includes('data-predictor-mode="G2"'), "G2 property screen should expose the predictor mode control");
+assert(g2Root.innerHTML.includes('data-save-properties="G2"') || g2Root.innerHTML.includes('data-edit-properties="G2"'), "G2 drawer should expose property editing controls");
+assert(g2Root.innerHTML.includes('data-property-field="value"'), "G2 property editor should expose property value inputs");
 
 const g3Root = fakeElement();
 renderGroupAggregateStepInspector(g3Root, g3);

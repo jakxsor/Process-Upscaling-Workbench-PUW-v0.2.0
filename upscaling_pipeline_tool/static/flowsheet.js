@@ -5,7 +5,7 @@
     // escapeHtml, escapeAttr, formatNumber, massToKg, resolvedEndpointId, isBackwardLink,
     // orthogonalPath, groupIdsInTextOrder, groupModel, ensureGroup, inferGroupOperationClass,
     // aggregateGroupConditions, groupContentsTip, promptModal, renderAll, buildProjectExport,
-    // flowsheetRequestSeq, flowsheetLayoutVersion — all defined in app.js.
+    // flowsheetLayoutVersion — defined in app.js.
 
     const flowsheetCategoryStyle = {
       reactor: { fill: "#fff8f7", stroke: "#cf4b42", label: "Reactor" },
@@ -223,6 +223,37 @@
       ].join("\n");
     }
 
+    function flowsheetProcessTooltipForLink(fromBox, toBox, link) {
+      if (!link || !(link.directStreams || []).length) return flowsheetProcessTooltip(fromBox, toBox);
+      const magnitudeKg = flowsheetStreamListKg(link.directStreams);
+      const substances = link.directStreams
+        .filter(s => !["wastewater", "solid waste", "purge", "loss", "vent"].includes(s.fate))
+        .slice(0, 6)
+        .map(s => `- ${s.name}: ${s.quantity || "?"} ${s.unit || ""}`.trim());
+      return [
+        `${fromBox.id} -> ${toBox.id}`,
+        Number.isFinite(magnitudeKg) && magnitudeKg > 0 ? `~${formatNumber(magnitudeKg)} kg/batch routed` : "quantity not available",
+        ...(substances.length ? ["Routed material:", ...substances] : [])
+      ].join("\n");
+    }
+
+    function flowsheetProcessLabelForLink(fromBox, toBox, link) {
+      if (!link || !(link.directStreams || []).length) return flowsheetProcessLabelText(fromBox, toBox);
+      const streams = link.directStreams;
+      const primary = streams.reduce((best, stream) => {
+        const kg = massToKg(stream.quantity, stream.unit);
+        const bestKg = massToKg(best.quantity, best.unit);
+        return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
+      }, streams[0]);
+      const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
+      return `${primary.name}${qty ? `, ${qty}` : ""}`;
+    }
+
+    function flowsheetMagnitudeForLink(fromBox, toBox, link) {
+      const routedKg = link && (link.directStreams || []).length ? flowsheetStreamListKg(link.directStreams) : NaN;
+      return routedKg > 0 ? routedKg : flowsheetProcessMagnitudeKg(fromBox, toBox);
+    }
+
     function flowsheetGroupSpecs(group) {
       const conditions = aggregateGroupConditions(group);
       const byId = id => conditions.find(item => item.id === id);
@@ -242,6 +273,28 @@
       const qty = String(stream?.quantity || "").trim();
       const unit = String(stream?.unit || "").trim();
       return `${name}${qty ? ` ${qty}${unit ? ` ${unit}` : ""}` : ""}`;
+    }
+
+    function flowsheetClipText(text, maxChars, minChars = 8) {
+      const normalized = String(text || "").replace(/\s+/g, " ").trim();
+      if (!normalized || normalized.length <= maxChars) return normalized;
+      if (maxChars < minChars + 3) return "";
+      const limit = Math.max(minChars, maxChars - 3);
+      const prefix = normalized.slice(0, limit);
+      const wordBreak = Math.max(prefix.lastIndexOf(" "), prefix.lastIndexOf("/"), prefix.lastIndexOf("-"));
+      const clipped = wordBreak >= minChars ? prefix.slice(0, wordBreak).trim() : prefix.trim();
+      return clipped ? `${clipped}...` : "";
+    }
+
+    function flowsheetCompactStreamLabel(stream, maxChars, includeQuantity = true) {
+      const name = String(stream?.name || "").trim();
+      if (!name) return "";
+      const qty = String(stream?.quantity || "").trim();
+      const unit = String(stream?.unit || "").trim();
+      const full = `${name}${includeQuantity && qty ? ` ${qty}${unit ? ` ${unit}` : ""}` : ""}`.trim();
+      const clippedFull = flowsheetClipText(full, maxChars);
+      if (clippedFull) return clippedFull;
+      return flowsheetClipText(name, maxChars);
     }
 
     function flowsheetTopStreamSummary(streams, label, limit = 1) {
@@ -352,7 +405,7 @@
       if (!lines.length) return "";
       const maxChars = Math.max(18, Math.min(30, Math.floor((width - 8) / 5.4)));
       return lines.map((line, index) => {
-        const clipped = line.length > maxChars ? `${line.slice(0, Math.max(12, maxChars - 1))}...` : line;
+        const clipped = flowsheetClipText(line, maxChars, 12);
         return `<text x="${x}" y="${y + index * 12}" font-size="9.4" font-weight="650" fill="#40515d">${escapeHtml(clipped)}</text>`;
       }).join("");
     }
@@ -480,14 +533,22 @@
         const len = Math.abs(b.x - a.x);
         if (!best || len > best.len) best = { len, left: Math.min(a.x, b.x), y: a.y };
       }
-      if (!best || best.len < 34) return "";
+      if (!best || best.len < 86) return "";
       const avgCharPx = 5.6; // approx glyph width at font-size 9.5, font-weight 700
-      const maxChars = Math.max(3, Math.floor((best.len - 12) / avgCharPx));
-      const clipped = text.length > maxChars ? `${text.slice(0, Math.max(2, maxChars - 1))}...` : text;
-      // Left-anchored at the segment's own start (not centered on its midpoint) so the label can
-      // never bleed backward into the box the segment starts from - width is already fit to the
-      // segment, so at worst it runs slightly long into the box the connector is heading into.
-      return `<text x="${best.left + 6}" y="${best.y - 7}" font-size="9.5" font-weight="700" text-anchor="start" fill="${color}" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round">${escapeHtml(clipped)}</text>`;
+      const maxChars = Math.max(10, Math.floor((best.len - 22) / avgCharPx));
+      const compact = flowsheetClipText(String(text).split(",")[0], maxChars, 8) || flowsheetClipText(text, maxChars, 8);
+      if (!compact) return "";
+      const labelW = Math.min(best.len - 10, compact.length * avgCharPx + 14);
+      const x = best.left + 6;
+      // Left-anchored at the segment's own start and backed by a small white tag so it does not
+      // read as text printed through the connector line.
+      return `
+        <g class="flowsheet-link-label">
+          <title>${escapeHtml(text)}</title>
+          <rect x="${x - 3}" y="${best.y - 21}" width="${labelW}" height="16" rx="3" fill="#ffffff" opacity="0.94" stroke="#d6e0e5" stroke-width="0.7"></rect>
+          <text x="${x + 3}" y="${best.y - 9}" font-size="9.3" font-weight="800" text-anchor="start" fill="${color}">${escapeHtml(compact)}</text>
+        </g>
+      `;
     }
 
     function flowsheetFlowTooltip(fromBox, toBox, magnitudeKg) {
@@ -795,6 +856,7 @@
 
       const renderedForward = new Set();
       const forwardLinkKey = (fromId, toId) => `${fromId}->${toId}`;
+      const forwardLinkByKey = new Map(model.forwardLinks.map(link => [forwardLinkKey(link.from, link.to), link]));
       const forwardGroups = [];
       const fanoutBySourceStage = new Map();
       const faninByTargetStage = new Map();
@@ -824,7 +886,9 @@
         const yValues = [source.y, ...targetPorts.map(item => item.point.y)];
         forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: Math.min(...yValues) }, { x: manifoldX, y: Math.max(...yValues) }], strokeWidth, `parallel manifold from ${from.id}`, "", "#172027"));
         targetPorts.forEach(({ target, point }) => {
-          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], strokeWidth, flowsheetFlowTooltip(from, target, from.totalOutputKg), "url(#fsArrow)", "#172027", "", flowsheetConnectorLabelText(from)));
+          const link = forwardLinkByKey.get(forwardLinkKey(from.id, target.id));
+          const branchKg = flowsheetMagnitudeForLink(from, target, link);
+          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(from, target, link), "url(#fsArrow)", "#172027", "", flowsheetProcessLabelForLink(from, target, link)));
           renderedForward.add(forwardLinkKey(from.id, target.id));
         });
       });
@@ -840,7 +904,9 @@
         const target = { x: to.x - 14, y: flowsheetBoxCenter(to).y };
         const manifoldX = Math.max(...sourcePorts.map(item => item.point.x)) + 46;
         sourcePorts.forEach(({ source, point }) => {
-          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(source.totalOutputKg), flowsheetFlowTooltip(source, to, source.totalOutputKg), "", "#172027", "", flowsheetConnectorLabelText(source)));
+          const link = forwardLinkByKey.get(forwardLinkKey(source.id, to.id));
+          const branchKg = flowsheetMagnitudeForLink(source, to, link);
+          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(source, to, link), "", "#172027", "", flowsheetProcessLabelForLink(source, to, link)));
           renderedForward.add(forwardLinkKey(source.id, to.id));
         });
         const yValues = [target.y, ...sourcePorts.map(item => item.point.y)];
@@ -903,15 +969,16 @@
           { x: endX, y: to.y + to.h }
         ];
         const d = orthogonalPath(points, 12);
-        const recycleKg = from.recycleStreams.reduce((sum, s) => {
+        const recycleStreams = (link.directStreams || []).length ? link.directStreams : from.recycleStreams;
+        const recycleKg = recycleStreams.reduce((sum, s) => {
           const kg = massToKg(s.quantity, s.unit);
           return sum + (Number.isFinite(kg) ? kg : 0);
         }, 0);
         const strokeWidth = Math.max(2, sankeyWidth(recycleKg) * 0.75);
         const recycleTooltip = [
           `recycle ${link.from} -> ${link.to}`,
-          from.recycleStreams.length
-            ? from.recycleStreams.map(s => `- ${s.name}: ${s.quantity || "?"} ${s.unit || ""}`.trim()).join("\n")
+          recycleStreams.length
+            ? recycleStreams.map(s => `- ${s.name}: ${s.quantity || "?"} ${s.unit || ""}`.trim()).join("\n")
             : "quantity not available"
         ].join("\n");
         return `
@@ -930,9 +997,10 @@
         const feedRows = names.map((stream, i) => {
           const rowY = box.y + 34 + i * 30;
           const label = `${stream.name}${stream.quantity ? ` ${stream.quantity} ${stream.unit || ""}` : ""}`.trim();
+          const compact = flowsheetCompactStreamLabel(stream, 24);
           return `
             <rect x="${box.x + 10}" y="${rowY - 14}" width="${box.w - 20}" height="23" rx="11.5" fill="#fff" stroke="#25834a" stroke-width="1.2"></rect>
-            <text x="${box.x + box.w / 2}" y="${rowY + 1}" font-size="10.5" font-weight="600" fill="#172027" text-anchor="middle">${escapeHtml(label.length > 25 ? `${label.slice(0, 24)}...` : label)}</text>
+            <text x="${box.x + box.w / 2}" y="${rowY + 1}" font-size="10.5" font-weight="650" fill="#172027" text-anchor="middle"><title>${escapeHtml(label)}</title>${escapeHtml(compact || "feed")}</text>
           `;
         }).join("");
         const pathRows = names.map((stream, i) => {
@@ -1000,9 +1068,10 @@
             const labelX = stubX + (leftSide ? -18 : 18);
             const labelAnchor = leftSide ? "end" : "start";
             const label = `${stream.kind}: ${stream.name}`;
+            const compact = `${stream.kind}: ${flowsheetClipText(stream.name, 20, 8) || "outlet"}`;
             return `
               <path d="M ${stubX} ${box.y + box.h} L ${stubX} ${stubY}" stroke="${color.line}" stroke-width="2" stroke-dasharray="${stream.kind === "vent" ? "4 4" : "none"}" fill="none" marker-end="${color.marker}"></path>
-              <text x="${labelX}" y="${stubY + 4}" font-size="8.8" font-weight="700" fill="${color.line}" text-anchor="${labelAnchor}">${escapeHtml(label.length > 25 ? `${label.slice(0, 24)}...` : label)}</text>
+              <text x="${labelX}" y="${stubY + 4}" font-size="8.8" font-weight="700" fill="${color.line}" text-anchor="${labelAnchor}"><title>${escapeHtml(label)}</title>${escapeHtml(compact)}</text>
             `;
           }).join("") + (showAuxiliaryArrows && hiddenLocalStreamCount ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 112}" font-size="8.8" font-weight="800" fill="#657480" text-anchor="middle">+${hiddenLocalStreamCount} local outlet${hiddenLocalStreamCount === 1 ? "" : "s"} in tooltip</text>` : "");
         // G1 already gets a dedicated feed box/arrows (feedBoxMarkup below) for its inputs. Every
@@ -1017,9 +1086,10 @@
           const stubX = box.x + box.w * (extraInlets.length > 1 ? 0.26 + i * 0.48 : 0.5);
           const stubYStart = box.y - 46;
           const label = `in: ${stream.name}${stream.quantity ? ` ${stream.quantity} ${stream.unit || ""}` : ""}`.trim();
+          const compact = `in: ${flowsheetCompactStreamLabel(stream, 17, false) || "feed"}`;
           return `
             <path d="M ${stubX} ${stubYStart} L ${stubX} ${box.y}" stroke="#657480" stroke-width="1.6" fill="none" marker-end="url(#fsArrowGrey)"></path>
-            <text x="${stubX}" y="${stubYStart - 4}" font-size="9.5" fill="#657480" text-anchor="middle">${escapeHtml(label.length > 20 ? `${label.slice(0, 19)}...` : label)}</text>
+            <text x="${stubX}" y="${stubYStart - 4}" font-size="9.3" fill="#657480" text-anchor="middle"><title>${escapeHtml(label)}</title>${escapeHtml(compact)}</text>
           `;
         }).join("");
         const strokeColor = box.isProduct ? "#286d3f" : style.stroke;
@@ -1028,7 +1098,7 @@
         const mainLoadKg = mainTarget ? flowsheetProcessMagnitudeKg(box, mainTarget) : 0;
         const footerLine = [
           mainLoadKg > 0 ? `${formatNumber(mainLoadKg)} kg/batch main route` : "",
-          box.specs.join(" / ")
+          (box.specs || [])[0] || ""
         ].filter(Boolean).join(" - ");
         const dragTip = `${box.tip}\n\nDrag to move. Double-click to edit the unit description.`;
         const symbolY = box.y + 10;
@@ -1037,10 +1107,12 @@
         const tagY = box.y + (showUnitDetails ? 132 : 142);
         const tagHeight = box.h - symbolH - (showUnitDetails ? 14 : 18);
         const unitLines = wrapSvgText(box.selectedUnit, showUnitDetails ? 24 : 28);
-        const taskLine = wrapSvgText(box.task, 38)[0] || "";
+        const taskLine = flowsheetClipText(box.task, 38, 12);
+        const selected = state.selectedFlowsheetGroupId === box.id;
         return `
-          <g class="flowsheet-unit" data-flowsheet-group="${escapeAttr(box.id)}">
+          <g class="flowsheet-unit ${selected ? "selected" : ""}" data-flowsheet-group="${escapeAttr(box.id)}">
             ${box.concurrent ? `<rect x="${box.x - 24}" y="${box.y - 24}" width="${box.w + 20}" height="${box.h + 20}" rx="7" fill="#eef2f4" stroke="#9aa7b0" stroke-width="1" opacity="0.55"></rect>` : ""}
+            ${selected ? `<rect x="${box.x - 16}" y="${box.y - 16}" width="${box.w + 32}" height="${box.h + 32}" rx="8" fill="none" stroke="#1671c2" stroke-width="3" opacity="0.82"></rect>` : ""}
             <rect x="${box.x - 10}" y="${box.y - 10}" width="${box.w + 20}" height="${box.h + 20}" rx="6" fill="#ffffff" stroke="#d6e0e5" stroke-width="1" opacity="0.86"></rect>
             <rect x="${box.x - 10}" y="${box.y - 10}" width="4" height="${box.h + 20}" rx="2" fill="${strokeColor}"></rect>
             ${flowsheetShapeMarkup(box.subcategory, box.x, symbolY, box.w, symbolH, strokeColor)}
@@ -1050,8 +1122,8 @@
               ${unitLines.slice(0, showUnitDetails ? 1 : 2).map((line, i) => `<tspan x="${box.x + box.w / 2}" dy="${i === 0 ? 0 : 13}">${escapeHtml(line)}</tspan>`).join("")}
             </text>
             ${flowsheetUnitDetailsMarkup(box, box.x + 24, tagY + 37, box.w - 48)}
-            ${!showUnitDetails && footerLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}">${escapeHtml(footerLine.length > 54 ? `${footerLine.slice(0, 53)}...` : footerLine)}</text>` : ""}
-            <text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 18 : 34)}" font-size="10.2" text-anchor="middle" fill="#657480">${escapeHtml(taskLine)}</text>
+            ${!showUnitDetails && footerLine ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 18}" font-size="10.5" font-weight="700" text-anchor="middle" fill="${style.stroke}"><title>${escapeHtml(footerLine)}</title>${escapeHtml(flowsheetClipText(footerLine, 46, 12))}</text>` : ""}
+            <text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 18 : 34)}" font-size="10.2" text-anchor="middle" fill="#657480"><title>${escapeHtml(box.task)}</title>${escapeHtml(taskLine)}</text>
             ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 34 : 50)}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
             ${wasteVentHtml}
@@ -1117,190 +1189,4 @@
         forwardLinkCount: model.forwardLinks.length,
         recycleLinkCount: model.recycleLinks.length
       };
-    }
-
-    function wrapSvgText(text, maxChars) {
-      const words = String(text || "").split(/\s+/);
-      const lines = [];
-      let current = "";
-      words.forEach(word => {
-        const next = current ? `${current} ${word}` : word;
-        if (next.length > maxChars && current) {
-          lines.push(current);
-          current = word;
-        } else {
-          current = next;
-        }
-      });
-      if (current) lines.push(current);
-      return lines.slice(0, 3);
-    }
-
-    async function renderPyflowsheetSvg() {
-      const project = buildProjectExport();
-      const response = await fetch("/api/flowsheet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project })
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (!data.ok || !data.svg) throw new Error(data.error || "pyflowsheet returned no SVG");
-      return data;
-    }
-
-    function renderFlowsheetModeButtons() {
-      const editable = $("flowsheetEditableMode");
-      const technical = $("flowsheetTechnicalMode");
-      if (state.flowsheetMode === "technical" && !technical) state.flowsheetMode = "editable";
-      if (editable) editable.classList.toggle("primary", state.flowsheetMode !== "technical");
-      if (technical) technical.classList.toggle("primary", state.flowsheetMode === "technical");
-      const fit = $("fitFlowsheetView");
-      if (fit) {
-        fit.classList.toggle("primary", state.flowsheetFit);
-        fit.textContent = state.flowsheetFit ? "Actual Size" : "Fit View";
-        fit.title = state.flowsheetFit
-          ? "Show the generated flowsheet at its actual SVG size"
-          : "Fit the generated flowsheet inside the modal for overview";
-      }
-      $("resetFlowsheetLayout").disabled = false;
-      const labelToggle = $("flowsheetShowStreamLabels");
-      if (labelToggle) labelToggle.checked = state.flowsheetShowStreamLabels !== false;
-      const auxToggle = $("flowsheetShowAuxiliaryArrows");
-      if (auxToggle) auxToggle.checked = state.flowsheetShowAuxiliaryArrows !== false;
-      const detailsToggle = $("flowsheetShowUnitDetails");
-      if (detailsToggle) detailsToggle.checked = state.flowsheetShowUnitDetails === true;
-    }
-
-    async function renderFlowsheetModal() {
-      const host = $("flowsheetHost");
-      if (!host) return;
-      const requestSeq = ++flowsheetRequestSeq;
-      renderFlowsheetModeButtons();
-      host.classList.toggle("technical-mode", state.flowsheetMode === "technical");
-      host.classList.toggle("editable-mode", state.flowsheetMode !== "technical");
-      host.classList.toggle("fit-mode", state.flowsheetFit && state.flowsheetMode !== "technical");
-      const result = buildFlowsheetSvg();
-      if (state.flowsheetMode !== "technical") {
-        const linkNote = !result.empty && !state.links.length && result.groupCount > 1
-          ? `<div class="flowsheet-render-status warn">No declared process arrows yet. The flowsheet is showing units, feed, and product only; use board arrows or Auto-Connect, then review the links.</div>`
-          : "";
-        host.innerHTML = result.empty
-          ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-          : `${linkNote}<div class="flowsheet-render-status ok">Editable flowsheet board. Drag units, double-click unit labels, and hover arrows/units for details.</div>${result.svg}`;
-        if (!result.empty) wireFlowsheetInteractions(host);
-        if (!result.empty) requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
-        return;
-      }
-      host.innerHTML = result.empty
-        ? `<div class="mfa-empty">No task groups yet — combine blocks into groups first, then open the Flowsheet View.</div>`
-        : `<div class="flowsheet-render-status">Rendering technical PFD...</div>${result.svg}`;
-      if (!result.empty) wireFlowsheetInteractions(host);
-      if (result.empty) return;
-      try {
-        const data = await renderPyflowsheetSvg();
-        if (requestSeq !== flowsheetRequestSeq || $("flowsheetModal").hidden) return;
-        host.innerHTML = `
-          <div class="flowsheet-render-status ok">Technical PFD rendered with ${escapeHtml(data.renderer || "Python renderer")} (${data.unitCount || 0} units). Parallel/split steps are stacked in the same stage and connected with explicit inlet/outlet arrows.</div>
-          ${data.svg}
-        `;
-        const svg = host.querySelector("svg");
-        if (svg) svg.classList.add("flowsheet-svg", "pyflowsheet-svg");
-        requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
-      } catch (err) {
-        if (requestSeq !== flowsheetRequestSeq) return;
-        const banner = host.querySelector(".flowsheet-render-status");
-        if (banner) {
-          banner.className = "flowsheet-render-status warn";
-          banner.textContent = `Technical renderer unavailable; showing interactive fallback. ${err.message || err}`;
-        }
-      }
-    }
-
-    function wireFlowsheetInteractions(host) {
-      const svg = host.querySelector("svg.flowsheet-svg");
-      if (!svg) return;
-      host.querySelectorAll(".flowsheet-unit").forEach(unitGroup => {
-        const groupId = unitGroup.dataset.flowsheetGroup;
-        let drag = null;
-        unitGroup.addEventListener("mousedown", event => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-          const model = buildFlowsheetModel();
-          const box = model.byId.get(groupId);
-          if (!box) return;
-          const rect = svg.getBoundingClientRect();
-          const scale = rect.width > 0 ? model.width / rect.width : 1;
-          drag = {
-            startClientX: event.clientX,
-            startClientY: event.clientY,
-            startX: box.x,
-            startY: box.y,
-            scale,
-            moved: false
-          };
-          const onMove = moveEvent => {
-            if (!drag) return;
-            const dx = (moveEvent.clientX - drag.startClientX) * drag.scale;
-            const dy = (moveEvent.clientY - drag.startClientY) * drag.scale;
-            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
-            unitGroup.setAttribute("transform", `translate(${dx}, ${dy})`);
-          };
-          const onUp = upEvent => {
-            document.removeEventListener("mousemove", onMove);
-            document.removeEventListener("mouseup", onUp);
-            if (!drag) return;
-            if (drag.moved) {
-              const dx = (upEvent.clientX - drag.startClientX) * drag.scale;
-              const dy = (upEvent.clientY - drag.startClientY) * drag.scale;
-              const groupState = ensureGroup(groupId);
-              groupState.flowsheetX = drag.startX + dx;
-              groupState.flowsheetY = drag.startY + dy;
-              groupState.flowsheetLayoutVersion = flowsheetLayoutVersion;
-              drag = null;
-              renderFlowsheetModal();
-              return;
-            }
-            unitGroup.removeAttribute("transform");
-            drag = null;
-          };
-          document.addEventListener("mousemove", onMove);
-          document.addEventListener("mouseup", onUp);
-        });
-        unitGroup.addEventListener("dblclick", async event => {
-          event.preventDefault();
-          const groupState = ensureGroup(groupId);
-          const nextLabel = await promptModal(`Edit the unit description shown for ${groupId}:`, groupState.selectedUnit || "");
-          if (nextLabel === null) return;
-          groupState.selectedUnit = nextLabel.trim();
-          renderFlowsheetModal();
-          renderAll();
-        });
-      });
-    }
-
-    function openFlowsheetModal() {
-      $("flowsheetModal").hidden = false;
-      state.flowsheetMode = "editable";
-      state.flowsheetFit = true;
-      renderFlowsheetModal();
-    }
-
-    function closeFlowsheetModal() {
-      $("flowsheetModal").hidden = true;
-    }
-
-    function downloadFlowsheetSvg() {
-      const visibleSvg = $("flowsheetHost")?.querySelector("svg");
-      const svgText = visibleSvg ? visibleSvg.outerHTML : buildFlowsheetSvg().svg;
-      if (!svgText) return;
-      const blob = new Blob([svgText], { type: "image/svg+xml" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "flowsheet.svg";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
     }
