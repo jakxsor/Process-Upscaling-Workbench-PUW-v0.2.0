@@ -101,6 +101,20 @@ assert.strictEqual(reconstructed.text, "legacy project");
 assert.strictEqual(reconstructed.groups.G1.task, "legacy task");
 assert.strictEqual(reconstructed.groups.G1.properties.density.value, "1");
 
+loadTripleReactantExampleProject();
+const tripleExport = buildProjectExport();
+state.text = "";
+state.blocks = [];
+state.groups = {};
+state.links = [];
+applyProjectStateSnapshot(tripleExport.projectState, { pushUndo: false });
+const restoredTriple = separationSimulatorModel(groupModel("G1"));
+assert.strictEqual(restoredTriple.substances.find(item => item.name === "benzyl alcohol").reactionFeedQuantity, "1.00", "Project JSON should preserve the hidden feed basis behind post-reaction residuals");
+assert.strictEqual(restoredTriple.substances.find(item => item.name === "benzyl acetate").reactionGenerated, true, "Project JSON should preserve generated-product balance semantics");
+assert.strictEqual(state.blocks.find(block => block.id === "B1").conversionDetail.conversionPercent, "90", "Project JSON should preserve explicit conversion separately from yield");
+assert.strictEqual(state.blocks.find(block => block.id === "B1").conversionDetail.selectivityPercent, "100", "Project JSON should preserve explicit selectivity");
+assert.strictEqual(state.groups.G1.timeOffsets["B1::reaction_time"], "0.5", "Project JSON should preserve editable task timetable starts");
+
 console.log("Project persistence regression check passed.");
 `;
 

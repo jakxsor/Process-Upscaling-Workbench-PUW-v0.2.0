@@ -22,10 +22,19 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Every served script, not just the two largest: the modules extracted out of app.js are where
+      # active refactoring happens, so they are the ones most likely to break.
       - name: Check JavaScript syntax
         run: |
-          node --check upscaling_pipeline_tool/static/app.js
-          node --check upscaling_pipeline_tool/static/flowsheet.js
+          for file in upscaling_pipeline_tool/static/*.js; do
+            node --check "$file"
+          done
+
+      # Globbed rather than listed, so a new module cannot silently escape the syntax check.
+      - name: Check Python syntax
+        run: |
+          python -m py_compile start.py run_upscaling_tool.py
+          python -m py_compile upscaling_pipeline_tool/*.py
 
       - name: Run workflow regression checks
         run: |
@@ -33,7 +42,18 @@ jobs:
           node scripts/check_separation_simulator.js
           node scripts/check_property_screening.js
           node scripts/check_flowsheet_view.js
+          node scripts/check_project_persistence.js
+          node scripts/check_tutorial_flow.js
+          python scripts/check_lci_xlsx_export.py
+          python scripts/check_flowsheet_pptx_export.py
+          python scripts/check_pubchem_lookup.py
 
-      - name: Check Python syntax
+      # Behavioural checks: these assert that the answers are physically possible and that the UI is
+      # actually wired, rather than that a given string is present in the source. They exist because
+      # every serious defect found so far failed silently - a schedule inconsistent with its own task
+      # times, a lab-sized reactor reported for an industrial target, a panel rendering into a
+      # container that no longer existed, buttons with no handler behind them.
+      - name: Check physical plausibility and UI wiring
         run: |
-          python -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pyflowsheet_renderer.py
+          node scripts/check_physical_plausibility.js
+          node scripts/check_ui_wiring.js
