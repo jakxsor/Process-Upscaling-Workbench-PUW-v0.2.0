@@ -13384,6 +13384,7 @@
             <div class="stream-name-row">
               <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off">
             </div>
+            ${upstreamSuggestionRailHtml(block, stream, suggestionRole)}
             ${streamSuggestionRailHtml(block, stream, suggestionRole)}
             ${streamPubChemSuggestionRailHtml(stream)}
           </label>
@@ -13506,6 +13507,71 @@
               data-pubchem-suggestion-name="${escapeAttr(item.name)}"
               title="${escapeAttr(item.formula ? `Formula ${item.formula}` : item.source || "PubChem candidate")}">
               ${escapeHtml(item.name)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // What enters a block has to come from somewhere. If the network says G1 feeds G2, then G2's
+    // inputs are most likely G1's outlets, so they are offered directly instead of being retyped -
+    // retyping is where names drift apart and quietly break the material balance downstream. Only
+    // outputs are offered, not wastes: a stream routed to treatment is not feeding the next task.
+    function upstreamOutletSuggestions(block, role) {
+      if (role !== "input" || !block) return [];
+      const target = resolvedEndpointId(block.id);
+      if (!target) return [];
+      const upstreamIds = [...new Set(state.links
+        .filter(link => resolvedEndpointId(link.to) === target && resolvedEndpointId(link.from) !== target)
+        .map(link => resolvedEndpointId(link.from)))];
+      if (!upstreamIds.length) return [];
+      const alreadyDeclared = new Set((block.streams || [])
+        .filter(item => item.role === "input")
+        .map(item => String(item.name || "").trim().toLowerCase())
+        .filter(Boolean));
+      const suggestions = [];
+      upstreamIds.forEach(sourceId => {
+        const grouped = blocksForGroup(sourceId);
+        const sourceBlocks = grouped.length ? grouped : state.blocks.filter(item => item.id === sourceId);
+        sourceBlocks.forEach(sourceBlock => {
+          ensureBlockFlowFields(sourceBlock);
+          (sourceBlock.streams || []).forEach(candidate => {
+            if (candidate.role !== "output") return;
+            const name = String(candidate.name || "").trim();
+            const key = name.toLowerCase();
+            if (!name || alreadyDeclared.has(key)) return;
+            if (suggestions.some(item => item.name.toLowerCase() === key)) return;
+            suggestions.push({
+              name,
+              quantity: candidate.quantity,
+              unit: candidate.unit,
+              phase: candidate.phase,
+              sourceId,
+              reason: `Outlet of ${sourceId} (${sourceBlock.id}), which feeds this block`
+            });
+          });
+        });
+      });
+      return suggestions.slice(0, 8);
+    }
+
+    function upstreamSuggestionRailHtml(block, stream, role) {
+      const suggestions = upstreamOutletSuggestions(block, role);
+      if (!suggestions.length) return "";
+      const sources = [...new Set(suggestions.map(item => item.sourceId))].join(", ");
+      return `
+        <div class="stream-suggestion-rail upstream" aria-label="Outlets of the blocks feeding this one">
+          <span>From ${escapeHtml(sources)}</span>
+          ${suggestions.map(item => `
+            <button type="button" class="stream-suggestion-chip upstream"
+              data-apply-stream-suggestion="${escapeAttr(stream.id)}"
+              data-suggestion-name="${escapeAttr(item.name)}"
+              data-suggestion-quantity="${escapeAttr(item.quantity || "")}"
+              data-suggestion-unit="${escapeAttr(item.unit || "")}"
+              data-suggestion-phase="${escapeAttr(item.phase || "")}"
+              title="${escapeAttr(`${item.reason}. Click to pre-fill this editable row; save it only after checking.`)}">
+              <span class="stream-suggestion-name">${escapeHtml(item.name)}</span>
+              ${item.quantity ? `<span class="stream-suggestion-meta">${escapeHtml(item.quantity)} ${escapeHtml(item.unit || "")}</span>` : ""}
             </button>
           `).join("")}
         </div>

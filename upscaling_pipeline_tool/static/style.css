@@ -2319,6 +2319,27 @@
       background: #fbfdfe;
     }
 
+    /* Upstream outlets are declared data from a block you already filled in, not a guess parsed out
+       of prose, so they read as solid rather than dashed-and-italic like the text-derived ones. */
+    .stream-suggestion-rail.upstream {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .stream-suggestion-chip.upstream {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .stream-suggestion-chip.upstream:hover {
+      background: var(--accent-soft);
+    }
+
     .stream-suggestion-rail > span {
       color: var(--muted);
       font-size: 10px;
