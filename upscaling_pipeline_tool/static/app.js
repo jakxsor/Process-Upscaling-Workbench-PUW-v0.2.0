@@ -2719,7 +2719,7 @@
       bindLinkRemovalHandlers(root);
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
-          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
           if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
             addConnection(state.connectingFrom, box.dataset.groupBox);
             return;
@@ -2737,12 +2737,6 @@
         };
         box.addEventListener("pointerdown", startGroupBoxDrag);
         if (!window.PointerEvent) box.addEventListener("mousedown", startGroupBoxDrag);
-      });
-      root.querySelectorAll("[data-select-group]").forEach(button => {
-        button.addEventListener("click", event => {
-          event.stopPropagation();
-          selectGroup(button.dataset.selectGroup);
-        });
       });
       root.querySelectorAll("[data-open-group-board]").forEach(button => {
         button.addEventListener("click", event => {
@@ -6410,7 +6404,10 @@
         ? `Gap to next task: ${formatNumber(gantt.bottleneckGapH)} h / ${formatNumber(gantt.bottleneckGapPercent)}%. Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}%.`
         : `Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}% above the next longest task.`;
       return `
-        <div class="muted small" style="margin-bottom:8px">${escapeHtml(gapText)}</div>
+        <div class="row between" style="margin-bottom:8px; gap:8px">
+          <span class="muted small">${escapeHtml(gapText)}</span>
+          <button data-load-schedule-example="octocrylene" class="mini-button" title="Overwrites every group's duration/capacity/notes with generic keyword-matched example values. Asks for confirmation first; can be undone.">Fill Example Durations</button>
+        </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
             <span class="label">Gantt makespan</span>
@@ -9224,6 +9221,11 @@
               </strong>
               <span class="conversion-preview-amount">${formatNumber(row.quantity)} ${escapeHtml(row.unit)}${row.secondary ? `<small>${escapeHtml(row.secondary)}</small>` : ""}</span>
               <small>${escapeHtml(row.note)}</small>
+              ${row.type === "Residual" ? `
+                <button type="button" class="mini-button" data-stage-conversion-residual="${escapeAttr(row.sourceStreamId)}" ${row.staged ? "disabled" : ""} title="Add this simulated residual to the staged reagent list below.">
+                  ${row.staged ? "Added" : "+ Reagent"}
+                </button>
+              ` : ""}
             </div>
           `).join("")}
         </div>
@@ -12937,33 +12939,6 @@
           ${showPostReactionSupport ? lutzeReactionSeparationLaunchHtml(group) : ""}
         </div>
       `;
-      root.querySelectorAll("[data-group-task-aggregate]").forEach(input => {
-        input.addEventListener("input", () => {
-          ensureGroup(input.dataset.groupTaskAggregate).task = input.value;
-          invalidateAiRefine();
-          renderGroupFlow();
-          renderExport();
-        });
-        input.addEventListener("change", renderAll);
-      });
-      root.querySelectorAll("[data-review-lutze]").forEach(button => {
-        button.addEventListener("click", () => {
-          const group = groupModel(button.dataset.reviewLutze);
-          if (!group) return;
-          const target = group.blocks.find(block => !(block.phenomena || []).length) || group.blocks[0];
-          if (target) {
-            state.selectedBlockId = target.id;
-            state.selectedGroupId = group.id;
-            state.selectedIds = [target.id];
-          } else {
-            state.selectedBlockId = null;
-            state.selectedGroupId = group.id;
-            state.selectedIds = [];
-          }
-          setInspectorTab("inspect");
-          renderAll();
-        });
-      });
       root.querySelectorAll("[data-suggest-unit-operation]").forEach(button => {
         button.addEventListener("click", () => {
           const target = ensureGroup(button.dataset.suggestUnitOperation);
@@ -12995,12 +12970,6 @@
           pushUndo();
           ensureGroup(groupId).selectedUnit = unit;
           renderAll();
-        });
-      });
-      root.querySelectorAll("[data-selection-basis]").forEach(input => {
-        input.addEventListener("change", () => {
-          ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
-          renderExport();
         });
       });
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {

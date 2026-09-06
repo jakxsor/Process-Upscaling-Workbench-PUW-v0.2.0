@@ -64,9 +64,13 @@ writtenIds.forEach(id => {
 // off tag names would miss exactly the cases that matter. An attribute is considered wired if
 // something queries [data-x], reads dataset.x, or styles it in CSS; anything else is emitted and
 // never used, which is what a zombie control looks like in this codebase.
+// Templates live in two places: JS string literals and the static page served from app.py. Both
+// count as emission, otherwise every control declared directly in the page markup looks orphaned.
 const emitted = new Map();
-Object.entries(jsSources).forEach(([file, source]) => {
-  const pattern = /\sdata-([a-z][a-z0-9-]*)=/gi;
+Object.entries({ ...jsSources, "upscaling_pipeline_tool/app.py": appHtml }).forEach(([file, source]) => {
+  // Valueless attributes count too: <button data-open-gantt> is a perfectly ordinary emission, and
+  // requiring an "=" here previously reported it as an orphaned handler.
+  const pattern = /\sdata-([a-z][a-z0-9-]*)(?=[=\s>/])/gi;
   let match;
   while ((match = pattern.exec(source))) {
     const attr = match[1].toLowerCase();
@@ -83,13 +87,28 @@ const camel = attr => attr.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
 emitted.forEach((file, attr) => {
   const queried = new RegExp(`\\[data-${attr}[\\]=^~|*$]`).test(allJs);
   const readViaDataset = new RegExp(`dataset\\.${camel(attr)}\\b`).test(allJs);
-  const styled = new RegExp(`\\[data-${attr}[\\]=^~|*$]`).test(cssSource);
+  // CSS uses these two ways: as a selector, and as a value via attr() - the latter is how the
+  // responsive table labels work, and matching only selectors reported them all as unused.
+  const styled = new RegExp(`\\[data-${attr}[\\]=^~|*$]`).test(cssSource)
+    || new RegExp(`attr\\(\\s*data-${attr}\\s*[,)]`).test(cssSource);
   if (!queried && !readViaDataset && !styled) {
     failures.push(`zombie control: templates emit data-${attr} (${file}) but nothing queries [data-${attr}], reads dataset.${camel(attr)}, or styles it`);
   }
 });
 
-// ---------------------------------------------------------------- 3. every script is served
+// ---------------------------------------------------------------- 3. orphaned handlers
+// The mirror image of a zombie control: code binds a handler to [data-x] but no template emits
+// data-x any more, so the handler is attached to nothing. This is what a refactor leaves behind when
+// it drops a control from a template and forgets its wiring, and it is invisible at runtime because
+// querySelectorAll simply returns an empty list.
+const queriedAttrs = new Set(Array.from(allJs.matchAll(/querySelectorAll\(["'`]\[data-([a-z][a-z0-9-]*)[\]=]/g), m => m[1].toLowerCase()));
+queriedAttrs.forEach(attr => {
+  if (!emitted.has(attr)) {
+    failures.push(`orphaned handler: code binds to [data-${attr}] but no template emits that attribute any more`);
+  }
+});
+
+// ---------------------------------------------------------------- 4. every script is served
 const scriptTags = new Set(Array.from(appHtml.matchAll(/<script src="\/([A-Za-z0-9_.-]+)"><\/script>/g), m => m[1]));
 const routed = new Set(Array.from(appHtml.matchAll(/"\/([A-Za-z0-9_.-]+\.js)":/g), m => m[1]));
 scriptTags.forEach(name => {

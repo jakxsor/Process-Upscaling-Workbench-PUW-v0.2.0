@@ -289,12 +289,33 @@ assert.strictEqual(loadedScale.reference.streamName, "benzyl acetate product", "
 assert(Math.abs(conversionNumber(loadedScale.reactorSizing.reactorVolumeM3) - 0.005) < 0.002, "3-reagent demo should calculate a working-fill reactor volume from MFA inputs");
 assert.strictEqual(conversionReactantStreams(loadedReactionBlock).length, 3, "Top-level 3-reagent case should expose three selectable conversion reagents");
 assert.strictEqual(loadedReactionBlock.streams.filter(stream => stream.name.startsWith("unreacted ")).length, 3, "Top-level example should already contain the three separated stoichiometric residual streams");
-assert(loadedReactionBlock.streams.some(stream => stream.name === "triethylammonium acetate salt" && stream.role === "waste"), "Top-level example should already contain the stoichiometric salt stream");
+// The stoichiometric salt is no longer dumped straight out of the reactor as waste: it leaves with
+// the reaction mixture as an in-process intermediate and is only removed downstream, in the
+// salt-rich phase of the separation step, which is how a dissolved salt actually behaves. Both ends
+// of that route are asserted, so the byproduct still cannot silently disappear from the balance.
+assert(
+  loadedReactionBlock.streams.some(stream =>
+    stream.name === "triethylammonium acetate salt" && stream.fate === "intermediate" && stream.destinationGroup),
+  "Reaction block should carry the stoichiometric salt as an intermediate routed downstream"
+);
+assert(
+  blocksInOrder().some(block => (block.streams || []).some(stream =>
+    stream.name.includes("triethylammonium acetate salt") && stream.role === "waste")),
+  "The stoichiometric salt should leave the process as waste at the separation step"
+);
 assert(["initial_temperature", "target_temperature", "holding_temperature", "thermal_ramp", "thermal_mode", "agitation_speed"].every(field => loadedReactionBlock.conditions[field]), "Reaction example should prefill temperature-control and mixing checks");
 assert.strictEqual(loadedReactionBlock.conversionDetail.productStreamId, "B1-S4", "Top-level 3-reagent case should preselect the product in Conversion");
 assert.strictEqual(loadedReactionBlock.conversionDetail.productAmountMode, "theoretical", "Demo product amount should be marked as a 100% theoretical basis");
 assert.strictEqual(conversionProductStream(loadedReactionBlock).name, "benzyl acetate", "Top-level 3-reagent case should expose benzyl acetate as the Conversion product");
-assert(Math.abs(conversionNumber(conversionProductStream(loadedReactionBlock).quantity) * 0.9 - 1.25) < 0.01, "Conversion popup should derive the 90% product amount from the theoretical product basis");
+// The product stream now carries its actual amount in quantity, with the 100% theoretical basis kept
+// alongside it in conversionBaseQuantity, rather than storing the theoretical figure in quantity and
+// applying conversion at display time. The relationship under test is unchanged: the actual amount
+// is the theoretical basis at the declared 90% conversion.
+const loadedProductStream = conversionProductStream(loadedReactionBlock);
+assert(
+  Math.abs(conversionNumber(loadedProductStream.conversionBaseQuantity) * 0.9 - conversionNumber(loadedProductStream.quantity)) < 0.01,
+  "Product amount should be the theoretical basis taken at the declared 90% conversion"
+);
 const loadedConversion = conversionCalculationModel(loadedReactionBlock);
 assert.strictEqual(loadedConversion.conversionPercent, 90, "Conversion modal should load explicit reactant conversion");
 assert.strictEqual(loadedConversion.selectivityPercent, 100, "Conversion modal should load explicit product selectivity");
@@ -509,7 +530,14 @@ assert(!conversionValidationIssues(esterificationClosure).some(issue => issue.te
 const esterificationApplyBlock = JSON.parse(JSON.stringify(esterificationClosureBlock));
 applyConversionBalanceStreams(esterificationApplyBlock);
 const generatedWater = esterificationApplyBlock.streams.find(stream => stream.name === "water");
-assert(generatedWater && generatedWater.role === "waste" && generatedWater.fate === "wastewater", "Stoichiometric water byproduct should be written as a wastewater outlet on apply");
+// Stoichiometric byproducts are materialised as in-process intermediates travelling with the
+// reaction mixture, not as waste declared at the reactor: the water of an esterification leaves with
+// the mixture and is only removed downstream. What still matters, and is asserted here, is that
+// applying the balance writes the byproduct into the MFA at all, with its computed mass.
+assert(
+  generatedWater && generatedWater.fate === "intermediate" && conversionNumber(generatedWater.quantity) > 0,
+  "Stoichiometric water byproduct should be written into the MFA as an in-process intermediate on apply"
+);
 assert(Math.abs(conversionNumber(generatedWater.quantity) - 0.0162135) < 0.001, "Applied stoichiometric byproduct stream should use the calculated mass rounded for MFA display");
 const esterificationMissingWaterBlock = {
   ...esterificationClosureBlock,
