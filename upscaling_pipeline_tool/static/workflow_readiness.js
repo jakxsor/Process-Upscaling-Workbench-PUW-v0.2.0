@@ -173,9 +173,9 @@
           reactionBlocks.length ? `${reactionBlocks.length} block(s) carry reaction phenomena.` : "No block carries a reaction phenomenon yet."),
         item("Stoichiometry", "important", null,
           "Not machine-checkable: confirm a balanced or semi-balanced reaction is recorded in block notes."),
-        item("Yield / conversion", "important",
+        item("Reaction yield", "important",
           blocks.length ? reactionBlocks.every(block => hasCondition(block, ["conversion_yield"])) && reactionBlocks.length > 0 : false,
-          "Record conversion/yield on each reaction block (conversion_yield condition)."),
+          "Record reaction yield on each reaction block; add conversion and selectivity in separation screening when residuals are calculated."),
         item("Input materials (identity + quantity)", "critical",
           blocks.length ? allStreams.some(s => s.role === "input") && allStreams.filter(s => s.role === "input").every(s => String(s.quantity || "").trim() && String(s.unit || "").trim()) : false,
           "Declare fresh inputs with quantity and unit; intermediates flow implicitly between linked blocks."),
@@ -219,7 +219,7 @@
             if (!needsReactionEvidence && !needsTransferEvidence) return true;
             return (!needsReactionEvidence || hasCondition(block, ["conversion_yield"])) && (!needsTransferEvidence || hasCondition(block, ["transfer_endpoint"]));
           }) : false,
-          "Reaction blocks should record conversion/yield; transfer blocks should record an observable completion cue."),
+          "Reaction blocks should record reaction yield; transfer blocks should record an observable completion cue."),
         item("Dominant phenomena per step (>= 1-2 per block)", "critical",
           blocks.length ? blocks.every(block => phen(block).length >= 1) : false,
           "Assign at least one phenomenon per block (paper Table 3)."),
@@ -258,6 +258,7 @@
       summary.className = model.missingCritical ? "small readiness-summary critical" : model.missingImportant ? "small readiness-summary important" : "small readiness-summary ok";
       panel.hidden = !state.showDataReadiness;
       $("toggleReadiness").textContent = state.showDataReadiness ? "Hide" : "Details";
+      renderDataProvenance();
       if (!state.showDataReadiness) return;
       panel.innerHTML = model.categories.map(category => `
         <div class="readiness-category">
@@ -272,7 +273,6 @@
           `).join("")}
         </div>
       `).join("");
-      renderDataProvenance();
     }
 
     // A different axis from dataReadinessModel above: that one asks "is this value present at all",

@@ -288,20 +288,38 @@
     function exportSeparationSimulator(group) {
       const groupState = ensureGroup(group.id);
       const model = separationSimulatorModel(group);
+      const pathway = separationPathwayModel(group, model);
       return {
-        source: "Garg et al. accepted manuscript: Algorithm A1.1 + KB3.1/Table S.10, implemented as optional hypothesis screening",
+        source: "Garg et al. accepted manuscript: Algorithm A1.1 plus selected KB3.1/Table S.10 and KB3.2/Table S.11 rules",
+        methodScope: "Optional pathway screening; not a full superstructure, process simulation, economic ranking, or Enthalpy Index calculation",
         substances: model.substances,
         binaryPairs: model.pairs.map(pair => ({
           pairKey: pair.key,
           componentA: pair.a.name,
           componentB: pair.b.name,
           ratios: pair.ratios,
+          propertyChecks: pair.propertyChecks,
           insights: pair.insights,
           routeVariants: binaryRouteVariants(group.id, pair)
         })),
         suggestions: model.suggestions,
         reactionBalance: reactionBalanceModel(group, model),
         workupPlan: workupPlanModel(group, model),
+        pathway: {
+          status: pathway.status,
+          complete: pathway.complete,
+          mainProduct: pathway.mainProduct?.name || "",
+          unresolved: pathway.unresolved,
+          steps: pathway.steps,
+          alternatives: pathway.alternatives.map(item => ({
+            id: item.id,
+            label: item.label,
+            status: item.status,
+            metrics: item.metrics,
+            unresolved: item.outcome.unresolved,
+            steps: item.steps
+          }))
+        },
         notes: groupState.separationSimulator.notes || ""
       };
     }

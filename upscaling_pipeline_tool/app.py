@@ -38,7 +38,7 @@ APP_HTML = r"""<!doctype html>
   <header>
     <div>
       <h1>Process Upscaling Workbench</h1>
-      <div class="subtitle">Lab protocol to industrial flowsheet: blocks, phenomena, unit operations, network, heuristics, and scale-up schedule.</div>
+      <div class="subtitle">From laboratory protocol to an auditable industrial flowsheet.</div>
     </div>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
@@ -75,9 +75,9 @@ APP_HTML = r"""<!doctype html>
         <button id="toggleProtocolPanel" class="eye-button" title="Show/hide protocol panel">&#8249;</button>
         <div class="source-panel-head-body">
           <div>
-            <h2>Laboratory Protocol Description</h2>
+            <h2>Protocol</h2>
             <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
-            <span class="muted small">Select text, then create a block</span>
+            <span class="muted small">Select a passage to create a process block.</span>
           </div>
         </div>
       </div>
@@ -85,8 +85,8 @@ APP_HTML = r"""<!doctype html>
         <div id="sourceProtocolTab" class="source-tab-view stack">
           <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
           <div class="row">
-            <button id="loadTextSide" class="primary">Load Text View</button>
-            <button id="createBlockSide">Create Block From Selection</button>
+            <button id="loadTextSide" class="primary">Load Protocol</button>
+            <button id="createBlockSide">Create Block</button>
             <button id="clearProject">Clear Blocks</button>
           </div>
           <div id="selectionInfo" class="muted">No active text selection.</div>
@@ -102,7 +102,7 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
-          <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Auto-Layout</button>
+          <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Layout</button>
           <div class="header-dropdown">
             <button id="connectionsToggle" aria-haspopup="true" aria-expanded="false" title="Auto-connect groups, or review/remove individual arrows">Connections ▾</button>
             <div id="connectionsMenu" class="header-dropdown-menu connections-dropdown-menu" hidden role="menu">
@@ -111,14 +111,19 @@ APP_HTML = r"""<!doctype html>
               <div id="linkSummary"></div>
             </div>
           </div>
-          <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset</button>
-          <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center</button>
-          <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit</button>
-          <div class="workflow-zoom-row">
-            <button id="zoomOut" title="Zoom out">-</button>
-            <span id="zoomReadout" class="zoom-readout">100%</span>
-            <button id="zoomIn" title="Zoom in">+</button>
-          </div>
+          <details class="header-dropdown board-view-dropdown">
+            <summary title="Center, fit, reset, or zoom the process board">View</summary>
+            <div class="header-dropdown-menu board-view-menu">
+              <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center selection</button>
+              <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit board</button>
+              <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset view</button>
+              <div class="workflow-zoom-row">
+                <button id="zoomOut" title="Zoom out" aria-label="Zoom out">-</button>
+                <span id="zoomReadout" class="zoom-readout">100%</span>
+                <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
       <div class="panel-body">
@@ -149,18 +154,30 @@ APP_HTML = r"""<!doctype html>
               <div class="label">Selected Description</div>
               <div id="selectedBlockInfo" class="muted">No block selected.</div>
             </div>
-            <label>
-              <div class="label">Description Text</div>
-              <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
-            </label>
-            <span class="step-flag"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span></span>
-            <label>
-              <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>
-              <select id="behaviorSelect" class="behavior-select"></select>
-            </label>
-            <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
-            <div id="phenomenaGridSection"></div>
+            <div id="blockInspectorFields" class="stack">
+              <label>
+                <div class="label">Description Text</div>
+                <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
+              </label>
+              <span class="step-flag"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span></span>
+              <label>
+                <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>
+                <select id="behaviorSelect" class="behavior-select"></select>
+              </label>
+              <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
+              <div id="phenomenaGridSection"></div>
+            </div>
           </div>
+
+          <details class="card inspector-details">
+            <summary>
+              <span><strong>Group Properties</strong><small>Density, heat capacity and screening inputs</small></span>
+            </summary>
+            <div class="inspector-details-body">
+              <div class="muted small">Physical properties for the selected task group. Heat capacity feeds the energy bridge; density feeds automatic reactor sizing from mass-based MFA.</div>
+              <div id="groupProperties"></div>
+            </div>
+          </details>
 
           <pre id="jsonOut" hidden>{}</pre>
 
@@ -175,11 +192,15 @@ APP_HTML = r"""<!doctype html>
             <div id="dataReadinessPanel" hidden></div>
           </div>
 
-          <div class="card stack">
-            <div class="label">Data Provenance</div>
-            <div class="muted small">How much of the declared streams is real vs. assumed - a different axis from Data Readiness above, which only checks whether a value is present at all.</div>
-            <div id="dataProvenanceSummary"></div>
-          </div>
+          <details class="card inspector-details">
+            <summary>
+              <span><strong>Data Provenance</strong><small>Measured, database and assumed values</small></span>
+            </summary>
+            <div class="inspector-details-body">
+              <div class="muted small">Shows how much declared stream data is measured, sourced, or assumed. Data Readiness only checks whether required values are present.</div>
+              <div id="dataProvenanceSummary"></div>
+            </div>
+          </details>
         </div>
 
         <div id="heuristicsPanelTab" class="tab-view scale-tab" hidden>
@@ -210,8 +231,8 @@ APP_HTML = r"""<!doctype html>
           <section class="card stack scale-sticky-card">
             <div class="scale-run-row">
               <div>
-                <div class="label">Scale-Up & Gantt Control</div>
-                <div class="muted small">Numerical scale-up and bottleneck review after heuristic screening.</div>
+                <div class="label">Scale-Up Basis</div>
+                <div class="muted small">Production target and numerical scale-up after heuristic screening.</div>
               </div>
               <button id="refineProject" class="primary">Run Check</button>
             </div>
@@ -222,8 +243,8 @@ APP_HTML = r"""<!doctype html>
           <div class="scale-scroll-body stack">
             <section class="card stack">
               <div>
-                <div class="label">Scale-Up & Gantt Details</div>
-                <div class="muted small">Schedule, correction factors, scaled MFA, recycle/fate, and energy bridge.</div>
+                <div class="label">Scale-Up Results</div>
+                <div class="muted small">Basis, equipment checks, schedule summary, MFA, recycle, and energy.</div>
               </div>
               <div id="scaleBasisPanel"></div>
             </section>
@@ -276,7 +297,7 @@ APP_HTML = r"""<!doctype html>
           <h2 id="pubchemResolveTitle">Resolve PubChem Compound</h2>
           <p id="pubchemResolveSubtitle">Search manually by compound name or CAS number.</p>
         </div>
-        <button id="closePubchemResolve">Close</button>
+        <button id="closePubchemResolve" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="pubchemResolveBody" class="modal-body"></div>
     </section>
@@ -314,7 +335,7 @@ APP_HTML = r"""<!doctype html>
           <div class="label">Scale-up bottleneck relief</div>
           <h2 id="splitGroupTitle">Split <span id="splitGroupIdLabel"></span> Into Parallel Units</h2>
         </div>
-        <button id="closeSplitGroupModal" class="mini-button">Close</button>
+        <button id="closeSplitGroupModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <div id="splitGroupWarning" class="muted small" hidden></div>
@@ -377,7 +398,7 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="flowsheet-hint">
-        <span>PFD-style board generated from declared group links. Click a unit for details; double-click a unit label to edit it.</span>
+        <span>Click a unit for details. Double-click its label to edit it.</span>
         <div class="flowsheet-layer-controls" aria-label="Flowsheet view layers">
           <span>View</span>
           <button id="flowsheetCleanPreset" class="mini-button" title="Clean presentation view: main units and process arrows only">Clean</button>
@@ -397,12 +418,38 @@ APP_HTML = r"""<!doctype html>
     <section class="modal-panel conversion-panel" role="dialog" aria-modal="true" aria-labelledby="conversionModalTitle">
       <div class="modal-head">
         <div>
-          <div class="label">Reaction mass split</div>
-          <h2 id="conversionModalTitle">Conversion</h2>
+          <div class="label">User-guided reaction definition</div>
+          <h2 id="conversionModalTitle">Reaction Balance</h2>
         </div>
-        <button id="closeConversionModal" class="mini-button">Close</button>
+        <button id="closeConversionModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="conversionModalBody" class="modal-body"></div>
+    </section>
+  </div>
+
+  <div id="ganttModal" class="modal-backdrop" hidden>
+    <section class="modal-panel gantt-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ganttModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Integrated production schedule</div>
+          <h2 id="ganttModalTitle">Schedule &amp; Gantt</h2>
+        </div>
+        <button id="closeGanttModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div id="ganttModalBody" class="modal-body"></div>
+    </section>
+  </div>
+
+  <div id="taskTimetableModal" class="modal-backdrop" hidden>
+    <section class="modal-panel task-timetable-modal-panel" role="dialog" aria-modal="true" aria-labelledby="taskTimetableModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Events inside one task</div>
+          <h2 id="taskTimetableModalTitle">Task Timetable</h2>
+        </div>
+        <button id="closeTaskTimetableModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div id="taskTimetableModalBody" class="modal-body"></div>
     </section>
   </div>
 
@@ -413,7 +460,7 @@ APP_HTML = r"""<!doctype html>
           <div id="separationSimulatorEyebrow" class="label">Optional KB3.1 sandbox</div>
           <h2 id="separationSimulatorTitle">Separation Simulator</h2>
         </div>
-        <button id="closeSeparationSimulator" class="mini-button">Close</button>
+        <button id="closeSeparationSimulator" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="separationSimulatorBody" class="modal-body"></div>
     </section>
@@ -426,7 +473,7 @@ APP_HTML = r"""<!doctype html>
           <div class="label">Heuristic Rule Application</div>
           <h2 id="aiRefineTitle">Process Rule Check & External API</h2>
         </div>
-        <button id="closeAiRefineModal" class="mini-button">Close</button>
+        <button id="closeAiRefineModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="modal-columns">
