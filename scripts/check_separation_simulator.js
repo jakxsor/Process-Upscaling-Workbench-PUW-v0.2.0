@@ -135,6 +135,53 @@ assert.strictEqual(llGate.eligibility, "not eligible", "L-L suggestion should be
 assert.strictEqual(llGate.selectable, false, "Rejected L-L suggestion should not be selectable");
 assert(!binaryRouteVariants("GV", vaporModel.pairs[0]).some(item => item.title === "Liquid-liquid split route"), "Rejected L-L suggestion should not become a route variant");
 
+const noTemperatureSimulator = separationCore.normalizeSeparationSimulator({
+  substances: [
+    { id: "CS1", name: "volatile", role: "solvent", phase: "L", fate: "recover", tb: "350", pvap: "10000" },
+    { id: "CS2", name: "product", role: "product", phase: "L", fate: "product", tb: "350", pvap: "10" }
+  ],
+  reactionBalance: { mainProductId: "CS2" }
+}, streamPhases);
+let conditionedModel = separationCore.separationSimulatorModel(noTemperatureSimulator, streamPhases);
+assert.strictEqual(conditionedModel.pairs[0].ratios.pvap, null, "Pvap ratio should be blocked when measurement temperatures are missing");
+assert.strictEqual(conditionedModel.pairs[0].propertyChecks.pvap.status, "missing-condition", "Pvap comparison should explain the missing condition");
+noTemperatureSimulator.substances[0].pvapTemperature = "298.15";
+noTemperatureSimulator.substances[1].pvapTemperature = "298.15";
+conditionedModel = separationCore.separationSimulatorModel(noTemperatureSimulator, streamPhases);
+assert.strictEqual(conditionedModel.pairs[0].ratios.pvap, 1000, "Pvap ratio should be available at matching temperatures");
+noTemperatureSimulator.substances[1].pvapTemperature = "320";
+conditionedModel = separationCore.separationSimulatorModel(noTemperatureSimulator, streamPhases);
+assert.strictEqual(conditionedModel.pairs[0].ratios.pvap, null, "Pvap ratio should be blocked at incompatible temperatures");
+assert.strictEqual(conditionedModel.pairs[0].propertyChecks.pvap.status, "incompatible-condition", "Pvap mismatch should be explicit");
+
+const unknownPhaseSimulator = separationCore.normalizeSeparationSimulator({
+  substances: [
+    { id: "CS1", name: "volatile", role: "solvent", phase: "unknown", fate: "recover", tb: "300" },
+    { id: "CS2", name: "product", role: "product", phase: "L", fate: "product", tb: "500" }
+  ]
+}, streamPhases);
+const unknownPhaseModel = separationCore.separationSimulatorModel(unknownPhaseSimulator, streamPhases);
+const unknownPhaseRoute = unknownPhaseModel.suggestions.find(item => item.ruleId === "KB3.1-VL-BP-PVAP");
+assert(unknownPhaseRoute, "A property trigger should still be diagnosed when phase is missing");
+assert.strictEqual(unknownPhaseRoute.selectable, false, "Missing phase should block route selection");
+
+const blockedSimulator = separationCore.normalizeSeparationSimulator({
+  substances: [
+    { id: "CS1", name: "residual A", role: "reactant", phase: "L", fate: "recover" },
+    { id: "CS2", name: "residual B", role: "reactant", phase: "L", fate: "waste" },
+    { id: "CS3", name: "target", role: "product", phase: "L", fate: "product" }
+  ],
+  reactionBalance: { mainProductId: "CS3" }
+}, streamPhases);
+const blockedModel = separationCore.separationSimulatorModel(blockedSimulator, streamPhases);
+const blockedPath = separationCore.separationPathwayModel({ id: "GB", blocks: [] }, blockedModel, blockedSimulator.reactionBalance, blockedSimulator.pathway);
+assert.strictEqual(blockedPath.status, "blocked_missing_data", "A mixture with unresolved components and missing evidence should be blocked by data quality");
+assert.strictEqual(blockedPath.complete, false, "No available route must not be interpreted as pathway completion");
+assert.strictEqual(blockedPath.canApply, false, "A blocked pathway must not be applicable");
+const invalidAlphaPair = blockedModel.pairs[0];
+invalidAlphaPair.insights.relativeVolatility = "0";
+assert(!separationCore.separationSuggestionsForPair(invalidAlphaPair).some(item => item.ruleId === "SCREEN-RVOL-LOW"), "Zero relative volatility must not trigger the low-alpha rule");
+
 state.blocks = [{
   id: "B100",
   start: 0,
@@ -163,7 +210,7 @@ state.groups = {
         { id: "CS3", name: "main product", role: "product", phase: "L", fate: "product", quantity: "", unit: "kg", stoichCoeff: "1", mw: "200" }
       ],
       pairInsights: {},
-      reactionBalance: { conversionPercent: "95", basis: "conversion", limiting: "auto", mainProductId: "CS3", note: "" },
+      reactionBalance: { conversionPercent: "80", selectivityPercent: "50", yieldPercent: "", basis: "conversion", limiting: "auto", mainProductId: "CS3", note: "" },
       lookupSummary: {},
       notes: ""
     }
@@ -172,13 +219,23 @@ state.groups = {
 group = groupModel("GR");
 const balance = reactionBalanceModel(group);
 assert.strictEqual(balance.mainProduct.name, "main product", "reaction balance should use selected main product");
-assert(Math.abs(balance.residualRows.find(row => row.name === "reactant A").finalMassKg - 0.05) < 0.0001, "95% conversion should leave 5% reactant A residual");
-assert(Math.abs(balance.residualRows.find(row => row.name === "reactant B").finalMassKg - 0.05) < 0.0001, "95% conversion should leave 5% reactant B residual");
+assert(Math.abs(balance.residualRows.find(row => row.name === "reactant A").finalMassKg - 0.2) < 0.0001, "80% conversion should leave 20% reactant A residual");
+assert(Math.abs(balance.residualRows.find(row => row.name === "reactant B").finalMassKg - 0.2) < 0.0001, "80% conversion should leave 20% reactant B residual");
+assert(Math.abs(balance.yield - 0.4) < 0.0001, "Yield should be derived from conversion times selectivity when no reported yield is supplied");
+assert(Math.abs(balance.rows.find(row => row.name === "main product").finalMassKg - 0.8) < 0.0001, "Product estimate should use yield rather than reactant conversion");
+const invalidBalance = separationCore.reactionBalanceModel(group, separationSimulatorModel(group), {
+  conversionPercent: "80",
+  yieldPercent: "90",
+  limiting: "auto",
+  mainProductId: "CS3"
+});
+assert(Number.isNaN(invalidBalance.yield), "Yield above conversion should not be used for product formation");
+assert(invalidBalance.issues.some(item => item.includes("yield cannot exceed conversion")), "Invalid conversion/yield relation should be reported");
 const balanceHtml = reactionBalanceHtml(group, separationSimulatorModel(group));
 assert(balanceHtml.includes("Main Product"), "reaction balance UI should identify the main product group");
 assert(balanceHtml.includes("Co-products / Byproducts"), "reaction balance UI should identify co-products and byproducts");
 assert(balanceHtml.includes("Reactants"), "reaction balance UI should identify reactants before residual waste generation");
-assert(balanceHtml.includes("0.05 kg unreacted"), "reaction balance UI should show unreacted reactant portions");
+assert(balanceHtml.includes("0.2 kg unreacted"), "reaction balance UI should show unreacted reactant portions");
 applyReactionResidualWasteStreams("GR");
 const residualWaste = state.blocks[0].streams.filter(stream => stream.role === "waste" && stream.name.startsWith("unreacted "));
 assert.strictEqual(residualWaste.length, 2, "residual reactants should be written as waste/recovery streams");

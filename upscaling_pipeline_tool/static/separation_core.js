@@ -12,11 +12,13 @@
     { id: "pvap", label: "Pvap", unit: "Pa", thresholdLabel: "Pvap ratio" },
     { id: "solubilityParameter", label: "Sol. parameter", unit: "", thresholdLabel: "solubility parameter ratio" },
     { id: "molarVolume", label: "Molar volume", unit: "m3/kmol", thresholdLabel: "molar volume ratio" },
-    { id: "molecularDiameter", label: "Mol. diameter", unit: "pm", thresholdLabel: "molecular diameter ratio" }
+    { id: "molecularDiameter", label: "Mol. diameter", unit: "nm", thresholdLabel: "molecular diameter ratio" },
+    { id: "vdwVolume", label: "VdW volume", unit: "", thresholdLabel: "Van der Waals volume ratio" },
+    { id: "criticalTemp", label: "Critical T", unit: "K", thresholdLabel: "critical-temperature ratio" }
   ];
 
   function numberFromText(value) {
-    const match = String(value || "").replace(",", ".").match(/-?\d+(?:\.\d+)?/);
+    const match = String(value ?? "").replace(",", ".").match(/-?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : NaN;
   }
 
@@ -100,26 +102,52 @@
       note: "A solid-liquid route becomes plausible when melting/eutectic behavior creates a separable solid phase."
     },
     {
-      id: "KB3.1-MEMBRANE-SIZE",
-      label: "Size/affinity contrast",
-      source: "A1.1 + KB3.1/Table S.10",
-      test: data => data.ratios.molecularDiameter >= 2 || data.ratios.mw >= 1.9 || data.ratios.molarVolume >= 1.02 || data.ratios.solubilityParameter >= 1.20,
+      id: "KB3.1-LS-SIZE",
+      label: "Liquid-solid molecular-size contrast",
+      source: "paper-derived: A1.1 + KB3.1/Table S.10",
+      test: data => data.ratios.molecularDiameter >= 2 && data.ratios.mw >= 1.90,
       evidence: data => [
-        data.ratios.molecularDiameter >= 2 ? `molecular diameter ratio ${formatRatio(data.ratios.molecularDiameter)} >= 2.00` : "",
-        data.ratios.mw >= 1.9 ? `MW ratio ${formatRatio(data.ratios.mw)} >= 1.90` : "",
-        data.ratios.molarVolume >= 1.02 ? `molar volume ratio ${formatRatio(data.ratios.molarVolume)} >= 1.02` : "",
-        data.ratios.solubilityParameter >= 1.20 ? `solubility parameter ratio ${formatRatio(data.ratios.solubilityParameter)} >= 1.20` : ""
-      ].filter(Boolean),
-      pbb: ["PT(MVL)", "PT(MLL)", "PS(VL)", "PS(LL)"],
-      units: ["Membrane pervaporation", "Membrane vapor permeation", "Liquid-liquid extraction"],
+        `molecular diameter ratio ${formatRatio(data.ratios.molecularDiameter)} >= 2.00`,
+        `MW ratio ${formatRatio(data.ratios.mw)} >= 1.90`
+      ],
+      pbb: ["PC(LS)", "PS(LS)"],
+      units: ["Membrane crystallization"],
       level: "partial",
-      note: "Size or affinity contrast can justify membrane/affinity options, but needs phase and selectivity evidence."
+      note: "The Table S.10 liquid-solid size criteria are kept separate from vapor and liquid membrane criteria."
+    },
+    {
+      id: "KB3.1-MEMBRANE-VAPOR",
+      label: "Vapor membrane size contrast",
+      source: "paper-derived: A1.1 + KB3.1/Table S.10",
+      test: data => data.ratios.vdwVolume >= 1.07 && data.ratios.criticalTemp >= 1.10,
+      evidence: data => [
+        `VdW volume ratio ${formatRatio(data.ratios.vdwVolume)} >= 1.07`,
+        `critical-temperature ratio ${formatRatio(data.ratios.criticalTemp)} >= 1.10`
+      ],
+      pbb: ["PT(MVV)", "PS(VV)"],
+      units: ["Membrane vapor permeation"],
+      level: "partial",
+      note: "Vapor membrane screening requires both size and critical-temperature evidence."
+    },
+    {
+      id: "KB3.1-MEMBRANE-LIQUID",
+      label: "Liquid membrane affinity contrast",
+      source: "paper-derived: A1.1 + KB3.1/Table S.10",
+      test: data => data.ratios.molarVolume >= 1.02 && data.ratios.solubilityParameter >= 1.00,
+      evidence: data => [
+        `molar volume ratio ${formatRatio(data.ratios.molarVolume)} >= 1.02`,
+        `solubility parameter ratio ${formatRatio(data.ratios.solubilityParameter)} >= 1.00`
+      ],
+      pbb: ["PT(MVL)", "PS(VL)"],
+      units: ["Membrane pervaporation"],
+      level: "partial",
+      note: "Liquid membrane screening requires both molar-volume and affinity evidence."
     },
     {
       id: "SCREEN-RVOL-LOW",
       label: "Simple distillation weak",
       source: "KB3.1/Table S.10 screening interpretation",
-      test: data => numberFromText(data.insights.relativeVolatility) <= 1.05,
+      test: data => numberFromText(data.insights.relativeVolatility) > 0 && numberFromText(data.insights.relativeVolatility) <= 1.05,
       evidence: data => [`relative volatility ${formatRatio(numberFromText(data.insights.relativeVolatility))} <= 1.05`],
       pbb: ["PT(MVV)", "PT(MVL)", "PT(MLL)", "PS(VV)", "PS(VL)", "PS(LL)"],
       units: ["Extractive distillation", "Azeotropic distillation", "Membrane pervaporation", "Liquid-liquid extraction"],
@@ -129,7 +157,7 @@
     {
       id: "SCREEN-THERMAL-SENSITIVE",
       label: "Thermal sensitivity constraint",
-      source: "KB3.1 plus local scale-up screening",
+      source: "local extension: KB3.1-informed scale-up screening",
       test: data => data.components.some(component => component.thermalSensitivity === "high") && (data.ratios.tb >= 1.23 || data.ratios.pvap >= 10),
       evidence: data => [`high thermal sensitivity: ${data.components.filter(component => component.thermalSensitivity === "high").map(component => component.name).join(", ")}`],
       pbb: ["PT(VL)", "PS(VL)", "ES(H)"],
@@ -140,23 +168,24 @@
   ];
 
   const kb32UnitOperationRules = [
-    { id: "KB3.2-PARTIAL-VAP", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Partial condensation / vaporization", feedPhase: "V and/or L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V or L", agentAdded: "ESA", outlets: 1 },
-    { id: "KB3.2-FLASH", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Flash vaporization", feedPhase: "L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V", agentAdded: "pressure reduction", outlets: 2 },
-    { id: "KB3.2-EVAP", ruleIds: ["KB3.1-VL-BP-PVAP", "SCREEN-THERMAL-SENSITIVE"], name: "Evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V", agentAdded: "ESA", outlets: 1 },
-    { id: "KB3.2-DISTILL", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-AZEO", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Azeotropic distillation", feedPhase: "V and/or L", pbb: ["M", "PC(VL)", "PT(VL)", "PS(VL)", "PC(LL)", "PS(LL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
-    { id: "KB3.2-EXTRACTIVE", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Extractive distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
-    { id: "KB3.2-PRESSURE-SWING", ruleIds: ["KB3.1-PRESSURE-SENSITIVE-AZEO"], name: "Pressure-swing distillation", feedPhase: "V and/or L", pbb: ["2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(D)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-LLE", ruleIds: ["KB3.1-LL-GAP", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Liquid-liquid extraction", feedPhase: "L", pbb: ["M", "PC(LL)", "PT(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "MSA", outlets: 2 },
-    { id: "KB3.2-DECANTER", ruleIds: ["KB3.1-LL-GAP"], name: "Decanter", feedPhase: "L", pbb: ["M", "PC(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "none", outlets: 2 },
-    { id: "KB3.2-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Crystallization", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-MELT-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Melt crystallization", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-PERVAP", ruleIds: ["KB3.1-MEMBRANE-SIZE", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Membrane pervaporation", feedPhase: "V and L", pbb: ["M", "PT(MVL)", "PS(VL)"], outletPhase: "L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-VAPOR-PERM", ruleIds: ["KB3.1-MEMBRANE-SIZE"], name: "Membrane vapor permeation", feedPhase: "V", pbb: ["M", "PT(MVV)", "PS(VV)"], outletPhase: "V", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-THIN-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Thin-film evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-WIPED-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Wiped-film evaporation", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-SHORT-PATH", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Short-path distillation", feedPhase: "L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
-    { id: "KB3.2-VACUUM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Vacuum distillation", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 }
+    { id: "KB3.2-PARTIAL-VAP", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Partial condensation / vaporization", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V and/or L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V or L", agentAdded: "ESA", outlets: 1 },
+    { id: "KB3.2-FLASH", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Flash vaporization", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["PT(VL)", "PS(VL)"], outletPhase: "V", agentAdded: "pressure reduction", outlets: 2 },
+    { id: "KB3.2-EVAP", ruleIds: ["KB3.1-VL-BP-PVAP", "SCREEN-THERMAL-SENSITIVE"], name: "Evaporation", source: "paper-derived with local thermal extension", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V", agentAdded: "ESA", outlets: 1 },
+    { id: "KB3.2-DISTILL", ruleIds: ["KB3.1-VL-BP-PVAP"], name: "Distillation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-AZEO", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Azeotropic distillation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V and/or L", pbb: ["M", "PC(VL)", "PT(VL)", "PS(VL)", "PC(LL)", "PS(LL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
+    { id: "KB3.2-EXTRACTIVE", ruleIds: ["KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Extractive distillation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "MSA + ESA", outlets: 2 },
+    { id: "KB3.2-PRESSURE-SWING", ruleIds: ["KB3.1-PRESSURE-SENSITIVE-AZEO"], name: "Pressure-swing distillation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V and/or L", pbb: ["2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(D)", "ES(C)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-LLE", ruleIds: ["KB3.1-LL-GAP", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Liquid-liquid extraction", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["M", "PC(LL)", "PT(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "MSA", outlets: 2 },
+    { id: "KB3.2-DECANTER", ruleIds: ["KB3.1-LL-GAP"], name: "Decanter", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["M", "PC(LL)", "PS(LL)"], outletPhase: "L", agentAdded: "none", outlets: 2 },
+    { id: "KB3.2-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Crystallization", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-MELT-CRYST", ruleIds: ["KB3.1-LS-MELTING"], name: "Melt crystallization", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["M", "PT(LS)", "PS(LS)", "ES(C/H)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-MEMBRANE-CRYST", ruleIds: ["KB3.1-LS-SIZE"], name: "Membrane crystallization", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["PC(LS)", "PS(LS)"], outletPhase: "S and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-PERVAP", ruleIds: ["KB3.1-MEMBRANE-LIQUID", "KB3.1-AZEO", "SCREEN-RVOL-LOW"], name: "Membrane pervaporation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "L", pbb: ["M", "PT(MVL)", "PS(VL)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-VAPOR-PERM", ruleIds: ["KB3.1-MEMBRANE-VAPOR"], name: "Membrane vapor permeation", source: "paper-derived: KB3.2/Table S.11", feedPhase: "V", pbb: ["M", "PT(MVV)", "PS(VV)"], outletPhase: "V", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-THIN-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Thin-film evaporation", source: "local extension: scale-up screening", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-WIPED-FILM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Wiped-film evaporation", source: "local extension: scale-up screening", feedPhase: "L", pbb: ["M", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-SHORT-PATH", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Short-path distillation", source: "local extension: scale-up screening", feedPhase: "L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 },
+    { id: "KB3.2-VACUUM", ruleIds: ["SCREEN-THERMAL-SENSITIVE"], name: "Vacuum distillation", source: "local extension: scale-up screening", feedPhase: "V and/or L", pbb: ["M", "2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outletPhase: "V and L", agentAdded: "ESA", outlets: 2 }
   ];
 
   function normalizeLookupSummary(value) {
@@ -170,9 +199,13 @@
 
   function normalizeReactionBalance(value) {
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const legacyBasis = ["conversion", "yield", "assumption"].includes(source.basis) ? source.basis : "conversion";
+    const legacyPercent = String(source.conversionPercent ?? "");
     return {
-      conversionPercent: String(source.conversionPercent || ""),
-      basis: ["conversion", "yield", "assumption"].includes(source.basis) ? source.basis : "conversion",
+      conversionPercent: legacyBasis === "yield" && source.yieldPercent === undefined ? "" : legacyPercent,
+      selectivityPercent: String(source.selectivityPercent ?? ""),
+      yieldPercent: String(source.yieldPercent ?? (legacyBasis === "yield" ? legacyPercent : "")),
+      basis: legacyBasis,
       limiting: String(source.limiting || "auto"),
       mainProductId: String(source.mainProductId || "auto"),
       note: String(source.note || "")
@@ -181,7 +214,7 @@
 
   function normalizeSeparationSubstance(value, index = 0, streamPhases = []) {
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const field = id => String(source[id] || "");
+    const field = id => String(source[id] ?? "");
     return {
       id: String(source.id || `CS${index + 1}`),
       name: field("name"),
@@ -190,6 +223,9 @@
       fate: substanceFates.includes(source.fate) ? source.fate : "unknown",
       quantity: field("quantity"),
       unit: field("unit"),
+      reactionFeedQuantity: field("reactionFeedQuantity"),
+      reactionFeedUnit: field("reactionFeedUnit"),
+      reactionGenerated: Boolean(source.reactionGenerated),
       stoichCoeff: field("stoichCoeff"),
       residualOf: field("residualOf"),
       residualSourceId: field("residualSourceId"),
@@ -202,11 +238,14 @@
       xlogp: field("xlogp"),
       exactMass: field("exactMass"),
       propertySource: field("propertySource"),
+      propertyStatus: ["unknown", "reported", "experimental", "database", "estimated", "assumption"].includes(source.propertyStatus) ? source.propertyStatus : "unknown",
       thermalSensitivity: thermalOptions.includes(source.thermalSensitivity) ? source.thermalSensitivity : "unknown",
       mw: field("mw"),
       tb: field("tb"),
       tm: field("tm"),
       pvap: field("pvap"),
+      pvapTemperature: field("pvapTemperature"),
+      pvapTemperatureUnit: ["K", "C", "F"].includes(source.pvapTemperatureUnit) ? source.pvapTemperatureUnit : "K",
       solubilityParameter: field("solubilityParameter"),
       molarVolume: field("molarVolume"),
       criticalTemp: field("criticalTemp"),
@@ -250,18 +289,25 @@
         id: String(candidate.id || candidate.name || ""),
         name: String(candidate.name || ""),
         source: String(candidate.source || ""),
+        sourceClass: String(candidate.sourceClass || ""),
         feedPhase: String(candidate.feedPhase || ""),
         outletPhase: String(candidate.outletPhase || ""),
         pbb: Array.isArray(candidate.pbb) ? candidate.pbb.map(String).filter(Boolean) : [],
         agentAdded: String(candidate.agentAdded || ""),
         outlets: Number.isFinite(Number(candidate.outlets)) ? Number(candidate.outlets) : 0
       })).filter(candidate => candidate.name) : [],
-      score: Number.isFinite(Number(step.score)) ? Number(step.score) : 0,
+      evidenceLevel: ["supported", "partial", "hypothesis", "blocked"].includes(step.evidenceLevel)
+        ? step.evidenceLevel
+        : step.directionConfidence === "supported" ? "supported" : "partial",
+      directionConfidence: ["supported", "review", "manual"].includes(step.directionConfidence) ? step.directionConfidence : "review",
+      methodSources: Array.isArray(step.methodSources) ? step.methodSources.map(String).filter(Boolean) : [],
       note: String(step.note || "")
     })) : [];
     return {
       steps,
+      viewMode: source.viewMode === "manual" ? "manual" : "guided",
       selectedStepId: String(source.selectedStepId || (steps.length ? steps[steps.length - 1].id : "") || ""),
+      selectedAlternativeId: String(source.selectedAlternativeId || ""),
       editFromStepId: String(source.editFromStepId || ""),
       appliedAt: String(source.appliedAt || "")
     };
@@ -345,7 +391,11 @@
     purePropertyDefs.forEach(def => {
       ratios[def.id] = propertyRatio(a[def.id], b[def.id]);
     });
-    return { key, a, b, components: [a, b], insights, ratios };
+    const propertyChecks = {
+      pvap: vaporPressureConditionCheck(a, b)
+    };
+    if (!propertyChecks.pvap.comparable) ratios.pvap = null;
+    return { key, a, b, components: [a, b], insights, ratios, propertyChecks };
   }
 
   function separationPairKey(a, b) {
@@ -357,6 +407,39 @@
     const vb = numberFromText(b);
     if (!Number.isFinite(va) || !Number.isFinite(vb) || va <= 0 || vb <= 0) return null;
     return Math.max(va, vb) / Math.min(va, vb);
+  }
+
+  function temperatureToKelvin(value, unit = "K") {
+    const number = numberFromText(value);
+    if (!Number.isFinite(number)) return NaN;
+    if (unit === "C") return number + 273.15;
+    if (unit === "F") return (number - 32) * 5 / 9 + 273.15;
+    return number;
+  }
+
+  function vaporPressureConditionCheck(a, b) {
+    const hasValues = Number.isFinite(numberFromText(a.pvap)) && Number.isFinite(numberFromText(b.pvap));
+    const ta = temperatureToKelvin(a.pvapTemperature, a.pvapTemperatureUnit);
+    const tb = temperatureToKelvin(b.pvapTemperature, b.pvapTemperatureUnit);
+    if (!hasValues) return { comparable: false, status: "missing", reason: "Pvap required for both components" };
+    if (!Number.isFinite(ta) || !Number.isFinite(tb)) {
+      return { comparable: false, status: "missing-condition", reason: "Pvap measurement temperature required for both components" };
+    }
+    const differenceK = Math.abs(ta - tb);
+    if (differenceK > 2) {
+      return {
+        comparable: false,
+        status: "incompatible-condition",
+        reason: `Pvap temperatures differ by ${formatNumber(differenceK)} K`,
+        temperaturesK: [ta, tb]
+      };
+    }
+    return {
+      comparable: true,
+      status: "comparable",
+      reason: `Pvap values compared near ${formatNumber((ta + tb) / 2)} K`,
+      temperaturesK: [ta, tb]
+    };
   }
 
   function separationSuggestionsForPair(pair) {
@@ -373,6 +456,7 @@
           ruleId: rule.id,
           label: rule.label,
           source: rule.source,
+          sourceClass: String(rule.source || "").startsWith("local extension") ? "local extension" : "paper-derived",
           evidence: rule.evidence(pair),
           pbb: rule.pbb,
           principlePbbs: rule.pbb,
@@ -390,12 +474,11 @@
           blockers: eligibility.blockers,
           note: rule.note,
           missing,
-          score: eligibility.selectable ? math.score : 0,
           strength: math.strength,
           comparisons: math.comparisons
         };
       })
-      .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || b.score - a.score || a.label.localeCompare(b.label));
+      .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.missing.length - b.missing.length || a.label.localeCompare(b.label));
     if (matched.length) return matched;
     return [{
       pairKey: pair.key,
@@ -420,7 +503,6 @@
       blockers: pairHasAnyData(pair) ? ["no supported KB3.1 trigger"] : ["missing binary/property evidence"],
       note: "Add pure-component values or binary mixture insights before proposing a defendable separation route.",
       missing: separationMissingForPair(pair),
-      score: 0,
       strength: null,
       comparisons: []
     }];
@@ -432,19 +514,11 @@
 
   function binaryMathForRule(pair, rule, missing = []) {
     const comparisons = binaryRuleComparisons(pair, rule.id);
-    const scored = comparisons.map(comparison => ({
-      ...comparison,
-      points: comparisonPoints(comparison),
-      strength: comparisonStrength(comparison)
-    }));
-    const score = Math.max(0, Math.min(100, Math.round(
-      scored.reduce((sum, item) => sum + item.points, 0) - missing.length * 4
-    )));
-    const strengths = scored.map(item => item.strength).filter(Number.isFinite);
+    const evaluated = comparisons.map(comparison => ({ ...comparison, strength: comparisonStrength(comparison) }));
+    const strengths = evaluated.map(item => item.strength).filter(Number.isFinite);
     return {
-      score,
       strength: strengths.length ? Math.max(...strengths) : null,
-      comparisons: scored
+      comparisons: evaluated
     };
   }
 
@@ -497,11 +571,15 @@
     } else if (ruleId === "KB3.1-LS-MELTING") {
       ratio("tm", "Melting point ratio", 1.20);
       insight("eutectic", "Eutectic");
-    } else if (ruleId === "KB3.1-MEMBRANE-SIZE") {
+    } else if (ruleId === "KB3.1-LS-SIZE") {
       ratio("molecularDiameter", "Molecular diameter ratio", 2.00);
       ratio("mw", "Molecular-weight ratio", 1.90);
+    } else if (ruleId === "KB3.1-MEMBRANE-VAPOR") {
+      ratio("vdwVolume", "Van der Waals volume ratio", 1.07);
+      ratio("criticalTemp", "Critical-temperature ratio", 1.10);
+    } else if (ruleId === "KB3.1-MEMBRANE-LIQUID") {
       ratio("molarVolume", "Molar-volume ratio", 1.02);
-      ratio("solubilityParameter", "Solubility parameter ratio", 1.20);
+      ratio("solubilityParameter", "Solubility parameter ratio", 1.00);
     } else if (ruleId === "SCREEN-RVOL-LOW") {
       const alpha = numberFromText(pair.insights.relativeVolatility);
       rows.push({
@@ -511,7 +589,7 @@
         value: Number.isFinite(alpha) ? alpha : null,
         threshold: 1.05,
         operator: "<=",
-        met: Number.isFinite(alpha) && alpha <= 1.05,
+        met: Number.isFinite(alpha) && alpha > 0 && alpha <= 1.05,
         basis: "binary mixture insight"
       });
     } else if (ruleId === "SCREEN-THERMAL-SENSITIVE") {
@@ -537,18 +615,6 @@
     return value / threshold;
   }
 
-  function comparisonPoints(comparison) {
-    if (comparison.kind === "binary") {
-      if (comparison.value === "unknown" || comparison.value === "") return 0;
-      return comparison.met ? 35 : 0;
-    }
-    const strength = comparisonStrength(comparison);
-    if (!Number.isFinite(strength)) return 0;
-    if (strength >= 1) return Math.min(45, 25 + Math.round((strength - 1) * 20));
-    if (strength >= 0.85) return Math.round(strength * 12);
-    return 0;
-  }
-
   function pairHasAnyData(pair) {
     return Object.values(pair.ratios).some(Number.isFinite)
       || Object.entries(pair.insights).some(([key, value]) => key !== "note" && value && value !== "unknown")
@@ -558,7 +624,7 @@
   function separationMissingForPair(pair) {
     const missing = [];
     if (!Number.isFinite(pair.ratios.tb)) missing.push("Tb for both components");
-    if (!Number.isFinite(pair.ratios.pvap)) missing.push("Pvap for both components");
+    if (!Number.isFinite(pair.ratios.pvap)) missing.push(pair.propertyChecks?.pvap?.reason || "Pvap for both components at comparable temperature");
     if (!Number.isFinite(pair.ratios.tm)) missing.push("Tm for both components");
     if (!Number.isFinite(pair.ratios.solubilityParameter)) missing.push("solubility parameter for both components");
     if (pair.insights.azeotrope === "unknown") missing.push("azeotrope yes/no");
@@ -571,15 +637,13 @@
     if (rule.id.includes("VL") || rule.id.includes("AZEO")) {
       if (pair.insights.azeotrope === "unknown") missing.push("azeotrope yes/no");
       if (!Number.isFinite(pair.ratios.tb)) missing.push("Tb ratio");
-      if (!Number.isFinite(pair.ratios.pvap)) missing.push("Pvap ratio");
+      if (!Number.isFinite(pair.ratios.pvap)) missing.push(pair.propertyChecks?.pvap?.reason || "Pvap ratio at comparable temperature");
     }
     if (rule.id.includes("LL") && pair.insights.miscibilityGap === "unknown") missing.push("miscibility gap");
     if (rule.id.includes("LS") && !Number.isFinite(pair.ratios.tm) && pair.insights.eutectic === "unknown") missing.push("Tm ratio or eutectic");
-    if (rule.id.includes("MEMBRANE")) {
-      if (!Number.isFinite(pair.ratios.molecularDiameter) && !Number.isFinite(pair.ratios.mw) && !Number.isFinite(pair.ratios.molarVolume)) {
-        missing.push("size or affinity ratio");
-      }
-    }
+    if (rule.id === "KB3.1-LS-SIZE" && (!Number.isFinite(pair.ratios.molecularDiameter) || !Number.isFinite(pair.ratios.mw))) missing.push("molecular diameter and MW ratios");
+    if (rule.id === "KB3.1-MEMBRANE-VAPOR" && (!Number.isFinite(pair.ratios.vdwVolume) || !Number.isFinite(pair.ratios.criticalTemp))) missing.push("VdW volume and critical-temperature ratios");
+    if (rule.id === "KB3.1-MEMBRANE-LIQUID" && (!Number.isFinite(pair.ratios.molarVolume) || !Number.isFinite(pair.ratios.solubilityParameter))) missing.push("molar-volume and solubility-parameter ratios");
     return [...new Set(missing)].slice(0, 4);
   }
 
@@ -625,24 +689,29 @@
   function routeFamilyForRule(ruleId) {
     if (ruleId === "KB3.1-VL-BP-PVAP" || ruleId === "KB3.1-AZEO" || ruleId === "KB3.1-PRESSURE-SENSITIVE-AZEO" || ruleId === "SCREEN-THERMAL-SENSITIVE") return "VL";
     if (ruleId === "KB3.1-LL-GAP") return "LL";
-    if (ruleId === "KB3.1-LS-MELTING") return "LS";
-    if (ruleId === "KB3.1-MEMBRANE-SIZE" || ruleId === "SCREEN-RVOL-LOW") return "AFFINITY";
+    if (ruleId === "KB3.1-LS-MELTING" || ruleId === "KB3.1-LS-SIZE") return "LS";
+    if (ruleId === "KB3.1-MEMBRANE-VAPOR") return "VV";
+    if (ruleId === "KB3.1-MEMBRANE-LIQUID" || ruleId === "SCREEN-RVOL-LOW") return "AFFINITY";
     return "unknown";
   }
 
   function unitOperationCandidatesForRule(rule) {
     return kb32UnitOperationRules
       .filter(item => item.ruleIds.includes(rule.id))
-      .map(item => ({
-        id: item.id,
-        name: item.name,
-        source: "KB3.2/Table S.11",
-        feedPhase: item.feedPhase,
-        outletPhase: item.outletPhase,
-        pbb: item.pbb,
-        agentAdded: item.agentAdded,
-        outlets: item.outlets
-      }));
+      .map(item => {
+        const localExtension = rule.id.startsWith("SCREEN-") || String(item.source || "").startsWith("local extension");
+        return {
+          id: item.id,
+          name: item.name,
+          source: localExtension ? "local extension: scale-up screening" : "KB3.2/Table S.11",
+          sourceClass: localExtension ? "local extension" : "paper-derived",
+          feedPhase: item.feedPhase,
+          outletPhase: item.outletPhase,
+          pbb: item.pbb,
+          agentAdded: item.agentAdded,
+          outlets: item.outlets
+        };
+      });
   }
 
   function possibleFeedPhaseForRule(ruleId) {
@@ -650,6 +719,7 @@
     if (candidates.length) return [...new Set(candidates)].join(" / ");
     const family = routeFamilyForRule(ruleId);
     if (family === "VL" || family === "AFFINITY") return "V and/or L";
+    if (family === "VV") return "V";
     if (family === "LL" || family === "LS") return "L";
     return "";
   }
@@ -659,6 +729,7 @@
     if (candidates.length) return [...new Set(candidates)].join(" / ");
     const family = routeFamilyForRule(ruleId);
     if (family === "VL") return "V and L";
+    if (family === "VV") return "V";
     if (family === "LL") return "L";
     if (family === "LS") return "S and L";
     return "";
@@ -679,10 +750,13 @@
     const hasSolidLike = phases.some(phase => phase === "S" || phase.includes("S"));
     const reasons = [];
     const blockers = [];
-    if (!known.length) reasons.push("phase not specified; compatibility inferred from property trigger");
+    if (hasUnknown) blockers.push("phase required for both substances before this route can be screened");
     if (family === "VL") {
       if (hasSolidOnly) blockers.push("both substances are marked solid; V-L route needs liquid/vapor handling basis");
       else reasons.push(hasLiquidLike ? "liquid/vapor-compatible phases" : "V-L route requires phase confirmation");
+    } else if (family === "VV") {
+      if (!hasUnknown && !hasVaporOnly) blockers.push("vapor membrane route requires a vapor feed basis");
+      else if (hasVaporOnly) reasons.push("vapor-vapor phase basis available");
     } else if (family === "LL") {
       if (hasVaporOnly) blockers.push("both substances are marked vapor; L-L split is not phase-compatible");
       else if (!hasLiquidLike && !hasUnknown) blockers.push("L-L split needs a liquid phase basis");
@@ -692,7 +766,7 @@
       else reasons.push(hasSolidLike || hasLiquidLike ? "solid-liquid phase basis available or can be generated" : "L-S route requires phase confirmation");
     } else if (family === "AFFINITY") {
       if (hasSolidOnly) blockers.push("both substances are marked solid; membrane/affinity route needs a fluid phase basis");
-      else reasons.push(hasLiquidLike || hasUnknown ? "fluid/affinity route basis available" : "affinity route requires phase confirmation");
+      else reasons.push(hasLiquidLike ? "fluid/affinity route basis available" : "affinity route requires phase confirmation");
     }
     return { reasons: [...new Set(reasons)], blockers: [...new Set(blockers)] };
   }
@@ -700,6 +774,8 @@
   function reactionBalanceModel(group, simulatorModel, balanceSource) {
     const balance = normalizeReactionBalance(balanceSource);
     const conversion = reactionConversionFraction(group, balance);
+    const selectivity = reactionSelectivityFraction(balance);
+    const yieldFraction = reactionYieldFraction(balance, conversion, selectivity);
     const rows = simulatorModel.substances.map(item => reactionBalanceRow(item));
     const reactants = rows.filter(row => row.role === "reactant" && row.stoich > 0 && Number.isFinite(row.initialMol));
     const manualLimiting = balance.limiting && balance.limiting !== "auto"
@@ -708,16 +784,38 @@
     const limiting = manualLimiting || reactants
       .map(row => ({ ...row, extentCapacity: row.initialMol / row.stoich }))
       .sort((a, b) => a.extentCapacity - b.extentCapacity)[0] || null;
-    const extent = limiting && Number.isFinite(conversion) ? limiting.initialMol / limiting.stoich * conversion : NaN;
+    const limitingCapacity = limiting ? limiting.initialMol / limiting.stoich : NaN;
+    const reactantExtent = Number.isFinite(limitingCapacity) && Number.isFinite(conversion) ? limitingCapacity * conversion : NaN;
+    const productExtent = Number.isFinite(limitingCapacity) && Number.isFinite(yieldFraction) ? limitingCapacity * yieldFraction : NaN;
     const mainProduct = mainProductRow(rows, balance);
-    const balancedRows = rows.map(row => reactionMixtureRow(row, extent, mainProduct));
+    const balancedRows = rows.map(row => reactionMixtureRow(row, reactantExtent, mainProduct, productExtent));
     const residualRows = balancedRows.filter(row => row.role === "reactant" && Number.isFinite(row.finalMassKg) && row.finalMassKg > 0.000001);
     const issues = [];
     if (!reactants.length) issues.push("reactant amounts with MW");
-    if (!Number.isFinite(conversion)) issues.push("conversion/yield percent");
+    if (!Number.isFinite(conversion)) issues.push("conversion percent");
+    const reportedYield = numberFromText(balance.yieldPercent);
+    if (Number.isFinite(reportedYield) && Number.isFinite(conversion) && reportedYield / 100 > conversion + 1e-9) {
+      issues.push("yield cannot exceed conversion on the same molar basis");
+    }
+    if (!Number.isFinite(yieldFraction) && !rows.some(row => ["product", "coproduct"].includes(row.role) && Number.isFinite(row.initialMol) && row.initialMol > 0)) {
+      issues.push("yield or selectivity percent for product estimate");
+    }
     if (!limiting) issues.push("limiting reagent");
     if (!mainProduct) issues.push("main product selection");
-    return { balance, conversion, limiting, extent, mainProduct, rows: balancedRows, residualRows, issues, status: issues.length ? "partial" : "estimated" };
+    return {
+      balance,
+      conversion,
+      selectivity,
+      yield: yieldFraction,
+      limiting,
+      extent: reactantExtent,
+      productExtent,
+      mainProduct,
+      rows: balancedRows,
+      residualRows,
+      issues,
+      status: issues.length ? "partial" : "estimated"
+    };
   }
 
   function mainProductRow(rows, balance) {
@@ -732,17 +830,32 @@
 
   function reactionConversionFraction(group, balance) {
     const manual = numberFromText(balance.conversionPercent);
-    if (Number.isFinite(manual) && manual > 0) return Math.min(1, manual / 100);
-    const fromConditions = (group.blocks || [])
-      .map(block => numberFromText(block.conditions?.conversion_yield))
-      .find(value => Number.isFinite(value) && value > 0);
-    return Number.isFinite(fromConditions) ? Math.min(1, fromConditions / 100) : NaN;
+    if (Number.isFinite(manual) && manual >= 0 && manual <= 100) return manual / 100;
+    return NaN;
+  }
+
+  function reactionSelectivityFraction(balance) {
+    const value = numberFromText(balance.selectivityPercent);
+    return Number.isFinite(value) && value >= 0 && value <= 100 ? value / 100 : NaN;
+  }
+
+  function reactionYieldFraction(balance, conversion, selectivity) {
+    const value = numberFromText(balance.yieldPercent);
+    if (Number.isFinite(value) && value >= 0 && value <= 100) {
+      const fraction = value / 100;
+      return Number.isFinite(conversion) && fraction > conversion + 1e-9 ? NaN : fraction;
+    }
+    if (Number.isFinite(conversion) && Number.isFinite(selectivity)) return conversion * selectivity;
+    return NaN;
   }
 
   function reactionBalanceRow(item) {
     const mw = numberFromText(item.mw);
-    const quantity = numberFromText(item.quantity);
-    const unit = String(item.unit || "").toLowerCase();
+    const hasFeedBasis = String(item.reactionFeedQuantity || "").trim() !== "";
+    const balanceQuantity = hasFeedBasis ? item.reactionFeedQuantity : item.quantity;
+    const balanceUnit = hasFeedBasis ? item.reactionFeedUnit || item.unit : item.unit;
+    const quantity = numberFromText(balanceQuantity);
+    const unit = String(balanceUnit || "").toLowerCase();
     let initialMol = NaN;
     if (Number.isFinite(quantity) && Number.isFinite(mw) && mw > 0) {
       if (unit === "kg") initialMol = quantity * 1000 / mw;
@@ -752,17 +865,27 @@
     }
     const defaultStoich = ["reactant", "product", "coproduct", "byproduct"].includes(item.role) ? 1 : 0;
     const parsedStoich = numberFromText(item.stoichCoeff);
-    return { ...item, mw, initialMol, stoich: Number.isFinite(parsedStoich) ? parsedStoich : defaultStoich, initialMassKg: massToKg(item.quantity, item.unit) };
+    return {
+      ...item,
+      mw,
+      initialMol,
+      stoich: Number.isFinite(parsedStoich) ? parsedStoich : defaultStoich,
+      initialMassKg: massToKg(balanceQuantity, balanceUnit),
+      balanceQuantity: String(balanceQuantity || ""),
+      balanceUnit: String(balanceUnit || "")
+    };
   }
 
-  function reactionMixtureRow(row, extent, mainProduct = null) {
+  function reactionMixtureRow(row, extent, mainProduct = null, productExtent = extent) {
     let finalMol = row.initialMol;
     let basis = "passes through";
     if (row.role === "reactant" && Number.isFinite(extent) && row.stoich > 0) {
       finalMol = Number.isFinite(row.initialMol) ? Math.max(0, row.initialMol - extent * row.stoich) : NaN;
       basis = "unreacted residual: route to waste/recovery";
-    } else if ((row.role === "product" || row.role === "coproduct" || row.role === "byproduct") && Number.isFinite(extent) && row.stoich > 0) {
-      finalMol = Number.isFinite(row.initialMol) && row.initialMol > 0 ? row.initialMol : extent * row.stoich;
+    } else if ((row.role === "product" || row.role === "coproduct" || row.role === "byproduct") && Number.isFinite(productExtent) && row.stoich > 0) {
+      finalMol = !row.reactionGenerated && Number.isFinite(row.initialMol) && row.initialMol > 0
+        ? row.initialMol
+        : productExtent * row.stoich;
       basis = row.id === mainProduct?.id ? "main product formed estimate" : `${row.role} formed estimate`;
     } else if (row.role === "solvent") {
       basis = "bulk solvent passthrough";
@@ -820,7 +943,6 @@
         id: routeVariantId("Volatility route"),
         title: "Volatility route",
         level: strongestSuggestionLevel(volatility),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(volatility, ["Evaporation", "Distillation", "Flash vaporization", "Partial condensation / vaporization"]),
@@ -844,7 +966,6 @@
         id: routeVariantId("Gentle thermal route"),
         title: "Gentle thermal route",
         level: strongestSuggestionLevel(thermal),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(thermal, ["Short-path distillation", "Wiped-film evaporation", "Thin-film evaporation", "Vacuum distillation"]),
@@ -867,7 +988,6 @@
         id: routeVariantId("Liquid-liquid split route"),
         title: "Liquid-liquid split route",
         level: strongestSuggestionLevel(liquid),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(liquid, ["Decanter", "Liquid-liquid extraction"]),
@@ -883,7 +1003,10 @@
         graphPreview: `${groupId} -> L-L split; route phase enriched in ${pair.a.name} separately from phase enriched in ${pair.b.name}.`
       });
     }
-    const solid = supportedBy("KB3.1-LS-MELTING");
+    const solid = [
+      ...supportedBy("KB3.1-LS-MELTING"),
+      ...supportedBy("KB3.1-LS-SIZE")
+    ];
     if (solid.length) {
       const crystallizing = preferredSolidComponent(pair);
       const math = routeMathSummary(solid);
@@ -891,7 +1014,6 @@
         id: routeVariantId("Crystallization route"),
         title: "Crystallization route",
         level: strongestSuggestionLevel(solid),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(solid, ["Crystallization", "Melt crystallization"]),
@@ -907,7 +1029,10 @@
         graphPreview: `${groupId} -> crystallizer/filter; isolate ${crystallizing.name} as solid-rich cut and send mother liquor downstream.`
       });
     }
-    const affinity = supportedBy("KB3.1-MEMBRANE-SIZE");
+    const affinity = [
+      ...supportedBy("KB3.1-MEMBRANE-VAPOR"),
+      ...supportedBy("KB3.1-MEMBRANE-LIQUID")
+    ];
     if (affinity.length) {
       const larger = preferredLargeComponent(pair);
       const math = routeMathSummary(affinity);
@@ -915,7 +1040,6 @@
         id: routeVariantId("Affinity / size-selective route"),
         title: "Affinity / size-selective route",
         level: strongestSuggestionLevel(affinity),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(affinity, ["Membrane pervaporation", "Membrane vapor permeation", "Liquid-liquid extraction"]),
@@ -938,7 +1062,6 @@
         id: routeVariantId("Avoid simple distillation route"),
         title: "Avoid simple distillation route",
         level: strongestSuggestionLevel(weakDistillation),
-        score: math.score,
         strength: math.strength,
         comparisons: math.comparisons,
         units: prioritizedUnits(weakDistillation, ["Extractive distillation", "Azeotropic distillation", "Membrane pervaporation", "Liquid-liquid extraction"]),
@@ -959,7 +1082,6 @@
         id: routeVariantId("Hypothesis route pending"),
         title: "Hypothesis route pending",
         level: "hypothesis",
-        score: 0,
         strength: null,
         comparisons: [],
         units: ["Review candidate unit"],
@@ -985,7 +1107,6 @@
     const comparisons = suggestions.flatMap(item => item.comparisons || []);
     const strengths = suggestions.map(item => item.strength).filter(Number.isFinite);
     return {
-      score: suggestions.length ? Math.max(...suggestions.map(item => Number(item.score) || 0)) : 0,
       strength: strengths.length ? Math.max(...strengths) : null,
       comparisons
     };
@@ -1097,8 +1218,11 @@
     const mainProduct = balance.mainProduct || mainProductRow(simulatorModel.substances.map(item => reactionBalanceRow(item)), balance.balance);
     const allById = new Map(simulatorModel.substances.map(item => [item.id, item]));
     const steps = pathway.steps.map(step => {
+      const pair = simulatorModel.pairs.find(item => item.key === step.pairKey);
+      const variant = pair ? binaryRouteVariants(groupId, pair).find(item => item.id === step.routeId && item.selectable !== false) : null;
       return {
         ...step,
+        valid: Boolean(pair && variant),
         separated: step.separatedIds.map(id => allById.get(id)).filter(Boolean),
         retained: step.retainedIds.map(id => allById.get(id)).filter(Boolean)
       };
@@ -1111,25 +1235,11 @@
     const activeIds = new Set(active.map(item => item.id));
     const activePairs = simulatorModel.pairs.filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id));
     const pairPriorities = binaryPairPriorities(groupId, activePairs, mainProduct);
-    const nextOptions = activePairs
-      .flatMap(pair => binaryRouteVariants(groupId, pair).filter(variant => variant.selectable !== false).map(variant => {
-        const split = pathwaySplitTargets(pair, variant, mainProduct);
-        const separatedIds = new Set(split.separated.map(item => item.id));
-        const retained = active.filter(item => !separatedIds.has(item.id));
-        return {
-          id: `${pair.key}::${variant.id}`,
-          pairKey: pair.key,
-          routeId: variant.id,
-          pairLabel: `${pair.a.name} / ${pair.b.name}`,
-          variant,
-          unit: (variant.units || []).find(unit => unit !== "Review candidate unit") || "",
-          separated: split.separated,
-          retained
-        };
-      }))
-      .filter(option => option.separated.length)
-      .sort((a, b) => pathwayOptionRank(a, mainProduct) - pathwayOptionRank(b, mainProduct) || a.pairLabel.localeCompare(b.pairLabel))
-      .slice(0, 8);
+    const nextOptions = pathwayOptionsForActive(groupId, simulatorModel, active, mainProduct);
+    const outcome = pathwayOutcome(simulatorModel.substances, active, mainProduct, steps);
+    const hasMissingEvidence = activePairs.some(pair => separationMissingForPair(pair).length > 0);
+    const status = pathwayStatus(pathway, outcome, nextOptions, editIndex, hasMissingEvidence);
+    const alternatives = editIndex >= 0 ? [] : generatePathwayAlternatives(groupId, simulatorModel, mainProduct);
     return {
       groupId,
       pathway,
@@ -1143,15 +1253,234 @@
       resolved: simulatorModel.substances.filter(item => resolvedIds.has(item.id)),
       pairPriorities,
       nextOptions,
-      complete: active.length <= 1 || nextOptions.length === 0
+      alternatives,
+      outcome,
+      unresolved: outcome.unresolved,
+      status,
+      complete: status === "complete" || status === "applied",
+      canApply: status === "complete" && steps.length > 0 && editIndex < 0
     };
+  }
+
+  function pathwayOptionsForActive(groupId, simulatorModel, active, mainProduct) {
+    const activeIds = new Set(active.map(item => item.id));
+    const ranked = simulatorModel.pairs
+      .filter(pair => activeIds.has(pair.a.id) && activeIds.has(pair.b.id))
+      .flatMap(pair => binaryRouteVariants(groupId, pair)
+        .filter(variant => variant.selectable !== false)
+        .map(variant => {
+          const split = pathwaySplitTargets(pair, variant, mainProduct);
+          const separatedIds = new Set(split.separated.map(item => item.id));
+          return {
+            id: `${pair.key}::${variant.id}`,
+            pairKey: pair.key,
+            routeId: variant.id,
+            pairLabel: `${pair.a.name} / ${pair.b.name}`,
+            variant,
+            unit: (variant.units || []).find(unit => unit !== "Review candidate unit") || "",
+            separated: split.separated,
+            retained: active.filter(item => !separatedIds.has(item.id)),
+            directionConfidence: pathwaySplitConfidence(pair, variant, mainProduct)
+          };
+        }))
+      .filter(option => option.separated.length && !option.separated.some(item => item.id === mainProduct?.id))
+      .sort((a, b) => pathwayOptionRank(a, mainProduct) - pathwayOptionRank(b, mainProduct)
+        || (Number(b.variant.strength) || 0) - (Number(a.variant.strength) || 0)
+        || a.pairLabel.localeCompare(b.pairLabel));
+    const firstPerTarget = [];
+    const targetIds = new Set();
+    ranked.forEach(option => {
+      const key = option.separated.map(item => item.id).sort().join(",");
+      if (!targetIds.has(key)) {
+        targetIds.add(key);
+        firstPerTarget.push(option);
+      }
+    });
+    const selectedIds = new Set(firstPerTarget.map(option => option.id));
+    return [...firstPerTarget, ...ranked.filter(option => !selectedIds.has(option.id))].slice(0, 10);
+  }
+
+  function pathwaySplitConfidence(pair, variant, mainProduct) {
+    const targetPair = mainProduct && pair.components.some(item => item.id === mainProduct.id);
+    if (targetPair && variant.level === "supported" && !(variant.missing || []).length) return "supported";
+    if (targetPair || variant.level === "supported") return "review";
+    return "manual";
+  }
+
+  function pathwayAcceptsInProductStream(component, mainProduct) {
+    if (component.id === mainProduct?.id) return true;
+    return ["product", "keep with mixture", "intermediate"].includes(component.fate);
+  }
+
+  function pathwayOutcome(allSubstances, active, mainProduct, steps = []) {
+    const activeIds = new Set(active.map(item => item.id));
+    const separated = allSubstances.filter(item => !activeIds.has(item.id));
+    const unresolved = [];
+    if (!mainProduct) unresolved.push("select a main product");
+    if (mainProduct && !activeIds.has(mainProduct.id)) unresolved.push("main product is not retained in the final stream");
+    steps.filter(step => step.valid === false).forEach((step, index) => unresolved.push(`step ${index + 1}: route evidence is no longer valid`));
+    allSubstances.filter(item => item.fate === "unknown").forEach(item => unresolved.push(`${item.name}: destination not assigned`));
+    active.filter(item => !pathwayAcceptsInProductStream(item, mainProduct))
+      .forEach(item => unresolved.push(`${item.name}: still present but assigned to ${item.fate || "unknown"}`));
+    const resolvedSeparated = separated.filter(item => item.fate !== "unknown");
+    return {
+      complete: Boolean(mainProduct) && !unresolved.length,
+      active,
+      separated,
+      resolvedSeparated,
+      unresolved: [...new Set(unresolved)],
+      destinationCoverage: allSubstances.length
+        ? allSubstances.filter(item => item.fate !== "unknown").length / allSubstances.length
+        : 0,
+      stepCount: steps.length
+    };
+  }
+
+  function pathwayStatus(pathway, outcome, nextOptions, editIndex = -1, hasMissingEvidence = false) {
+    if (pathway.appliedAt && outcome.complete) return "applied";
+    if (outcome.complete) return "complete";
+    if (!outcome.active.length || !outcome.active.some(item => item.role === "product" || item.role === "coproduct")) return "not_started";
+    if (editIndex >= 0 || nextOptions.length) return "in_progress";
+    const missingData = outcome.active.some(item => item.phase === "unknown")
+      || outcome.active.some(item => item.fate === "unknown")
+      || hasMissingEvidence;
+    return missingData ? "blocked_missing_data" : "blocked_no_route";
+  }
+
+  function pathwayStepFromOption(option, id) {
+    return {
+      id,
+      pairKey: option.pairKey,
+      routeId: option.routeId,
+      title: option.variant.title,
+      unit: option.unit,
+      separatedIds: option.separated.map(item => item.id),
+      retainedIds: option.retained.map(item => item.id),
+      drivers: option.variant.drivers || [],
+      missing: option.variant.missing || [],
+      pbb: option.variant.pbb || [],
+      possibleOutletPhase: option.variant.possibleOutletPhase || "",
+      agentAdded: option.variant.agentAdded || "",
+      translationBasis: option.variant.translationBasis || "",
+      unitCandidates: option.variant.unitCandidates || [],
+      evidenceLevel: option.variant.level || "partial",
+      directionConfidence: option.directionConfidence || "review",
+      methodSources: [...new Set((option.variant.unitCandidates || []).map(item => item.source).filter(Boolean))],
+      note: option.variant.graphPreview || ""
+    };
+  }
+
+  function pathwayMetrics(steps) {
+    const missingChecks = steps.reduce((sum, step) => sum + (step.missing || []).length, 0);
+    const supportedSteps = steps.filter(step => step.evidenceLevel === "supported").length;
+    const partialSteps = steps.filter(step => step.evidenceLevel === "partial").length;
+    const hypothesisSteps = steps.filter(step => step.evidenceLevel === "hypothesis" || step.evidenceLevel === "blocked").length;
+    const directedSteps = steps.filter(step => step.directionConfidence === "supported").length;
+    const addedAgentSteps = steps.filter(step => /MSA|solvent|entrainer/i.test(step.agentAdded || "")).length;
+    const thermalOperationPattern = /thermal|distill|evapor|flash|condens|crystalli|pervapor|sublim|heat|cool|reflux/i;
+    const highHeatPattern = /high[- ]?temperature|short[- ]?path|molecular distill|wiped[- ]?film|thin[- ]?film|distill|evapor|flash/i;
+    const thermalOperationSteps = steps.filter(step => thermalOperationPattern.test(`${step.title || ""} ${step.unit || ""}`)).length;
+    const thermalRiskSteps = steps.filter(step => highHeatPattern.test(`${step.title || ""} ${step.unit || ""}`)).length;
+    return {
+      stepCount: steps.length,
+      missingChecks,
+      supportedSteps,
+      partialSteps,
+      hypothesisSteps,
+      directedSteps,
+      addedAgentSteps,
+      thermalOperationSteps,
+      thermalRiskSteps
+    };
+  }
+
+  function pathwayAlternativeRank(alternative, profile) {
+    const m = alternative.metrics;
+    const incompletePenalty = alternative.status === "complete" ? 0 : 100000;
+    if (profile === "msa") return incompletePenalty + m.addedAgentSteps * 10000 + m.missingChecks * 100 + m.thermalRiskSteps * 10 + m.stepCount;
+    if (profile === "gentle") return incompletePenalty + m.thermalRiskSteps * 10000 + m.missingChecks * 100 + m.addedAgentSteps * 20 + m.stepCount;
+    const unsupportedShare = m.stepCount ? 1 - m.supportedSteps / m.stepCount : 1;
+    return incompletePenalty + unsupportedShare * 10000 + m.missingChecks * 100 + m.addedAgentSteps * 10 + m.stepCount;
+  }
+
+  function generatePathwayAlternatives(groupId, simulatorModel, mainProduct, limit = 3) {
+    if (!mainProduct || simulatorModel.substances.length < 2) return [];
+    const maxDepth = Math.min(Math.max(1, simulatorModel.substances.length - 1), 8);
+    let frontier = [{ active: simulatorModel.substances, steps: [] }];
+    const candidates = [];
+    for (let depth = 0; depth < maxDepth && frontier.length; depth += 1) {
+      const expanded = [];
+      frontier.forEach((state, stateIndex) => {
+        const options = pathwayOptionsForActive(groupId, simulatorModel, state.active, mainProduct).slice(0, 6);
+        if (!options.length) candidates.push(state);
+        options.forEach((option, optionIndex) => {
+          const step = pathwayStepFromOption(option, `ALT${depth + 1}-${stateIndex + 1}-${optionIndex + 1}`);
+          const next = { active: option.retained, steps: [...state.steps, step] };
+          const outcome = pathwayOutcome(simulatorModel.substances, next.active, mainProduct, next.steps);
+          if (outcome.complete) candidates.push(next);
+          else expanded.push(next);
+        });
+      });
+      const seen = new Set();
+      frontier = expanded
+        .sort((a, b) => pathwayMetrics(a.steps).missingChecks - pathwayMetrics(b.steps).missingChecks
+          || pathwayAlternativeRank({ metrics: pathwayMetrics(a.steps), status: "incomplete" }, "evidence")
+            - pathwayAlternativeRank({ metrics: pathwayMetrics(b.steps), status: "incomplete" }, "evidence"))
+        .filter(item => {
+          const signature = `${item.active.map(component => component.id).sort().join(",")}::${item.steps.map(step => step.routeId).join("|")}`;
+          if (seen.has(signature)) return false;
+          seen.add(signature);
+          return true;
+        })
+        .slice(0, 24);
+    }
+    candidates.push(...frontier);
+    const prepared = candidates
+      .filter(item => item.steps.length)
+      .map((item, index) => {
+        const outcome = pathwayOutcome(simulatorModel.substances, item.active, mainProduct, item.steps);
+        return {
+          id: `PA${index + 1}`,
+          status: outcome.complete ? "complete" : "incomplete",
+          steps: item.steps,
+          active: item.active,
+          outcome,
+          metrics: pathwayMetrics(item.steps)
+        };
+      });
+    const profiles = [["evidence", "Best KB3.1 coverage"]];
+    if (new Set(prepared.map(item => item.metrics.addedAgentSteps)).size > 1) profiles.push(["msa", "Lowest MSA use"]);
+    if (new Set(prepared.map(item => item.metrics.thermalRiskSteps)).size > 1) profiles.push(["gentle", "Lower thermal exposure"]);
+    const chosen = [];
+    const signatures = new Set();
+    profiles.forEach(([profile, label]) => {
+      const candidate = [...prepared].sort((a, b) => pathwayAlternativeRank(a, profile) - pathwayAlternativeRank(b, profile))
+        .find(item => {
+          const signature = item.steps.map(step => `${step.routeId}:${step.separatedIds.join(",")}`).join("|");
+          return !signatures.has(signature);
+        });
+      if (!candidate) return;
+      const signature = candidate.steps.map(step => `${step.routeId}:${step.separatedIds.join(",")}`).join("|");
+      signatures.add(signature);
+      chosen.push({ ...candidate, id: `PA${chosen.length + 1}`, label, profile });
+    });
+    [...prepared]
+      .sort((a, b) => pathwayAlternativeRank(a, "evidence") - pathwayAlternativeRank(b, "evidence"))
+      .forEach(candidate => {
+        if (chosen.length >= limit) return;
+        const signature = candidate.steps.map(step => `${step.routeId}:${step.separatedIds.join(",")}`).join("|");
+        if (signatures.has(signature)) return;
+        signatures.add(signature);
+        chosen.push({ ...candidate, id: `PA${chosen.length + 1}`, label: "Other screened candidate", profile: "alternative" });
+      });
+    return chosen.slice(0, limit);
   }
 
   function binaryPairPriorities(groupId, pairs, mainProduct) {
     return pairs.map(pair => {
       const variants = binaryRouteVariants(groupId, pair)
         .filter(variant => variant.selectable !== false)
-        .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || (Number(b.score) || 0) - (Number(a.score) || 0));
+        .sort((a, b) => suggestionLevelRank(a.level) - suggestionLevelRank(b.level) || a.missing.length - b.missing.length || a.title.localeCompare(b.title));
       const best = variants[0] || null;
       const mainId = mainProduct?.id || "";
       const touchesMain = mainId && (pair.a.id === mainId || pair.b.id === mainId);
@@ -1160,10 +1489,8 @@
         : touchesMain && opposite && opposite.role !== "product" ? 2
           : touchesMain ? 1
             : 0;
-      const score = best ? Number(best.score) || 0 : 0;
-      const priorityScore = roleWeight * 1000 + score;
-      const priority = best && roleWeight >= 2 && score >= 60 ? "high"
-        : best && (roleWeight >= 1 || score >= 50) ? "medium"
+      const priority = best && roleWeight >= 2 && best.level === "supported" ? "high"
+        : best && (roleWeight >= 1 || best.level === "supported") ? "medium"
           : best ? "low"
             : "needs data";
       const noMatch = separationSuggestionsForPair(pair).find(item => item.ruleId === "NO-KB3.1-MATCH");
@@ -1171,12 +1498,11 @@
         pairKey: pair.key,
         pairLabel: `${pair.a.name} / ${pair.b.name}`,
         priority,
-        priorityScore,
+        roleWeight,
         mainProductPair: Boolean(touchesMain),
         bestRoute: best ? best.title : "",
         bestUnit: best ? (best.units || []).find(unit => unit !== "Review candidate unit") || "" : "",
         level: best ? best.level : noMatch?.level || "blocked",
-        score,
         pbb: best ? best.pbb || [] : [],
         possibleOutletPhase: best ? best.possibleOutletPhase || "" : "",
         agentAdded: best ? best.agentAdded || "" : "",
@@ -1188,7 +1514,10 @@
           ? `${touchesMain ? "separates a non-product from the selected main product" : "secondary pair after product-facing cuts"}; ${best.graphPreview}`
           : "no selectable route has passed the Lutze/KB3.1 gate yet"
       };
-    }).sort((a, b) => b.priorityScore - a.priorityScore || a.pairLabel.localeCompare(b.pairLabel));
+    }).sort((a, b) => b.roleWeight - a.roleWeight
+      || suggestionLevelRank(a.level) - suggestionLevelRank(b.level)
+      || a.missing.length - b.missing.length
+      || a.pairLabel.localeCompare(b.pairLabel));
   }
 
   function pathwayOptionRank(option, mainProduct) {
@@ -1200,8 +1529,9 @@
       && option.retained.some(item => item.id === mainId)
       && option.separated.some(item => item.id !== mainId);
     const roleRank = separatesReactantFromMain ? 0 : separatesNonProductFromMain ? 1 : 2;
-    const evidenceRank = (100 - (Number(option.variant.score) || 0)) / 100;
-    return roleRank * 10 + suggestionLevelRank(option.variant.level) + evidenceRank;
+    const evidenceRank = suggestionLevelRank(option.variant.level);
+    const missingRank = (option.variant.missing || []).length;
+    return roleRank * 100 + evidenceRank * 10 + missingRank;
   }
 
   function pathwaySplitTargets(pair, variant, mainProduct) {
@@ -1248,6 +1578,8 @@
     separationPairModel,
     separationPairKey,
     propertyRatio,
+    temperatureToKelvin,
+    vaporPressureConditionCheck,
     numberFromText,
     formatRatio,
     separationSuggestionsForPair,
@@ -1256,7 +1588,6 @@
     binaryRuleComparisons,
     thresholdMet,
     comparisonStrength,
-    comparisonPoints,
     pairHasAnyData,
     separationMissingForPair,
     separationMissingForSuggestion,
@@ -1270,6 +1601,8 @@
     reactionBalanceModel,
     mainProductRow,
     reactionConversionFraction,
+    reactionSelectivityFraction,
+    reactionYieldFraction,
     reactionBalanceRow,
     reactionMixtureRow,
     workupPlanModel,
@@ -1291,6 +1624,15 @@
     routeVariantPhenomena,
     routeVariantBehavior,
     separationPathwayModel,
+    pathwayOptionsForActive,
+    pathwaySplitConfidence,
+    pathwayAcceptsInProductStream,
+    pathwayOutcome,
+    pathwayStatus,
+    pathwayStepFromOption,
+    pathwayMetrics,
+    pathwayAlternativeRank,
+    generatePathwayAlternatives,
     binaryPairPriorities,
     pathwayOptionRank,
     pathwaySplitTargets

@@ -26,7 +26,7 @@ assert(tutorialSource.includes("Create recovery task"), "Tutorial should teach c
 assert(tutorialSource.includes("Assign Unit In G1"), "Tutorial should teach assigning a unit operation inside G1");
 assert(tutorialSource.includes("Switch G1 Unit"), "Tutorial should teach switching the selected G1 unit");
 assert(tutorialSource.includes("Reaction Menu"), "Tutorial should teach the reaction/conversion menu");
-assert(tutorialSource.includes("Generate Residuals"), "Tutorial should teach reaction residual generation");
+assert(tutorialSource.includes("Apply Conversion"), "Tutorial should teach applying reaction residuals to MFA and Lutze");
 assert(tutorialSource.includes("Same Group Or New Task"), "Tutorial should explain when G2 is optional versus necessary");
 assert(!tutorialSource.includes('target: "[data-open-conversion-modal]"'), "Reaction menu tutorial target should not depend on a generic conversion button selector");
 assert(tutorialSource.includes("Heuristic Rules"), "Tutorial should teach heuristic rule review");
@@ -95,7 +95,8 @@ globalThis.document = {
     if (selector === "#conversionApplyBalance") return $("conversionModal").hidden ? null : elementById("conversionApplyBalance");
     if (selector === ".conversion-preview-section") return $("conversionModal").hidden ? null : fakeElement("conversion-preview-section");
     if (selector === "[data-open-lutze-reaction-separation]") return Object.keys(state.groups).length ? fakeElement("lutze-launch") : null;
-    if (selector === ".pathway-stepper") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-stepper");
+    if (selector === ".pathway-mode-switch") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-mode-switch");
+    if (selector === ".pathway-alternative-grid") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-alternative-grid");
     if (selector === ".pathway-options-panel") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-options-panel");
     if (selector === "[data-pathway-try-option]") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-try-option");
     if (selector === ".pathway-canvas") return $("separationSimulatorModal").hidden ? null : fakeElement("pathway-canvas");

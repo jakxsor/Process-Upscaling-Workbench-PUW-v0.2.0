@@ -93,7 +93,7 @@
 
     .flowsheet-workspace {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) 280px;
       gap: 10px;
       align-items: stretch;
       min-height: min(760px, calc(100vh - 178px));
@@ -238,16 +238,6 @@
       color: var(--green);
     }
 
-    @media (max-width: 980px) {
-      .flowsheet-workspace {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .flowsheet-details-panel {
-        max-height: 320px;
-      }
-    }
-
     .flowsheet-host {
       min-height: min(760px, calc(100vh - 178px));
       overflow: auto;
@@ -288,6 +278,55 @@
     .flowsheet-host.fit-mode .flowsheet-svg {
       width: 100%;
       max-width: 100%;
+    }
+
+    @media (max-width: 980px) {
+      .flowsheet-workspace {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .flowsheet-details-panel {
+        max-height: 320px;
+      }
+
+    }
+
+    @media (max-width: 600px) {
+      .flowsheet-panel {
+        width: calc(100vw - 12px);
+        height: calc(100vh - 12px);
+      }
+
+      .flowsheet-panel .modal-head {
+        align-items: flex-start;
+        padding: 9px;
+      }
+
+      .flowsheet-toolbar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+      }
+
+      .flowsheet-hint {
+        align-items: flex-start;
+        padding: 7px 10px;
+      }
+
+      .flowsheet-hint > span { display: none; }
+      .flowsheet-layer-controls { justify-content: flex-start; }
+      .flowsheet-panel .modal-body { padding: 7px; }
+
+      .flowsheet-host {
+        min-height: 430px;
+        padding: 10px;
+        place-items: start;
+      }
+
+      .flowsheet-host.editable-mode .flowsheet-svg {
+        min-width: 680px;
+      }
+
+      .flowsheet-details-panel { max-height: 260px; }
     }
 
     .flowsheet-render-status {

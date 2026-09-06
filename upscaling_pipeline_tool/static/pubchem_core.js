@@ -21,6 +21,8 @@
     fill("tm", mapped.tm);
     fill("tb", mapped.tb);
     fill("pvap", mapped.pvap);
+    fill("pvapTemperature", mapped.pvapTemperature);
+    fill("pvapTemperatureUnit", mapped.pvapTemperatureUnit);
     fill("molecularFormula", props.MolecularFormula);
     fill("canonicalSmiles", props.CanonicalSMILES || props.SMILES || props.ConnectivitySMILES || props.IsomericSMILES);
     fill("xlogp", props.XLogP);
@@ -28,6 +30,7 @@
     substance.pubchemCid = data.cid ? String(data.cid) : substance.pubchemCid || "";
     substance.pubchemUrl = data.url || substance.pubchemUrl || "";
     substance.propertySource = "PubChem PUG-REST/PUG-View";
+    substance.propertyStatus = "database";
 
     const rawEvidence = [];
     const experimental = data.experimental || {};

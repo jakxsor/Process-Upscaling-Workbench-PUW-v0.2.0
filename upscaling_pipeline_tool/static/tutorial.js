@@ -369,6 +369,12 @@ async function tutorialOpenReactionMenu() {
   if (typeof openConversionModal === "function") openConversionModal(block.id);
 }
 
+async function tutorialShowConversionApply() {
+  await tutorialOpenReactionMenu();
+  state.conversionView = "outputs";
+  if (typeof renderConversionModal === "function") renderConversionModal();
+}
+
 async function tutorialApplyReactionBalance() {
   await tutorialOpenReactionMenu();
   const block = tutorialReactionBlock();
@@ -406,6 +412,7 @@ async function tutorialOpenLutzeScene() {
 async function tutorialTryFirstLutzeRoute() {
   await tutorialOpenLutzeScene();
   const groupId = tutorialReactionBlock()?.groupId || "G1";
+  ensureGroup(groupId).separationSimulator.pathway.viewMode = "manual";
   const group = groupModel(groupId);
   if (!group || typeof separationPathwayModel !== "function" || typeof tryPathwayRoute !== "function") return;
   const path = separationPathwayModel(group);
@@ -416,10 +423,22 @@ async function tutorialTryFirstLutzeRoute() {
   if (typeof renderSeparationSimulatorModal === "function") renderSeparationSimulatorModal();
 }
 
+async function tutorialShowManualLutzeMode() {
+  await tutorialOpenLutzeScene();
+  const groupId = tutorialReactionBlock()?.groupId || "G1";
+  ensureGroup(groupId).separationSimulator.pathway.viewMode = "manual";
+  if (typeof renderSeparationSimulatorModal === "function") renderSeparationSimulatorModal();
+}
+
 async function tutorialEnsureAppliedLutzePathway() {
   await tutorialTryFirstLutzeRoute();
   const groupId = tutorialReactionBlock()?.groupId || "G1";
   const simulator = ensureGroup(groupId).separationSimulator;
+  const group = groupModel(groupId);
+  const path = group && typeof separationPathwayModel === "function" ? separationPathwayModel(group) : null;
+  if (path && !path.canApply && path.alternatives?.length && typeof usePathwayAlternative === "function") {
+    usePathwayAlternative(groupId, path.alternatives.find(item => item.status === "complete")?.id || path.alternatives[0].id);
+  }
   if (!simulator.pathway?.appliedAt && typeof applyPathwayToMainFlowsheet === "function") {
     applyPathwayToMainFlowsheet(groupId);
   }
@@ -616,11 +635,11 @@ const tutorialSteps = [
   },
   {
     target: "#conversionApplyBalance",
-    title: "Part 2 · 9. Generate Residuals",
-    body: "The preview shows what remains after conversion. Balance & Create Streams writes the calculated product and residual reagents into the editable MFA and Lutze substance list.",
+    title: "Part 2 · 9. Apply Conversion",
+    body: "The final Review & apply step shows the streams that will be written. Apply to MFA & LUTZE updates the product, residual reagents, and byproducts in both connected views.",
     details: ["Residuals are not automatically final waste: they can become recovery, recycle, purge, or downstream separation feeds.", "This is the bridge between reaction accounting and later separation logic."],
-    action: tutorialOpenReactionMenu,
-    cta: "Balance streams",
+    action: tutorialShowConversionApply,
+    cta: "Apply conversion",
     ctaAction: tutorialApplyReactionBalance
   },
   {
@@ -651,8 +670,8 @@ const tutorialSteps = [
   {
     target: "[data-open-lutze-reaction-separation]",
     title: "Part 3 · 1. Lutze Support",
-    body: "When a reaction leaves product mixed with residual reagents or recoverable components, open Lutze Reaction-Separation to test pathway variants before changing the main graph.",
-    details: ["The sandbox reads substances, conversion/yield, phases, binary evidence, and properties.", "The main flowchart changes only if you apply a pathway."],
+    body: "When a reaction leaves product mixed with residual reagents or recoverable components, open Lutze/Garg Separation Screening before changing the main graph.",
+    details: ["The workspace keeps conversion, selectivity, yield, phases, binary evidence, and properties distinct.", "The main flowchart changes only after a complete pathway is reviewed and applied."],
     action: tutorialShowLutzeLaunch,
     cta: "Open Lutze",
     ctaAction: tutorialOpenLutzeScene
@@ -660,30 +679,30 @@ const tutorialSteps = [
   {
     target: "#separationSimulatorBody",
     title: "Part 3 · 2. Lutze Scene",
-    body: "This view ranks separation moves around the main product. Review the target product, residual reactants, binary pairs, and route options before applying anything to the flowsheet.",
-    details: ["Use Simulation to inspect the pathway logic.", "Use Substances to correct roles, phases, quantities, and properties if the route ranking looks wrong."],
+    body: "The objective stays at the top: the product to retain and the component destinations. Use Mixture & objective only when these inputs need correction.",
+    details: ["The pathway workspace stays separate from mixture editing.", "Nothing changes in the main graph until a complete draft is applied."],
     action: tutorialOpenLutzeScene
   },
   {
-    target: ".pathway-stepper",
-    title: "Part 3 · 3. Lutze Checklist",
-    body: "The checklist shows whether Lutze has a target product, a post-reaction mixture, ranked binary pairs, a next route, a preview, and an apply-ready pathway.",
-    details: ["If a checklist item is weak, correct substances or binary evidence before trusting the ranking.", "This is a screening workflow, not a final equipment design."],
+    target: ".pathway-mode-switch",
+    title: "Part 3 · 3. Choose A Pathway Mode",
+    body: "Recommended pathways calculates complete drafts in the background. Build step by step lets you choose each separation yourself.",
+    details: ["Recommended drafts are ranked by phase compatibility, evidence, missing checks, route length, added agents, and thermal exposure.", "Any recommended pathway becomes editable before it is applied."],
+    action: tutorialOpenLutzeScene
+  },
+  {
+    target: ".pathway-alternative-grid",
+    title: "Part 3 · 4. Recommended Pathways",
+    body: "Each card is a complete route profile: strongest evidence, fewer operations, or lower thermal exposure. These are screening alternatives, not process simulation results.",
+    details: ["Compare the full sequence and its evidence score.", "Use as editable draft moves a recommendation into the manual builder."],
     action: tutorialOpenLutzeScene
   },
   {
     target: ".pathway-options-panel",
-    title: "Part 3 · 4. Route Options",
-    body: "The right side lists several possible next moves. Each option shows the pair being separated, the retained stream, the evidence drivers, missing checks, and a score.",
-    details: ["Do not pick only the first option because it is first.", "Use the options as route hypotheses to compare before changing the main flowchart."],
-    action: tutorialOpenLutzeScene
-  },
-  {
-    target: "[data-pathway-try-option]",
-    title: "Part 3 · 5. Try A Route",
-    body: "Try Route draws a preview pathway. This is still reversible sandbox work: it does not create new process tasks in the main graph yet.",
-    details: ["The preview helps you see which component is separated and which mixture continues downstream.", "You can reset or try a different branch if the route logic is not credible."],
-    action: tutorialOpenLutzeScene,
+    title: "Part 3 · 5. Build Step By Step",
+    body: "Manual mode lists at least one next move for each separable component before showing extra variants. Choose one operation at a time to draw your own sequence.",
+    details: ["Each option states what leaves and what remains in the product-rich stream.", "You can select an existing step to replace that branch."],
+    action: tutorialShowManualLutzeMode,
     cta: "Try first route",
     ctaAction: tutorialTryFirstLutzeRoute
   },
