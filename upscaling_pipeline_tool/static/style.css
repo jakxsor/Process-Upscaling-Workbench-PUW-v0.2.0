@@ -7052,6 +7052,16 @@
       user-select: none;
     }
 
+    /* The PubChem fetch sits in this header rather than next to the stream name, so it stays with the
+       properties it fills in - and in the header rather than inside the panel, so it is still
+       reachable while the section is collapsed, which is exactly when no properties exist yet.
+       Kept inline so the disclosure triangle survives: making the summary a flex container removes
+       the marker in WebKit. */
+    .stream-advanced summary button {
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
     .stream-advanced-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));

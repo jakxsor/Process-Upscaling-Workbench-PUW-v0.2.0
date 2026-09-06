@@ -13383,7 +13383,6 @@
             <span class="stream-field-label">Material / stream</span>
             <div class="stream-name-row">
               <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off">
-              <button type="button" class="mini-button" data-fetch-stream-pubchem="${sid}" title="Fetch optional pure-component properties for Lutze/scale-up support">PubChem</button>
             </div>
             ${streamSuggestionRailHtml(block, stream, suggestionRole)}
             ${streamPubChemSuggestionRailHtml(stream)}
@@ -13437,7 +13436,10 @@
             <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
           </label>
           <details class="stream-advanced stream-chemical span-2" ${hasChemical ? "open" : ""}>
-            <summary>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</summary>
+            <summary>
+              <span>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</span>
+              <button type="button" class="mini-button" data-fetch-stream-pubchem="${sid}" title="Fetch optional pure-component properties for Lutze/scale-up support">PubChem</button>
+            </summary>
             <div class="stream-advanced-grid">
               <label class="stream-field">
                 <span class="stream-field-label">Thermal sensitivity</span>
