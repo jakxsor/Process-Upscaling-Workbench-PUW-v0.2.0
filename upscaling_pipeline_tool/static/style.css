@@ -6462,6 +6462,18 @@
       font-size: 13px;
     }
 
+    /* Pathway screening and the full KB3.1 sandbox open the same modal in two
+       different modes; keep their launchers side by side, primary one first. */
+    .separation-launch-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    @media (max-width: 900px) {
+      .separation-launch-row { grid-template-columns: 1fr; }
+    }
+
     .sep-balance-table {
       display: grid;
       gap: 6px;

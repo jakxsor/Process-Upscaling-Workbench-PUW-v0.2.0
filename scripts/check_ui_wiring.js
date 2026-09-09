@@ -108,7 +108,28 @@ queriedAttrs.forEach(attr => {
   }
 });
 
-// ---------------------------------------------------------------- 4. every script is served
+// ---------------------------------------------------------------- 4. unreachable modals
+// Checks 2 and 3 both start from a data-attribute, so they cannot see a feature whose only entry
+// point is a plain function call. That blind spot hid the separation simulator: openSeparationSimulator
+// unhid the modal, closeSeparationSimulator was bound to the close button, the modal existed in the
+// served HTML - and nothing ever called the opener, so four of its six tabs were unreachable while
+// this check reported "passed". A function that reveals a modal has to be invoked by something.
+const opensAModal = /(?:\.hidden\s*=\s*false|classList\.remove\(["'`]hidden)/;
+Array.from(allJs.matchAll(/function\s+(\w+)\s*\([^)]*\)\s*\{/g)).forEach(match => {
+  const name = match[1];
+  if (!/^(open|show|reveal|launch)/.test(name)) return;
+  // an IIFE runs itself, so its name appearing once is not evidence of death
+  if (allJs.slice(Math.max(0, match.index - 2), match.index).includes("(")) return;
+  const body = allJs.slice(match.index, match.index + 1400);
+  if (!opensAModal.test(body)) return;
+  const references = (allJs.match(new RegExp(`\\b${name}\\b`, "g")) || []).length
+    + (appHtml.match(new RegExp(`\\b${name}\\b`, "g")) || []).length;
+  if (references <= 1) {
+    failures.push(`unreachable modal: ${name}() reveals a modal but nothing ever calls it, so the feature has no entry point`);
+  }
+});
+
+// ---------------------------------------------------------------- 5. every script is served
 const scriptTags = new Set(Array.from(appHtml.matchAll(/<script src="\/([A-Za-z0-9_.-]+)"><\/script>/g), m => m[1]));
 const routed = new Set(Array.from(appHtml.matchAll(/"\/([A-Za-z0-9_.-]+\.js)":/g), m => m[1]));
 scriptTags.forEach(name => {

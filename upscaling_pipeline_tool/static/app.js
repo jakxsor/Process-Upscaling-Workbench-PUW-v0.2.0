@@ -1896,10 +1896,6 @@
       });
     }
 
-    function loadMethylbenzeneExampleProject() {
-      loadTripleReactantExampleProject();
-    }
-
     function normalizeStream(stream) {
       const role = streamRoles[stream?.role] ? stream.role : (streamRoles[stream?.type] ? stream.type : "input");
       return {
@@ -2176,14 +2172,28 @@
       return unitCatalog
         .map(unit => {
           const overlap = unit.phenomena.filter(item => phen.has(item));
-          const sameTask = unit.task === group.task;
-          return { ...unit, overlap, sameTask };
+          // Group tasks are free-text descriptions ("Knoevenagel reaction with
+          // in-situ water removal"), while unit.task is a six-value vocabulary, so
+          // strict equality matched no group at all in the shipped example and this
+          // sort key was dead. taskTextUnitScore maps the description onto the
+          // vocabulary, which is what makes the key mean anything.
+          const sameTask = unit.task === group.task || taskTextUnitScore(group, unit) > 0;
+          // Ranking on raw overlap count rewards units that simply declare more
+          // phenomena: a unit covering 8 of the group's needs while dragging in 7
+          // unrequested ones outranked a unit whose 4 declared phenomena were all
+          // requested. Jaccard charges for those extras.
+          const union = phen.size + unit.phenomena.length - overlap.length;
+          const coverage = union > 0 ? overlap.length / union : 0;
+          return { ...unit, overlap, sameTask, coverage };
         })
         .filter(unit => unit.sameTask || unit.overlap.length)
         .filter(unit => unitTaskCompatibleWithGroup(unit, group))
         .filter(unit => unit.phenomena.every(code => phenomenonCompatibleWithPhase(code, context)))
         .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
-        .sort((a, b) => Number(b.sameTask) - Number(a.sameTask) || b.overlap.length - a.overlap.length || a.name.localeCompare(b.name));
+        .sort((a, b) => Number(b.sameTask) - Number(a.sameTask)
+          || b.coverage - a.coverage
+          || b.overlap.length - a.overlap.length
+          || a.name.localeCompare(b.name));
     }
 
     function unitOperationCandidatesForGroup(group) {
@@ -3798,21 +3808,6 @@
       `;
     }
 
-    function streamTipLines(streams) {
-      return streamEditorSections.flatMap(role => {
-        const items = role === "outlet"
-          ? streams.filter(stream => streamIsOutlet(stream))
-          : streams.filter(stream => stream.role === role);
-        if (!items.length) return [];
-        const header = streamSectionMeta(role).title;
-        return [
-          `${header}:`,
-          ...items.slice(0, 5).map(stream => `- ${streamTipText(stream)}`),
-          ...(items.length > 5 ? [`- +${items.length - 5} more`] : [])
-        ];
-      });
-    }
-
     function streamTipText(stream) {
       const name = stream.name.trim() || "untitled stream";
       const quantity = stream.quantity.trim() ? `${stream.quantity.trim()} ${stream.unit}` : "quantity missing";
@@ -4231,13 +4226,6 @@
         kind: item.kind || "text",
         phenomena: relevantPhenomena.length ? relevantPhenomena : item.blockPhenomena || []
       };
-    }
-
-    function groupConditionTipLines(group) {
-      return aggregateGroupConditions(group).flatMap(item => [
-        `- ${item.label}: ${item.display} (${item.status})`,
-        ...item.lines.slice(0, 3).map(line => `  ${line}`)
-      ]);
     }
 
     function aggregateGroupStreams(group) {
@@ -6001,15 +5989,6 @@
       if (text.includes("vapor pressure")) return values.has("vapor_pressure");
       if (text.includes("thermal limit") || text.includes("degradation")) return values.has("degradation_temperature");
       return false;
-    }
-
-    function conditionTipLines(block, blockId = "") {
-      ensureBlockConditionFields(block);
-      const values = conditionValuesForBlock(block);
-      return values.slice(0, 6).map(item => {
-        const prefix = blockId ? `[${blockId}] ` : "";
-        return `- ${prefix}${item.label}: ${formatConditionValue(item)}`;
-      });
     }
 
     function scaleSectionHtml(_key, title, gridInnerHtml) {
@@ -8188,11 +8167,21 @@
       });
     }
 
+    // Two entry points into the same modal. The Lutze button opens it in "pathway"
+    // mode (2 tabs); "full" mode adds reaction balance, binary screening, workup plan
+    // and suggestions. Full mode had no launcher anywhere, so those four tabs were
+    // unreachable even though openSeparationSimulator was written and working.
     function lutzeReactionSeparationLaunchHtml(group) {
       return `
-        <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">
-          Open Lutze/Garg Separation Screening
-        </button>
+        <div class="separation-launch-row">
+          <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">
+            Open Lutze/Garg Separation Screening
+          </button>
+          <button class="lutze-launch-button tip" data-open-separation-simulator="${escapeAttr(group.id)}"
+            data-tip="Optional KB3.1 sandbox on the same group: reaction balance, substance list, binary screening, workup plan, pathway sandbox and suggestions. The Lutze/Garg button opens the evidence-based pathway screening only.">
+            Open Separation Simulator
+          </button>
+        </div>
       `;
     }
 
@@ -13241,6 +13230,9 @@
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
         button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
       });
+      root.querySelectorAll("[data-open-separation-simulator]").forEach(button => {
+        button.addEventListener("click", () => openSeparationSimulator(button.dataset.openSeparationSimulator));
+      });
       restoreStepFlowStreamViewport(streamViewport);
     }
 
@@ -13368,6 +13360,9 @@
       });
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
         button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
+      });
+      root.querySelectorAll("[data-open-separation-simulator]").forEach(button => {
+        button.addEventListener("click", () => openSeparationSimulator(button.dataset.openSeparationSimulator));
       });
       root.querySelectorAll("[data-open-task-timetable]").forEach(button => {
         button.addEventListener("click", () => openTaskTimetable(button.dataset.openTaskTimetable));
