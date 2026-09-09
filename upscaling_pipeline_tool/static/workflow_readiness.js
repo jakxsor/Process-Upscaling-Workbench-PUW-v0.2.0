@@ -2,14 +2,82 @@
     // separated from app.js because they are derived status calculations used by
     // both the UI and exports.
 
+    // Every step has a physical home in the layout, and for half of them it is not
+    // the right-hand panel: step 1 is the protocol panel on the left, steps 3 and 4
+    // are the board in the middle. `home.region` says which panel to open and where
+    // to scroll; `home.el` is the element to highlight once we get there.
     const workflowSteps = [
-      { id: 1, name: "Blocks", paperName: "Block building", tab: "inspect" },
-      { id: 2, name: "Phenomena", paperName: "Phenomena definition", tab: "inspect" },
-      { id: 3, name: "Unit Ops", paperName: "Unit operation deduction", tab: "inspect" },
-      { id: 4, name: "Network", paperName: "Network establishment", tab: "inspect" },
-      { id: 5, name: "Heuristics", paperName: "Heuristic rules application", tab: "heuristics" },
-      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale" }
+      { id: 1, name: "Blocks", paperName: "Block building", tab: "inspect",
+        home: { region: "protocol", el: "protocolPanel" } },
+      { id: 2, name: "Phenomena", paperName: "Phenomena definition", tab: "inspect",
+        home: { region: "inspector", el: "phenomenaGridSection" } },
+      { id: 3, name: "Unit Ops", paperName: "Unit operation deduction", tab: "inspect",
+        home: { region: "board", el: "groupFlow" } },
+      { id: 4, name: "Network", paperName: "Network establishment", tab: "inspect",
+        home: { region: "board", el: "stepFlowInspector" } },
+      { id: 5, name: "Heuristics", paperName: "Heuristic rules application", tab: "heuristics",
+        home: { region: "inspector", el: "heuristicsPanelTab" } },
+      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale",
+        home: { region: "inspector", el: "scalePanelTab" } }
     ];
+
+    // Brief outline on the region the user was just sent to, so a click that scrolls
+    // the board rather than switching tabs still reads as "you are here now".
+    function flashWorkflowTarget(elementId) {
+      // Clicking two steps in quick succession would otherwise leave both regions
+      // glowing, which points at two places at once.
+      document.querySelectorAll(".workflow-step-target").forEach(el => el.classList.remove("workflow-step-target"));
+      const target = $(elementId);
+      if (!target) return;
+      void target.offsetWidth;
+      target.classList.add("workflow-step-target");
+      window.setTimeout(() => target.classList.remove("workflow-step-target"), 1600);
+    }
+
+    // Step 3's whole point is the unit-operation proposals, which appear on a group
+    // box only after its picker is expanded. Land the user on the first group still
+    // waiting for a unit, with the proposals already open.
+    function revealFirstPendingUnitOperation() {
+      const groups = groupIdsInTextOrder().map(groupId => groupModel(groupId)).filter(Boolean);
+      if (!groups.length) return false;
+      const pending = groups.find(group => !group.selectedUnit) || groups[0];
+      state.selectedGroupId = pending.id;
+      state.selectedBlockId = null;
+      state.focusEndpoint = pending.id;
+      if (groupUnitSuggestionReadiness(pending).ready) {
+        ensureGroup(pending.id).unitSuggestionsExpanded = true;
+      }
+      return true;
+    }
+
+    function goToWorkflowStep(step) {
+      if (!step) return;
+      const home = step.home || { region: "inspector", el: null };
+      const main = $("appMain");
+
+      if (home.region === "protocol") {
+        if (main.classList.contains("protocol-collapsed")) {
+          main.classList.remove("protocol-collapsed");
+          updateProtocolToggleIcon();
+        }
+      } else if (home.region === "inspector") {
+        if (main.classList.contains("inspector-collapsed")) {
+          main.classList.remove("inspector-collapsed");
+          updateInspectorToggleIcon();
+        }
+        setInspectorTab(step.tab);
+      }
+
+      if (home.region === "board" && step.id === 3) revealFirstPendingUnitOperation();
+
+      renderAll();
+
+      if (home.region === "board") {
+        centerSelection();
+        $(home.el)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+      if (home.el) flashWorkflowTarget(home.el);
+    }
 
     function blockExpectsStreams(block) {
       const phenomena = block.phenomena || [];
@@ -119,17 +187,60 @@
         set(6, "done", "Scale basis and task durations defined. Review schedule balance in Scale-Up tab.");
       }
 
+      // Compact counters for the panel badges. The hints above are full sentences,
+      // too long for a badge, so each step also gets a few words of live tally.
+      const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+      const withPhenomena = blocks.filter(block => (block.phenomena || []).length).length;
+      const withUnit = groups.filter(group => group.selectedUnit).length;
+      const linkedPairs = new Set((state.links || []).map(link => `${link.from}>${link.to}`)).size;
+      const shortLabels = {
+        1: blocks.length ? plural(blocks.length, "block") : "no blocks yet",
+        2: blocks.length ? `${withPhenomena}/${blocks.length} with phenomena` : "no blocks yet",
+        3: groups.length ? `${withUnit}/${groups.length} units chosen` : "no task groups yet",
+        4: groups.length ? plural(linkedPairs, "arrow") : "no task groups yet",
+        5: heuristics.triggered.length ? `${decided}/${heuristics.triggered.length} rules decided` : "no rules triggered yet",
+        6: groups.length ? `${groups.length - missingDuration.length}/${groups.length} durations set` : "no task groups yet"
+      };
+      Object.keys(shortLabels).forEach(id => {
+        if (statuses[id]) statuses[id].short = shortLabels[id];
+      });
+
       return statuses;
     }
 
+    // The panel badges ("1 Block Creation", "3 Unit Ops & Task Assignment", ...) were
+    // fixed HTML, so the number never changed and carried no information once you had
+    // read it. They now track the same statuses as the stepper.
+    function renderStepFlags() {
+      const flags = document.querySelectorAll("[data-step-flag]");
+      if (!flags.length) return;
+      const statuses = workflowStepStatuses();
+      flags.forEach(flag => {
+        const id = Number(flag.dataset.stepFlag);
+        const info = statuses[id];
+        if (!info) return;
+        const step = workflowSteps.find(item => item.id === id);
+        flag.classList.toggle("done", info.status === "done");
+        flag.classList.toggle("partial", info.status === "partial");
+        const marker = flag.querySelector(".step-flag-num");
+        if (marker) marker.textContent = info.status === "done" ? "✓" : String(id);
+        const note = flag.querySelector(".step-flag-note");
+        if (note) note.textContent = info.short || "";
+        if (step) flag.setAttribute("aria-label", `Step ${id}, ${step.paperName}: ${info.hint || ""}`);
+      });
+    }
+
     function renderWorkflowStepper() {
+      renderStepFlags();
       const root = $("workflowStepper");
       if (!root) return;
       const statuses = workflowStepStatuses();
+      const whereLabel = { protocol: "protocol panel, left", board: "process board, centre", inspector: "right-hand panel" };
       root.innerHTML = workflowSteps.map(step => {
         const info = statuses[step.id] || { status: "todo", hint: "" };
+        const where = whereLabel[step.home?.region] || whereLabel.inspector;
         return `
-          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}. ${step.paperName} - ${info.hint}`)}">
+          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}. ${step.paperName} - happens in the ${where}. ${info.hint}`)}">
             <span class="workflow-step-marker">${info.status === "done" ? "✓" : step.id}</span>
             <span class="workflow-step-name">${escapeHtml(step.name)}</span>
           </button>

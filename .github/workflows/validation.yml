@@ -47,6 +47,7 @@ jobs:
           python scripts/check_lci_xlsx_export.py
           python scripts/check_flowsheet_pptx_export.py
           python scripts/check_pubchem_lookup.py
+          python scripts/check_server_payload.py
 
       # Behavioural checks: these assert that the answers are physically possible and that the UI is
       # actually wired, rather than that a given string is present in the source. They exist because

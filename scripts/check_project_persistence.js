@@ -77,6 +77,12 @@ assert(exported.projectState, "Project export should contain a projectState snap
 assert(exported.projectState.blocks.length > 0, "Snapshot should preserve blocks");
 assert(Object.keys(exported.projectState.groups).length > 0, "Snapshot should preserve groups");
 
+const futureExport = JSON.parse(JSON.stringify(exported));
+futureExport.projectState.schemaVersion = "workbench-state-v999";
+assert.throws(() => validateProjectImport(futureExport), /Unsupported workbench state schema/, "Unknown future state schemas must be rejected instead of loaded silently");
+assert.throws(() => validateProjectImport({ exportSchemaVersion: "upscaling-project-v999", projectState: exported.projectState }), /Unsupported project schema/, "Unknown project schemas must be rejected");
+assert.throws(() => applyProjectStateSnapshot({ blocks: [{ streams: [] }], groups: {}, links: [] }, { pushUndo: false }), /reloadable project state/, "Malformed nested block data must be rejected");
+
 state.text = "";
 state.blocks = [];
 state.groups = {};
@@ -100,6 +106,7 @@ const reconstructed = projectStateFromExport({
 assert.strictEqual(reconstructed.text, "legacy project");
 assert.strictEqual(reconstructed.groups.G1.task, "legacy task");
 assert.strictEqual(reconstructed.groups.G1.properties.density.value, "1");
+assert.strictEqual(reconstructed.blocks[0].source, "protocol", "Legacy blocks should receive an explicit protocol source during migration");
 
 loadTripleReactantExampleProject();
 const tripleExport = buildProjectExport();

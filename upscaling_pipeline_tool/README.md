@@ -11,6 +11,7 @@ The app supports a phenomena-based scale-up workflow from protocol text to:
 - grouped phenomena and task logic;
 - quantified MFA inputs and outlets, including products, intermediates, waste,
   emissions, recoveries, and recycle candidates;
+- input-derived stoichiometric product and residual mass calculations;
 - unit-operation alternatives;
 - heuristic-rule review;
 - optional Lutze-inspired post-reaction separation pathway screening;
@@ -79,6 +80,7 @@ node scripts/check_project_persistence.js
 node scripts/check_tutorial_flow.js
 python3 scripts/check_flowsheet_pptx_export.py
 python3 scripts/check_lci_xlsx_export.py
+python3 scripts/check_server_payload.py
 python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pptx_renderer.py upscaling_pipeline_tool/xlsx_renderer.py
 ```
 
@@ -93,6 +95,7 @@ xlsx_renderer.py    LCI workbook export
 static/app.js       Client-side tool logic
 static/export.js    JSON persistence and export logic
 static/flowsheet.js Built-in editable flowsheet model/SVG renderer
+static/heuristic_rules.js Auditable process-heuristic checklist data
 static/lca_bridge.js LCI/openLCA bridge model generation
 static/workflow_readiness.js Workflow progress and data-readiness metrics
 static/style.css    UI styling

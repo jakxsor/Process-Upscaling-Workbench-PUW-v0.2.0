@@ -351,22 +351,39 @@ def _exchange_rows(exchanges: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _flow_rows(exchanges: list[dict[str, Any]]) -> list[list[Any]]:
-    rows = [["canonical_name", "lca_role", "flow_type_hint", "occurrences", "raw_names", "total_kg_where_available", "units_seen", "provider_needed"]]
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    rows = [[
+        "process_id", "direction", "canonical_name", "lca_role", "amount_basis",
+        "flow_type_hint", "occurrences", "raw_names", "total_kg_where_available",
+        "aggregation_status", "units_seen", "provider_needed",
+    ]]
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
     for exchange in exchanges:
-        key = (_clean(exchange.get("canonicalName") or exchange.get("rawName")), _clean(exchange.get("lcaRole")))
+        key = (
+            _clean(exchange.get("_processId") or exchange.get("groupId")),
+            _exchange_direction(exchange),
+            _clean(exchange.get("canonicalName") or exchange.get("rawName")),
+            _clean(exchange.get("lcaRole")),
+            _clean(_get(exchange, "amount.basis")),
+        )
         grouped.setdefault(key, []).append(exchange)
-    for (name, role), items in sorted(grouped.items()):
+    for (process_id, direction, name, role, basis), items in sorted(grouped.items()):
         raw_names = sorted({_clean(item.get("rawName")) for item in items if _clean(item.get("rawName"))})
         units = sorted({_clean(_get(item, "amount.unit")) for item in items if _clean(_get(item, "amount.unit"))})
-        total_kg = sum(_num(_get(item, "amount.kg")) or 0 for item in items)
+        kg_values = [_num(_get(item, "amount.kg")) for item in items]
+        complete_kg = all(value is not None for value in kg_values)
+        total_kg = sum(value for value in kg_values if value is not None) if complete_kg else None
+        aggregation_status = "same process/direction/basis; kg-convertible" if complete_kg else "not summed: one or more amounts are not kg-convertible"
         rows.append([
+            process_id,
+            direction,
             name,
             role,
+            basis,
             _get(items[0], "openLcaHint.flowType"),
             len(items),
             "; ".join(raw_names),
-            total_kg if total_kg else "",
+            total_kg if total_kg is not None else "",
+            aggregation_status,
             "; ".join(units),
             _get(items[0], "openLcaHint.providerNeeded"),
         ])
@@ -395,7 +412,7 @@ def _mapping_rows(project: dict[str, Any]) -> list[list[Any]]:
         "mapping_status", "canonical_name", "lca_role", "openlca_flow_type_hint",
         "provider_needed", "selected_openlca_flow_id", "selected_provider_id",
         "selected_location", "candidate_queries", "occurrences", "total_kg_where_available",
-        "units_seen",
+        "aggregation_status", "units_seen",
     ]]
     bridge = project.get("lcaBridge") if isinstance(project.get("lcaBridge"), dict) else {}
     for candidate in bridge.get("mappingCandidates") or []:
@@ -405,7 +422,12 @@ def _mapping_rows(project: dict[str, Any]) -> list[list[Any]]:
         for occurrence in candidate.get("occurrences") or []:
             if isinstance(occurrence, dict):
                 occurrences.append(f"{_clean(occurrence.get('groupId'))}/{_clean(occurrence.get('blockId'))}: {_clean(occurrence.get('rawName'))}")
-        total_kg = sum(_num(_get(occurrence, "amount.kg")) or 0 for occurrence in candidate.get("occurrences") or [] if isinstance(occurrence, dict))
+        amount_items = [occurrence for occurrence in candidate.get("occurrences") or [] if isinstance(occurrence, dict)]
+        kg_values = [_num(_get(occurrence, "amount.kg")) for occurrence in amount_items]
+        bases = {_clean(_get(occurrence, "amount.basis")) for occurrence in amount_items if _clean(_get(occurrence, "amount.basis"))}
+        can_sum = bool(amount_items) and all(value is not None for value in kg_values) and len(bases) <= 1
+        total_kg = sum(value for value in kg_values if value is not None) if can_sum else None
+        aggregation_status = "compatible basis; kg-convertible" if can_sum else "not summed: mixed basis or non-kg amount"
         units_seen = sorted({_clean(_get(occurrence, "amount.unit")) for occurrence in candidate.get("occurrences") or [] if isinstance(occurrence, dict) and _clean(_get(occurrence, "amount.unit"))})
         rows.append([
             candidate.get("mappingStatus", "unmapped"),
@@ -418,7 +440,8 @@ def _mapping_rows(project: dict[str, Any]) -> list[list[Any]]:
             candidate.get("selectedLocation", ""),
             _join(candidate.get("candidateQueries")),
             "; ".join(occurrences),
-            total_kg if total_kg else "",
+            total_kg if total_kg is not None else "",
+            aggregation_status,
             "; ".join(units_seen),
         ])
     return rows

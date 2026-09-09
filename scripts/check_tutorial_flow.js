@@ -26,7 +26,7 @@ assert(tutorialSource.includes("Create recovery task"), "Tutorial should teach c
 assert(tutorialSource.includes("Assign Unit In G1"), "Tutorial should teach assigning a unit operation inside G1");
 assert(tutorialSource.includes("Switch G1 Unit"), "Tutorial should teach switching the selected G1 unit");
 assert(tutorialSource.includes("Reaction Menu"), "Tutorial should teach the reaction/conversion menu");
-assert(tutorialSource.includes("Apply Conversion"), "Tutorial should teach applying reaction residuals to MFA and Lutze");
+assert(tutorialSource.includes("Save Reaction Balance"), "Tutorial should teach saving reviewed reaction-effluent components before opening Lutze");
 assert(tutorialSource.includes("Same Group Or New Task"), "Tutorial should explain when G2 is optional versus necessary");
 assert(!tutorialSource.includes('target: "[data-open-conversion-modal]"'), "Reaction menu tutorial target should not depend on a generic conversion button selector");
 assert(tutorialSource.includes("Heuristic Rules"), "Tutorial should teach heuristic rule review");
@@ -66,6 +66,7 @@ function fakeElement(id = "") {
     },
     querySelector() { return null; },
     querySelectorAll() { return []; },
+    contains() { return false; },
     addEventListener() {},
     removeEventListener() {},
     setAttribute() {},

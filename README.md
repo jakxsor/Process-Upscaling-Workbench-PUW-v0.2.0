@@ -16,9 +16,13 @@ in:
 > Methodology for Chemicals and Materials in Prospective LCA." [journal,
 > publication details to be added]
 
-The built-in octocrylene example reproduces the case study in Section 3 and
-the Supplementary Information of that paper (nine unit operations, three
-recycle loops, ~15 m³ reactor, 750 t/yr target).
+The built-in octocrylene example is a source-reconciled software fixture for the
+case study in Section 3 and the Supplementary Information: nine protocol-derived
+blocks plus three explicit scale-up additions, nine task groups, a cyclohexane
+recycle target, a 20 h limiting plant cycle, and a 750 t/yr target at roughly 250
+batches/yr. It also exposes the SI's unresolved capacity conflict: 3000 kg of
+product requires 7.5 m³ of cyclohexane alone at 2.5 L/kg, which cannot fit in the
+stated 5 m³ reactor before reactants and freeboard are considered.
 
 If you use this tool in your work, please cite the paper above.
 
@@ -39,6 +43,8 @@ and low-confidence scale-up risks.
   intermediate streams, waste, emissions, recoveries, and recycle candidates.
 - Combine blocks into task groups while preserving block-level information.
 - Aggregate group-level MFA and operating conditions.
+- Calculate reaction-stage product and residual masses from reactive-input
+  quantities, molecular weights, stoichiometric coefficients, and declared yield.
 - Use phase categories to avoid incompatible phenomenon/unit-operation choices.
 - Suggest industrial unit-operation alternatives from grouped phenomena.
 - Show heuristic-rule checks before numerical scale-up.
@@ -87,6 +93,13 @@ separation evidence when available. Suggestions are gated until the task has
 enough material streams, phase labels, and conditions to make the choice
 auditable.
 
+In Stoichiometric Balance mode, the selected product amount is calculated from
+the limiting-reagent extent and product coefficient, then multiplied by the
+declared yield. Conversion controls unreacted reagent quantities; selectivity is
+kept as a separate consistency assumption. Missing amounts, coefficients, MW,
+or supported units block saving rather than being silently replaced by a valid
+number. This is a reaction-stage material balance, not a kinetic model.
+
 The Lutze Reaction-Separation sandbox is optional. It compares active
 post-reaction substances pairwise and proposes draft separation moves from
 property contrasts and phase compatibility. The main flowchart is unchanged
@@ -98,16 +111,19 @@ For scheduling, the tool uses:
 
 ```text
 adjusted duration = input duration x (1 + Gantt margin %)
-effective duration = adjusted duration / parallel units
-bottleneck = task with the largest effective duration
-cycle time = sum of non-overlapping effective durations
+effective duration = adjusted duration / parallel units, except kinetics-bound stages
+kinetics-bound effective duration = adjusted duration
+batch makespan = latest finish in the explicit task-dependency graph
+plant cycle time = largest task effective duration
+bottleneck = longest zero-slack task on the dependency critical path
 ```
 
 For campaign scheduling, the UI also shows an overlapped scenario:
 
 ```text
-plant cycle time = max(task effective duration)
-overlapped batches/year = 8760 x OEE / plant cycle time
+productive hours/year = operating days x operating hours/day x OEE
+overlapped batches/year = productive hours/year x parallel trains / plant cycle time
+conservative batches/year = productive hours/year x parallel trains / batch makespan
 ```
 
 The overlapped scenario is an upper-throughput screening case. It assumes that
@@ -287,9 +303,11 @@ It demonstrates:
 - heuristic review;
 - scale-up/Gantt bottleneck screening.
 
-Pre-filled values are a mix of paper/case-study values and labelled engineering
-screening assumptions. They should be reviewed before using exported results in
-new studies.
+Reported values, deterministic calculations, and missing data are labelled
+separately. The benzophenone <0.5% endpoint is used only as an explicit 99.5%
+screening-conversion proxy to demonstrate residual-stream generation; it is not
+presented as a reported yield. Unreported catalyst, extraction-solvent, brine,
+vent, drying-regeneration, and heavy-residue quantities remain blank.
 
 ## Data Sources
 

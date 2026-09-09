@@ -51,7 +51,7 @@
       ].filter(Boolean),
       pbb: ["PT(VL)", "PS(VL)"],
       units: ["Flash vaporization", "Evaporation", "Distillation", "Partial condensation / vaporization"],
-      level: "supported",
+      level: "matched",
       note: "A vapor-liquid split is plausible when volatility contrast is large enough."
     },
     {
@@ -62,7 +62,7 @@
       evidence: () => ["binary azeotrope = yes"],
       pbb: ["2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)", "ES(H)", "PC(LL)", "PS(LL)"],
       units: ["Azeotropic distillation", "Extractive distillation", "Membrane pervaporation", "Liquid-liquid extraction"],
-      level: "supported",
+      level: "matched",
       note: "Azeotropes weaken simple distillation and justify intensified or agent-assisted alternatives."
     },
     {
@@ -73,7 +73,7 @@
       evidence: () => ["azeotrope = yes", "pressure sensitive = yes"],
       pbb: ["2phM", "PC(VL)", "PT(VL)", "PS(VL)", "ES(D)", "ES(C)", "ES(H)"],
       units: ["Pressure-swing distillation", "Azeotropic distillation", "Membrane-reactive distillation"],
-      level: "supported",
+      level: "matched",
       note: "Pressure sensitivity opens a pressure-swing or intensified V-L route."
     },
     {
@@ -84,7 +84,7 @@
       evidence: () => ["miscibility gap = yes"],
       pbb: ["PC(LL)", "PT(LL)", "PS(LL)"],
       units: ["Decanter", "Liquid-liquid extraction"],
-      level: "supported",
+      level: "matched",
       note: "A liquid-liquid phase split can support decanting or extraction."
     },
     {
@@ -98,7 +98,7 @@
       ].filter(Boolean),
       pbb: ["PT(LS)", "PS(LS)", "ES(C/H)"],
       units: ["Crystallization", "Melt crystallization"],
-      level: "supported",
+      level: "partial",
       note: "A solid-liquid route becomes plausible when melting/eutectic behavior creates a separable solid phase."
     },
     {
@@ -296,10 +296,14 @@
         agentAdded: String(candidate.agentAdded || ""),
         outlets: Number.isFinite(Number(candidate.outlets)) ? Number(candidate.outlets) : 0
       })).filter(candidate => candidate.name) : [],
-      evidenceLevel: ["supported", "partial", "hypothesis", "blocked"].includes(step.evidenceLevel)
-        ? step.evidenceLevel
-        : step.directionConfidence === "supported" ? "supported" : "partial",
-      directionConfidence: ["supported", "review", "manual"].includes(step.directionConfidence) ? step.directionConfidence : "review",
+      evidenceLevel: step.evidenceLevel === "supported"
+        ? "matched"
+        : ["matched", "partial", "hypothesis", "blocked"].includes(step.evidenceLevel)
+          ? step.evidenceLevel
+          : step.directionConfidence === "supported" ? "matched" : "partial",
+      directionConfidence: step.directionConfidence === "supported"
+        ? "inferred"
+        : ["inferred", "review", "manual"].includes(step.directionConfidence) ? step.directionConfidence : "review",
       methodSources: Array.isArray(step.methodSources) ? step.methodSources.map(String).filter(Boolean) : [],
       note: String(step.note || "")
     })) : [];
@@ -338,17 +342,17 @@
     const quantifiedCount = model.substances.filter(item => item.quantity && item.unit).length;
     const propertyCount = model.substances.filter(item => purePropertyDefs.some(def => String(item[def.id] || "").trim())).length;
     const actionableCount = model.suggestions.filter(suggestionIsSelectable).length;
-    const supportedCount = model.suggestions.filter(item => suggestionIsSelectable(item) && item.level === "supported").length;
+    const routeReadyCount = model.suggestions.filter(item => suggestionIsSelectable(item) && item.level === "matched").length;
     const blockedCount = model.suggestions.filter(item => !suggestionIsSelectable(item)).length;
     if (actionableCount) {
       return {
-        status: supportedCount ? "ready" : "partial",
-        title: supportedCount ? "First separation theories available" : "Partial theories available",
+        status: routeReadyCount ? "ready" : "partial",
+        title: routeReadyCount ? "Route-ready KB3.1 screens available" : "Threshold-only candidates need review",
         message: `${actionableCount} gated KB3.1 route${actionableCount === 1 ? "" : "s"} passed phase/phenomena checks. Review evidence and missing data before applying a candidate.`,
         quantifiedCount,
         propertyCount,
         actionableCount,
-        supportedCount,
+        routeReadyCount,
         blockedCount
       };
     }
@@ -360,7 +364,7 @@
         quantifiedCount,
         propertyCount,
         actionableCount,
-        supportedCount,
+        routeReadyCount,
         blockedCount
       };
     }
@@ -371,7 +375,7 @@
       quantifiedCount,
       propertyCount,
       actionableCount,
-      supportedCount,
+      routeReadyCount,
       blockedCount
     };
   }
@@ -484,7 +488,7 @@
       pairKey: pair.key,
       pairLabel: `${pair.a.name} / ${pair.b.name}`,
       ruleId: "NO-KB3.1-MATCH",
-      label: "No supported KB3.1 trigger yet",
+      label: "No KB3.1 threshold match yet",
       source: "A1.1 + KB3.1/Table S.10",
       evidence: [],
       pbb: [],
@@ -500,7 +504,7 @@
       selectable: false,
       routeFamily: "unknown",
       eligibilityReasons: pairHasAnyData(pair) ? ["some properties are present, but no KB3.1 threshold is met"] : [],
-      blockers: pairHasAnyData(pair) ? ["no supported KB3.1 trigger"] : ["missing binary/property evidence"],
+      blockers: pairHasAnyData(pair) ? ["no KB3.1 threshold matched"] : ["missing binary/property evidence"],
       note: "Add pure-component values or binary mixture insights before proposing a defendable separation route.",
       missing: separationMissingForPair(pair),
       strength: null,
@@ -641,6 +645,10 @@
     }
     if (rule.id.includes("LL") && pair.insights.miscibilityGap === "unknown") missing.push("miscibility gap");
     if (rule.id.includes("LS") && !Number.isFinite(pair.ratios.tm) && pair.insights.eutectic === "unknown") missing.push("Tm ratio or eutectic");
+    if (rule.id === "KB3.1-LS-MELTING") {
+      const hasSolidPhase = pair.components.some(component => /S/.test(String(component.phase || "").toUpperCase()));
+      if (!hasSolidPhase && pair.insights.eutectic !== "yes") missing.push("observed solid phase or measured SLE/eutectic evidence");
+    }
     if (rule.id === "KB3.1-LS-SIZE" && (!Number.isFinite(pair.ratios.molecularDiameter) || !Number.isFinite(pair.ratios.mw))) missing.push("molecular diameter and MW ratios");
     if (rule.id === "KB3.1-MEMBRANE-VAPOR" && (!Number.isFinite(pair.ratios.vdwVolume) || !Number.isFinite(pair.ratios.criticalTemp))) missing.push("VdW volume and critical-temperature ratios");
     if (rule.id === "KB3.1-MEMBRANE-LIQUID" && (!Number.isFinite(pair.ratios.molarVolume) || !Number.isFinite(pair.ratios.solubilityParameter))) missing.push("molar-volume and solubility-parameter ratios");
@@ -674,10 +682,13 @@
         blockers: ["no property or binary threshold matched"]
       };
     }
-    if (missing.length) reasons.push("route has evidence but still needs review data");
-    const level = rule.level === "supported" && missing.length ? "partial" : rule.level;
+    if (missing.length) reasons.push("the KB threshold matched, but route feasibility still needs review data");
+    const hasConfirmedSolidBasis = family === "LS"
+      && (pair.components.some(component => /S/.test(String(component.phase || "").toUpperCase())) || pair.insights.eutectic === "yes");
+    const baseLevel = rule.id === "KB3.1-LS-MELTING" && hasConfirmedSolidBasis ? "matched" : rule.level;
+    const level = baseLevel === "matched" && missing.length ? "partial" : baseLevel;
     return {
-      status: level === "supported" ? "supported" : "partial",
+      status: level === "matched" ? "rule matched" : "review required",
       level,
       selectable: true,
       family,
@@ -802,6 +813,9 @@
     }
     if (!limiting) issues.push("limiting reagent");
     if (!mainProduct) issues.push("main product selection");
+    const balancedMainProduct = mainProduct
+      ? balancedRows.find(row => row.id === mainProduct.id) || mainProduct
+      : null;
     return {
       balance,
       conversion,
@@ -810,7 +824,7 @@
       limiting,
       extent: reactantExtent,
       productExtent,
-      mainProduct,
+      mainProduct: balancedMainProduct,
       rows: balancedRows,
       residualRows,
       issues,
@@ -881,7 +895,7 @@
     let basis = "passes through";
     if (row.role === "reactant" && Number.isFinite(extent) && row.stoich > 0) {
       finalMol = Number.isFinite(row.initialMol) ? Math.max(0, row.initialMol - extent * row.stoich) : NaN;
-      basis = "unreacted residual: route to waste/recovery";
+      basis = "unreacted component in reaction effluent";
     } else if ((row.role === "product" || row.role === "coproduct" || row.role === "byproduct") && Number.isFinite(productExtent) && row.stoich > 0) {
       finalMol = !row.reactionGenerated && Number.isFinite(row.initialMol) && row.initialMol > 0
         ? row.initialMol
@@ -933,8 +947,8 @@
   function binaryRouteVariants(groupId, pair) {
     const variants = [];
     const suggestions = separationSuggestionsForPair(pair).filter(suggestionIsSelectable);
-    const supportedBy = ruleId => suggestions.filter(item => item.ruleId === ruleId);
-    const volatility = supportedBy("KB3.1-VL-BP-PVAP");
+    const matchedBy = ruleId => suggestions.filter(item => item.ruleId === ruleId);
+    const volatility = matchedBy("KB3.1-VL-BP-PVAP");
     if (volatility.length) {
       const volatile = preferredVolatileComponent(pair);
       const retained = volatile.id === pair.a.id ? pair.b : pair.a;
@@ -958,7 +972,7 @@
         graphPreview: `${groupId} -> V-L separator; ${volatile.name} leaves as volatile/recovery stream, ${retained.name} continues as heavier liquid/product-rich stream.`
       });
     }
-    const thermal = supportedBy("SCREEN-THERMAL-SENSITIVE");
+    const thermal = matchedBy("SCREEN-THERMAL-SENSITIVE");
     if (thermal.length) {
       const sensitive = pair.components.find(component => component.thermalSensitivity === "high") || pair.b;
       const math = routeMathSummary(thermal);
@@ -981,7 +995,7 @@
         graphPreview: `${groupId} -> low-residence thermal separator; protect ${sensitive.name}, remove the more volatile/light component under reduced pressure.`
       });
     }
-    const liquid = supportedBy("KB3.1-LL-GAP");
+    const liquid = matchedBy("KB3.1-LL-GAP");
     if (liquid.length) {
       const math = routeMathSummary(liquid);
       variants.push({
@@ -1004,8 +1018,8 @@
       });
     }
     const solid = [
-      ...supportedBy("KB3.1-LS-MELTING"),
-      ...supportedBy("KB3.1-LS-SIZE")
+      ...matchedBy("KB3.1-LS-MELTING"),
+      ...matchedBy("KB3.1-LS-SIZE")
     ];
     if (solid.length) {
       const crystallizing = preferredSolidComponent(pair);
@@ -1030,8 +1044,8 @@
       });
     }
     const affinity = [
-      ...supportedBy("KB3.1-MEMBRANE-VAPOR"),
-      ...supportedBy("KB3.1-MEMBRANE-LIQUID")
+      ...matchedBy("KB3.1-MEMBRANE-VAPOR"),
+      ...matchedBy("KB3.1-MEMBRANE-LIQUID")
     ];
     if (affinity.length) {
       const larger = preferredLargeComponent(pair);
@@ -1055,7 +1069,7 @@
         graphPreview: `${groupId} -> selective separator; use MW/size/affinity contrast to split ${larger.name} from the smaller or more permeable component.`
       });
     }
-    const weakDistillation = supportedBy("SCREEN-RVOL-LOW");
+    const weakDistillation = matchedBy("SCREEN-RVOL-LOW");
     if (weakDistillation.length) {
       const math = routeMathSummary(weakDistillation);
       variants.push({
@@ -1117,7 +1131,7 @@
   }
 
   function suggestionLevelRank(level) {
-    if (level === "supported") return 0;
+    if (level === "matched") return 0;
     if (level === "partial") return 1;
     if (level === "hypothesis") return 2;
     return 3;
@@ -1302,8 +1316,8 @@
 
   function pathwaySplitConfidence(pair, variant, mainProduct) {
     const targetPair = mainProduct && pair.components.some(item => item.id === mainProduct.id);
-    if (targetPair && variant.level === "supported" && !(variant.missing || []).length) return "supported";
-    if (targetPair || variant.level === "supported") return "review";
+    if (targetPair && variant.level === "matched" && !(variant.missing || []).length) return "inferred";
+    if (targetPair || variant.level === "matched") return "review";
     return "manual";
   }
 
@@ -1372,35 +1386,46 @@
 
   function pathwayMetrics(steps) {
     const missingChecks = steps.reduce((sum, step) => sum + (step.missing || []).length, 0);
-    const supportedSteps = steps.filter(step => step.evidenceLevel === "supported").length;
+    const routeReadySteps = steps.filter(step => step.evidenceLevel === "matched").length;
     const partialSteps = steps.filter(step => step.evidenceLevel === "partial").length;
     const hypothesisSteps = steps.filter(step => step.evidenceLevel === "hypothesis" || step.evidenceLevel === "blocked").length;
-    const directedSteps = steps.filter(step => step.directionConfidence === "supported").length;
+    const inferredDirectionSteps = steps.filter(step => step.directionConfidence === "inferred").length;
     const addedAgentSteps = steps.filter(step => /MSA|solvent|entrainer/i.test(step.agentAdded || "")).length;
     const thermalOperationPattern = /thermal|distill|evapor|flash|condens|crystalli|pervapor|sublim|heat|cool|reflux/i;
-    const highHeatPattern = /high[- ]?temperature|short[- ]?path|molecular distill|wiped[- ]?film|thin[- ]?film|distill|evapor|flash/i;
+    const thermalExposureProxyPattern = /distill|evapor|flash|reboil|high[- ]?temperature/i;
     const thermalOperationSteps = steps.filter(step => thermalOperationPattern.test(`${step.title || ""} ${step.unit || ""}`)).length;
-    const thermalRiskSteps = steps.filter(step => highHeatPattern.test(`${step.title || ""} ${step.unit || ""}`)).length;
+    const thermalExposureProxySteps = steps.filter(step => thermalExposureProxyPattern.test(`${step.title || ""} ${step.unit || ""}`)).length;
     return {
       stepCount: steps.length,
       missingChecks,
-      supportedSteps,
+      routeReadySteps,
       partialSteps,
       hypothesisSteps,
-      directedSteps,
+      inferredDirectionSteps,
       addedAgentSteps,
       thermalOperationSteps,
-      thermalRiskSteps
+      thermalExposureProxySteps
     };
   }
 
-  function pathwayAlternativeRank(alternative, profile) {
-    const m = alternative.metrics;
-    const incompletePenalty = alternative.status === "complete" ? 0 : 100000;
-    if (profile === "msa") return incompletePenalty + m.addedAgentSteps * 10000 + m.missingChecks * 100 + m.thermalRiskSteps * 10 + m.stepCount;
-    if (profile === "gentle") return incompletePenalty + m.thermalRiskSteps * 10000 + m.missingChecks * 100 + m.addedAgentSteps * 20 + m.stepCount;
-    const unsupportedShare = m.stepCount ? 1 - m.supportedSteps / m.stepCount : 1;
-    return incompletePenalty + unsupportedShare * 10000 + m.missingChecks * 100 + m.addedAgentSteps * 10 + m.stepCount;
+  function comparePathwayAlternatives(a, b, profile) {
+    const completeOrder = Number(b.status === "complete") - Number(a.status === "complete");
+    if (completeOrder) return completeOrder;
+    const routeReadyShare = item => item.metrics.stepCount ? item.metrics.routeReadySteps / item.metrics.stepCount : 0;
+    const fields = profile === "msa"
+      ? [["addedAgentSteps", 1], ["missingChecks", 1], ["thermalExposureProxySteps", 1], ["stepCount", 1]]
+      : profile === "thermal-proxy"
+        ? [["thermalExposureProxySteps", 1], ["missingChecks", 1], ["addedAgentSteps", 1], ["stepCount", 1]]
+        : [["missingChecks", 1], ["hypothesisSteps", 1], ["partialSteps", 1], ["addedAgentSteps", 1], ["stepCount", 1]];
+    if (profile === "evidence") {
+      const coverageOrder = routeReadyShare(b) - routeReadyShare(a);
+      if (coverageOrder) return coverageOrder;
+    }
+    for (const [field, direction] of fields) {
+      const order = (a.metrics[field] - b.metrics[field]) * direction;
+      if (order) return order;
+    }
+    return 0;
   }
 
   function generatePathwayAlternatives(groupId, simulatorModel, mainProduct, limit = 3) {
@@ -1424,8 +1449,11 @@
       const seen = new Set();
       frontier = expanded
         .sort((a, b) => pathwayMetrics(a.steps).missingChecks - pathwayMetrics(b.steps).missingChecks
-          || pathwayAlternativeRank({ metrics: pathwayMetrics(a.steps), status: "incomplete" }, "evidence")
-            - pathwayAlternativeRank({ metrics: pathwayMetrics(b.steps), status: "incomplete" }, "evidence"))
+          || comparePathwayAlternatives(
+            { metrics: pathwayMetrics(a.steps), status: "incomplete" },
+            { metrics: pathwayMetrics(b.steps), status: "incomplete" },
+            "evidence"
+          ))
         .filter(item => {
           const signature = `${item.active.map(component => component.id).sort().join(",")}::${item.steps.map(step => step.routeId).join("|")}`;
           if (seen.has(signature)) return false;
@@ -1448,13 +1476,13 @@
           metrics: pathwayMetrics(item.steps)
         };
       });
-    const profiles = [["evidence", "Best KB3.1 coverage"]];
+    const profiles = [["evidence", "Most complete KB3.1 match"]];
     if (new Set(prepared.map(item => item.metrics.addedAgentSteps)).size > 1) profiles.push(["msa", "Lowest MSA use"]);
-    if (new Set(prepared.map(item => item.metrics.thermalRiskSteps)).size > 1) profiles.push(["gentle", "Lower thermal exposure"]);
+    if (new Set(prepared.map(item => item.metrics.thermalExposureProxySteps)).size > 1) profiles.push(["thermal-proxy", "Fewer thermal separation steps"]);
     const chosen = [];
     const signatures = new Set();
     profiles.forEach(([profile, label]) => {
-      const candidate = [...prepared].sort((a, b) => pathwayAlternativeRank(a, profile) - pathwayAlternativeRank(b, profile))
+      const candidate = [...prepared].sort((a, b) => comparePathwayAlternatives(a, b, profile))
         .find(item => {
           const signature = item.steps.map(step => `${step.routeId}:${step.separatedIds.join(",")}`).join("|");
           return !signatures.has(signature);
@@ -1465,7 +1493,7 @@
       chosen.push({ ...candidate, id: `PA${chosen.length + 1}`, label, profile });
     });
     [...prepared]
-      .sort((a, b) => pathwayAlternativeRank(a, "evidence") - pathwayAlternativeRank(b, "evidence"))
+      .sort((a, b) => comparePathwayAlternatives(a, b, "evidence"))
       .forEach(candidate => {
         if (chosen.length >= limit) return;
         const signature = candidate.steps.map(step => `${step.routeId}:${step.separatedIds.join(",")}`).join("|");
@@ -1489,8 +1517,8 @@
         : touchesMain && opposite && opposite.role !== "product" ? 2
           : touchesMain ? 1
             : 0;
-      const priority = best && roleWeight >= 2 && best.level === "supported" ? "high"
-        : best && (roleWeight >= 1 || best.level === "supported") ? "medium"
+      const priority = best && roleWeight >= 2 && best.level === "matched" ? "high"
+        : best && (roleWeight >= 1 || best.level === "matched") ? "medium"
           : best ? "low"
             : "needs data";
       const noMatch = separationSuggestionsForPair(pair).find(item => item.ruleId === "NO-KB3.1-MATCH");
@@ -1631,7 +1659,7 @@
     pathwayStatus,
     pathwayStepFromOption,
     pathwayMetrics,
-    pathwayAlternativeRank,
+    comparePathwayAlternatives,
     generatePathwayAlternatives,
     binaryPairPriorities,
     pathwayOptionRank,

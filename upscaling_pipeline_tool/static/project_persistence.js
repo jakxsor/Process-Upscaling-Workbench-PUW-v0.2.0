@@ -10,6 +10,8 @@
 
     const projectAutosaveKey = "upscalingWorkbench.autosave.v1";
     const projectSnapshotsKey = "upscalingWorkbench.snapshots.v1";
+    const currentProjectSchemaVersion = "upscaling-project-v1";
+    const currentStateSchemaVersion = "workbench-state-v1";
     let projectAutosaveTimer = null;
     let projectPersistencePaused = false;
 
@@ -103,8 +105,40 @@
         }]));
     }
 
+    function validateProjectImport(project) {
+      if (!project || typeof project !== "object" || Array.isArray(project)) {
+        throw new Error("The selected JSON is not a project object.");
+      }
+      if (project.exportSchemaVersion && project.exportSchemaVersion !== currentProjectSchemaVersion) {
+        throw new Error(`Unsupported project schema: ${project.exportSchemaVersion}. Expected ${currentProjectSchemaVersion}.`);
+      }
+      const snapshot = project.projectState;
+      if (snapshot !== undefined) {
+        if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+          throw new Error("projectState must be an object.");
+        }
+        if (snapshot.schemaVersion && ![currentStateSchemaVersion, `${currentStateSchemaVersion}-reconstructed`].includes(snapshot.schemaVersion)) {
+          throw new Error(`Unsupported workbench state schema: ${snapshot.schemaVersion}. Expected ${currentStateSchemaVersion}.`);
+        }
+      } else if (!Array.isArray(project.blocks) || !Array.isArray(project.groups)) {
+        throw new Error("Legacy project JSON must contain blocks and groups arrays.");
+      }
+      return project;
+    }
+
+    function migrateProjectStateSnapshot(snapshot) {
+      const migrated = cloneProjectValue(snapshot, {});
+      migrated.schemaVersion = currentStateSchemaVersion;
+      migrated.blocks = (migrated.blocks || []).map(block => ({
+        ...block,
+        source: block?.source || "protocol"
+      }));
+      return migrated;
+    }
+
     function projectStateFromExport(project) {
-      if (project?.projectState && typeof project.projectState === "object") return project.projectState;
+      validateProjectImport(project);
+      if (project?.projectState && typeof project.projectState === "object") return migrateProjectStateSnapshot(project.projectState);
       const groups = {};
       const exportedGroups = Array.isArray(project?.groups) ? project.groups : [];
       exportedGroups.forEach((group, index) => {
@@ -122,7 +156,7 @@
           y: 90 + Math.floor(index / 4) * 330
         };
       });
-      return {
+      return migrateProjectStateSnapshot({
         schemaVersion: "workbench-state-v1-reconstructed",
         text: project?.text || "",
         blocks: Array.isArray(project?.blocks) ? project.blocks : [],
@@ -135,11 +169,17 @@
         processRuleOptions: {},
         board: { boardCompact: false, draftPos: { x: 24, y: 24 }, zoom: 0.78 },
         flowsheet: { viewPreset: "audit", selectedGroupId: "", fit: true, showAuxiliaryArrows: true, showUnitDetails: false, showStreamLabels: true }
-      };
+      });
     }
 
     function applyProjectStateSnapshot(snapshot, options = {}) {
-      if (!snapshot || !Array.isArray(snapshot.blocks) || !snapshot.groups || typeof snapshot.groups !== "object") {
+      const groupsAreValid = snapshot?.groups && typeof snapshot.groups === "object" && !Array.isArray(snapshot.groups)
+        && Object.values(snapshot.groups).every(group => group && typeof group === "object" && !Array.isArray(group));
+      const blocksAreValid = Array.isArray(snapshot?.blocks)
+        && snapshot.blocks.every(block => block && typeof block === "object" && !Array.isArray(block) && String(block.id || "").trim());
+      const linksAreValid = snapshot?.links === undefined || (Array.isArray(snapshot.links)
+        && snapshot.links.every(link => link && typeof link === "object" && !Array.isArray(link)));
+      if (!snapshot || !blocksAreValid || !groupsAreValid || !linksAreValid) {
         throw new Error("This JSON does not contain a reloadable project state.");
       }
       if (options.pushUndo !== false) pushUndo();
@@ -182,6 +222,7 @@
     }
 
     async function applyImportedProject(project, options = {}) {
+      validateProjectImport(project);
       if (options.confirmReplace !== false && projectHasWork(buildProjectExport())) {
         const ok = await confirmModal("Load this saved project? It replaces the current workspace. The current state is kept in Undo and autosave.");
         if (!ok) return false;

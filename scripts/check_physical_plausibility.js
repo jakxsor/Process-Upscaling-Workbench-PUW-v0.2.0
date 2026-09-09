@@ -104,6 +104,48 @@ const productBatchKg = num(sizing.productBatchKg);
 const chargeM3 = num(sizing.totalChargeM3);
 const reactorM3 = num(sizing.reactorVolumeM3);
 
+// ---------------------------------------------------------------- scale-up basis consistency
+const originalScaleBasis = JSON.parse(JSON.stringify(state.scaleBasis));
+const plannedBatchKg = num(scale.target.kgPerBatch);
+const plannedFactor = num(scale.factors.productFactor);
+state.scaleBasis.productKgPerBatch = String(plannedBatchKg / 2);
+const sizingOverrideScale = scaleModel();
+assert(Math.abs(num(sizingOverrideScale.target.kgPerBatch) - plannedBatchKg) < 1e-6, "Sizing batch override must not change the production-plan kg/batch");
+assert(Math.abs(num(sizingOverrideScale.factors.productFactor) - plannedFactor) < 1e-6, "Sizing batch override must not change the MFA scale factor");
+assert(Math.abs(num(sizingOverrideScale.reactorSizing.productBatchKg) - plannedBatchKg / 2) < 1e-6, "Sizing batch override must still drive the equipment what-if calculation");
+
+state.scaleBasis = JSON.parse(JSON.stringify(originalScaleBasis));
+state.scaleBasis.productKgPerBatch = "";
+[state.scaleBasis.productMolecularWeightGmol, state.scaleBasis.condensationWaterMolPerMol] = ["", ""];
+const reactionDerivedScale = scaleModel();
+assert(Number.isFinite(num(reactionDerivedScale.reactorSizing.productMolecularWeightGmol)), "Product MW should be derived from Reaction Balance when no scale-up override is set");
+assert(Number.isFinite(num(reactionDerivedScale.reactorSizing.waterMolPerMol)), "Water stoichiometry should be derived from Reaction Balance when no scale-up override is set");
+
+state.scaleBasis = JSON.parse(JSON.stringify(originalScaleBasis));
+state.scaleBasis.productKgPerBatch = "";
+const calendarBaseline = scaleModel();
+state.scaleBasis.operatingDays = String(num(originalScaleBasis.operatingDays) / 2);
+const shortCalendarScale = scaleModel();
+assert(Math.abs(num(shortCalendarScale.schedule.effectiveBatchesPerYear) * 2 - num(calendarBaseline.schedule.effectiveBatchesPerYear)) < 0.01, "Halving operating days must halve annual batch capacity");
+assert(Math.abs(num(shortCalendarScale.target.kgPerBatch) - num(calendarBaseline.target.kgPerBatch) * 2) < 0.01, "Halving calendar availability must double the required batch size for a fixed annual target");
+
+state.scaleBasis = JSON.parse(JSON.stringify(originalScaleBasis));
+state.scaleBasis.productKgPerBatch = "";
+state.scaleBasis.parallelUnits = "2";
+const parallelScale = scaleModel();
+assert(Math.abs(num(parallelScale.schedule.effectiveBatchesPerYear) - num(calendarBaseline.schedule.effectiveBatchesPerYear) * 2) < 0.01, "Two complete trains must double annual batch capacity");
+assert(Math.abs(num(parallelScale.target.kgPerBatch) * 2 - num(calendarBaseline.target.kgPerBatch)) < 0.01, "Two complete trains must halve required kg/batch for a fixed annual target");
+
+state.scaleBasis = JSON.parse(JSON.stringify(originalScaleBasis));
+state.scaleBasis.productKgPerBatch = "";
+["conservative", "overlapped"].forEach(scenario => {
+  state.scaleBasis.planningScenario = scenario;
+  const scenarioScale = scaleModel();
+  const projected = scenario === "overlapped" ? num(scenarioScale.schedule.overlappedKgPerYear) : num(scenarioScale.schedule.conservativeKgPerYear);
+  assert(Math.abs(projected - num(scenarioScale.target.kgPerYear)) < 0.1, scenario + " planning must reconcile projected and target annual output");
+});
+state.scaleBasis = JSON.parse(JSON.stringify(originalScaleBasis));
+
 if (sizing.ready && Number.isFinite(reactorM3) && Number.isFinite(chargeM3)) {
   assert(
     reactorM3 >= chargeM3 - 1e-6,

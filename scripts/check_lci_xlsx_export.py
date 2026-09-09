@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from upscaling_pipeline_tool.xlsx_renderer import render_lci_workbook_xlsx
+from upscaling_pipeline_tool.xlsx_renderer import _flow_rows, render_lci_workbook_xlsx
 
 
 PROJECT = {
@@ -120,6 +120,13 @@ PROJECT = {
 
 
 def main() -> None:
+    separated_flows = _flow_rows([
+        {"_processId": "G1", "canonicalName": "solvent", "lcaRole": "technosphere_input", "amount": {"kg": 2, "unit": "kg", "basis": "per batch"}},
+        {"_processId": "G2", "canonicalName": "solvent", "lcaRole": "technosphere_input", "amount": {"kg": 3, "unit": "kg", "basis": "per batch"}},
+    ])
+    assert len(separated_flows) == 3, "Flow summary must not sum the same name across different foreground processes"
+    assert separated_flows[0][:5] == ["process_id", "direction", "canonical_name", "lca_role", "amount_basis"]
+
     data = render_lci_workbook_xlsx(PROJECT)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         names = set(archive.namelist())

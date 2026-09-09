@@ -18,6 +18,48 @@ else:
     from xlsx_renderer import render_lci_workbook_xlsx
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+MAX_REQUEST_BYTES = 12 * 1024 * 1024
+
+
+def _compact_project_for_review(project):
+    """Keep every decision-relevant field without cutting serialized JSON mid-object."""
+    serialized = json.dumps(project, separators=(",", ":"))
+    protocol_text = str(project.get("text", ""))
+    if len(serialized) <= 180_000:
+        return project, {
+            "compacted": False,
+            "sourceCharacters": len(serialized),
+            "textTruncated": False,
+        }
+
+    scale = project.get("scaleUp") if isinstance(project.get("scaleUp"), dict) else {}
+    compact = {
+        "_reviewPayload": {
+            "compacted": True,
+            "sourceCharacters": len(serialized),
+            "textTruncated": len(protocol_text) > 30_000,
+            "scope": "Decision-relevant fields retained; derived previews and duplicate export views omitted.",
+        },
+        "exportSchemaVersion": project.get("exportSchemaVersion"),
+        "text": protocol_text[:30_000],
+        "blocks": [
+            {key: block.get(key) for key in ("id", "groupId", "source", "text", "behavior", "phenomena", "streams", "conditions", "conditionUnits", "endpoint", "notes", "status")}
+            for block in project.get("blocks", []) if isinstance(block, dict)
+        ],
+        "groups": [
+            {key: group.get(key) for key in ("groupId", "task", "blocks", "phenomena", "selectedUnit", "selectionBasis", "schedule", "properties", "conditionAggregation", "mfaAggregation")}
+            for group in project.get("groups", []) if isinstance(group, dict)
+        ],
+        "links": project.get("links", []),
+        "scaleUp": {key: scale.get(key) for key in ("basis", "reference", "target", "schedule", "reactorSizing", "assessment", "heuristicReview", "ganttSchedule", "throughputDiagnostics")},
+        "recycleSummary": project.get("recycleSummary"),
+        "energyBridge": project.get("energyBridge"),
+        "ruleChecks": project.get("ruleChecks", []),
+        "dataReadiness": project.get("dataReadiness"),
+        "heuristicDecisions": project.get("heuristicDecisions", {}),
+        "lcaReadiness": (project.get("lcaBridge") or {}).get("readiness") if isinstance(project.get("lcaBridge"), dict) else None,
+    }
+    return compact, compact["_reviewPayload"]
 
 
 def _read_static(filename):
@@ -31,6 +73,7 @@ APP_HTML = r"""<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Process Upscaling Workbench</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/flowsheet.css">
 </head>
@@ -76,7 +119,7 @@ APP_HTML = r"""<!doctype html>
         <div class="source-panel-head-body">
           <div>
             <h2>Protocol</h2>
-            <span class="step-flag"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span></span>
+            <span class="step-flag" data-step-flag="1"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span><span class="step-flag-note"></span></span>
             <span class="muted small">Select a passage to create a process block.</span>
           </div>
         </div>
@@ -127,12 +170,12 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="panel-body">
-        <span class="step-flag board-step-flag tip" data-tip="Shift-click draft blocks below, then right-click -> Combine Selected to form a task group; drag between group handles to connect them. Unit-operation suggestions unlock once MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
-          <span class="step-flag-num">3</span><span class="step-flag-label">Task Assignment</span>
+        <span class="step-flag board-step-flag tip" data-step-flag="3" data-tip="This board is where step 3 happens: the unit-operation proposals appear on each group box, under its Assign Unit Operation button. First shift-click draft blocks below and right-click -> Combine Selected to form a task group, then drag between group handles to connect them. Proposals unlock once MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
+          <span class="step-flag-num">3</span><span class="step-flag-label">Unit Ops &amp; Task Assignment</span><span class="step-flag-note"></span>
         </span>
         <div id="groupFlow" class="group-flow"></div>
         <div id="stepFlowInspector" class="step-flow-inspector empty">
-          <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+          <span class="step-flag" data-step-flag="4"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span><span class="step-flag-note"></span></span>
           <div>Select a block to add quantified MFA inputs, outputs, and waste/emission streams.</div>
         </div>
       </div>
@@ -142,7 +185,7 @@ APP_HTML = r"""<!doctype html>
       <div class="panel-head">
         <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">&#8250;</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-4: Blocks, Phenomena, Unit Ops, Network"><span class="panel-tab-step">1-4</span><span class="panel-tab-label">Phenomena/Group</span></button>
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: the selected block's description and phenomena. Steps 3 (unit operations) and 4 (network and MFA) are done on the board in the middle, not here."><span class="panel-tab-step">1-2</span><span class="panel-tab-label">Phenomena/Group</span></button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-step">5</span><span class="panel-tab-label">Heuristics</span></button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-step">6</span><span class="panel-tab-label">Scale-Up</span></button>
         </div>
@@ -159,7 +202,7 @@ APP_HTML = r"""<!doctype html>
                 <div class="label">Description Text</div>
                 <textarea id="blockText" class="description-editor" placeholder="Select or create a block, then refine the extracted description here."></textarea>
               </label>
-              <span class="step-flag"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span></span>
+              <span class="step-flag" data-step-flag="2"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span><span class="step-flag-note"></span></span>
               <label>
                 <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>
                 <select id="behaviorSelect" class="behavior-select"></select>
@@ -231,20 +274,19 @@ APP_HTML = r"""<!doctype html>
           <section class="card stack scale-sticky-card">
             <div class="scale-run-row">
               <div>
-                <div class="label">Scale-Up Basis</div>
-                <div class="muted small">Production target and numerical scale-up after heuristic screening.</div>
+                <div class="label">Scale-Up Setup</div>
+                <div class="muted small">Set the production target; existing MFA, reaction, and timetable data provide the calculation basis.</div>
               </div>
-              <button id="refineProject" class="primary">Run Check</button>
+              <button id="refineProject" class="primary">Review Gaps</button>
             </div>
             <div id="scaleQuickPanel"></div>
-            <div class="muted small">Results (conflicts and missing data) appear under the Heuristics tab's Review Results.</div>
           </section>
 
           <div class="scale-scroll-body stack">
             <section class="card stack">
               <div>
-                <div class="label">Scale-Up Results</div>
-                <div class="muted small">Basis, equipment checks, schedule summary, MFA, recycle, and energy.</div>
+                <div class="label">Scale-Up Decision</div>
+                <div class="muted small">Production plan, preliminary equipment sizing, and the most important gaps.</div>
               </div>
               <div id="scaleBasisPanel"></div>
             </section>
@@ -560,6 +602,7 @@ APP_HTML = r"""<!doctype html>
   <script src="/export.js"></script>
   <script src="/project_persistence.js"></script>
   <script src="/separation_core.js"></script>
+  <script src="/heuristic_rules.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
@@ -574,11 +617,13 @@ STATIC_ROUTES = {
     "/export.js": ("export.js", "application/javascript; charset=utf-8"),
     "/project_persistence.js": ("project_persistence.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
+    "/heuristic_rules.js": ("heuristic_rules.js", "application/javascript; charset=utf-8"),
     "/pubchem_core.js": ("pubchem_core.js", "application/javascript; charset=utf-8"),
     "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
     "/flowsheet_ui.js": ("flowsheet_ui.js", "application/javascript; charset=utf-8"),
     "/flowsheet.css": ("flowsheet.css", "text/css; charset=utf-8"),
     "/pubchem.js": ("pubchem.js", "application/javascript; charset=utf-8"),
+    "/favicon.svg": ("favicon.svg", "image/svg+xml"),
 }
 
 
@@ -616,7 +661,14 @@ class AppHandler(BaseHTTPRequestHandler):
         if self.path not in ("/api/refine", "/api/flowsheet-pptx", "/api/lci-xlsx", "/api/pubchem"):
             self.send_error(404)
             return
-        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            self._send_json(400, {"ok": False, "error": "Invalid Content-Length header."})
+            return
+        if length <= 0 or length > MAX_REQUEST_BYTES:
+            self._send_json(413, {"ok": False, "error": f"Request body must be between 1 and {MAX_REQUEST_BYTES} bytes."})
+            return
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
             if self.path == "/api/pubchem":
@@ -674,6 +726,7 @@ class AppHandler(BaseHTTPRequestHandler):
         default_model = os.environ.get("OPENAI_MODEL", "").strip() or "gpt-5-mini"
         model = str(payload.get("model", "")).strip() or default_model
         project = payload.get("project", {})
+        review_project, review_payload_info = _compact_project_for_review(project)
         options = payload.get("options", {})
         report_style = str(payload.get("reportStyle", "commentary_summary")).strip() or "commentary_summary"
         use_web = bool(payload.get("useWebReferences", True))
@@ -713,7 +766,7 @@ class AppHandler(BaseHTTPRequestHandler):
             "5. Rules involved - cite only heuristic IDs or local rule-check titles that are relevant to this process.\n"
             "6. Proposed process changes, not applied - concrete options the user could manually implement.\n"
             "7. Immediate next actions - maximum 5 actions in practical order.\n\n"
-            + json.dumps(project)[:45000]
+            + json.dumps(review_project, separators=(",", ":"))
         )
         if endpoint.endswith("/chat/completions"):
             body = {
@@ -787,7 +840,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 "error": "The API request completed but returned no written text. Try Run External Process Check again, or use a non-reasoning model such as gpt-4.1-mini for this report.",
                 "details": compact,
             }
-        return {"ok": True, "text": text, "model": model}
+        return {"ok": True, "text": text, "model": model, "reviewPayload": review_payload_info}
 
     def _post_api_json(self, req, timeout):
         with request.urlopen(req, timeout=timeout) as resp:
