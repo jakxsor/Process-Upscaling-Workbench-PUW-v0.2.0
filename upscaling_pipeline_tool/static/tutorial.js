@@ -911,7 +911,14 @@ function positionTutorialStep(step) {
   const placeLeft = rect.left - 18 - cardWidth > 0;
   card.style.width = `${cardWidth}px`;
   card.style.left = `${placeRight ? rect.right + 18 : placeLeft ? rect.left - cardWidth - 18 : Math.max(16, (window.innerWidth - cardWidth) / 2)}px`;
-  card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - 260))}px`;
+  // The clamp used to assume a 260px card, but cards run 250-302px depending on how
+  // much body and detail text a step carries. Whenever the step's target sat low
+  // enough for the clamp to bind, the bottom of the card - which is where Back/Next
+  // live - was pushed past the bottom of the window, and since the overlay is fixed
+  // the user cannot scroll to it: the tutorial simply stops advancing. Measure the
+  // card instead of guessing, and keep a 16px margin below it.
+  const cardHeight = card.getBoundingClientRect().height || 260;
+  card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - cardHeight - 16))}px`;
 
   positionTutorialArrow(target, card, arrow);
 }

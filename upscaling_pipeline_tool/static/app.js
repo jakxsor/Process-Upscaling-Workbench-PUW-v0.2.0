@@ -15888,17 +15888,32 @@
     $("exportLciExcel")?.addEventListener("click", downloadLciExcel);
     $("openTutorial").addEventListener("click", () => openTutorial());
     $("tutorialSkip").addEventListener("click", closeTutorial);
+    // renderTutorialStep is async and awaits each step's action. Called bare, a
+    // rejecting action leaves the index already advanced while the card still shows
+    // the previous step and no error surfaces anywhere - indistinguishable from
+    // "the tutorial will not go past step N". Roll the index back and say so.
+    const goToTutorialStep = async (nextIndex, fallbackIndex) => {
+      state.tutorialIndex = nextIndex;
+      try {
+        await renderTutorialStep();
+      } catch (error) {
+        console.error("Tutorial step failed to render", error);
+        state.tutorialIndex = fallbackIndex;
+        await renderTutorialStep().catch(() => {});
+        await alertModal("This tutorial step could not be prepared. Use Back, or close and reopen the tutorial.");
+      }
+    };
     $("tutorialPrev").addEventListener("click", () => {
-      state.tutorialIndex = Math.max(0, state.tutorialIndex - 1);
-      renderTutorialStep();
+      const current = state.tutorialIndex;
+      goToTutorialStep(Math.max(0, current - 1), current);
     });
     $("tutorialNext").addEventListener("click", () => {
       if (state.tutorialIndex >= tutorialSteps.length - 1) {
         closeTutorial();
         return;
       }
-      state.tutorialIndex += 1;
-      renderTutorialStep();
+      const current = state.tutorialIndex;
+      goToTutorialStep(current + 1, current);
     });
     $("tutorialOverlay").addEventListener("click", event => {
       if (event.target === $("tutorialOverlay")) closeTutorial();
