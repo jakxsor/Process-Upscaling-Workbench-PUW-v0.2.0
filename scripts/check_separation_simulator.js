@@ -43,6 +43,21 @@ state.blocks.forEach(block => {
   assert((block.streams || []).some(stream => stream.role === "input"), block.id + " should have at least one input stream in the Octocrylene example");
   assert((block.streams || []).some(stream => stream.role !== "input"), block.id + " should have at least one outlet stream in the Octocrylene example");
 });
+const pseudoMaterialName = /charged reaction|reaction mixture|reaction solution|organic phase|reflux-ready|solvent-free crude|recovery basis|vent stream|aqueous wash|brine-washed|wet organic|dried organic/i;
+const pseudoMaterialStreams = state.blocks.flatMap(block => (block.streams || [])
+  .filter(stream => pseudoMaterialName.test(stream.name))
+  .map(stream => block.id + "/" + stream.id + ": " + stream.name));
+assert.deepStrictEqual(pseudoMaterialStreams, [], "Octocrylene streams must use chemical/material identities; process state belongs in notes and block context");
+const b2MaterialNames = new Set(state.blocks.find(block => block.id === "B2").streams.map(stream => stream.name));
+assert.deepStrictEqual([...b2MaterialNames].sort(), ["2-ethylhexyl cyanoacetate", "ammonium acetate", "benzophenone", "cyclohexane"], "Heat-up should carry component rows instead of an aggregate reaction-mixture row");
+const b3Residual = state.blocks.find(block => block.id === "B3").streams.find(stream => stream.role === "output" && stream.name === "benzophenone");
+assert.strictEqual(b3Residual.residualOf, "benzophenone", "Residual identity must be stored as metadata instead of encoded in the material name");
+const g2Mfa = aggregateGroupStreams(groupModel("G2"));
+const g2Inputs = g2Mfa.find(group => group.role === "input").items;
+const g2Outputs = g2Mfa.find(group => group.role === "output").items;
+assert(!g2Inputs.some(item => item.name === "octocrylene"), "Post-reaction pass-through must not appear as a fresh G2 task input");
+assert.strictEqual(g2Inputs.find(item => item.name === "cyclohexane").totalText, "2.5 L", "G2 boundary MFA must not count cyclohexane again at every internal step");
+assert.strictEqual(g2Outputs.find(item => item.name === "octocrylene").totalText, "1 kg", "G2 boundary MFA must expose one terminal product inventory");
 let group = groupModel("G2");
 syncSeparationSimulatorSubstances(group);
 syncSeparationSimulatorSubstances(group);
@@ -62,7 +77,7 @@ assert.strictEqual(model.substances.find(item => item.name === "benzophenone").r
 assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").residualOf, "2-ethylhexyl cyanoacetate", "2-ethylhexyl cyanoacetate should be tagged as a residual of the original chemical");
 assert.strictEqual(model.substances.find(item => item.name === "water").quantity, "0.049837", "water byproduct should reproduce the SI value of approximately 0.05 kg/kg product");
 assert(model.substances.find(item => item.name === "cyclohexane").source.includes("B1"), "cyclohexane should keep source stream traceability");
-const ventStream = state.blocks.find(block => block.id === "B10").streams.find(stream => stream.name === "cyclohexane-rich vent stream");
+const ventStream = state.blocks.find(block => block.id === "B10").streams.find(stream => stream.role === "input" && stream.name === "cyclohexane");
 assert.strictEqual(streamPubChemLookupName(ventStream), "cyclohexane", "Process stream labels should fetch PubChem through a pure-compound lookup name");
 assert(streamRowHtml({ ...ventStream, editing: true }, "material", "input", state.blocks.find(block => block.id === "B10")).includes("PubChem lookup name"), "Stream editor should expose the PubChem lookup name field");
 const octoConversion = conversionCalculationModel(state.blocks.find(block => block.id === "B3"));

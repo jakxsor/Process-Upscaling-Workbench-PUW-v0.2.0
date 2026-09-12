@@ -1,2 +1,2 @@
-# Runtime uses only the Python standard library. Keep this file for reproducible
-# installation commands and add pinned third-party dependencies here if introduced.
+openpyxl==3.1.5
+python-pptx==1.0.2

@@ -53,6 +53,18 @@ assert(baseHeuristics.triggered.length <= 25, "The octocrylene example should sh
 assert.strictEqual(state.blocks.find(block => block.id === "B10").source, "scale-up addition", "Vent treatment must remain distinguishable from protocol-derived blocks");
 assert.strictEqual(state.blocks.find(block => block.id === "B11").source, "scale-up addition", "Solvent recovery must remain distinguishable from protocol-derived blocks");
 assert.strictEqual(state.blocks.find(block => block.id === "B12").source, "scale-up addition", "Wastewater treatment must remain distinguishable from protocol-derived blocks");
+const sourceBlocks = state.blocks.filter(block => block.source === "protocol").sort((a, b) => a.start - b.start);
+assert.strictEqual(state.text, sampleText, "The Protocol panel must contain only the normalized B1-B9 protocol mapping");
+sourceBlocks.forEach((block, index) => {
+  assert.strictEqual(state.text.slice(block.start, block.end), block.text, block.id + " must link to its exact source excerpt");
+  if (index > 0) assert(block.start >= sourceBlocks[index - 1].end, block.id + " must not overlap the previous source annotation");
+});
+state.blocks.filter(block => block.source === "scale-up addition").forEach(block => {
+  assert.strictEqual(block.start, block.end, block.id + " must not claim a span in the laboratory protocol");
+});
+assert(!state.text.includes("[Industrial addition]"), "Industrial additions must stay out of the source protocol text");
+assert(!state.text.includes("chosen solvent") && !state.text.includes("85-140"), "The selected cyclohexane route must not retain ambiguous multi-route wording");
+assert(state.text.includes("2.5 L per kg") && state.text.includes("18-24 h"), "The normalized protocol must retain conditions reported in SI Table S1");
 
 const g2 = groupModel("G2");
 const g3 = groupModel("G3");
@@ -108,7 +120,7 @@ assert(g2Root.innerHTML.includes("Open Lutze/Garg Separation Screening"), "G2 dr
 assert(!g2Root.innerHTML.includes("route moves") && !g2Root.innerHTML.includes("binary pairs"), "G2 drawer launcher should not duplicate Lutze details");
 assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");
 assert(g2Root.innerHTML.includes("Outlets"), "Group drawer should expose the unified outlets MFA section");
-assert(g2Root.innerHTML.includes("water of condensation"), "Unified outlets should still include waste/emission streams");
+assert(g2Root.innerHTML.includes(">water<"), "Unified outlets should still include the reaction-water waste stream");
 assert(g2Root.innerHTML.includes("Task-level editor"), "Group drawer should make task-level material editing explicit");
 assert(g2Root.innerHTML.includes("Task timetable") && g2Root.innerHTML.includes("Open timetable"), "Group drawer should expose a compact task-level timetable launcher");
 assert(taskTimetableHtml(g2).includes("data-timetable-duration"), "Task timetable should expose editable event durations");

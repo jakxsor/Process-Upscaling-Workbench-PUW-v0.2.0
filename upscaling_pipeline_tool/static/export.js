@@ -184,6 +184,11 @@
           throw new Error(message);
         }
         const blob = await response.blob();
+        if (!blob.size) throw new Error("Excel export returned an empty file.");
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!contentType.includes("spreadsheetml.sheet")) {
+          throw new Error("Excel export returned an unexpected file type.");
+        }
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -191,7 +196,7 @@
         document.body.appendChild(link);
         link.click();
         link.remove();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (err) {
         const message = `Could not export LCI Excel workbook: ${err.message || err}`;
         await alertModal(message);
@@ -243,6 +248,9 @@
         timing: stream.timing,
         status: stream.status,
         fate: stream.fate,
+        substanceRole: stream.substanceRole,
+        residualOf: stream.residualOf,
+        internalTransfer: Boolean(stream.internalTransfer),
         recoveryPercent: stream.recoveryPercent,
         purgePercent: stream.purgePercent,
         loopId: stream.loopId,

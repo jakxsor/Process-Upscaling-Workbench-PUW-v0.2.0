@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+from openpyxl import load_workbook
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from upscaling_pipeline_tool.xlsx_renderer import _flow_rows, render_lci_workbook_xlsx
@@ -128,6 +130,16 @@ def main() -> None:
     assert separated_flows[0][:5] == ["process_id", "direction", "canonical_name", "lca_role", "amount_basis"]
 
     data = render_lci_workbook_xlsx(PROJECT)
+    workbook = load_workbook(io.BytesIO(data))
+    expected_sheets = [
+        "README", "LCI Coverage", "Processes", "Exchanges", "Flows",
+        "Internal Links", "OpenLCA Mapping", "Energy Utilities", "Data Quality", "Validation",
+    ]
+    assert workbook.sheetnames == expected_sheets
+    assert workbook["Exchanges"]["G2"].value == "benzophenone"
+    roundtrip = io.BytesIO()
+    workbook.save(roundtrip)
+    assert load_workbook(io.BytesIO(roundtrip.getvalue())).sheetnames == expected_sheets
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         names = set(archive.namelist())
         required = {

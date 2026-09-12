@@ -1,18 +1,20 @@
 """Spreadsheet export for LCI review and openLCA mapping.
 
-This writes a dependency-free .xlsx package with ordinary worksheet tables. It
-is intentionally not an openLCA JSON-LD file: the workbook is the review and
-mapping layer between the workbench JSON and a database-specific openLCA import.
+This writes an .xlsx package with ordinary worksheet tables. It is intentionally
+not an openLCA JSON-LD file: the workbook is the review and mapping layer between
+the workbench JSON and a database-specific openLCA import.
 """
 
 from __future__ import annotations
 
 import io
+import math
 import re
-import zipfile
-from datetime import datetime, timezone
-from html import escape
 from typing import Any
+
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 
 
 MAX_EXCEL_ROWS = 1_048_576
@@ -38,13 +40,6 @@ def _clean(value: Any, default: str = "") -> str:
         return default
     text = str(value).strip()
     return re.sub(r"\s+", " ", text) if text else default
-
-
-def _xml(value: Any) -> str:
-    text = _clean(value)
-    # XML 1.0 disallows most control chars.
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
-    return escape(text, quote=True)
 
 
 def _num(value: Any) -> float | None:
@@ -77,13 +72,13 @@ def _join(values: Any) -> str:
     return "; ".join(_clean(value) for value in values if _clean(value))
 
 
-def _col_name(index: int) -> str:
-    name = ""
-    index += 1
-    while index:
-        index, rem = divmod(index - 1, 26)
-        name = chr(65 + rem) + name
-    return name
+def _excel_value(value: Any) -> Any:
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return value if not isinstance(value, float) or math.isfinite(value) else ""
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(value))
+    return text[:32_767]
 
 
 def _sheet_name(name: str, used: set[str]) -> str:
@@ -96,133 +91,6 @@ def _sheet_name(name: str, used: set[str]) -> str:
         suffix += 1
     used.add(candidate)
     return candidate
-
-
-def _cell_xml(value: Any, ref: str, style: int | None = None) -> str:
-    style_attr = f' s="{style}"' if style is not None else ""
-    number = _num(value)
-    if number is not None and _clean(value) == str(value).strip() and not re.match(r"^0\d+", _clean(value)):
-        if number.is_integer():
-            number_text = str(int(number))
-        else:
-            number_text = f"{number:.12g}"
-        return f'<c r="{ref}"{style_attr}><v>{number_text}</v></c>'
-    return f'<c r="{ref}" t="inlineStr"{style_attr}><is><t>{_xml(value)}</t></is></c>'
-
-
-def _worksheet_xml(rows: list[list[Any]], header_rows: int = 1, widths: list[int] | None = None) -> str:
-    rows = rows[:MAX_EXCEL_ROWS]
-    max_cols = max((len(row) for row in rows), default=1)
-    last_cell = f"{_col_name(max_cols - 1)}{max(len(rows), 1)}"
-    freeze_xml = ""
-    if rows and header_rows:
-        first_body = header_rows + 1
-        freeze_xml = (
-            f'<sheetViews><sheetView workbookViewId="0"><pane ySplit="{header_rows}" '
-            f'topLeftCell="A{first_body}" activePane="bottomLeft" state="frozen"/>'
-            f'<selection pane="bottomLeft" activeCell="A{first_body}" sqref="A{first_body}"/>'
-            '</sheetView></sheetViews>'
-        )
-    sheet_rows = []
-    for row_idx, row in enumerate(rows, start=1):
-        cells = []
-        for col_idx, value in enumerate(row):
-            ref = f"{_col_name(col_idx)}{row_idx}"
-            style = 1 if row_idx <= header_rows else 2
-            cells.append(_cell_xml(value, ref, style))
-        sheet_rows.append(f'<row r="{row_idx}">{"".join(cells)}</row>')
-    col_xml = "".join(
-        f'<col min="{idx}" max="{idx}" width="{width}" customWidth="1"/>'
-        for idx, width in enumerate((widths or [])[:max_cols] + [DEFAULT_COLUMN_WIDTH] * max(0, max_cols - len(widths or [])), start=1)
-    )
-    auto_filter_xml = f'<autoFilter ref="A1:{last_cell}"/>' if rows and header_rows == 1 and len(rows) > 1 else ""
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  {freeze_xml}
-  <cols>{col_xml}</cols>
-  <sheetData>{''.join(sheet_rows)}</sheetData>
-  {auto_filter_xml}
-</worksheet>"""
-
-
-def _content_types(sheet_count: int) -> str:
-    sheets = "\n".join(
-        f'  <Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-        for i in range(1, sheet_count + 1)
-    )
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-{sheets}
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>"""
-
-
-def _root_rels() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>"""
-
-
-def _workbook_xml(sheet_names: list[str]) -> str:
-    sheets = "\n".join(
-        f'    <sheet name="{_xml(name)}" sheetId="{idx}" r:id="rId{idx}"/>'
-        for idx, name in enumerate(sheet_names, start=1)
-    )
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets>
-{sheets}
-  </sheets>
-</workbook>"""
-
-
-def _workbook_rels(sheet_count: int) -> str:
-    sheet_rels = "\n".join(
-        f'  <Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>'
-        for i in range(1, sheet_count + 1)
-    )
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-{sheet_rels}
-  <Relationship Id="rId{sheet_count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>"""
-
-
-def _styles_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>
-  <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF365F7E"/><bgColor indexed="64"/></patternFill></fill></fills>
-  <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD9E2EA"/></left><right style="thin"><color rgb="FFD9E2EA"/></right><top style="thin"><color rgb="FFD9E2EA"/></top><bottom style="thin"><color rgb="FFD9E2EA"/></bottom><diagonal/></border></borders>
-  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs>
-</styleSheet>"""
-
-
-def _core_props() -> str:
-    timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>LCI review workbook</dc:title>
-  <dc:creator>Process Upscaling Workbench</dc:creator>
-  <dcterms:created xsi:type="dcterms:W3CDTF">{timestamp}</dcterms:created>
-</cp:coreProperties>"""
-
-
-def _app_props(sheet_count: int) -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Process Upscaling Workbench</Application>
-  <Worksheets>{sheet_count}</Worksheets>
-</Properties>"""
 
 
 def _all_exchanges(project: dict[str, Any]) -> list[dict[str, Any]]:
@@ -511,15 +379,47 @@ def render_lci_workbook_xlsx(project: dict[str, Any]) -> bytes:
         (_sheet_name("Validation", used_names), _validation_rows(project)),
     ]
 
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    workbook.properties.creator = "Process Upscaling Workbench"
+    workbook.properties.title = "LCI review workbook"
+    workbook.properties.description = "Editable LCI review and openLCA mapping handoff"
+
+    edge = Side(style="thin", color="D9E2EA")
+    border = Border(left=edge, right=edge, top=edge, bottom=edge)
+    header_fill = PatternFill("solid", fgColor="365F7E")
+    header_font = Font(name="Aptos", size=11, bold=True, color="FFFFFF")
+    body_font = Font(name="Aptos", size=10, color="172027")
+
+    for name, rows in sheets:
+        worksheet = workbook.create_sheet(name)
+        safe_rows = rows[:MAX_EXCEL_ROWS]
+        for row in safe_rows:
+            worksheet.append([_excel_value(value) for value in row])
+
+        worksheet.freeze_panes = "A2"
+        worksheet.sheet_view.showGridLines = False
+        if len(safe_rows) > 1:
+            worksheet.auto_filter.ref = worksheet.dimensions
+
+        widths = SHEET_WIDTHS.get(name, [])
+        for index in range(1, worksheet.max_column + 1):
+            worksheet.column_dimensions[get_column_letter(index)].width = (
+                widths[index - 1] if index <= len(widths) else DEFAULT_COLUMN_WIDTH
+            )
+
+        worksheet.row_dimensions[1].height = 30
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = border
+        for row in worksheet.iter_rows(min_row=2):
+            for cell in row:
+                cell.font = body_font
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.border = border
+
     output = io.BytesIO()
-    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("[Content_Types].xml", _content_types(len(sheets)))
-        zf.writestr("_rels/.rels", _root_rels())
-        zf.writestr("xl/workbook.xml", _workbook_xml([name for name, _ in sheets]))
-        zf.writestr("xl/_rels/workbook.xml.rels", _workbook_rels(len(sheets)))
-        zf.writestr("xl/styles.xml", _styles_xml())
-        for idx, (name, rows) in enumerate(sheets, start=1):
-            zf.writestr(f"xl/worksheets/sheet{idx}.xml", _worksheet_xml(rows, widths=SHEET_WIDTHS.get(name)))
-        zf.writestr("docProps/core.xml", _core_props())
-        zf.writestr("docProps/app.xml", _app_props(len(sheets)))
+    workbook.save(output)
     return output.getvalue()

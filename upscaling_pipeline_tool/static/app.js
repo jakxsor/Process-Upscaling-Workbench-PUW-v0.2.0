@@ -24,21 +24,26 @@
       });
     })();
 
+    // Readability-normalized cyclohexane route from SI Table S1. Calculated charges and industrial
+    // equipment choices stay in the MFA and scale-up layers instead of being presented as protocol facts.
     const octocryleneExampleSteps = Object.freeze({
-      B1: `On a 1 kg purified-octocrylene functional-unit basis, charge benzophenone and 2-ethylhexyl cyanoacetate in a 1:1 stoichiometric ratio, ammonium acetate catalyst (quantity not reported), and a total of 2.5 L cyclohexane per kg product under nitrogen.`,
-      B2: "Heat the stirred mixture from 25 °C to cyclohexane reflux at 85 to 90 °C over 0.5 to 1 h under nitrogen.",
-      B3: "Maintain reflux for 18 to 24 h, remove reaction water azeotropically in the Dean-Stark trap, return cyclohexane to the reactor, and stop when water collection ceases and benzophenone is below 0.5 percent.",
-      B4: "Cool the crude reaction mixture to 25 °C over approximately 1 h.",
-      B5: "If cyclohexane is used, extract with ethyl acetate (quantity not reported), wash with 2 L water per kg product at ambient temperature, and separate the aqueous phase containing ammonium acetate and soluble impurities.",
-      B6: "Wash the organic phase with saturated sodium chloride brine (quantity not reported), allow the phases to settle, and separate the aqueous brine phase.",
-      B7: "Dry the washed organic phase; at industrial scale use a regenerable fixed bed of 4A molecular sieves and continue until Karl-Fischer water is below 500 ppm.",
-      B8: "Remove cyclohexane and residual ethyl acetate in a thin-film evaporator at 100 to 200 mbar and 40 to 50 °C, sending the cyclohexane-rich condensate to solvent recovery.",
-      B9: "Purify the crude octocrylene by short-path distillation at about 1.5 mmHg and 190 to 210 °C with residence below 1 min, collecting 1 kg purified product at no less than 98 percent purity and separating residual benzophenone and heavier fractions.",
+      B1: "Equip a four-necked round-bottom flask with a mechanical stirrer, thermometer, reflux condenser, and Dean-Stark trap. Under a nitrogen blanket at 25 °C, charge benzophenone, 2-ethylhexyl cyanoacetate, ammonium acetate, and cyclohexane (2.5 L per kg of target product), then begin stirring.",
+      B2: "Heat the stirred suspension to cyclohexane reflux at 85-90 °C over 0.5-1 h. Continue until the benzophenone has dissolved and stable reflux is established.",
+      B3: "Maintain reflux at 85-90 °C for 18-24 h under nitrogen. Continuously collect the reaction water in the Dean-Stark trap and return the cyclohexane phase to the flask. End the reaction when water collection ceases and residual benzophenone is below 0.5%.",
+      B4: "Cool the reaction mixture to 25 °C over approximately 1 h.",
+      B5: "Extract the crude mixture with ethyl acetate. Wash the organic phase with water (2 L per kg of target product), allow the phases to separate, and remove the aqueous phase.",
+      B6: "Wash the retained organic phase with saturated sodium chloride solution. Allow the phases to separate, then remove the aqueous brine phase.",
+      B7: "Dry the organic phase over anhydrous magnesium sulfate or sodium sulfate until the water content is below 500 ppm, then filter off the drying agent.",
+      B8: "Concentrate the filtrate under reduced pressure to remove cyclohexane and residual ethyl acetate.",
+      B9: "Purify the crude octocrylene by vacuum distillation at approximately 1.5 mmHg and a head temperature of approximately 210 °C. Collect the light-yellow, viscous product fraction.",
       B10: "[Industrial addition] Route cyclohexane-rich vents from the reactor and evaporator to a condenser and activated-carbon polishing system.",
       B11: "[Industrial addition] Combine the cyclohexane recovery feeds in a dedicated distillation column, target at least 98 percent recovery, and return purified cyclohexane to feed preparation.",
       B12: "[Industrial addition] Route reaction water, aqueous wash, brine, and molecular-sieve regeneration water to the wastewater-treatment interface."
     });
-    const sampleText = Object.values(octocryleneExampleSteps).join(" ");
+    const sampleText = Object.entries(octocryleneExampleSteps)
+      .filter(([id]) => Number(id.slice(1)) <= 9)
+      .map(([, text]) => text)
+      .join("\n\n");
     // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
     // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
     // of 0.05h) and a relative margin (avoids flagging trivial % differences on long processes) before
@@ -1148,6 +1153,9 @@
         conversionBaseQuantity: values.conversionBaseQuantity || "",
         stoichCoeff: values.stoichCoeff || "",
         reactionRole: values.reactionRole || "",
+        substanceRole: values.substanceRole || "",
+        residualOf: values.residualOf || "",
+        internalTransfer: Boolean(values.internalTransfer),
         unit: values.unit || "kg",
         phase: values.phase || "unknown",
         status: values.status || "missing",
@@ -1179,9 +1187,20 @@
         brine: { name: "saturated sodium chloride brine", phase: "L" },
         ethylAcetate: { name: "ethyl acetate", phase: "L" }
       };
+      const chemicalRole = {
+        benzophenone: "reactant",
+        cyanoacetate: "reactant",
+        catalyst: "catalyst",
+        cyclohexane: "solvent",
+        octocrylene: "product",
+        water: "auxiliary",
+        brine: "auxiliary",
+        ethylAcetate: "solvent"
+      };
       const component = (role, key, values = {}) => ({
         role,
         ...chemical[key],
+        substanceRole: values.substanceRole || chemicalRole[key] || "",
         scalingMode: "per kg product",
         ...values
       });
@@ -1197,14 +1216,66 @@
         scalingMode: "per kg product",
         ...values
       });
+      const processComponent = (role, key, values, context) => component(role, key, {
+        ...values,
+        note: [values.note, `Process context: ${context}.`].filter(Boolean).join(" ")
+      });
+      const reactionChargeInventory = (role, context) => [
+        processComponent(role, "benzophenone", {
+          quantity: basis.benzophenoneKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "1"
+        }, context),
+        processComponent(role, "cyanoacetate", {
+          quantity: basis.cyanoacetateKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "1"
+        }, context),
+        processComponent(role, "catalyst", {
+          quantity: "", unit: "kg", status: "missing",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst"
+        }, context),
+        processComponent(role, "cyclohexane", {
+          quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+        }, context)
+      ];
+      const postReactionInventory = (role, context) => [
+        processComponent(role, "octocrylene", {
+          quantity: basis.productKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate"
+        }, context),
+        processComponent(role, "benzophenone", {
+          quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone"
+        }, context),
+        processComponent(role, "cyanoacetate", {
+          quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate"
+        }, context),
+        processComponent(role, "cyclohexane", {
+          quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+        }, context),
+        processComponent(role, "catalyst", {
+          quantity: "", unit: "kg", status: "missing",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst"
+        }, context)
+      ];
+      const organicInventory = (role, context) => [
+        ...postReactionInventory(role, context).filter(stream => stream.name !== chemical.catalyst.name),
+        processComponent(role, "ethylAcetate", {
+          quantity: "", unit: "L", status: "missing",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+        }, context)
+      ];
+      const internalInventory = streams => streams.map(stream => ({ ...stream, internalTransfer: true }));
       const makeBlock = (id, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}, source = "protocol") => {
         const phrase = octocryleneExampleSteps[id];
-        const start = sampleText.indexOf(phrase);
+        const start = source === "protocol" ? sampleText.indexOf(phrase) : -1;
         return {
           id,
           groupId,
           start: start >= 0 ? start : 0,
-          end: start >= 0 ? start + phrase.length : phrase.length,
+          end: start >= 0 ? start + phrase.length : 0,
           source,
           text: phrase,
           behavior,
@@ -1215,7 +1286,7 @@
           conditionsEditing: false,
           phase: "",
           endpoint: "",
-          status: "SI-reconciled example"
+          status: source === "protocol" ? "SI-normalized protocol" : "SI scale-up addition"
         };
       };
 
@@ -1253,7 +1324,6 @@
             note: "NH4OAc is named in the SI, but its quantity is not reported."
           }),
           component("input", "cyclohexane", {
-            name: "recycled cyclohexane charge",
             quantity: basis.cyclohexaneRecoveredL,
             unit: "L",
             status: "calculated",
@@ -1265,7 +1335,6 @@
             note: "Steady-state target case: 98% of the reported 2.5 L/kg total charge is supplied by recycle."
           }),
           component("input", "cyclohexane", {
-            name: "fresh cyclohexane make-up",
             quantity: basis.cyclohexaneMakeupL,
             unit: "L",
             status: "calculated",
@@ -1274,31 +1343,15 @@
             reactionRole: "solvent",
             note: "Maximum make-up implied by the 98% recovery target; actual solvent losses require measured recovery data."
           }),
-          unknown("output", "charged reaction mixture", {
-            phase: "LS",
-            status: "missing",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "Total mass is intentionally not stated because the catalyst dose is missing; known components remain listed separately as inputs."
-          })
+          ...reactionChargeInventory("output", "after charging and mixing; catalyst quantity remains unknown")
         ], {
           initial_temperature: "25",
           agitation_note: "mechanical stirring under nitrogen blanket"
         }, { initial_temperature: "°C" }),
 
         makeBlock("B2", "G2", "heat/cool", ["ES(H)", "M(L)", "PT(LS)"], [
-          unknown("input", "charged reaction mixture", {
-            phase: "LS",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "Composition is inherited from B1; total mass remains open because catalyst loading is not reported."
-          }),
-          unknown("output", "reflux-ready reaction solution", {
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "Benzophenone is reported to dissolve during heat-up."
-          })
+          ...reactionChargeInventory("input", "charged materials before heat-up"),
+          ...internalInventory(reactionChargeInventory("output", "same components at cyclohexane reflux; benzophenone is dissolved"))
         ], {
           initial_temperature: "25",
           target_temperature: "85-90",
@@ -1312,19 +1365,14 @@
         }),
 
         makeBlock("B3", "G2", "reaction with in-situ removal", ["M(L)", "2phM(VL)", "R(L)", "ES(H)", "PC(VL)", "PT(VL)", "PS(LL)"], [
-          unknown("input", "reflux-ready reaction solution", {
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "The reaction calculation resolves reactive feeds from the component inputs in B1."
-          }),
+          ...internalInventory(reactionChargeInventory("input", "reaction feed at reflux")),
           component("output", "octocrylene", {
             quantity: basis.productKg,
             unit: "kg",
             status: "calculated",
             timing: "in-process intermediate",
             fate: "product",
-            destinationGroup: "G3",
+            internalTransfer: true,
             stoichCoeff: "1",
             note: "Calculated by the Reaction Balance from charged reagent moles and the endpoint-proxy conversion; no downstream product-loss percentage is invented."
           }),
@@ -1334,7 +1382,7 @@
             status: "reported",
             timing: "in-process intermediate",
             fate: "intermediate",
-            destinationGroup: "G3",
+            internalTransfer: true,
             reactionRole: "",
             note: "Gross solvent inventory on the reported 2.5 L/kg product basis; the Dean-Stark solvent is returned to the reactor."
           }),
@@ -1344,12 +1392,12 @@
             status: "missing",
             timing: "in-process intermediate",
             fate: "intermediate",
-            destinationGroup: "G3",
+            internalTransfer: true,
             note: "The SI states that NH4OAc leaves with the first aqueous wash; its mass remains unknown."
           }),
           component("waste", "water", {
             id: "B3-CB-byproduct-1",
-            name: "water of condensation",
+            substanceRole: "byproduct",
             quantity: basis.reactionWaterKg,
             unit: "kg",
             status: "calculated",
@@ -1360,43 +1408,35 @@
           }),
           component("output", "benzophenone", {
             id: "B3-CB-unreacted-benzophenone",
-            name: "unreacted benzophenone",
             quantity: basis.unreactedBenzophenoneKg,
             unit: "kg",
             status: "calculated",
             timing: "in-process intermediate",
             fate: "intermediate",
-            destinationGroup: "G3",
+            internalTransfer: true,
             residualOf: "benzophenone",
             note: "Generated by the Reaction Balance using 99.5% as an explicit screening proxy for the reported benzophenone <0.5% endpoint."
           }),
           component("output", "cyanoacetate", {
             id: "B3-CB-unreacted-2-ethylhexyl-cyanoacetate",
-            name: "unreacted 2-ethylhexyl cyanoacetate",
             quantity: basis.unreactedCyanoacetateKg,
             unit: "kg",
             status: "calculated",
             timing: "in-process intermediate",
             fate: "intermediate",
-            destinationGroup: "G3",
+            internalTransfer: true,
             residualOf: "2-ethylhexyl cyanoacetate",
             note: "Generated on the same 99.5% screening-conversion and 1:1 stoichiometric basis."
           }),
-          unknown("waste", "cyclohexane-rich reactor purge", {
-            unit: "L",
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            destinationGroup: "G8",
-            note: "The SI routes a U2 purge to U8 but does not quantify it."
+          component("waste", "cyclohexane", {
+            quantity: "", unit: "L", phase: "L", status: "missing",
+            timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8",
+            note: "Cyclohexane in the U2 liquid purge routed to U8; quantity not reported."
           }),
-          unknown("waste", "cyclohexane-rich reactor vent", {
-            unit: "L",
-            phase: "V",
-            timing: "vent/emission",
-            fate: "vent",
-            destinationGroup: "G7",
-            note: "The vent route is reported; its quantity is not."
+          component("waste", "cyclohexane", {
+            quantity: "", unit: "L", phase: "V", status: "missing",
+            timing: "vent/emission", fate: "vent", destinationGroup: "G7",
+            note: "Cyclohexane in the U2 reactor vent; quantity not reported."
           })
         ], {
           reaction_time: "18-24",
@@ -1409,18 +1449,9 @@
         }),
 
         makeBlock("B4", "G2", "heat/cool", ["ES(C)"], [
-          unknown("input", "reactor organic phase before cooling", {
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "Known components are the B3 product, residual reagents, cyclohexane, and unquantified catalyst."
-          }),
-          unknown("output", "cooled reactor organic phase", {
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            note: "No component loss is reported during cooling."
-          })
+          ...internalInventory(postReactionInventory("input", "reactor contents before cooling")),
+          ...postReactionInventory("output", "same components after cooling to 25 °C; no loss is reported")
+            .map(stream => ({ ...stream, destinationGroup: "G3" }))
         ], {
           initial_temperature: "85-90",
           target_temperature: "25",
@@ -1432,11 +1463,7 @@
         }),
 
         makeBlock("B5", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
-          unknown("input", "cooled reactor organic phase", {
-            phase: "L",
-            timing: "in-process intermediate",
-            fate: "intermediate"
-          }),
+          ...postReactionInventory("input", "cooled reactor contents entering extraction and water wash"),
           component("input", "ethylAcetate", {
             quantity: "",
             unit: "L",
@@ -1447,7 +1474,6 @@
             note: "The public protocol requires ethyl acetate extraction for the cyclohexane route, but no quantity is reported."
           }),
           component("input", "water", {
-            name: "wash water",
             quantity: basis.washWaterL,
             unit: "L",
             status: "reported",
@@ -1456,50 +1482,8 @@
             reactionRole: "auxiliary",
             note: "Reported SI ratio: 2 L water per kg product."
           }),
-          component("output", "octocrylene", {
-            name: "octocrylene in washed organic phase",
-            quantity: basis.productKg,
-            unit: "kg",
-            status: "calculated",
-            timing: "in-process intermediate",
-            fate: "intermediate"
-          }),
-          component("output", "benzophenone", {
-            name: "unreacted benzophenone in organic phase",
-            quantity: basis.unreactedBenzophenoneKg,
-            unit: "kg",
-            status: "calculated",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            residualOf: "benzophenone"
-          }),
-          component("output", "cyanoacetate", {
-            name: "unreacted 2-ethylhexyl cyanoacetate in organic phase",
-            quantity: basis.unreactedCyanoacetateKg,
-            unit: "kg",
-            status: "calculated",
-            timing: "in-process intermediate",
-            fate: "intermediate",
-            residualOf: "2-ethylhexyl cyanoacetate"
-          }),
-          component("output", "cyclohexane", {
-            name: "cyclohexane in washed organic phase",
-            quantity: basis.cyclohexaneChargeL,
-            unit: "L",
-            status: "reported",
-            timing: "in-process intermediate",
-            fate: "intermediate"
-          }),
-          component("output", "ethylAcetate", {
-            name: "ethyl acetate in washed organic phase",
-            quantity: "",
-            unit: "L",
-            status: "missing",
-            timing: "in-process intermediate",
-            fate: "intermediate"
-          }),
+          ...internalInventory(organicInventory("output", "organic components retained after extraction and water wash")),
           component("waste", "water", {
-            name: "aqueous wash water",
             quantity: basis.washWaterL,
             unit: "L",
             status: "reported",
@@ -1509,7 +1493,6 @@
             note: "Carrier water is reported; dissolved impurity loading is not quantified."
           }),
           component("waste", "catalyst", {
-            name: "ammonium acetate in aqueous wash",
             quantity: "",
             unit: "kg",
             status: "missing",
@@ -1524,51 +1507,31 @@
         }),
 
         makeBlock("B6", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
-          component("input", "octocrylene", { name: "octocrylene in organic phase", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("input", "benzophenone", { name: "unreacted benzophenone in organic phase", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("input", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in organic phase", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("input", "cyclohexane", { name: "cyclohexane in organic phase", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
-          component("input", "ethylAcetate", { name: "ethyl acetate in organic phase", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
+          ...internalInventory(organicInventory("input", "organic components entering the brine wash")),
           component("input", "brine", { quantity: "", unit: "L", status: "missing", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", note: "Brine is required by the SI; dosage is not reported." }),
-          component("output", "octocrylene", { name: "octocrylene in brine-washed organic phase", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("output", "benzophenone", { name: "unreacted benzophenone after brine wash", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("output", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate after brine wash", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("output", "cyclohexane", { name: "cyclohexane after brine wash", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate" }),
-          component("output", "ethylAcetate", { name: "ethyl acetate after brine wash", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate" }),
-          component("waste", "brine", { name: "spent aqueous brine", quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "The route to U9 is reported; water and salt quantities are not." })
+          ...organicInventory("output", "organic components retained after the brine wash"),
+          component("waste", "brine", { quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Spent saturated sodium chloride brine; the route to U9 is reported, but water and salt quantities are not." })
         ], {
           transfer_endpoint: "no emulsion; aqueous phase neutral"
         }),
 
         makeBlock("B7", "G4", "solid-liquid drying", ["PC(LS)", "PS(LS)"], [
-          component("input", "octocrylene", { name: "octocrylene in wet organic phase", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("input", "benzophenone", { name: "unreacted benzophenone in wet organic phase", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("input", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in wet organic phase", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("input", "cyclohexane", { name: "cyclohexane in wet organic phase", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
-          component("input", "ethylAcetate", { name: "ethyl acetate in wet organic phase", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
-          component("output", "octocrylene", { name: "octocrylene in dried organic phase", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("output", "benzophenone", { name: "unreacted benzophenone in dried organic phase", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("output", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in dried organic phase", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("output", "cyclohexane", { name: "cyclohexane in dried organic phase", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate" }),
-          component("output", "ethylAcetate", { name: "ethyl acetate in dried organic phase", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate" }),
-          unknown("waste", "water removed during molecular-sieve regeneration", { phase: "L", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "The <500 ppm endpoint is reported, but the inlet water loading and regeneration discharge are not." })
+          ...organicInventory("input", "organic components entering the 4A molecular-sieve bed"),
+          ...organicInventory("output", "same organic components after drying to the Karl-Fischer endpoint"),
+          component("waste", "water", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Water removed during molecular-sieve regeneration; the <500 ppm endpoint is reported, but inlet water loading and regeneration discharge are not." })
         ], {
           transfer_endpoint: "Karl-Fischer water <500 ppm",
           contact_device: "regenerable fixed bed of 4A molecular sieves"
         }),
 
         makeBlock("B8", "G5", "solvent evaporation", ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"], [
-          component("input", "octocrylene", { name: "octocrylene in dried organic phase", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("input", "benzophenone", { name: "unreacted benzophenone in dried organic phase", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("input", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in dried organic phase", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("input", "cyclohexane", { name: "cyclohexane in dried organic phase", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
-          component("input", "ethylAcetate", { name: "ethyl acetate in dried organic phase", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent" }),
-          component("output", "octocrylene", { name: "octocrylene in solvent-free crude", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6" }),
-          component("output", "benzophenone", { name: "unreacted benzophenone in solvent-free crude", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "benzophenone" }),
-          component("output", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in solvent-free crude", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "2-ethylhexyl cyanoacetate" }),
-          component("output", "cyclohexane", { name: "cyclohexane recovery feed", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Gross reported solvent basis before the U8 recovery target is applied." }),
-          component("output", "ethylAcetate", { name: "ethyl acetate condensate", quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", note: "The SI names residual ethyl acetate removal but does not define its amount or destination." }),
-          unknown("waste", "cyclohexane-rich evaporator vent", { unit: "L", phase: "V", timing: "vent/emission", fate: "vent", destinationGroup: "G7", note: "The route to U7 is represented without inventing a vent fraction." })
+          ...organicInventory("input", "organic components entering thin-film solvent removal"),
+          component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "Non-volatile product component sent to final short-path distillation." }),
+          component("output", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "benzophenone", note: "Residual reagent retained with the non-volatile fraction." }),
+          component("output", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual reagent retained with the non-volatile fraction." }),
+          component("output", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Condensed cyclohexane sent to solvent recovery; gross basis before applying the U8 recovery target." }),
+          component("output", "ethylAcetate", { quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", note: "Ethyl acetate condensate; the SI does not define its amount or destination." }),
+          component("waste", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", destinationGroup: "G7", note: "Cyclohexane in the evaporator vent; the route to U7 is represented without inventing a vent fraction." })
         ], {
           target_temperature: "40-50",
           target_pressure: "100-200",
@@ -1580,13 +1543,13 @@
         }),
 
         makeBlock("B9", "G6", "distillation purification", ["PT(VL)", "PS(VL)", "ES(H)"], [
-          component("input", "octocrylene", { name: "octocrylene in solvent-free crude", quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
-          component("input", "benzophenone", { name: "unreacted benzophenone in solvent-free crude", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
-          component("input", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate in solvent-free crude", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
+          component("input", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", note: "Product component entering final short-path distillation." }),
+          component("input", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
+          component("input", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
           component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "reported", timing: "final output", fate: "product", note: "Defined functional unit: 1 kg purified product at >=98% purity. This is a basis definition, not a reported isolation yield." }),
-          component("waste", "benzophenone", { name: "unreacted benzophenone residue", quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "benzophenone", note: "Separated from the product cut; downstream recovery versus disposal is not specified." }),
-          component("waste", "cyanoacetate", { name: "unreacted 2-ethylhexyl cyanoacetate residue", quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "2-ethylhexyl cyanoacetate", note: "Tracked separately rather than hidden in an aggregate heavy-residue mass." }),
-          unknown("waste", "uncharacterized heavier fractions", { phase: "L", timing: "waste purge", fate: "purge", note: "The SI reports a low-volume heavy stream but gives no quantity or composition." })
+          component("waste", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "benzophenone", note: "Residual benzophenone separated from the product cut; recovery versus disposal is not specified." }),
+          component("waste", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual 2-ethylhexyl cyanoacetate tracked separately rather than hidden in an aggregate residue." }),
+          unknown("waste", "uncharacterized organic residue", { phase: "L", timing: "waste purge", fate: "purge", note: "Composition unknown: the SI reports a low-volume heavy fraction but gives no quantity or chemical identity." })
         ], {
           target_temperature: "190-210",
           target_pressure: "2",
@@ -1598,17 +1561,17 @@
         }),
 
         makeBlock("B10", "G7", "vent gas treatment", ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"], [
-          unknown("input", "cyclohexane-rich vent stream", { unit: "L", phase: "V", timing: "vent/emission", fate: "vent", note: "Combined U2/U5 vent flow is not quantified in the SI." }),
-          unknown("output", "recovered cyclohexane from vent treatment", { unit: "L", phase: "L", timing: "in-process intermediate", fate: "recovered solvent", destinationGroup: "G8", note: "Recovery by condenser/carbon system is described, but no capture efficiency is reported." }),
-          unknown("waste", "uncaptured VOC emission", { unit: "L", phase: "V", timing: "vent/emission", fate: "vent", note: "No numerical emission factor is available in the SI." })
+          component("input", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", note: "Cyclohexane in the combined U2/U5 vents; flow not quantified in the SI." }),
+          component("output", "cyclohexane", { quantity: "", unit: "L", phase: "L", status: "missing", timing: "in-process intermediate", fate: "recovered solvent", destinationGroup: "G8", note: "Condensed cyclohexane; no capture efficiency is reported." }),
+          component("waste", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", note: "Uncaptured cyclohexane emission; no numerical emission factor is available." })
         ], {
           contact_device: "condenser plus activated-carbon polishing"
         }, {}, "scale-up addition"),
 
         makeBlock("B11", "G8", "solvent recovery distillation", ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], [
-          component("input", "cyclohexane", { name: "gross cyclohexane recovery basis", quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Uses the reported 2.5 L/kg gross charge as the closed target-case recovery basis; unquantified side feeds remain separate." }),
-          component("output", "cyclohexane", { name: "purified cyclohexane recycle (target minimum)", quantity: basis.cyclohexaneRecoveredL, unit: "L", status: "calculated", timing: "recycle", fate: "recovered solvent", recoveryPercent: basis.solventRecoveryPercent, scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "Minimum recycle calculated from the SI target of at least 98% recovery." }),
-          component("waste", "cyclohexane", { name: "cyclohexane make-up/loss allowance (target maximum)", quantity: basis.cyclohexaneMakeupL, unit: "L", status: "calculated", timing: "waste purge", fate: "loss", note: "Maximum unrecovered share implied by the 98% target; it is not a measured loss." })
+          component("input", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Reported 2.5 L/kg gross charge used as the closed target-case recovery basis; unquantified side feeds remain separate." }),
+          component("output", "cyclohexane", { quantity: basis.cyclohexaneRecoveredL, unit: "L", status: "calculated", timing: "recycle", fate: "recovered solvent", recoveryPercent: basis.solventRecoveryPercent, scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "Purified recycle; minimum quantity calculated from the SI target of at least 98% recovery." }),
+          component("waste", "cyclohexane", { quantity: basis.cyclohexaneMakeupL, unit: "L", status: "calculated", timing: "waste purge", fate: "loss", note: "Maximum unrecovered cyclohexane share implied by the 98% target; it is not a measured loss." })
         ], {
           separation_efficiency: basis.solventRecoveryPercent,
           transfer_endpoint: "cyclohexane recovery >=98%"
@@ -1617,12 +1580,12 @@
         }, "scale-up addition"),
 
         makeBlock("B12", "G9", "wastewater treatment", ["M(L)"], [
-          component("input", "water", { name: "reaction water", quantity: basis.reactionWaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater" }),
-          component("input", "water", { name: "aqueous wash water", quantity: basis.washWaterL, unit: "L", status: "reported", timing: "waste purge", fate: "wastewater" }),
-          component("input", "catalyst", { name: "ammonium acetate in aqueous wash", quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater" }),
-          component("input", "brine", { name: "spent aqueous brine", quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater" }),
-          unknown("input", "molecular-sieve regeneration water", { phase: "L", timing: "waste purge", fate: "wastewater" }),
-          unknown("output", "treated aqueous discharge", { phase: "L", timing: "waste purge", fate: "wastewater", note: "No neutralization-reagent demand or final discharge quantity is reported, so the WWT balance remains open." })
+          component("input", "water", { quantity: basis.reactionWaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater", note: "Stoichiometric reaction water." }),
+          component("input", "water", { quantity: basis.washWaterL, unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", note: "Aqueous wash carrier." }),
+          component("input", "catalyst", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", note: "Ammonium acetate transferred to the aqueous wash; amount not reported." }),
+          component("input", "brine", { quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater", note: "Spent saturated sodium chloride brine; amount not reported." }),
+          component("input", "water", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", note: "Molecular-sieve regeneration water; amount not reported." }),
+          unknown("output", "wastewater", { phase: "L", timing: "waste purge", fate: "wastewater", note: "Aggregate treatment-boundary flow: composition is represented by the input rows; final quantity and treatment reagents are not reported." })
         ], {
           agitation_note: "neutralization and biological-treatment interface; design data missing"
         }, {}, "scale-up addition")
@@ -1630,19 +1593,19 @@
 
       const octocryleneReactionBlock = state.blocks.find(block => block.id === "B3");
       octocryleneReactionBlock.conversionDetail = {
-        productStreamId: "B3-S2",
+        productStreamId: octocryleneReactionBlock.streams.find(stream => stream.role === "output" && stream.name === "octocrylene")?.id || "",
         productAmountMode: "from reactants",
         productBasisQuantity: "",
         balanceMethod: "stoichiometric",
         reactionEquation: "benzophenone + 2-ethylhexyl cyanoacetate -> octocrylene + water",
-        effluentName: "octocrylene crude reaction effluent",
+        effluentName: "component-resolved octocrylene reaction effluent",
         conversionPercent: basis.endpointConversionPercent,
         conversionStatus: "estimated",
         selectivityPercent: "100",
         selectivityStatus: "assumed",
         byproducts: [{
           id: "octo-water",
-          name: "water of condensation",
+          name: "water",
           basis: "generated by stoichiometry",
           amount: "",
           percent: "",
@@ -1906,6 +1869,9 @@
         conversionBaseQuantity: String(stream?.conversionBaseQuantity || ""),
         stoichCoeff: String(stream?.stoichCoeff || ""),
         reactionRole: normalizeStreamReactionRole(stream, role),
+        substanceRole: String(stream?.substanceRole || ""),
+        residualOf: String(stream?.residualOf || ""),
+        internalTransfer: Boolean(stream?.internalTransfer),
         unit: streamUnits.includes(stream?.unit) ? stream.unit : "kg",
         phase: streamPhases.includes(stream?.phase) ? stream.phase : "unknown",
         status: streamDataStatuses.includes(stream?.status) ? stream.status : "missing",
@@ -3640,7 +3606,7 @@
       if (block?.source === "scale-up addition") {
         return { label: "scale-up addition", description: "Industrial operation added during scale-up; it has no laboratory counterpart." };
       }
-      return { label: "protocol", description: "Block linked to the source protocol text." };
+      return { label: "protocol", description: "Block linked to the loaded protocol text." };
     }
 
     function blockCardHtml(block) {
@@ -4232,7 +4198,7 @@
       const streams = group.blocks.flatMap(block => {
         ensureBlockFlowFields(block);
         return block.streams
-          .filter(stream => stream.name.trim())
+          .filter(stream => stream.name.trim() && !stream.internalTransfer)
           .map(stream => ({ ...stream, blockId: block.id }));
       });
       const mfaOverrides = ensureGroup(group.id).mfaOverrides;
@@ -10360,7 +10326,8 @@
         (block.streams || []).forEach(stream => {
           const name = cleanSubstanceName(stream.name);
           if (!name || ignored.test(name)) return;
-          const residual = isUnreactedOrResidualName(stream.name);
+          const residualOf = cleanSubstanceName(stream.residualOf);
+          const residual = Boolean(residualOf) || isUnreactedOrResidualName(stream.name);
           candidates.push({
             name,
             role: inferSubstanceRole(stream),
@@ -10368,7 +10335,7 @@
             fate: inferSubstanceFate(stream),
             quantity: String(stream.quantity || ""),
             unit: String(stream.unit || ""),
-            residualOf: residual ? name : "",
+            residualOf: residual ? residualOf || name : "",
             residualSourceId: residual ? stream.id || "" : "",
             chemicalKey: canonicalChemicalKey(name),
             source: `${block.id}/${stream.id || stream.role || "stream"}`,
@@ -10506,11 +10473,11 @@
       const b = parseStreamQuantity(bQty);
       if (!String(aQty || "").trim()) return { quantity: String(bQty || ""), unit: String(bUnit || "") };
       if (!String(bQty || "").trim()) return { quantity: String(aQty || ""), unit: String(aUnit || "") };
-      if (aUnit && bUnit && aUnit === bUnit && Number.isFinite(a) && Number.isFinite(b)) {
-        return { quantity: formatNumber(a + b), unit: aUnit };
-      }
       if (String(aQty).trim() === String(bQty).trim() && String(aUnit || "") === String(bUnit || "")) {
         return { quantity: String(aQty || ""), unit: String(aUnit || "") };
+      }
+      if (aUnit && bUnit && aUnit === bUnit && Number.isFinite(a) && Number.isFinite(b)) {
+        return { quantity: formatNumber(a + b), unit: aUnit };
       }
       return {
         quantity: `${String(aQty || "").trim()} ${String(aUnit || "").trim()} + ${String(bQty || "").trim()} ${String(bUnit || "").trim()}`.replace(/\s+/g, " ").trim(),
@@ -10543,12 +10510,16 @@
     }
 
     function inferSubstanceRole(stream) {
+      const explicitRole = String(stream?.substanceRole || "").trim().toLowerCase();
+      if (["product", "solvent", "reactant", "byproduct", "catalyst", "auxiliary", "impurity", "coproduct"].includes(explicitRole)) {
+        return explicitRole;
+      }
       const reactionRole = streamReactionRole(stream);
       if (reactionRole === "solvent") return "solvent";
       if (reactionRole === "catalyst") return "catalyst";
       if (["auxiliary", "inert"].includes(reactionRole)) return "auxiliary";
       if (reactionRole === "reactant" && stream.role === "input") return "reactant";
-      if (isUnreactedOrResidualName(stream.name)) return "reactant";
+      if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
       if (/catalyst|nh4oac|ammonium acetate/.test(text)) return "catalyst";
       if (/solvent|cyclohexane/.test(text)) return "solvent";

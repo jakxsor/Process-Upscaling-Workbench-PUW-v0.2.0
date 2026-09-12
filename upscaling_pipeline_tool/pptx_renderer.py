@@ -9,9 +9,16 @@ from __future__ import annotations
 
 import io
 import re
-import zipfile
-from html import escape
 from typing import Any
+
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.enum.dml import MSO_LINE_DASH_STYLE
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import nsdecls
+from pptx.util import Emu, Pt
 
 
 EMU_PER_INCH = 914400
@@ -20,10 +27,6 @@ EMU_PER_INCH = 914400
 def _clean(value: Any, default: str = "") -> str:
     text = str(value or "").strip()
     return re.sub(r"\s+", " ", text) if text else default
-
-
-def _xml(value: Any) -> str:
-    return escape(_clean(value), quote=True)
 
 
 def _color(value: str) -> str:
@@ -101,12 +104,11 @@ def _category_label(category: Any) -> str:
 
 
 class _ShapeWriter:
-    def __init__(self, scale: float, x_offset: float, y_offset: float) -> None:
+    def __init__(self, slide: Any, scale: float, x_offset: float, y_offset: float) -> None:
+        self.slide = slide
         self.scale = scale
         self.x_offset = x_offset
         self.y_offset = y_offset
-        self.next_id = 2
-        self.parts: list[str] = []
 
     def _emu(self, value: float) -> int:
         return int(round(value))
@@ -120,42 +122,37 @@ class _ShapeWriter:
     def map_len(self, px: Any) -> int:
         return max(1, self._emu(_float(px) * self.scale))
 
-    def _id(self) -> int:
-        value = self.next_id
-        self.next_id += 1
-        return value
-
     def rect(self, x: Any, y: Any, w: Any, h: Any, *, fill: str, line: str, radius: bool = False, name: str = "Shape") -> None:
-        shape_id = self._id()
-        prst = "roundRect" if radius else "rect"
-        self.parts.append(f"""
-          <p:sp>
-            <p:nvSpPr><p:cNvPr id="{shape_id}" name="{_xml(name)}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-            <p:spPr>
-              <a:xfrm><a:off x="{self.map_x(x)}" y="{self.map_y(y)}"/><a:ext cx="{self.map_len(w)}" cy="{self.map_len(h)}"/></a:xfrm>
-              <a:prstGeom prst="{prst}"><a:avLst/></a:prstGeom>
-              <a:solidFill><a:srgbClr val="{_color(fill)}"/></a:solidFill>
-              <a:ln w="12700"><a:solidFill><a:srgbClr val="{_color(line)}"/></a:solidFill></a:ln>
-            </p:spPr>
-            <p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
-          </p:sp>""")
+        kind = MSO_SHAPE.ROUNDED_RECTANGLE if radius else MSO_SHAPE.RECTANGLE
+        shape = self.slide.shapes.add_shape(
+            kind, Emu(self.map_x(x)), Emu(self.map_y(y)), Emu(self.map_len(w)), Emu(self.map_len(h))
+        )
+        shape.name = _clean(name, "Shape")
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor.from_string(_color(fill))
+        shape.line.color.rgb = RGBColor.from_string(_color(line))
+        shape.line.width = Pt(1)
 
     def textbox(self, x: Any, y: Any, w: Any, h: Any, text: str, *, size: float = 10, color: str = "172027", bold: bool = False, name: str = "Text", max_lines: int = 4) -> None:
-        shape_id = self._id()
         lines = _wrap(text, max(10, int(_float(w) / max(size * 0.45, 4))), max_lines)
-        paragraphs = "".join(
-            f"""<a:p><a:r><a:rPr lang="en-US" sz="{int(size * 100)}" b="{'1' if bold else '0'}"><a:solidFill><a:srgbClr val="{_color(color)}"/></a:solidFill></a:rPr><a:t>{_xml(line)}</a:t></a:r><a:endParaRPr lang="en-US" sz="{int(size * 100)}"/></a:p>"""
-            for line in lines
-        ) or "<a:p/>"
-        self.parts.append(f"""
-          <p:sp>
-            <p:nvSpPr><p:cNvPr id="{shape_id}" name="{_xml(name)}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
-            <p:spPr>
-              <a:xfrm><a:off x="{self.map_x(x)}" y="{self.map_y(y)}"/><a:ext cx="{self.map_len(w)}" cy="{self.map_len(h)}"/></a:xfrm>
-              <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln>
-            </p:spPr>
-            <p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/>{paragraphs}</p:txBody>
-          </p:sp>""")
+        shape = self.slide.shapes.add_textbox(
+            Emu(self.map_x(x)), Emu(self.map_y(y)), Emu(self.map_len(w)), Emu(self.map_len(h))
+        )
+        shape.name = _clean(name, "Text")
+        frame = shape.text_frame
+        frame.clear()
+        frame.word_wrap = True
+        frame.vertical_anchor = MSO_ANCHOR.TOP
+        frame.margin_left = frame.margin_right = Emu(0)
+        frame.margin_top = frame.margin_bottom = Emu(0)
+        for index, line_text in enumerate(lines or [""]):
+            paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+            paragraph.text = line_text
+            paragraph.font.name = "Aptos"
+            paragraph.font.size = Pt(size)
+            paragraph.font.bold = bold
+            paragraph.font.color.rgb = RGBColor.from_string(_color(color))
+            paragraph.space_before = paragraph.space_after = Pt(0)
 
     def label(self, x: Any, y: Any, w: Any, text: str, *, color: str = "172027", name: str = "Label") -> None:
         if not _clean(text):
@@ -164,25 +161,20 @@ class _ShapeWriter:
         self.textbox(_float(x) + 6, _float(y) + 3, max(1, _float(w) - 12), 12, text, size=8.3, color=color, bold=True, name=name, max_lines=1)
 
     def line(self, x1: Any, y1: Any, x2: Any, y2: Any, *, color: str = "172027", width: float = 2.2, arrow: bool = False, dash: bool = False) -> None:
-        shape_id = self._id()
         x1e, y1e = self.map_x(x1), self.map_y(y1)
         x2e, y2e = self.map_x(x2), self.map_y(y2)
-        off_x, off_y = min(x1e, x2e), min(y1e, y2e)
-        ext_x, ext_y = max(1, abs(x2e - x1e)), max(1, abs(y2e - y1e))
-        flip_h = ' flipH="1"' if x2e < x1e else ""
-        flip_v = ' flipV="1"' if y2e < y1e else ""
-        dash_xml = '<a:prstDash val="dash"/>' if dash else ""
-        arrow_xml = '<a:tailEnd type="triangle"/>' if arrow else ""
-        self.parts.append(f"""
-          <p:sp>
-            <p:nvSpPr><p:cNvPr id="{shape_id}" name="Connector"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-            <p:spPr>
-              <a:xfrm{flip_h}{flip_v}><a:off x="{off_x}" y="{off_y}"/><a:ext cx="{ext_x}" cy="{ext_y}"/></a:xfrm>
-              <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-              <a:ln w="{max(6350, int(width * 12700))}" cap="round"><a:solidFill><a:srgbClr val="{_color(color)}"/></a:solidFill>{dash_xml}{arrow_xml}</a:ln>
-            </p:spPr>
-            <p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>
-          </p:sp>""")
+        connector = self.slide.shapes.add_connector(
+            MSO_CONNECTOR.STRAIGHT, Emu(x1e), Emu(y1e), Emu(x2e), Emu(y2e)
+        )
+        connector.name = "Connector"
+        connector.line.color.rgb = RGBColor.from_string(_color(color))
+        connector.line.width = Pt(max(0.5, width))
+        if dash:
+            connector.line.dash_style = MSO_LINE_DASH_STYLE.DASH
+        if arrow:
+            connector.line._get_or_add_ln().append(
+                parse_xml(f'<a:tailEnd {nsdecls("a")} type="triangle"/>')
+            )
 
 
 def _wrap(text: Any, width: int, max_lines: int = 2) -> list[str]:
@@ -288,73 +280,6 @@ def _draw_legend(writer: _ShapeWriter, diagram_w: float, diagram_h: float, categ
         cursor_x += 104
 
 
-def _content_types() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
-  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
-  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
-  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
-</Types>"""
-
-
-def _root_rels() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
-</Relationships>"""
-
-
-def _presentation_xml(width: int, height: int) -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
-  <p:sldSz cx="{width}" cy="{height}" type="custom"/>
-  <p:notesSz cx="6858000" cy="9144000"/>
-</p:presentation>"""
-
-
-def _presentation_rels() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
-</Relationships>"""
-
-
-def _core_props() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <dc:title>Editable process flowsheet</dc:title>
-  <dc:creator>Process Upscaling Workbench</dc:creator>
-</cp:coreProperties>"""
-
-
-def _app_props() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
-  <Application>Process Upscaling Workbench</Application>
-  <Slides>1</Slides>
-</Properties>"""
-
-
-def _slide_xml(shape_tree: str) -> str:
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-  <p:cSld>
-    <p:spTree>
-      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
-      {shape_tree}
-    </p:spTree>
-  </p:cSld>
-  <p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>
-</p:sld>"""
-
-
 def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
     flowsheet = payload.get("flowsheet") if isinstance(payload, dict) else None
     if not isinstance(flowsheet, dict):
@@ -370,7 +295,11 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
     slide_h = int(min(14.0, max(7.5, diagram_h / 96)) * EMU_PER_INCH)
     margin = int(0.28 * EMU_PER_INCH)
     scale = min((slide_w - margin * 2) / diagram_w, (slide_h - margin * 2) / diagram_h)
-    writer = _ShapeWriter(scale, (slide_w - diagram_w * scale) / 2, (slide_h - diagram_h * scale) / 2)
+    presentation = Presentation()
+    presentation.slide_width = slide_w
+    presentation.slide_height = slide_h
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    writer = _ShapeWriter(slide, scale, (slide_w - diagram_w * scale) / 2, (slide_h - diagram_h * scale) / 2)
 
     category_styles = {
         "reactor": ("FFF8F7", "CF4B42"),
@@ -474,14 +403,9 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
 
     _draw_legend(writer, diagram_w, diagram_h, category_styles)
 
+    presentation.core_properties.title = "Editable process flowsheet"
+    presentation.core_properties.author = "Process Upscaling Workbench"
+    presentation.core_properties.subject = "Editable process flowsheet export"
     pptx = io.BytesIO()
-    with zipfile.ZipFile(pptx, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("[Content_Types].xml", _content_types())
-        zf.writestr("_rels/.rels", _root_rels())
-        zf.writestr("ppt/presentation.xml", _presentation_xml(slide_w, slide_h))
-        zf.writestr("ppt/_rels/presentation.xml.rels", _presentation_rels())
-        zf.writestr("ppt/slides/slide1.xml", _slide_xml("".join(writer.parts)))
-        zf.writestr("ppt/slides/_rels/slide1.xml.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>""")
-        zf.writestr("docProps/core.xml", _core_props())
-        zf.writestr("docProps/app.xml", _app_props())
+    presentation.save(pptx)
     return pptx.getvalue()

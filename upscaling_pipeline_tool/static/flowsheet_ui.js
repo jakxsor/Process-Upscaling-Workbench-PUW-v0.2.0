@@ -343,7 +343,7 @@
         document.body.appendChild(link);
         link.click();
         link.remove();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (err) {
         const message = `Could not export PowerPoint: ${err.message || err}`;
         await alertModal(message);

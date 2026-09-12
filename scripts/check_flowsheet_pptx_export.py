@@ -8,6 +8,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+from pptx import Presentation
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from upscaling_pipeline_tool.pptx_renderer import render_flowsheet_pptx
 
@@ -67,6 +69,12 @@ payload = {
 
 body = render_flowsheet_pptx(payload)
 assert body.startswith(b"PK"), "PowerPoint export should be an OOXML zip package"
+deck = Presentation(io.BytesIO(body))
+assert len(deck.slides) == 1, "PowerPoint export should reopen with one slide"
+assert len(deck.slides[0].shapes) > 10, "PowerPoint export should retain editable native shapes"
+roundtrip = io.BytesIO()
+deck.save(roundtrip)
+assert len(Presentation(io.BytesIO(roundtrip.getvalue())).slides) == 1, "PowerPoint export should survive a save round trip"
 with zipfile.ZipFile(io.BytesIO(body)) as zf:
     slide = zf.read("ppt/slides/slide1.xml").decode("utf-8")
 

@@ -102,7 +102,7 @@ APP_HTML = r"""<!doctype html>
       <div class="header-dropdown">
         <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
         <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
-          <button id="loadSample" role="menuitem">Octocrylene Case</button>
+          <button id="loadSample" role="menuitem" title="SI-derived case with a readability-normalized cyclohexane protocol">Octocrylene Case</button>
           <button id="loadMethylbenzeneCase" role="menuitem">3-Reagent Case</button>
         </div>
       </div>
