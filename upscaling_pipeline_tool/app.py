@@ -144,7 +144,10 @@ APP_HTML = r"""<!doctype html>
           <h2>Blocks, Tasks & Network</h2>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
-          <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
+          <div class="board-mode-switch" role="group" aria-label="Group box detail level">
+            <button id="boardModeCompact" aria-pressed="true" title="Compact boxes: icon, unit operation and a one-line summary">Compact</button>
+            <button id="boardModeDetailed" aria-pressed="false" title="Detailed boxes: blocks, phenomena and streams shown inline">Detailed</button>
+          </div>
           <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Layout</button>
           <div class="header-dropdown">
             <button id="connectionsToggle" aria-haspopup="true" aria-expanded="false" title="Auto-connect groups, or review/remove individual arrows">Connections ▾</button>

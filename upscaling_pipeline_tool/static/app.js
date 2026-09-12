@@ -614,6 +614,23 @@
       return `<span class="unit-micro-icon compact-icon-${category} ${extraClass}" title="${escapeAttr(label)}">${escapeHtml(icon)}</span>`;
     }
 
+    // Room past the last node so there is always somewhere to drag a new block or group to.
+    // Shared with fitBoard(), which divides by content + margin so that "fit" leaves no scroll.
+    const boardMargin = Object.freeze({ x: 120, y: 100 });
+
+    // How much of the board the group drawer (absolutely positioned over the panel bottom) covers
+    // right now, measured rather than estimated so fitBoard() lands the content above it.
+    function boardDrawerOverlap() {
+      const flow = $("groupFlow");
+      const drawer = $("stepFlowInspector");
+      if (!flow || !drawer || drawer.hidden || typeof drawer.getBoundingClientRect !== "function") return 0;
+      if (!(selectedGroup() || selectedBlock()?.groupId)) return 0;
+      const flowRect = flow.getBoundingClientRect();
+      const drawerRect = drawer.getBoundingClientRect();
+      if (!Number.isFinite(flowRect?.bottom) || !Number.isFinite(drawerRect?.top)) return 0;
+      return Math.max(0, Math.min(flow.clientHeight * 0.6, flowRect.bottom - drawerRect.top));
+    }
+
     function boardBounds() {
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
       const boxes = [];
@@ -642,28 +659,36 @@
         if (b) boxes.push({ x: b.x, y: b.y, w: 1, h: 1 });
       });
       const flow = $("groupFlow");
-      const minWidth = flow ? Math.max(1900, flow.clientWidth / Math.max(0.1, state.zoom) + 700) : 2200;
-      const minHeight = flow ? Math.max(1150, flow.clientHeight / Math.max(0.1, state.zoom) + 420) : 1300;
-      if (!boxes.length) return { width: minWidth, height: minHeight };
+      // At minimum the canvas fills the viewport at the current zoom (no gap inside the panel);
+      // beyond that it follows the content plus boardMargin, and nothing else. The old formula
+      // added 700 board units to viewport/zoom, so the canvas inflated as the zoom shrank and
+      // fitBoard() - which sizes its zoom from the content - could never actually fit it.
+      const viewW = flow ? flow.clientWidth / Math.max(0.1, state.zoom) : 0;
+      const viewH = flow ? flow.clientHeight / Math.max(0.1, state.zoom) : 0;
+      if (!boxes.length) return { width: Math.max(viewW, 1200), height: Math.max(viewH, 800), contentWidth: 0, contentHeight: 0 };
       const maxX = Math.max(...boxes.map(box => box.x + box.w));
       const maxY = Math.max(...boxes.map(box => box.y + box.h));
       return {
-        width: Math.max(minWidth, maxX + 520),
-        height: Math.max(minHeight, maxY + 360)
+        width: Math.max(viewW, maxX + boardMargin.x),
+        height: Math.max(viewH, maxY + boardMargin.y),
+        contentWidth: maxX + boardMargin.x,
+        contentHeight: maxY + boardMargin.y
       };
     }
 
-    function groupDrawerBoardClearance() {
-      if (!selectedGroup() && !selectedBlock()?.groupId) return 0;
-      const drawerHeight = Number(state.groupStepEditorHeight || 520);
-      return Math.max(520, Math.min(1120, drawerHeight + 340));
-    }
-
+    // Extra canvas height so the lowest node can be scrolled out from under the group drawer.
+    // Only as much as the content actually reaches under the drawer, up to the drawer's own
+    // measured overlap: a flat 520-1120 units used to be added whenever a group was selected,
+    // which left a scrollbar on every fitted board with nothing below to scroll to.
     function boardWithDrawerClearance(board = boardBounds()) {
-      return {
-        width: board.width,
-        height: board.height + groupDrawerBoardClearance()
-      };
+      const overlap = boardDrawerOverlap();
+      if (!overlap) return { width: board.width, height: board.height };
+      const flow = $("groupFlow");
+      const zoom = Math.max(0.1, state.zoom);
+      const usableUnits = Math.max(0, (flow?.clientHeight || 0) - overlap) / zoom;
+      const contentHeight = Number.isFinite(board.contentHeight) ? board.contentHeight : board.height;
+      const clearance = Math.max(0, Math.min(overlap / zoom, contentHeight - usableUnits));
+      return { width: board.width, height: board.height + clearance };
     }
 
     function nextBlockId() {
@@ -1686,6 +1711,9 @@
       state.focusEndpoint = "G2";
       state.activeInspectorTab = "inspect";
       state.showAllTriggeredHeuristics = false;
+      // Fixture coordinates were hand-placed for detailed boxes at 560-unit spacing; the board
+      // opens in compact mode, so lay out for the actual panel instead of trusting them.
+      layoutGroupsInReadingOrder();
       renderAll();
       requestAnimationFrame(() => fitBoard());
     }
@@ -1853,6 +1881,7 @@
       state.activeInspectorTab = "inspect";
       state.showAllTriggeredHeuristics = false;
       loadTripleReactantSeparationDemo("G1");
+      layoutGroupsInReadingOrder();
       renderAll();
       requestAnimationFrame(() => {
         fitBoard();
@@ -2811,8 +2840,7 @@
     function renderGroupFlow() {
       const root = $("groupFlow");
       $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
-      $("toggleCompact").textContent = state.boardCompact ? "Detailed" : "Compact";
-      $("toggleCompact").classList.toggle("primary", state.boardCompact);
+      syncBoardModeSwitch();
       if (!state.blocks.length) {
         root.classList.remove("has-group-drawer");
         root.innerHTML = `<div class="empty">Create blocks from highlighted text. They will appear here as Draft Blocks first.</div>`;
@@ -2821,7 +2849,7 @@
       const groupIds = groupIdsInTextOrder();
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
       const board = boardBounds();
-      const boardClearance = groupDrawerBoardClearance();
+      const hasGroupDrawer = Boolean(selectedGroup() || selectedBlock()?.groupId);
       const displayBoard = boardWithDrawerClearance(board);
       const draftHtml = draftBlocks.length ? `
         <section class="group-box draft" style="left:${state.draftPos.x}px; top:${state.draftPos.y}px; width:${nodeWidth(draftBlocks.length, "draft")}px" data-draft-box="true">
@@ -2884,7 +2912,7 @@
           </section>
         `;
       }).join("");
-      root.classList.toggle("has-group-drawer", boardClearance > 0);
+      root.classList.toggle("has-group-drawer", hasGroupDrawer);
       root.innerHTML = `
         <div class="board-space" style="width:${displayBoard.width * state.zoom}px; height:${displayBoard.height * state.zoom}px">
           <div class="board-canvas" style="width:${displayBoard.width}px; height:${displayBoard.height}px; transform:scale(${state.zoom})">
@@ -15448,30 +15476,78 @@
       renderAll();
     }
 
+    // Groups in process reading order (topological stage, then row - the same order the Flowsheet
+    // View uses, via topologicalGroupOrder in flowsheet.js), wrapped into a grid whose shape follows
+    // the board panel. One column per stage made a linear nine-stage protocol a 3040-unit-wide,
+    // one-row strip: a 5:1 shape inside a 1.3:1 panel, so fitBoard() bottomed out at 35% with every
+    // label unreadable. The Flowsheet View keeps the true stage layout for presentation; the board
+    // is an editing surface and reads better as a wrapped grid. The column count is the one that
+    // gives the largest fit zoom for this panel, not a fixed number.
+    function layoutGroupsInReadingOrder() {
+      const ids = groupIdsInTextOrder();
+      const draftBlocks = blocksInOrder().filter(block => !block.groupId);
+      if (!ids.length) return;
+      const layout = typeof topologicalGroupOrder === "function"
+        ? topologicalGroupOrder(ids)
+        : { stageById: new Map(ids.map((id, index) => [id, index])), rowById: new Map() };
+      // Protocol-derived groups first, in the order their text appears (for a lab protocol that is
+      // the process order); scale-up additions such as vent, recovery and wastewater units after
+      // them. Those additions have no text position (start 0), so groupIdsInTextOrder() lists them
+      // first, and their recycle links back into the feed stage also make them the topological
+      // roots - either key alone would put the vent condenser in the top-left corner.
+      const firstTextStart = id => {
+        const starts = blocksForGroup(id)
+          .filter(block => block.source === "protocol" && Number.isFinite(block.start) && (block.start > 0 || block.end > 0))
+          .map(block => block.start);
+        return starts.length ? Math.min(...starts) : Infinity;
+      };
+      const ordered = [...ids].sort((a, b) =>
+        firstTextStart(a) - firstTextStart(b)
+        || (layout.stageById.get(a) || 0) - (layout.stageById.get(b) || 0)
+        || (layout.rowById.get(a) || 0) - (layout.rowById.get(b) || 0)
+        || ids.indexOf(a) - ids.indexOf(b));
+      // Compact boxes are 240 units wide and about 170 tall; 60 x 45 units between them is enough
+      // for the connectors, and on an 800px-tall laptop those 100 units per row are the difference
+      // between three rows fitting above the drawer or not.
+      const gapX = state.boardCompact ? 300 : 560;
+      const gapY = state.boardCompact ? 215 : 330;
+      const nodeW = nodeWidth(1);
+      const nodeH = Math.max(0, ...ids.map(id => state.measuredNodeHeights[id] || 0)) || (state.boardCompact ? 170 : 380);
+      const startX = draftBlocks.length ? 520 : 40;
+      const startY = 40;
+      const flow = $("groupFlow");
+      const panelW = Math.max(320, flow?.clientWidth || 960);
+      const panelH = Math.max(240, (flow?.clientHeight || 720) - boardDrawerOverlap());
+      let perRow = ordered.length;
+      let bestZoom = -1;
+      for (let columns = Math.min(6, ordered.length); columns >= 1; columns -= 1) {
+        const rows = Math.ceil(ordered.length / columns);
+        const width = startX + (columns - 1) * gapX + nodeW + boardMargin.x;
+        const height = startY + (rows - 1) * gapY + nodeH + boardMargin.y;
+        const zoom = Math.min(panelW / width, panelH / height);
+        if (zoom > bestZoom + 0.005) {
+          bestZoom = zoom;
+          perRow = columns;
+        }
+      }
+      ordered.forEach((id, index) => {
+        const group = ensureGroup(id);
+        group.x = startX + (index % perRow) * gapX;
+        group.y = startY + Math.floor(index / perRow) * gapY;
+      });
+      if (draftBlocks.length) state.draftPos = { x: 24, y: 40 };
+    }
+
     function autoLayoutGroups() {
       const ids = groupIdsInTextOrder();
       const draftBlocks = blocksInOrder().filter(block => !block.groupId);
       if (!ids.length && !draftBlocks.length) return;
       pushUndo();
-      // Same topological stage/row order the Flowsheet View uses (topologicalGroupOrder, in
-      // flowsheet.js) instead of a blind index%columns grid - follows state.links direction, so
-      // Auto-Layout produces a left-to-right process order with far fewer crossed arrows to begin
-      // with, rather than one that connectionRoute has to detour around after the fact.
-      const layout = topologicalGroupOrder(ids);
-      const gapX = state.boardCompact ? 340 : 560;
-      const gapY = state.boardCompact ? 245 : 330;
-      const startX = draftBlocks.length ? 520 : 80;
-      const startY = 90;
-      ids.forEach(id => {
-        const group = ensureGroup(id);
-        group.x = startX + (layout.stageById.get(id) || 0) * gapX;
-        group.y = startY + (layout.rowById.get(id) || 0) * gapY;
-      });
-      if (draftBlocks.length) state.draftPos = { x: 24, y: 90 };
+      layoutGroupsInReadingOrder();
       state.focusEndpoint = ids[0] || null;
       pendingBoardReflow = true;
       renderAll();
-      fitBoard();
+      requestAnimationFrame(() => fitBoard());
     }
 
     function resetView() {
@@ -15561,6 +15637,27 @@
 
     function zoomAnchorPoint(flow, anchor, oldZoom) {
       if (anchor === "none") return null;
+      // Keep the selected (or first) group where it is on screen while zooming; if it is off
+      // screen, bring it to the middle of the visible board. Centre-anchored zoom from a fitted
+      // view magnified whatever happened to be under the viewport centre, which on a wide, short
+      // process was empty canvas, so zooming in made every unit box disappear.
+      if (anchor === "selection") {
+        const block = selectedBlock();
+        const endpoint = block?.groupId || block?.id || state.selectedGroupId || groupIdsInTextOrder()[0];
+        const center = endpoint ? endpointCenter(endpoint) : null;
+        if (center) {
+          const viewX = center.x * oldZoom - flow.scrollLeft;
+          const viewY = center.y * oldZoom - flow.scrollTop;
+          const usableHeight = Math.max(200, flow.clientHeight - boardDrawerOverlap());
+          const inView = viewX >= 0 && viewX <= flow.clientWidth && viewY >= 0 && viewY <= usableHeight;
+          return {
+            viewX: inView ? viewX : flow.clientWidth / 2,
+            viewY: inView ? viewY : usableHeight / 2,
+            boardX: center.x,
+            boardY: center.y
+          };
+        }
+      }
       if (anchor && typeof anchor === "object") {
         const rect = flow.getBoundingClientRect();
         const viewX = clamp(anchor.clientX - rect.left, 0, flow.clientWidth);
@@ -15617,6 +15714,9 @@
       $("hoverTip").hidden = true;
     }
 
+    // Zoom so the whole board (content + boardMargin) fills the panel above the group drawer,
+    // then park at the origin. Uses the measured node heights, and the same margin boardBounds()
+    // adds, so the canvas and the viewport agree and no scrollbar is left over after a fit.
     function fitBoard() {
       const flow = $("groupFlow");
       const ids = groupIdsInTextOrder();
@@ -15625,21 +15725,16 @@
       if (draftBlocks.length) boxes.push({ x: state.draftPos.x, y: state.draftPos.y, w: nodeWidth(draftBlocks.length, "draft"), h: 300 });
       ids.forEach(id => {
         const group = ensureGroup(id);
-        boxes.push({ x: group.x, y: group.y, w: nodeWidth(blocksForGroup(id).length), h: 340 });
+        boxes.push({ x: group.x, y: group.y, w: nodeWidth(blocksForGroup(id).length), h: state.measuredNodeHeights[id] || (state.boardCompact ? 200 : 380) });
       });
-      if (!boxes.length) return;
-      const minX = Math.min(...boxes.map(b => b.x));
-      const minY = Math.min(...boxes.map(b => b.y));
+      if (!boxes.length || !flow) return;
       const maxX = Math.max(...boxes.map(b => b.x + b.w));
       const maxY = Math.max(...boxes.map(b => b.y + b.h));
-      const zoomX = flow.clientWidth / Math.max(700, maxX - minX + 260);
-      const zoomY = flow.clientHeight / Math.max(480, maxY - minY + 240);
-      setZoom(Math.min(1.1, Math.max(0.35, Math.min(zoomX, zoomY))), "none");
-      flow.scrollTo({
-        left: Math.max(0, minX * state.zoom - 80),
-        top: Math.max(0, minY * state.zoom - 80),
-        behavior: "smooth"
-      });
+      const usableHeight = Math.max(200, flow.clientHeight - boardDrawerOverlap());
+      const zoomX = flow.clientWidth / (maxX + boardMargin.x);
+      const zoomY = usableHeight / (maxY + boardMargin.y);
+      setZoom(Math.min(1, Math.max(0.25, Math.min(zoomX, zoomY))), "none");
+      if (typeof flow.scrollTo === "function") flow.scrollTo({ left: 0, top: 0, behavior: "smooth" });
     }
 
     // Chevrons point in the direction each toggle collapses its panel toward, matching the panel's
@@ -15974,20 +16069,39 @@
       document.querySelector(".board-view-dropdown")?.removeAttribute("open");
     });
     $("autoLayout").addEventListener("click", autoLayoutGroups);
-    $("toggleCompact").addEventListener("click", () => {
-      state.boardCompact = !state.boardCompact;
-      $("toggleCompact").textContent = state.boardCompact ? "Detailed" : "Compact";
-      $("toggleCompact").classList.toggle("primary", state.boardCompact);
+    // The single toggle button read "Detailed" while compact mode was on and was filled as if
+    // active at the same time, so the label and the highlight disagreed about the current state.
+    // Two pressed-state buttons say which mode is on; the pressed one is the current mode.
+    function syncBoardModeSwitch() {
+      const compact = $("boardModeCompact");
+      const detailed = $("boardModeDetailed");
+      if (!compact || !detailed) return;
+      compact.classList.toggle("primary", state.boardCompact);
+      detailed.classList.toggle("primary", !state.boardCompact);
+      compact.setAttribute("aria-pressed", String(state.boardCompact));
+      detailed.setAttribute("aria-pressed", String(!state.boardCompact));
+    }
+    const setBoardMode = compact => {
+      if (state.boardCompact === compact) return;
+      pushUndo();
+      state.boardCompact = compact;
+      // Box widths differ between the modes (240 vs 430 units) while positions do not, so the
+      // grid is re-laid for the new width rather than left overlapping. Undo restores positions.
+      layoutGroupsInReadingOrder();
+      syncBoardModeSwitch();
       pendingBoardReflow = true;
       renderAll();
-    });
+      requestAnimationFrame(() => fitBoard());
+    };
+    $("boardModeCompact").addEventListener("click", () => setBoardMode(true));
+    $("boardModeDetailed").addEventListener("click", () => setBoardMode(false));
     const closeBoardViewMenu = () => document.querySelector(".board-view-dropdown")?.removeAttribute("open");
     $("boardCenter").addEventListener("click", () => {
       centerSelection();
       closeBoardViewMenu();
     });
-    $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.35));
-    $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
+    $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.25, "selection"));
+    $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.25, "selection"));
     $("zoomFit").addEventListener("click", () => {
       fitBoard();
       closeBoardViewMenu();
@@ -16215,6 +16329,16 @@
         ? await maybeRestoreAutosavedProject()
         : false;
       if (!restored) loadBaseExampleProject();
+      // Below ~1400px the three-column grid leaves the board about 650px: nine compact boxes
+      // cannot be legible in that. Open with the protocol panel folded (step 1 in the stepper and
+      // the chevron both reopen it) so the board, the tool's centrepiece, gets the width first.
+      if (!restored && window.innerWidth < 1400 && state.blocks.length && !$("appMain").classList.contains("protocol-collapsed")) {
+        $("appMain").classList.add("protocol-collapsed");
+        updateProtocolToggleIcon();
+        layoutGroupsInReadingOrder();
+        renderAll();
+        requestAnimationFrame(() => fitBoard());
+      }
       renderSavedWorkMenu();
       if (window.location.hash === "#flowsheet") {
         requestAnimationFrame(openFlowsheetModal);
