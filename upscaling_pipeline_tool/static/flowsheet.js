@@ -1035,7 +1035,10 @@
         const end = flowsheetPort(box, last, 14);
         const midX = (start.x + end.x) / 2;
         const d = orthogonalPath([start, { x: midX, y: start.y }, { x: midX, y: end.y }, end], 12);
-        const productStreams = last.outputStreams.filter(stream => stream.fate === "product" || /product|octocrylene/i.test(stream.name)).slice(0, 2);
+        const targetProduct = String(state.scaleBasis?.targetProduct || "").trim().toLowerCase();
+        const productStreams = last.outputStreams.filter(stream => stream.fate === "product"
+          || /product/i.test(stream.name)
+          || (targetProduct && String(stream.name || "").toLowerCase().includes(targetProduct))).slice(0, 2);
         const label = productStreams[0]?.name || "final product";
         const qty = productStreams[0]?.quantity ? `${productStreams[0].quantity} ${productStreams[0].unit || ""}`.trim() : "";
         return `

@@ -91,21 +91,22 @@
 
     function lcaCanonicalName(name) {
       const raw = lcaNameKey(name);
+      // Generic flow classes are recognised by wording; named substances come from what the
+      // project itself declared (PubChem CID, molar mass or a reaction role), so "recovered
+      // cyclohexane" and "cyclohexane" share one inventory flow in any protocol, not only in the
+      // two example cases whose substance names used to be listed here.
       const rules = [
-        [/methylbenzene|toluene/, "toluene"],
-        [/cyclohexane/, "cyclohexane"],
-        [/benzaldehyde/, "benzaldehyde"],
-        [/benzophenone/, "benzophenone"],
-        [/2-ethylhexyl cyanoacetate/, "2-ethylhexyl cyanoacetate"],
-        [/ammonium acetate/, "ammonium acetate"],
         [/molecular sieves|sieve 4a|sieves 4a/, "molecular sieve, zeolite 4A"],
-        [/wash water|water of condensation|\bwater\b/, "water"],
         [/wastewater|aqueous waste|treated effluent/, "wastewater"],
-        [/uncaptured voc|voc/, "volatile organic compounds"],
-        [/heavy residue|column bottoms|heavies|organic residue/, "organic residues"]
+        [/uncaptured voc|\bvoc\b/, "volatile organic compounds"],
+        [/heavy residue|column bottoms|heavies|organic residue/, "organic residues"],
+        [/wash water|water of condensation|\bwater\b/, "water"]
       ];
       const match = rules.find(([pattern]) => pattern.test(raw));
       if (match) return { name: match[1], source: "rule" };
+      const vocabulary = typeof projectSubstanceVocabulary === "function" ? projectSubstanceVocabulary() : [];
+      const declared = vocabulary.find(name => substanceNamePattern(name).test(raw));
+      if (declared) return { name: declared, source: "declared_substance" };
       const cleaned = raw
         .replace(/\b(crude|purified|recovered|residual|charged|product-rich|rich|liquid|vapor|condensate|mixture|phase|stream)\b/g, " ")
         .replace(/\b(to vent|loss|purge|waste|final output|in-process intermediate)\b/g, " ")

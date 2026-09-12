@@ -315,7 +315,7 @@
       groups: {},
       links: [],
       scaleBasis: {
-        targetProduct: "octocrylene",
+        targetProduct: "",
         targetAmount: "1000",
         targetUnit: "kg/batch",
         referenceBlockId: "",
@@ -5618,7 +5618,7 @@
       const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
       const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
       const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
-      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
+      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
       const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
       const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText);
@@ -5630,7 +5630,16 @@
       const hasDrying = /dry|drying|sieve|mgso4|na2so4|moisture|water <|karl/.test(allText);
       const hasAdsorption = /adsorb|activated carbon|carbon bed|molecular sieve|sieve/.test(allText);
       const hasMembrane = /membrane|pervaporation|permeat|retentate/.test(allText) || [...phenomena].some(code => code.includes("(M"));
-      const hasHighTemperature = /400\s*C|750\s*F|furnace|fired|hot oil|190|210/.test(allText);
+      // Fired or hot-oil heating is a wording cue; the temperature itself is read from the declared
+      // conditions or from a stated "NNN °C", not from bare numbers that happened to be the case
+      // study's head temperature (and matched "2100 kg" just as well).
+      const statedTemperatures = Array.from(allText.matchAll(/(\d{2,3}(?:\.\d+)?)\s*(?:°|deg(?:rees)?)?\s*c\b/g)).map(match => Number(match[1]));
+      const conditionTemperatures = groupConditions
+        .filter(item => /temperature/.test(String(item.id || "")))
+        .map(item => parseStreamQuantity(String(item.value ?? item.text ?? "")))
+        .filter(Number.isFinite);
+      const hasHighTemperature = /furnace|fired heat|hot oil|thermal oil/.test(allText)
+        || [...statedTemperatures, ...conditionTemperatures].some(temperature => temperature >= 180);
       const hasPressureChange = hasVacuum || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText) || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
       const tags = new Set();
       if (hasReaction) tags.add("reaction");
@@ -5664,7 +5673,7 @@
       if (/selectiv|yield|conversion|side reaction|byproduct/.test(allText)) tags.add("selectivity");
       if (groupConditions.length) tags.add("condition");
       if (/inert|nitrogen|n2|catalyst poison/.test(allText)) tags.add("inert");
-      if (/valuable|product|solvent|octocrylene|cyclohexane/.test(allText)) tags.add("valuable");
+      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) tags.add("valuable");
       if (/wash|brine|water wash|cake wash/.test(allText)) tags.add("washing");
       if (/accumul|build[- ]?up/.test(allText)) tags.add("accumulation");
       if (/classif|particle[- ]?size distribution/.test(allText)) tags.add("classification");
@@ -10270,7 +10279,10 @@
     }
 
     function inferredSeparationSubstances(group) {
-      const ignored = /^(reaction mixture|crude reaction mixture|organic phase|aqueous phase|aqueous layer|organic layer|crude product|purified product|treated effluent|neutralized aqueous effluent|aqueous waste|column bottoms|heavies|uncaptured voc|wash water|water content|spent sieves|condensed solvent|recovered voc|heated reaction feed|reflux-ready reaction solution|reactor organic phase before cooling|cooled reactor organic phase|water-washed organic\/aqueous dispersion|washed organic phase|dried organic phase|octocrylene-rich distillation feed|crude cyclohexane recovery feed)$/i;
+      // A stream name is a mixture or a process stream rather than a substance when its wording
+      // says so ("organic phase", "crude reaction mixture", "product-rich distillation feed").
+      // Judged by these words instead of by a fixed list of the octocrylene case's stream names.
+      const ignored = /\b(mixture|phase|layer|feed|effluent|waste|bottoms|heavies|solution|dispersion|crude|spent|filtrate|slurry|solvent|voc|content|residue)\b|-rich\b|^(crude |purified |final )?product$/i;
       const candidates = [];
       substanceSourceBlocksForGroup(group).forEach(block => {
         ensureBlockFlowFields(block);
@@ -10444,20 +10456,42 @@
       return blocksInOrder().filter(block => groupIds.has(block.groupId));
     }
 
-    function cleanSubstanceName(value) {
-      const raw = String(value || "").toLowerCase();
-      if (raw.includes("cyclohexane")) return "cyclohexane";
-      if (raw.includes("octocrylene")) return "octocrylene";
-      if (raw.includes("benzophenone")) return "benzophenone";
-      if (raw.includes("2-ethylhexyl cyanoacetate")) return "2-ethylhexyl cyanoacetate";
-      if (raw.includes("ammonium acetate")) return "ammonium acetate";
-      if (raw.includes("water")) return "water";
-      if (/charged reaction|reaction feed|reaction mixture|reaction solution|organic phase|aqueous phase|organic\/aqueous dispersion|distillation feed|recovery feed|crude reaction|washed organic|dried organic|effluent/.test(raw)) return "";
+    function stripSubstanceQualifiers(value) {
       return String(value || "")
         .replace(/\([^)]*\)/g, "")
         .replace(/\b(crude|purified|recovered|condensed|unreacted|residual|vapor|rich|loss|purge|mixture|condensate|final|reactor|decanter|to vent)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim();
+    }
+
+    function substanceNamePattern(name) {
+      return new RegExp(`(^|[^a-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`);
+    }
+
+    // Substances this project has declared - streams carrying a PubChem CID, a molar mass, or a
+    // reaction/substance role - are the canonical vocabulary, longest name first. A longer stream
+    // name that contains one ("recovered cyclohexane (98%)") maps to it. This used to be a fixed
+    // list of the octocrylene case's five substances, so any other protocol fell through to
+    // generic word-stripping and its recycle, product and reactant streams never lined up.
+    function projectSubstanceVocabulary() {
+      const names = new Set();
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        const declared = [stream.pubchemCid, stream.mw, stream.reactionRole, stream.substanceRole]
+          .some(field => String(field || "").trim());
+        if (!declared) return;
+        const name = stripSubstanceQualifiers(stream.name).toLowerCase();
+        if (name && !/\b(mixture|phase|layer|feed|effluent|solution|dispersion|waste|residue)\b/.test(name)) names.add(name);
+      }));
+      return Array.from(names).sort((a, b) => b.length - a.length);
+    }
+
+    function cleanSubstanceName(value) {
+      const raw = String(value || "").toLowerCase();
+      const canonical = projectSubstanceVocabulary().find(name => substanceNamePattern(name).test(raw));
+      if (canonical) return canonical;
+      if (/\bwater\b/.test(raw) && !/wastewater/.test(raw)) return "water";
+      if (/charged reaction|reaction feed|reaction mixture|reaction solution|organic phase|aqueous phase|organic\/aqueous dispersion|distillation feed|recovery feed|crude reaction|washed organic|dried organic|effluent/.test(raw)) return "";
+      return stripSubstanceQualifiers(value);
     }
 
     function inferSubstanceRole(stream) {
@@ -10472,10 +10506,10 @@
       if (reactionRole === "reactant" && stream.role === "input") return "reactant";
       if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
-      if (/catalyst|nh4oac|ammonium acetate/.test(text)) return "catalyst";
-      if (/solvent|cyclohexane/.test(text)) return "solvent";
+      if (/catalyst/.test(text)) return "catalyst";
+      if (/solvent/.test(text)) return "solvent";
       if (/water|by[- ]?product|condensation/.test(text)) return "byproduct";
-      if (/product|octocrylene/.test(text)) return "product";
+      if (/product/.test(text)) return "product";
       if (stream.role === "input") return "reactant";
       if (stream.role === "waste") return "impurity";
       return "unknown";
@@ -15799,6 +15833,8 @@
       state.blocks = [];
       state.groups = {};
       state.links = [];
+      // A cleared project starts from the generic basis, not from the example's 750 t/yr target.
+      state.scaleBasis = scaleBasisDefaults();
       state.draftPos = { x: 24, y: 24 };
       state.connectingFrom = null;
       state.focusEndpoint = null;
