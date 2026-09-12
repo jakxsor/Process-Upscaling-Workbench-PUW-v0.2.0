@@ -282,6 +282,20 @@ node scripts/check_tutorial_flow.js
 python3 scripts/check_flowsheet_pptx_export.py
 python3 scripts/check_lci_xlsx_export.py
 python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pptx_renderer.py upscaling_pipeline_tool/xlsx_renderer.py
+node scripts/check_browser_smoke.js
+```
+
+The last line is a browser smoke check. It drives the served application in
+headless Chromium and asserts what the static checks cannot see: the page loads
+without a runtime error, the process board opens legible with every group inside
+the panel, the rule check produces a local report, the inventory readiness card
+renders, and the flowsheet opens. It needs Playwright and a Chromium build and
+prints `SKIP` (exit 0) when either is missing:
+
+```bash
+npm install --no-save playwright@1.54.0
+npx playwright install chromium
+node scripts/check_browser_smoke.js
 ```
 
 These checks cover the built-in example, conversion balance propagation,

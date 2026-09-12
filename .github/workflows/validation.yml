@@ -61,3 +61,13 @@ jobs:
         run: |
           node scripts/check_physical_plausibility.js
           node scripts/check_ui_wiring.js
+
+      # The one check that looks at the rendered page. The board regression it guards (opening at
+      # 35% zoom, clipped, on every screen size) passed every static check above.
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.0
+          npx playwright install --with-deps chromium
+
+      - name: Run browser smoke check
+        run: node scripts/check_browser_smoke.js
