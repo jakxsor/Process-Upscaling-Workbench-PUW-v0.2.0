@@ -797,7 +797,15 @@ async function openTutorial(index = 0) {
     }
     const canReuseCurrentTutorialProject = startIndex > 0 && tutorialProjectIsLoaded();
     if (state.blocks.length && !canReuseCurrentTutorialProject) {
-      if (!(await confirmModal("This tutorial will replace the current project with a short guided example. Continue?"))) return;
+      // The old dialog only said the project would be replaced, which read as destructive and
+      // kept anyone with real work from ever opening the tutorial. The work was always kept in
+      // Undo; now it is also saved as a named snapshot in the File menu, and the dialog says so.
+      const canSnapshot = typeof saveLocalProjectSnapshot === "function";
+      const message = canSnapshot
+        ? "The tutorial loads its own short example in place of the current project. Your current work is saved first as a snapshot in this browser (File menu) and can also be brought back with Undo. Continue?"
+        : "This tutorial will replace the current project with a short guided example. Continue?";
+      if (!(await confirmModal(message, { okLabel: canSnapshot ? "Save and start" : "OK" }))) return;
+      if (canSnapshot) saveLocalProjectSnapshot("Before tutorial (auto-saved)");
       pushUndo();
     }
     if (!canReuseCurrentTutorialProject || startIndex === 0) tutorialResetProject();

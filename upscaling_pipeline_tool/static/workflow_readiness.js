@@ -370,6 +370,7 @@
       panel.hidden = !state.showDataReadiness;
       $("toggleReadiness").textContent = state.showDataReadiness ? "Hide" : "Details";
       renderDataProvenance();
+      renderLcaReadiness();
       if (!state.showDataReadiness) return;
       panel.innerHTML = model.categories.map(category => `
         <div class="readiness-category">
@@ -384,6 +385,87 @@
           `).join("")}
         </div>
       `).join("");
+    }
+
+    // Inventory (LCI) readiness on screen. buildLcaBridge() already derives the reference product,
+    // technosphere inputs, emissions, waste treatments, mapping candidates and an issue list, but
+    // it was only reachable through the export: the first sight of "N streams have no amount" was
+    // a spreadsheet. Same inputs as the export builder, computed only while the inspect tab shows.
+    function lcaReadinessSnapshot() {
+      if (typeof buildLcaBridge !== "function" || typeof exportBlock !== "function") return null;
+      const blocks = blocksInOrder().map(block => {
+        ensureBlockFlowFields(block);
+        return exportBlock(block);
+      });
+      if (!blocks.length) return null;
+      const groups = groupIdsInTextOrder().map(groupId => {
+        const group = groupModel(groupId);
+        return {
+          groupId: group.id,
+          task: group.task,
+          blocks: group.blocks.map(block => block.id),
+          phenomena: group.phenomena,
+          selectedUnit: group.selectedUnit
+        };
+      });
+      const scale = scaleModel();
+      return buildLcaBridge(blocks, groups, scale, recycleSummary(scale), energyBridgeModel(scale));
+    }
+
+    function renderLcaReadiness() {
+      const summary = $("lcaReadinessSummary");
+      const panel = $("lcaReadinessPanel");
+      const toggle = $("toggleLcaReadiness");
+      if (!summary || !panel) return;
+      if (state.activeInspectorTab && state.activeInspectorTab !== "inspect") return;
+      let bridge = null;
+      try {
+        bridge = lcaReadinessSnapshot();
+      } catch (error) {
+        console.error("Inventory readiness could not be computed", error);
+      }
+      if (!bridge) {
+        summary.textContent = "No streams yet.";
+        summary.className = "muted small";
+        panel.hidden = true;
+        if (toggle) toggle.textContent = "Details";
+        return;
+      }
+      const issues = bridge.readiness?.issues || [];
+      const counts = `${bridge.externalInputs.length} input${bridge.externalInputs.length === 1 ? "" : "s"}, ${bridge.emissions.length} emission${bridge.emissions.length === 1 ? "" : "s"}, ${bridge.wasteTreatments.length} waste treatment${bridge.wasteTreatments.length === 1 ? "" : "s"}`;
+      summary.textContent = issues.length
+        ? `${issues.length} inventory issue${issues.length === 1 ? "" : "s"}; ${counts}.`
+        : `Ready for mapping; ${counts}.`;
+      summary.className = issues.length ? "small readiness-summary important" : "small readiness-summary ok";
+      panel.hidden = !state.showLcaReadiness;
+      if (toggle) toggle.textContent = state.showLcaReadiness ? "Hide" : "Details";
+      if (!state.showLcaReadiness) return;
+      const product = bridge.referenceProduct;
+      const productName = product ? (product.name || product.canonicalName || product.rawName || "product") : "";
+      const productKg = product?.amount?.kg;
+      const candidates = bridge.mappingCandidates || [];
+      panel.innerHTML = `
+        <div class="readiness-category">
+          <div class="label">Reference product</div>
+          <div class="muted small">${product
+            ? escapeHtml(`${productName}${Number.isFinite(productKg) ? ` - ${productKg} kg` : ""}`)
+            : "Not identified. Declare an output stream with fate \"product\" and set the scale-up target product."}</div>
+        </div>
+        <div class="readiness-category">
+          <div class="label">Before openLCA mapping</div>
+          ${issues.length
+            ? issues.map(issue => `
+              <div class="readiness-row important missing">
+                <span class="readiness-mark">✕</span>
+                <span class="readiness-note">${escapeHtml(issue)}</span>
+              </div>`).join("")
+            : `<div class="muted small">No blocking issues.</div>`}
+        </div>
+        <div class="readiness-category">
+          <div class="label">Mapping candidates</div>
+          <div class="muted small">${candidates.length} flow${candidates.length === 1 ? "" : "s"} with a suggested database name. The final dataset choice stays manual; the LCI Excel export carries the full list.</div>
+        </div>
+      `;
     }
 
     // A different axis from dataReadinessModel above: that one asks "is this value present at all",
