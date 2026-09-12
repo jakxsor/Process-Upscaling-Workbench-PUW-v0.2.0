@@ -2294,14 +2294,24 @@
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
       if (!readiness.ready || !groupState.unitSuggestionsExpanded) return "";
-      const alternatives = unitOperationCandidatesForGroup(group).slice(0, limit);
+      // The board is where the choice is actually made, so the evidence behind the ranking is
+      // printed under each candidate rather than kept in a hover tooltip only, and the list can
+      // be opened past the first few instead of silently stopping at four.
+      const all = unitOperationCandidatesForGroup(group);
+      const showAll = Boolean(groupState.unitPickerShowAll);
+      const alternatives = showAll ? all : all.slice(0, limit);
+      const hidden = all.length - alternatives.length;
       return `
         <div class="board-unit-picker">
-          ${alternatives.length ? alternatives.map(candidate => `
+          ${alternatives.length ? alternatives.map((candidate, index) => `
             <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-              ${escapeHtml(candidate.name)}
+              <span class="alt-rank">${index + 1}</span>
+              <span class="alt-name">${escapeHtml(candidate.name)}</span>
+              ${candidateFitMetaHtml(candidate)}
             </button>
           `).join("") : `<span class="muted small">No matching unit operation.</span>`}
+          ${hidden > 0 ? `<button class="mini-button" data-unit-picker-more="${escapeAttr(group.id)}">Show ${hidden} more candidate${hidden === 1 ? "" : "s"}</button>` : ""}
+          ${showAll && all.length > limit ? `<button class="mini-button" data-unit-picker-more="${escapeAttr(group.id)}">Show fewer</button>` : ""}
         </div>
       `;
     }
@@ -2894,6 +2904,16 @@
           ensureGroup(group.id).unitSuggestionsExpanded = false;
           renderAll();
         });
+      });
+      root.querySelectorAll("[data-unit-picker-more]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const groupState = ensureGroup(button.dataset.unitPickerMore);
+          groupState.unitPickerShowAll = !groupState.unitPickerShowAll;
+          renderAll();
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
@@ -4166,6 +4186,18 @@
 
     function formatNumber(value) {
       return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000);
+    }
+
+    // Display-only rounding for derived screening figures (batches/year, kg/year, operating
+    // days). The model strings keep formatNumber's three decimals because the checks compare
+    // them exactly, but "204.082 batches/year" on screen is false precision for a screening
+    // estimate in a tool whose stated purpose is to avoid exactly that.
+    function formatDisplayNumber(value) {
+      const number = typeof value === "number" ? value : parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return typeof value === "string" ? value : "";
+      const magnitude = Math.abs(number);
+      const digits = magnitude >= 1000 ? 0 : magnitude >= 100 ? 1 : magnitude >= 10 ? 2 : 3;
+      return String(Number(number.toFixed(digits)));
     }
 
     function massToKg(value, unit) {
@@ -5899,7 +5931,7 @@
         <section class="scale-primary-setup">
           <div class="scale-section-title">
             <span>Capacity &amp; calendar</span>
-            <span class="scale-source-badge">${escapeHtml(model.schedule.productiveHoursPerYear || "-")} productive h/year</span>
+            <span class="scale-source-badge">${escapeHtml(model.schedule.productiveHoursPerYear ? formatDisplayNumber(model.schedule.productiveHoursPerYear) : "-")} productive h/year</span>
           </div>
           <div class="scale-scenario-control" role="group" aria-label="Planning scenario">
             <button type="button" class="${basis.planningScenario === "conservative" ? "chosen" : ""}" data-planning-scenario="conservative">
@@ -5910,7 +5942,7 @@
             </button>
           </div>
           <div class="scale-primary-grid">
-            <label>${fieldLabel("Days/year", "Scheduled operating days used in annual capacity.")}<input data-scale-field="operatingDays" value="${escapeAttr(formatNumber(parseStreamQuantity(basis.operatingDays)))}" inputmode="decimal" placeholder="250"></label>
+            <label>${fieldLabel("Days/year", "Scheduled operating days used in annual capacity.")}<input data-scale-field="operatingDays" value="${escapeAttr(formatDisplayNumber(parseStreamQuantity(basis.operatingDays)))}" inputmode="decimal" placeholder="250"></label>
             <label>${fieldLabel("Hours/day", "Scheduled operating hours per day used in annual capacity.")}<input data-scale-field="hoursPerDay" value="${escapeAttr(basis.hoursPerDay)}" inputmode="decimal" placeholder="16"></label>
             <label>${fieldLabel("OEE, %", "Productive fraction of scheduled hours after downtime, maintenance, and changeovers.")}<input data-scale-field="oeePercent" value="${escapeAttr(basis.oeePercent)}" inputmode="decimal" placeholder="80"></label>
             <label>${fieldLabel("Production trains", "Number of complete, identical process trains operating in parallel.")}<input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1"></label>
@@ -6212,7 +6244,7 @@
       const metrics = [
         ["Planned kg/batch", model.target.kgPerBatch || "missing"],
         ["Annual target", model.target.kgPerYear ? `${model.target.kgPerYear} kg` : "missing"],
-        ["Annual batches", model.schedule.effectiveBatchesPerYear || "missing"],
+        ["Annual batches", model.schedule.effectiveBatchesPerYear ? formatDisplayNumber(model.schedule.effectiveBatchesPerYear) : "missing"],
         ["Scale factor", model.factors.productFactor || "missing"],
         ["Batch makespan", model.schedule.batchMakespanH ? `${model.schedule.batchMakespanH} h` : "missing"],
         ["Required reactor", model.reactorSizing?.reactorVolumeM3 ? `${model.reactorSizing.reactorVolumeM3} m3` : "incomplete"]
@@ -6333,9 +6365,9 @@
       const row = (label, makespan, batches, kgYear, note) => `
         <div class="scaled-flow-row">
           <strong>${escapeHtml(label)}</strong>
-          <span>${escapeHtml(makespan || "missing")} h</span>
-          <span>${escapeHtml(batches || "missing")} batches/year</span>
-          <span>${escapeHtml(kgYear || "missing")} kg/year</span>
+          <span>${escapeHtml(makespan ? formatDisplayNumber(makespan) : "missing")} h</span>
+          <span>${escapeHtml(batches ? formatDisplayNumber(batches) : "missing")} batches/year</span>
+          <span>${escapeHtml(kgYear ? formatDisplayNumber(kgYear) : "missing")} kg/year</span>
           <span class="muted small">${escapeHtml(note)}</span>
         </div>
       `;
@@ -6344,8 +6376,8 @@
         ? row("Overlapped plan", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches start at the limiting equipment cycle")
         : row("Conservative plan", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "a new batch starts after the previous batch leaves the train");
       const comparison = view === "overlapped"
-        ? `Conservative comparison: ${schedule.conservativeKgPerYear || "missing"} kg/year`
-        : `Overlapped comparison: ${schedule.overlappedKgPerYear || "missing"} kg/year`;
+        ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
+        : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
       return `
         ${activeRow}
         <div class="muted small scale-scenario-comparison">${escapeHtml(comparison)}</div>
@@ -6598,7 +6630,11 @@
           <span>${escapeHtml(refine.mode)}</span>
           ${refine.scope ? `<span class="muted small">Scopes: ${escapeHtml(refine.scope)}</span>` : ""}
           ${refine.conflicts.length
-            ? refine.conflicts.slice(0, 5).map(item => `<span class="muted small">${escapeHtml(item.severity.toUpperCase())}: ${escapeHtml(item.title)} -> ${escapeHtml(item.action)}</span>`).join("")
+            ? refine.conflicts.slice(0, 5).map(item => {
+              const reason = String(item.reason || item.title || "");
+              const shortReason = reason.length > 150 ? `${reason.slice(0, 147)}...` : reason;
+              return `<span class="muted small">${escapeHtml(item.severity.toUpperCase())} - ${escapeHtml(item.target || "process")}: ${escapeHtml(shortReason)}</span>`;
+            }).join("")
             : `<span class="muted small">No high-priority conflicts detected from the current rule set.</span>`}
           ${refine.conflicts.length > 5 ? `<span class="muted small">+${refine.conflicts.length - 5} more conflicts in Review Results / export.</span>` : ""}
         </div>
@@ -6659,7 +6695,7 @@
           </div>
           <div class="scale-mini-metric">
             <span class="label">Conservative batches/year</span>
-            <strong>${Number.isFinite(gantt.batchesPerYear) ? formatNumber(gantt.batchesPerYear) : "missing"}</strong>
+            <strong>${Number.isFinite(gantt.batchesPerYear) ? formatDisplayNumber(gantt.batchesPerYear) : "missing"}</strong>
             <span class="muted small">from batch makespan</span>
           </div>
           <div class="scale-mini-metric">
@@ -7250,7 +7286,7 @@
       const high = refine.conflicts.filter(item => item.severity === "high").length;
       const medium = refine.conflicts.filter(item => item.severity === "medium").length;
       const low = refine.conflicts.filter(item => item.severity === "low").length;
-      const missing = refine.conflicts.filter(item => /missing|lacks|incomplete/i.test(`${item.title} ${item.reason}`)).length;
+      const missing = refine.conflicts.filter(isDataGapIssue).length;
       const top = refine.conflicts[0];
       return `
         <div class="process-commentary">
@@ -7390,11 +7426,46 @@
       return Object.entries(scopeMatches).some(([scope, matched]) => matched && options?.[scope] !== false);
     }
 
+    // "Missing duration" and "heating and cooling in one group" are different kinds of finding:
+    // one asks for a number, the other for an engineering decision. Counting them together made
+    // the reference example read as "4 high and 59 medium conflicts", which is mostly a to-do
+    // list of data to enter, not 63 design problems.
+    function isDataGapIssue(item) {
+      return /missing|lacks|incomplete|needs data|need data|not reported|no numeric|unspecified|needs? (more )?evidence/i.test(`${item.title || ""} ${item.reason || ""}`);
+    }
+
     function aiRefineSummary(conflicts, heuristics) {
-      const high = conflicts.filter(item => item.severity === "high").length;
-      const medium = conflicts.filter(item => item.severity === "medium").length;
-      if (high || medium) return `${high} high and ${medium} medium priority conflicts before scale-up`;
+      const gaps = conflicts.filter(isDataGapIssue);
+      const design = conflicts.filter(item => !isDataGapIssue(item));
+      if (design.length || gaps.length) {
+        const high = design.filter(item => item.severity === "high").length;
+        const medium = design.filter(item => item.severity === "medium").length;
+        const parts = [];
+        if (design.length) parts.push(`${design.length} design conflict${design.length === 1 ? "" : "s"} (${high} high, ${medium} medium)`);
+        if (gaps.length) parts.push(`${gaps.length} data gap${gaps.length === 1 ? "" : "s"}`);
+        return `${parts.join(" and ")} before scale-up`;
+      }
       return `${heuristics.triggered.length} heuristic rules screened with no high-priority conflict`;
+    }
+
+    // The same finding raised for several groups (identical severity, title, reason and action)
+    // becomes one card that lists the targets, instead of four identical cards that read as noise.
+    function mergeDuplicateRuleIssues(issues) {
+      const merged = new Map();
+      issues.forEach(issue => {
+        const key = [issue.severity, issue.title, issue.reason, issue.action].join(" ");
+        const existing = merged.get(key);
+        if (!existing) {
+          merged.set(key, { ...issue, targets: [issue.target].filter(Boolean) });
+          return;
+        }
+        if (issue.target && !existing.targets.includes(issue.target)) existing.targets.push(issue.target);
+        // A data gap raised for twenty streams lists the first few and counts the rest; the full
+        // list is still in `targets` for the export and the Review Results cards.
+        const shown = existing.targets.slice(0, 6);
+        existing.target = shown.join(", ") + (existing.targets.length > shown.length ? ` and ${existing.targets.length - shown.length} more` : "");
+      });
+      return Array.from(merged.values());
     }
 
     function buildRuleChecks() {
@@ -7525,7 +7596,7 @@
         .forEach(item => {
           issues.push(ruleIssue(item.severity, "Scale-up risk needs review", `${item.title}: ${item.recommendation}`, item.groupId || item.task, "Complete the missing/check fields before treating the scaled process as robust."));
         });
-      return issues.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+      return mergeDuplicateRuleIssues(issues).sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
     }
 
     function processSequenceChecks() {
@@ -15705,6 +15776,10 @@
     $("autoConnect").addEventListener("click", autoConnectGroups);
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
+      renderDataReadiness();
+    });
+    $("toggleLcaReadiness").addEventListener("click", () => {
+      state.showLcaReadiness = !state.showLcaReadiness;
       renderDataReadiness();
     });
     $("workflowStepper").addEventListener("click", event => {

@@ -9,13 +9,37 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
 if __package__:
-    from .pptx_renderer import render_flowsheet_pptx
     from .pubchem_lookup import lookup_pubchem
-    from .xlsx_renderer import render_lci_workbook_xlsx
 else:
-    from pptx_renderer import render_flowsheet_pptx
     from pubchem_lookup import lookup_pubchem
-    from xlsx_renderer import render_lci_workbook_xlsx
+
+
+def _export_renderer(kind):
+    """Import an export renderer on first use.
+
+    python-pptx and openpyxl are only needed by the two export endpoints; the
+    workbench itself is browser code and runs without them. Importing them at
+    module load made a missing optional dependency fail the whole application
+    instead of just the export button that needs it.
+    """
+    try:
+        if kind == "pptx":
+            if __package__:
+                from .pptx_renderer import render_flowsheet_pptx as renderer
+            else:
+                from pptx_renderer import render_flowsheet_pptx as renderer
+        else:
+            if __package__:
+                from .xlsx_renderer import render_lci_workbook_xlsx as renderer
+            else:
+                from xlsx_renderer import render_lci_workbook_xlsx as renderer
+    except ImportError as exc:
+        package = "python-pptx" if kind == "pptx" else "openpyxl"
+        raise RuntimeError(
+            f"{package} is not installed, so this export is unavailable. "
+            "Install it with: python3 -m pip install -r upscaling_pipeline_tool/requirements.txt"
+        ) from exc
+    return renderer
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_REQUEST_BYTES = 12 * 1024 * 1024
@@ -245,6 +269,17 @@ APP_HTML = r"""<!doctype html>
               <button id="toggleReadiness" class="mini-button">Details</button>
             </div>
             <div id="dataReadinessPanel" hidden></div>
+          </div>
+
+          <div class="card stack">
+            <div class="row between">
+              <div>
+                <div class="label">Inventory Readiness</div>
+                <div id="lcaReadinessSummary" class="muted small">No streams yet.</div>
+              </div>
+              <button id="toggleLcaReadiness" class="mini-button">Details</button>
+            </div>
+            <div id="lcaReadinessPanel" hidden></div>
           </div>
 
           <details class="card inspector-details">
@@ -525,7 +560,7 @@ APP_HTML = r"""<!doctype html>
       <div class="modal-head">
         <div>
           <div class="label">Heuristic Rule Application</div>
-          <h2 id="aiRefineTitle">Process Rule Check & External API</h2>
+          <h2 id="aiRefineTitle">Heuristic Rule Check</h2>
         </div>
         <button id="closeAiRefineModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
@@ -553,9 +588,9 @@ APP_HTML = r"""<!doctype html>
               <div class="muted small">Deterministic checks from the current board data.</div>
               <div id="aiRefineLocalResult" class="rule-results"></div>
             </section>
-          </div>
 
-          <div class="modal-column">
+            <details class="external-analysis-details">
+              <summary>Optional second opinion from an external model (OpenAI-compatible API)</summary>
             <section class="modal-section external-analysis-section">
               <div>
                 <div class="label">External Process Analysis</div>
@@ -598,6 +633,7 @@ APP_HTML = r"""<!doctype html>
               <button id="runExternalAiRefine" class="primary">Run External Process Check</button>
               <div id="externalAiResult" class="external-ai-result mfa-empty">No external analysis run yet.</div>
             </section>
+            </details>
           </div>
         </div>
       </div>
@@ -702,7 +738,10 @@ class AppHandler(BaseHTTPRequestHandler):
                 result = self._lookup_pubchem(payload)
             elif self.path == "/api/flowsheet-pptx":
                 try:
-                    body = render_flowsheet_pptx(payload)
+                    body = _export_renderer("pptx")(payload)
+                except RuntimeError as exc:
+                    self._send_json(503, {"ok": False, "error": str(exc)})
+                    return
                 except ValueError as exc:
                     self._send_json(400, {"ok": False, "error": str(exc)})
                     return
@@ -714,7 +753,11 @@ class AppHandler(BaseHTTPRequestHandler):
                 )
                 return
             elif self.path == "/api/lci-xlsx":
-                body = render_lci_workbook_xlsx(payload.get("project", payload))
+                try:
+                    body = _export_renderer("xlsx")(payload.get("project", payload))
+                except RuntimeError as exc:
+                    self._send_json(503, {"ok": False, "error": str(exc)})
+                    return
                 self._send_binary(
                     200,
                     body,

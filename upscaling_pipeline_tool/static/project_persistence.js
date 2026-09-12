@@ -73,13 +73,13 @@
       }, 900);
     }
 
-    function saveLocalProjectSnapshot() {
+    function saveLocalProjectSnapshot(title = "") {
       const project = buildProjectExport();
-      if (!projectHasWork(project)) return;
+      if (!projectHasWork(project)) return false;
       const snapshots = readProjectSnapshots();
       snapshots.unshift({
         id: `snapshot-${Date.now()}`,
-        title: projectWorkTitle(project),
+        title: String(title || "").trim() || projectWorkTitle(project),
         savedAt: new Date().toISOString(),
         project
       });
@@ -88,9 +88,10 @@
         localStorage.setItem(projectAutosaveKey, JSON.stringify(snapshots[0]));
       } catch (err) {
         alertModal(`Could not save project in this browser: ${err.message || err}`);
-        return;
+        return false;
       }
       renderSavedWorkMenu();
+      return true;
     }
 
     function propertyListToState(properties) {
