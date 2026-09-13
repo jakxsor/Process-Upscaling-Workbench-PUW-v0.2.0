@@ -3,6 +3,8 @@ const assert = require("assert");
 
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
+const examplesSource = fs.readFileSync("upscaling_pipeline_tool/static/examples.js", "utf8");
+const catalogSource = fs.readFileSync("upscaling_pipeline_tool/static/process_catalogs.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const marker = "$(\"behaviorSelect\").innerHTML";
 source = source.slice(0, source.indexOf(marker));
@@ -276,4 +278,4 @@ assert(residualComponents.every(stream => stream.status === "calculated" && stre
 console.log("Separation simulator regression check passed.");
 `;
 
-eval(`${core}\n${workflowReadinessSource}\n${source}`);
+eval(`${examplesSource}\n${catalogSource}\n${core}\n${workflowReadinessSource}\n${source}`);

@@ -169,6 +169,13 @@ For headless or remote checks:
 python3 start.py --no-browser
 ```
 
+Optional editable install for development:
+
+```bash
+python3 -m pip install -e .
+process-upscaling-workbench --no-browser
+```
+
 ## Windows Instructions
 
 1. Install Python from:
@@ -268,10 +275,23 @@ paper-support workflow. They can be run from the repository root without a
 Node package install:
 
 ```bash
+python3 scripts/validate.py
+```
+
+The validation runner checks every served JavaScript file, compiles the Python
+entry points, and runs the workflow, physical-plausibility, UI-wiring, PubChem,
+LCI Excel, and PowerPoint export regressions. It automatically prefers the local
+`.venv` interpreter when present so the export dependencies are available.
+
+The individual commands are:
+
+```bash
 node --check upscaling_pipeline_tool/static/app.js
+node --check upscaling_pipeline_tool/static/examples.js
 node --check upscaling_pipeline_tool/static/flowsheet.js
 node --check upscaling_pipeline_tool/static/flowsheet_ui.js
 node --check upscaling_pipeline_tool/static/lca_bridge.js
+node --check upscaling_pipeline_tool/static/process_catalogs.js
 node --check upscaling_pipeline_tool/static/workflow_readiness.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js

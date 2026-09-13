@@ -62,15 +62,35 @@ For headless runs:
 python3 start.py --no-browser
 ```
 
+Optional editable install for development:
+
+```bash
+python3 -m pip install -e .
+process-upscaling-workbench --no-browser
+```
+
 ## Validation
 
 From the repository root:
 
 ```bash
+python3 scripts/validate.py
+```
+
+The validation runner checks every served JavaScript file, compiles the Python
+entry points, and runs the workflow, physical-plausibility, UI-wiring, PubChem,
+LCI Excel, and PowerPoint export regressions. It automatically prefers the local
+`.venv` interpreter when present so optional export dependencies are available.
+
+The individual commands are:
+
+```bash
 node --check upscaling_pipeline_tool/static/app.js
+node --check upscaling_pipeline_tool/static/examples.js
 node --check upscaling_pipeline_tool/static/flowsheet.js
 node --check upscaling_pipeline_tool/static/flowsheet_ui.js
 node --check upscaling_pipeline_tool/static/lca_bridge.js
+node --check upscaling_pipeline_tool/static/process_catalogs.js
 node --check upscaling_pipeline_tool/static/workflow_readiness.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js
@@ -93,10 +113,12 @@ app.py              HTTP server and HTML shell
 pptx_renderer.py    Editable PowerPoint flowsheet export
 xlsx_renderer.py    LCI workbook export
 static/app.js       Client-side tool logic
+static/examples.js  Built-in case-study examples and normalized protocol text
 static/export.js    JSON persistence and export logic
 static/flowsheet.js Built-in editable flowsheet model/SVG renderer
 static/heuristic_rules.js Auditable process-heuristic checklist data
 static/lca_bridge.js LCI/openLCA bridge model generation
+static/process_catalogs.js Phenomena, behaviour presets, and unit-operation catalog
 static/workflow_readiness.js Workflow progress and data-readiness metrics
 static/style.css    UI styling
 workshop.md       Workshop notes

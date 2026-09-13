@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "process-upscaling-workbench"
+version = "0.1.0"
+description = "Local browser workbench for phenomena-based chemical process upscaling."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Jacopo Sorani" }
+]
+dependencies = [
+  "openpyxl==3.1.5",
+  "python-pptx==1.0.2"
+]
+
+[project.scripts]
+process-upscaling-workbench = "start:main"
+
+[tool.setuptools]
+py-modules = ["start", "run_upscaling_tool"]
+packages = ["upscaling_pipeline_tool"]
+
+[tool.setuptools.package-data]
+upscaling_pipeline_tool = ["static/*", "*.md"]

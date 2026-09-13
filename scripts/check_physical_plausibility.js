@@ -16,6 +16,8 @@ const lcaBridgeSource = fs.readFileSync("upscaling_pipeline_tool/static/lca_brid
 const readinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
 const exportSource = fs.readFileSync("upscaling_pipeline_tool/static/export.js", "utf8");
 const persistenceSource = fs.readFileSync("upscaling_pipeline_tool/static/project_persistence.js", "utf8");
+const examplesSource = fs.readFileSync("upscaling_pipeline_tool/static/examples.js", "utf8");
+const catalogSource = fs.readFileSync("upscaling_pipeline_tool/static/process_catalogs.js", "utf8");
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 
 const marker = "$(\"behaviorSelect\").innerHTML";
@@ -189,4 +191,4 @@ if (autoSizing.ready) {
 console.log("Physical plausibility check passed.");
 `;
 
-eval(`${core}\n${lcaBridgeSource}\n${readinessSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);
+eval(`${examplesSource}\n${catalogSource}\n${core}\n${lcaBridgeSource}\n${readinessSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);

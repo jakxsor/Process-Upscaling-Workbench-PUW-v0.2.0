@@ -9,6 +9,8 @@ const lcaBridgeSource = fs.readFileSync("upscaling_pipeline_tool/static/lca_brid
 const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
 const exportSource = fs.readFileSync("upscaling_pipeline_tool/static/export.js", "utf8");
 const persistenceSource = fs.readFileSync("upscaling_pipeline_tool/static/project_persistence.js", "utf8");
+const examplesSource = fs.readFileSync("upscaling_pipeline_tool/static/examples.js", "utf8");
+const catalogSource = fs.readFileSync("upscaling_pipeline_tool/static/process_catalogs.js", "utf8");
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const appHtml = fs.readFileSync("upscaling_pipeline_tool/app.py", "utf8");
 
@@ -125,4 +127,4 @@ assert.strictEqual(state.groups.G1.timeOffsets["B1::reaction_time"], "0.5", "Pro
 console.log("Project persistence regression check passed.");
 `;
 
-eval(`${core}\n${lcaBridgeSource}\n${workflowReadinessSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);
+eval(`${examplesSource}\n${catalogSource}\n${core}\n${lcaBridgeSource}\n${workflowReadinessSource}\n${exportSource}\n${persistenceSource}\n${appSource}\n${setupSource}\n${testSource}`);

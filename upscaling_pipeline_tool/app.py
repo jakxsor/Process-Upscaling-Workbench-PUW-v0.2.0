@@ -67,6 +67,18 @@ def _read_static(filename):
         return f.read()
 
 
+def _decode_json_payload(raw_body):
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise ValueError("Request body must be valid UTF-8 JSON.") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Request body must be valid JSON: {exc.msg}.") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Request JSON must be an object.")
+    return payload
+
+
 APP_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -603,6 +615,8 @@ APP_HTML = r"""<!doctype html>
   <script src="/project_persistence.js"></script>
   <script src="/separation_core.js"></script>
   <script src="/heuristic_rules.js"></script>
+  <script src="/examples.js"></script>
+  <script src="/process_catalogs.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
@@ -618,6 +632,8 @@ STATIC_ROUTES = {
     "/project_persistence.js": ("project_persistence.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
     "/heuristic_rules.js": ("heuristic_rules.js", "application/javascript; charset=utf-8"),
+    "/examples.js": ("examples.js", "application/javascript; charset=utf-8"),
+    "/process_catalogs.js": ("process_catalogs.js", "application/javascript; charset=utf-8"),
     "/pubchem_core.js": ("pubchem_core.js", "application/javascript; charset=utf-8"),
     "/flowsheet.js": ("flowsheet.js", "application/javascript; charset=utf-8"),
     "/flowsheet_ui.js": ("flowsheet_ui.js", "application/javascript; charset=utf-8"),
@@ -628,6 +644,11 @@ STATIC_ROUTES = {
 
 
 class AppHandler(BaseHTTPRequestHandler):
+    def _send_no_cache_headers(self):
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+
     def _resolve(self):
         if self.path in ("/", "/index.html"):
             return APP_HTML.encode("utf-8"), "text/html; charset=utf-8"
@@ -644,6 +665,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._send_no_cache_headers()
         self.end_headers()
 
     def do_GET(self):
@@ -654,6 +676,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self._send_no_cache_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -670,7 +693,11 @@ class AppHandler(BaseHTTPRequestHandler):
             self._send_json(413, {"ok": False, "error": f"Request body must be between 1 and {MAX_REQUEST_BYTES} bytes."})
             return
         try:
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            try:
+                payload = _decode_json_payload(self.rfile.read(length))
+            except ValueError as exc:
+                self._send_json(400, {"ok": False, "error": str(exc)})
+                return
             if self.path == "/api/pubchem":
                 result = self._lookup_pubchem(payload)
             elif self.path == "/api/flowsheet-pptx":
@@ -706,6 +733,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self._send_no_cache_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -714,6 +742,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(len(body)))
+        self._send_no_cache_headers()
         self.end_headers()
         self.wfile.write(body)
 

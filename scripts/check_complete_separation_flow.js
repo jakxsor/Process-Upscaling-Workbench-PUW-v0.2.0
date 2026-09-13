@@ -7,6 +7,8 @@ const assert = require("assert");
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
 const heuristicRulesSource = fs.readFileSync("upscaling_pipeline_tool/static/heuristic_rules.js", "utf8");
 const workflowReadinessSource = fs.readFileSync("upscaling_pipeline_tool/static/workflow_readiness.js", "utf8");
+const examplesSource = fs.readFileSync("upscaling_pipeline_tool/static/examples.js", "utf8");
+const catalogSource = fs.readFileSync("upscaling_pipeline_tool/static/process_catalogs.js", "utf8");
 let source = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const cssSource = fs.readFileSync("upscaling_pipeline_tool/static/style.css", "utf8");
 assert(cssSource.includes(".stream-editor-grid {\n      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);"), "Stream editor should give Inputs and Outlets equal horizontal space");
@@ -865,4 +867,4 @@ assert(secondPathwayInputs.every(stream => stream.mw), "Pure-component MW values
 console.log("Complete separation flow check passed.");
 `;
 
-eval(`${core}\n${heuristicRulesSource}\n${workflowReadinessSource}\n${source}`);
+eval(`${examplesSource}\n${catalogSource}\n${core}\n${heuristicRulesSource}\n${workflowReadinessSource}\n${source}`);

@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from upscaling_pipeline_tool.app import MAX_REQUEST_BYTES, _compact_project_for_review
+from upscaling_pipeline_tool.app import MAX_REQUEST_BYTES, _compact_project_for_review, _decode_json_payload
 
 
 def main() -> None:
@@ -31,6 +31,16 @@ def main() -> None:
     assert prepared["_reviewPayload"]["scope"]
     assert prepared["_reviewPayload"]["textTruncated"] is True
     assert MAX_REQUEST_BYTES >= 10 * 1024 * 1024
+
+    assert _decode_json_payload(b'{"ok": true}') == {"ok": True}
+    for raw in (b"{not-json", b'["array"]', "é".encode("latin-1")):
+        try:
+            _decode_json_payload(raw)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Invalid payload was accepted: {raw!r}")
+
     print("Server payload regression check passed.")
 
 

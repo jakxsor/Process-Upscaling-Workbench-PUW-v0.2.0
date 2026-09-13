@@ -5,6 +5,8 @@ const fs = require("fs");
 const assert = require("assert");
 
 const core = fs.readFileSync("upscaling_pipeline_tool/static/separation_core.js", "utf8");
+const examplesSource = fs.readFileSync("upscaling_pipeline_tool/static/examples.js", "utf8");
+const catalogSource = fs.readFileSync("upscaling_pipeline_tool/static/process_catalogs.js", "utf8");
 let appSource = fs.readFileSync("upscaling_pipeline_tool/static/app.js", "utf8");
 const appHtml = fs.readFileSync("upscaling_pipeline_tool/app.py", "utf8");
 const flowsheetSource = fs.readFileSync("upscaling_pipeline_tool/static/flowsheet.js", "utf8");
@@ -57,6 +59,21 @@ var renderExport = () => {};
 
 const testSource = `
 loadBaseExampleProject();
+assert.deepStrictEqual(
+  groupIdsInTextOrder(),
+  ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"],
+  "Scale-up additions should sort after the source protocol groups, not before G1"
+);
+let baseModel = buildFlowsheetModel();
+const byGroup = Object.fromEntries(baseModel.groups.map(group => [group.id, group]));
+["G1", "G2", "G3", "G4", "G5", "G6"].forEach((id, index) => {
+  assert.strictEqual(byGroup[id].stage, index, id + " should stay on the main left-to-right process train");
+  assert.strictEqual(byGroup[id].stageRow, 0, id + " should stay on the main flowsheet row");
+});
+["G7", "G8", "G9"].forEach(id => {
+  assert(byGroup[id].stageRow > 0, id + " should render in a service lane below the main process row");
+  assert(byGroup[id].x >= byGroup.G2.x, id + " should not be shoved to the feed side of the flowsheet");
+});
 state.links = [];
 state.flowsheetShowAuxiliaryArrows = false;
 state.flowsheetShowUnitDetails = false;
@@ -94,4 +111,4 @@ assert(pptxModel.width > 0 && pptxModel.height > 0, "PowerPoint export should in
 console.log("Flowsheet view regression check passed.");
 `;
 
-eval(`${core}\n${appSource}\n${flowsheetSource}\n${flowsheetUiSource}\n${setupSource}\n${testSource}`);
+eval(`${examplesSource}\n${catalogSource}\n${core}\n${appSource}\n${flowsheetSource}\n${flowsheetUiSource}\n${setupSource}\n${testSource}`);
