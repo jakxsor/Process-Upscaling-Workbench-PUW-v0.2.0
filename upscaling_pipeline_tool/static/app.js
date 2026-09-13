@@ -15812,7 +15812,7 @@
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
     });
-    $("toggleLcaReadiness").addEventListener("click", () => {
+    $("toggleLcaReadiness")?.addEventListener("click", () => {
       state.showLcaReadiness = !state.showLcaReadiness;
       renderDataReadiness();
     });
