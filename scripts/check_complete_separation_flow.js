@@ -108,7 +108,14 @@ const oneCubicMeter = groupScaledLoadVolumeM3(
 assert(Math.abs(oneCubicMeter.value - 1) < 0.0001, "Group volumetric load should convert mass through group density");
 
 assert(postReactionSeparationSupportApplies(g2), "G2 should expose post-reaction separation support");
-assert(!postReactionSeparationSupportApplies(g3), "G3 cooling-only group should not expose post-reaction separation support");
+// Separation tasks with no reaction of their own screen the mixture that enters them; a task
+// without a separation phenomenon (feed preparation) still gets nothing.
+["G3", "G5", "G6"].forEach(id => assert(postReactionSeparationSupportApplies(groupModel(id)), id + " separation task should expose the separation screening without a reaction"));
+assert(!postReactionSeparationSupportApplies(groupModel("G1")), "G1 feed preparation has no separation phenomenon and should not expose the screening");
+const g3Mixture = inferredSeparationSubstances(g3);
+assert(g3Mixture.length >= 2, "G3 should gather a mixture from its own streams and the upstream outlets");
+assert(g3Mixture.some(item => item.name === "octocrylene" && item.role === "product"), "In a separation-only task the scale-up target product takes the product role");
+assert(!g3Mixture.some(item => item.role === "reactant"), "A separation-only task has no reactants");
 
 const g2Root = fakeElement();
 renderGroupAggregateStepInspector(g2Root, g2);
@@ -184,7 +191,7 @@ assert(g2Root.innerHTML.includes('data-property-field="value"'), "G2 property ed
 const g3Root = fakeElement();
 renderGroupAggregateStepInspector(g3Root, g3);
 assert(!g3Root.innerHTML.includes("Post-Reaction Separation Support"), "G3 drawer should not render separation support");
-assert(!g3Root.innerHTML.includes("Lutze/Garg Separation Screening"), "G3 drawer should not offer the Lutze/Garg separation screening module");
+assert(g3Root.innerHTML.includes("Lutze/Garg Separation Screening"), "G3 separation task should offer the screening without a reaction of its own");
 
 const simulator = ensureGroup("G2").separationSimulator;
 const propertySet = {

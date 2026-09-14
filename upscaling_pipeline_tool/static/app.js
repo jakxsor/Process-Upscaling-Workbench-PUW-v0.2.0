@@ -10204,13 +10204,21 @@
     }
 
     function separationProcessTrackHtml(groupId, simulator, model, pathway) {
-      const reactionReady = Number.isFinite(pathway?.balance?.conversion) && Boolean(pathway?.mainProduct);
+      // A separation task with no reaction of its own starts from the mixture that enters it:
+      // step 1 says so instead of asking for reaction data that does not exist.
+      const separationOnly = !groupHasReaction(groupModel(groupId) || ensureGroup(groupId));
+      const reactionReady = separationOnly
+        ? model.substances.length >= 2
+        : Number.isFinite(pathway?.balance?.conversion) && Boolean(pathway?.mainProduct);
       const mixtureReady = model.substances.length >= 2 && model.substances.every(item => item.fate !== "unknown");
       const applied = Boolean(simulator.pathway.appliedAt);
       const marker = ready => ready ? "&#10003;" : "";
+      const firstStep = separationOnly
+        ? `<span class="${reactionReady ? "complete" : "pending"}" title="No reaction in this task: the screening starts from the inlet mixture"><em>1</em><strong>Feed mixture</strong><small>${reactionReady ? "from upstream" : "needs streams"}</small></span>`
+        : `<span class="${reactionReady ? "complete" : "pending"}"><em>1</em><strong>Reaction</strong><small>${marker(reactionReady) || "needs data"}</small></span>`;
       return `
         <nav class="sep-process-track" aria-label="Reaction to scale-up workflow">
-          <span class="${reactionReady ? "complete" : "pending"}"><em>1</em><strong>Reaction</strong><small>${marker(reactionReady) || "needs data"}</small></span>
+          ${firstStep}
           <button class="${simulator.tab === "substances" ? "active" : ""} ${mixtureReady ? "complete" : "pending"}" data-sep-sim-tab="substances"><em>2</em><strong>Mixture</strong><small>${marker(mixtureReady) || "needs data"}</small></button>
           <button class="${simulator.tab === "pathway" ? "active" : ""} ${pathway?.complete ? "complete" : "pending"}" data-sep-sim-tab="pathway"><em>3</em><strong>Pathway</strong><small>${marker(pathway?.complete) || "draft"}</small></button>
           <button class="${applied ? "complete" : "pending"}" data-open-scale-from-separation="${escapeAttr(groupId)}" ${applied ? "" : "disabled"}><em>4</em><strong>Scale-up</strong><small>${applied ? "ready" : "apply first"}</small></button>
@@ -10305,16 +10313,27 @@
       // Judged by these words instead of by a fixed list of the octocrylene case's stream names.
       const ignored = /\b(mixture|phase|layer|feed|effluent|waste|bottoms|heavies|solution|dispersion|crude|spent|filtrate|slurry|solvent|voc|content|residue)\b|-rich\b|^(crude |purified |final )?product$/i;
       const candidates = [];
+      const roleOptions = { separationOnly: !groupHasReaction(group), targetProduct: state.scaleBasis?.targetProduct || "" };
+      const groupKey = String(group.id || "").trim().toUpperCase();
       substanceSourceBlocksForGroup(group).forEach(block => {
         ensureBlockFlowFields(block);
+        const upstream = block.groupId !== group.id;
         (block.streams || []).forEach(stream => {
+          // For a separation task the feed is what the upstream units send out, not what was
+          // charged into them: only upstream outlets count, and only those routed here when a
+          // destination is declared. A reaction task keeps the whole reactor content as before.
+          if (roleOptions.separationOnly && upstream) {
+            if (stream.role !== "output") return;
+            const destination = String(stream.destinationGroup || "").trim().toUpperCase();
+            if (destination && destination !== groupKey) return;
+          }
           const name = cleanSubstanceName(stream.name);
           if (!name || ignored.test(name)) return;
           const residualOf = cleanSubstanceName(stream.residualOf);
           const residual = Boolean(residualOf) || isUnreactedOrResidualName(stream.name);
           candidates.push({
             name,
-            role: inferSubstanceRole(stream),
+            role: inferSubstanceRole(stream, roleOptions),
             phase: stream.phase || "unknown",
             fate: inferSubstanceFate(stream),
             quantity: String(stream.quantity || ""),
@@ -10515,15 +10534,32 @@
       return stripSubstanceQualifiers(value);
     }
 
-    function inferSubstanceRole(stream) {
+    function inferSubstanceRole(stream, options = {}) {
       const explicitRole = String(stream?.substanceRole || "").trim().toLowerCase();
       if (["product", "solvent", "reactant", "byproduct", "catalyst", "auxiliary", "impurity", "coproduct"].includes(explicitRole)) {
-        return explicitRole;
+        // A declared reactant that reaches a separation task is a leftover to remove.
+        return options.separationOnly && explicitRole === "reactant" ? "impurity" : explicitRole;
       }
       const reactionRole = streamReactionRole(stream);
       if (reactionRole === "solvent") return "solvent";
       if (reactionRole === "catalyst") return "catalyst";
       if (["auxiliary", "inert"].includes(reactionRole)) return "auxiliary";
+      if (options.separationOnly) {
+        if (reactionRole === "reactant") return "impurity";
+        // No reaction in this task, so nothing is a reactant: the product is what the scale-up
+        // target names (or what leaves with fate "product"), residuals and anything leaving as
+        // waste or vent are impurities to remove, fresh charges are separating agents.
+        const name = String(stream.name || "").trim().toLowerCase();
+        const target = String(options.targetProduct || "").trim().toLowerCase();
+        if (target && name && (name === target || name.includes(target))) return "product";
+        if (stream.fate === "product") return "product";
+        if (["recovered solvent", "recycled input"].includes(stream.fate)) return "solvent";
+        if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "impurity";
+        if (["wastewater", "solid waste", "purge", "loss", "vent", "unreacted reagent"].includes(stream.fate) || stream.role === "waste") return "impurity";
+        if (/solvent/.test(`${stream.name || ""} ${stream.note || ""}`.toLowerCase())) return "solvent";
+        if (stream.fate === "fresh input") return "auxiliary";
+        return "unknown";
+      }
       if (reactionRole === "reactant" && stream.role === "input") return "reactant";
       if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
@@ -12408,17 +12444,31 @@
       return matchesForGroup(group).some(candidate => candidate.task === "separation" || candidate.task.includes("separation"));
     }
 
+    function groupHasReaction(group) {
+      const phen = new Set(group?.phenomena || []);
+      const groupText = [
+        group?.task,
+        ...(group?.blocks || []).map(block => `${block.task || ""} ${block.text || ""}`)
+      ].join(" ").toLowerCase();
+      return [...phen].some(code => code.startsWith("R(")) || /react|reaction|synth|condensation|reactor/.test(groupText);
+    }
+
+    // A reaction task screens its post-reaction mixture. A separation task with no reaction of
+    // its own (extraction, drying, evaporation, recovery column) screens the mixture that enters
+    // it: the binary screening works per pair of substances and needs no balance. Its gate is a
+    // separation phenomenon plus at least two substances, own streams and upstream outlets
+    // included; a cooling-only or feed-preparation task still gets nothing.
     function postReactionSeparationSupportApplies(group, model = separationSimulatorModel(group)) {
       const phen = new Set(group.phenomena || []);
-      const groupText = [
-        group.task,
-        ...(group.blocks || []).map(block => `${block.task || ""} ${block.text || ""}`)
-      ].join(" ").toLowerCase();
-      const hasReaction = [...phen].some(code => code.startsWith("R(")) || /react|reaction|synth|condensation|reactor/.test(groupText);
-      const hasSeparationEvidence = [...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("));
-      const hasChemicalMixture = model.substances.length >= 2;
+      const hasReaction = groupHasReaction(group);
+      const unitWording = `${group.task || ""} ${group.selectedUnit || ""}`.toLowerCase();
+      const hasSeparationEvidence = [...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("))
+        || /distill|evaporat|\bdry|extraction|decanter|filtration|crystalliz|absorption|membrane|strip|flash|column|separation/.test(unitWording);
+      const mixtureSize = Math.max(model.substances.length, inferredSeparationSubstances(group).length);
+      const hasChemicalMixture = mixtureSize >= 2;
       const hasReactionFates = model.substances.some(item => ["product", "byproduct", "impurity"].includes(item.role));
-      return hasReaction && (hasSeparationEvidence || hasChemicalMixture || hasReactionFates);
+      if (hasReaction) return hasSeparationEvidence || hasChemicalMixture || hasReactionFates;
+      return hasSeparationEvidence && hasChemicalMixture;
     }
 
     function propertySeparationPredictorModel(group) {
