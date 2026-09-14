@@ -2185,9 +2185,8 @@
       if (candidate.sameTask) fit.push("it matches the assigned task");
       if (candidate.overlap?.length) fit.push(`it covers ${candidate.overlap.join(", ")}`);
       const basis = fit.length ? fit.join(" and ") : "it is a related heuristic option";
-      const feed = candidate.feedPhases?.length ? ` Typical feed phase: ${candidate.feedPhases.join(", ")}.` : "";
-      const outlet = candidate.outlet ? ` Key outlet phase: ${candidate.outlet}.` : "";
-      return `${candidate.rationale}${feed}${outlet} Use this when ${basis}.`;
+      const feed = candidate.feedPhases?.length ? ` Feed: ${candidate.feedPhases.join(", ")}.` : "";
+      return `${candidate.rationale}${feed} Fits because ${basis}.`;
     }
 
     function groupUnitSuggestionReadiness(group) {
@@ -2228,7 +2227,7 @@
     function unitOperationGateTooltip(readiness, group = null) {
       if (readiness?.ready) {
         const action = group?.selectedUnit ? "switch" : "assign";
-        return `Ready to ${action}: the task has a task definition, material streams, phase labels, and at least one condition. Suggestions are ranked from task class, MFA/phase transition, conditions, and Lutze review when available.`;
+        return `Ready to ${action}. Ranked by task class, phase transition, conditions and Lutze evidence.`;
       }
       const missing = readiness?.missing?.length ? readiness.missing.join(", ") : "task data";
       const details = [];
@@ -2239,7 +2238,7 @@
         details.push(phaseDetail);
       }
       if (!readiness?.conditionsReady) details.push("add at least one operating condition such as temperature, pressure, time, pH, mixing, or phase-change evidence");
-      return `Unit-operation assignment is locked because ${missing} are incomplete. ${details.length ? `To unlock it: ${details.join("; ")}.` : "Complete the task-level data first."} This prevents choosing equipment before the material/phase/condition basis is auditable.`;
+      return `Locked: ${missing} incomplete. ${details.length ? `To unlock: ${details.join("; ")}.` : "Complete the task-level data first."}`;
     }
 
     function groupUnitSuggestionGateHtml(group, options = {}) {
@@ -6701,7 +6700,7 @@
       return `
         <div class="gantt-toolbar">
           <div><strong>Schedule status</strong><span title="${escapeAttr(gapText)}">${escapeHtml(statusText)}</span></div>
-          ${gantt.missingDurationCount ? `<button data-load-schedule-example="octocrylene" class="mini-button" title="Overwrites every group's duration/capacity/notes with generic keyword-matched example values. Asks for confirmation first; can be undone.">Fill Example Durations</button>` : ""}
+          ${gantt.missingDurationCount ? `<button data-load-schedule-example="octocrylene" class="mini-button" title="Fill every task with generic example durations; asks first, can be undone">Fill Example Durations</button>` : ""}
         </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
@@ -6906,8 +6905,8 @@
                 <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
                 <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
                 <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
-                <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
-                <label><span>Starts after</span><select data-schedule-field="dependencyMode" data-schedule-group="${escapeAttr(task.groupId)}" title="Auto: this task follows the previous one in text order (legacy behavior). Manual: pick exactly which task(s) this one must wait on below.">${dependencyModeOptionHtml(task.dependencyMode)}</select></label>
+                <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale; kinetics-bound is never divided by parallel units">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
+                <label><span>Starts after</span><select data-schedule-field="dependencyMode" data-schedule-group="${escapeAttr(task.groupId)}" title="Auto follows the previous task in text order; Manual picks the tasks to wait for">${dependencyModeOptionHtml(task.dependencyMode)}</select></label>
               </div>
               ${dependencyPickerHtml(task, allTasks)}
               <div class="gantt-scale-note">
@@ -8136,7 +8135,7 @@
             Open Lutze/Garg Separation Screening
           </button>
           <button class="lutze-launch-button tip" data-open-separation-simulator="${escapeAttr(group.id)}"
-            data-tip="Optional KB3.1 sandbox on the same group: reaction balance, substance list, binary screening, workup plan, pathway sandbox and suggestions. The Lutze/Garg button opens the evidence-based pathway screening only.">
+            data-tip="Wider KB3.1 sandbox: balance, substances, binary screening, workup and pathway">
             Open Separation Simulator
           </button>
         </div>
@@ -9322,7 +9321,7 @@
             <span>Mass closure</span>
             <strong>${escapeHtml(closureText)}</strong>
           </div>
-          <div class="conversion-analysis-note" title="Only inputs classified as Reagent/reactant are consumed; solvents, catalysts, auxiliaries, and inerts pass through for downstream handling.">
+          <div class="conversion-analysis-note" title="Only reagents are consumed; solvents, catalysts, auxiliaries and inerts pass through">
             ${calc.reactantRows.length} reactive input${calc.reactantRows.length === 1 ? "" : "s"} / ${calc.nonReactiveRows.length} non-reactive
           </div>
         </div>
@@ -9443,7 +9442,7 @@
                   ${streamDataStatusBadgeHtml(row.stream.status, "Status of this input amount/property evidence.")}
                 </strong>
                 <div class="conversion-reagent-cell" data-field-label="Reaction role">
-                  <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagent/reactant enters the reaction stoichiometry. Solvents, catalysts, auxiliaries, and inerts are tracked but not consumed by conversion.">
+                  <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagents enter the stoichiometry; the rest is tracked, not consumed">
                     ${streamReactionRoleOptions(row.reactionRole || streamReactionRole(row.stream))}
                   </select>
                 </div>
@@ -9734,7 +9733,7 @@
               ${detail.byproducts.map((bp, i) => `
                 <div class="conversion-byproduct-row">
                   <span class="conversion-byproduct-swatch" style="background:${byproductColor(i)}"></span>
-                  <input class="conversion-outlet-name" type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name" title="Name a real byproduct, co-product, or named residual outlet. Leave blank if no such stream exists.">
+                  <input class="conversion-outlet-name" type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name" title="Name a real byproduct or residual outlet, or leave blank">
                   <select class="conversion-outlet-role" data-conversion-byproduct-role="${i}" title="Choose whether this outlet is a formed byproduct, useful co-product, or residual purge/recovery stream.">
                     ${optionHtml(bp.basis === "generated by stoichiometry" ? ["byproduct", "coproduct"] : ["byproduct", "coproduct", "residual"], bp.role)}
                   </select>
@@ -9761,7 +9760,7 @@
                 <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}</span>
               </div>
             </div>
-            <button type="button" class="mini-button" id="addConversionByproduct" title="Add a named byproduct, co-product, or residual outlet only when it is known or intentionally modeled.">+ Add named outlet</button>
+            <button type="button" class="mini-button" id="addConversionByproduct" title="Add a byproduct or residual outlet only when it is known or modelled">+ Add named outlet</button>
           </div>
 
           <div class="conversion-section conversion-preview-section">
@@ -11819,10 +11818,10 @@
           <span class="muted small">${escapeHtml(profileNotes[alternative.profile] || "Evidence-based pathway draft.")}</span>
           <div class="pathway-alternative-sequence">${sequence.map((step, stepIndex) => `<span><em>${stepIndex + 1}</em><span><strong>${escapeHtml(step.unit)}</strong><small>${step.separated ? `Remove ${escapeHtml(step.separated)}` : "Separation target to verify"}</small></span></span>`).join("")}</div>
           <div class="pathway-metric-grid">
-            <span title="Route-ready means that the KB threshold and the minimum phase/evidence gate passed. It is still not final equipment validation."><strong>${m.routeReadySteps}/${m.stepCount} route-ready</strong>${m.partialSteps ? ` · ${m.partialSteps} threshold-only review` : ""}</span>
+            <span title="Route-ready: threshold and phase/evidence gate passed; not equipment validation"><strong>${m.routeReadySteps}/${m.stepCount} route-ready</strong>${m.partialSteps ? ` · ${m.partialSteps} threshold-only review` : ""}</span>
             <span title="Property, phase, or equilibrium inputs explicitly missing from the selected route rules."><strong>${m.missingChecks}</strong> missing property inputs</span>
             <span title="Steps requiring an added mass-separating agent such as a solvent or entrainer."><strong>${m.addedAgentSteps}</strong> MSA steps</span>
-            <span title="The second value only counts operation names associated with thermal separation. It does not calculate operating temperature or degradation risk."><strong>${m.thermalOperationSteps}</strong> thermal operations / ${m.thermalExposureProxySteps} exposure proxy</span>
+            <span title="Counts thermal-separation operation names only; no temperature or degradation calculation"><strong>${m.thermalOperationSteps}</strong> thermal operations / ${m.thermalExposureProxySteps} exposure proxy</span>
           </div>
           ${alternative.outcome.unresolved.length ? `<div class="muted small">Unresolved: ${escapeHtml(alternative.outcome.unresolved.slice(0, 3).join("; "))}</div>` : ""}
           <button class="primary-mini" data-pathway-use-alternative="${escapeAttr(alternative.id)}" data-sep-group="${escapeAttr(groupId)}">Use as editable draft</button>
@@ -13830,13 +13829,13 @@
           ${["recycled input", "recovered solvent"].includes(stream.fate) ? `
             <label class="stream-field">
               <span class="stream-field-label">Recovery %</span>
-              <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="e.g. 98" inputmode="decimal" title="Fraction of this stream actually recovered/recycled - used by the Recycle / fate summary (Scale-Up tab) to compute recovered vs. lost mass.">
+              <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="e.g. 98" inputmode="decimal" title="Fraction recovered or recycled; feeds the recycle and fate summary">
             </label>
           ` : ""}
           ${stream.fate === "purge" ? `
             <label class="stream-field">
               <span class="stream-field-label">Purge %</span>
-              <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="e.g. 5" inputmode="decimal" title="Fraction of the loop purged here - used by the Recycle / fate summary (Scale-Up tab) to compute purge mass.">
+              <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="e.g. 5" inputmode="decimal" title="Fraction of the loop purged here; feeds the recycle and fate summary">
             </label>
           ` : ""}
           <label class="stream-field">
@@ -15991,6 +15990,41 @@
     });
     $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
     $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    // "?" buttons: the long explanations for an area, readable in a modal instead of hover.
+    function openHelpModal(topicKey) {
+      const registry = globalThis.ProcessUpscalingHelp || {};
+      const keys = topicKey === "inspector" ? ["phenomena", "mfa", "heuristics", "scale"] : [topicKey];
+      const sections = keys.map(key => registry[key]).filter(Boolean);
+      const body = $("helpModalBody");
+      const title = $("helpModalTitle");
+      if (!body) return;
+      if (title) title.textContent = sections.length === 1 ? sections[0].title : "Help";
+      body.innerHTML = sections.length ? sections.map(section => `
+        <section class="help-section">
+          ${sections.length > 1 ? `<h3>${escapeHtml(section.title)}</h3>` : ""}
+          ${section.items.map(item => `
+            <article class="help-topic">
+              <strong>${escapeHtml(item.title)}</strong>
+              <p>${escapeHtml(item.body)}</p>
+            </article>
+          `).join("")}
+        </section>
+      `).join("") : `<div class="mfa-empty">No help text for this area yet.</div>`;
+      $("helpModal").hidden = false;
+    }
+    function closeHelpModal() {
+      const modal = $("helpModal");
+      if (modal) modal.hidden = true;
+    }
+    document.querySelectorAll("[data-help-topic]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openHelpModal(button.dataset.helpTopic);
+      });
+    });
+    $("closeHelpModal")?.addEventListener("click", closeHelpModal);
+    $("helpModal")?.addEventListener("click", event => { if (event.target === $("helpModal")) closeHelpModal(); });
     $("flowsheetBasisSelect")?.addEventListener("change", event => {
       state.flowsheetBasis = event.target.value;
       renderFlowsheetModal();

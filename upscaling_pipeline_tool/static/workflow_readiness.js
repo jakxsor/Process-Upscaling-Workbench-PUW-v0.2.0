@@ -240,7 +240,7 @@
         const info = statuses[step.id] || { status: "todo", hint: "" };
         const where = whereLabel[step.home?.region] || whereLabel.inspector;
         return `
-          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}. ${step.paperName} - happens in the ${where}. ${info.hint}`)}">
+          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}: ${step.paperName}. ${info.hint}`)}">
             <span class="workflow-step-marker">${info.status === "done" ? "✓" : step.id}</span>
             <span class="workflow-step-name">${escapeHtml(step.name)}</span>
           </button>

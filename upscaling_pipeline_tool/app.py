@@ -154,7 +154,7 @@ APP_HTML = r"""<!doctype html>
         <button id="toggleProtocolPanel" class="eye-button" title="Show/hide protocol panel">&#8249;</button>
         <div class="source-panel-head-body">
           <div>
-            <h2>Protocol</h2>
+            <h2>Protocol <button class="help-button" data-help-topic="protocol" title="Help for this panel" aria-label="Help for the protocol panel">?</button></h2>
             <span class="step-flag" data-step-flag="1"><span class="step-flag-num">1</span><span class="step-flag-label">Block Creation</span><span class="step-flag-note"></span></span>
             <span class="muted small">Select a passage to create a process block.</span>
           </div>
@@ -180,8 +180,9 @@ APP_HTML = r"""<!doctype html>
           <h2>Blocks, Tasks & Network</h2>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
+          <button class="help-button" data-help-topic="board" title="Help for the board" aria-label="Help for the board">?</button>
           <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
-          <button id="autoLayout" title="Rearrange task groups left-to-right following the declared process links (same order as Flowsheet View), without changing block/group content">Layout</button>
+          <button id="autoLayout" title="Arrange groups left to right along the declared links; content is unchanged">Layout</button>
           <div class="header-dropdown">
             <button id="connectionsToggle" aria-haspopup="true" aria-expanded="false" title="Auto-connect groups, or review/remove individual arrows">Connections ▾</button>
             <div id="connectionsMenu" class="header-dropdown-menu connections-dropdown-menu" hidden role="menu">
@@ -206,7 +207,7 @@ APP_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="panel-body">
-        <span class="step-flag board-step-flag tip" data-step-flag="3" data-tip="This board is where step 3 happens: the unit-operation proposals appear on each group box, under its Assign Unit Operation button. First shift-click draft blocks below and right-click -> Combine Selected to form a task group, then drag between group handles to connect them. Proposals unlock once MFA streams, phases, and conditions are complete; Lutze review can refine the choice afterward.">
+        <span class="step-flag board-step-flag tip" data-step-flag="3" data-tip="Step 3: group blocks, then assign a unit operation on each group box">
           <span class="step-flag-num">3</span><span class="step-flag-label">Unit Ops &amp; Task Assignment</span><span class="step-flag-note"></span>
         </span>
         <div id="groupFlow" class="group-flow"></div>
@@ -220,8 +221,9 @@ APP_HTML = r"""<!doctype html>
     <section class="panel" id="inspectorPanel">
       <div class="panel-head">
         <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">&#8250;</button>
+        <button class="help-button" data-help-topic="inspector" title="Help for this panel" aria-label="Help for the right-hand panel">?</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: the selected block's description and phenomena. Steps 3 (unit operations) and 4 (network and MFA) are done on the board in the middle, not here."><span class="panel-tab-step">1-2</span><span class="panel-tab-label">Phenomena/Group</span></button>
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: description and phenomena of the selected block"><span class="panel-tab-step">1-2</span><span class="panel-tab-label">Phenomena/Group</span></button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-step">5</span><span class="panel-tab-label">Heuristics</span></button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-step">6</span><span class="panel-tab-label">Scale-Up</span></button>
         </div>
@@ -240,7 +242,7 @@ APP_HTML = r"""<!doctype html>
               </label>
               <span class="step-flag" data-step-flag="2"><span class="step-flag-num">2</span><span class="step-flag-label">Phenomena Assignment</span><span class="step-flag-note"></span></span>
               <label>
-                <div class="label tip" data-tip="Pick a preset to auto-assign its whole group of phenomena to this block, or leave it on unassigned and add/remove individual phenomena manually in the grid below.">Phenomena Presets</div>
+                <div class="label tip" data-tip="A preset assigns a whole set of phenomena; unassigned lets you pick them one by one below">Phenomena Presets</div>
                 <select id="behaviorSelect" class="behavior-select"></select>
               </label>
               <div id="behaviorPresetHelp" class="behavior-preset-help muted small"></div>
@@ -341,17 +343,17 @@ APP_HTML = r"""<!doctype html>
     <button id="ctxRemoveBlockLinks">Remove Arrows For This Block</button>
 
     <div class="label" style="margin-top:10px">Task Grouping (Step 3) — keeps blocks separate</div>
-    <button id="ctxCombine" class="primary" title="Group the selected blocks under one new task (Gx). Blocks stay separate and keep their own text/streams/conditions; the group just bundles them for a shared unit operation.">Group Into New Task</button>
+    <button id="ctxCombine" class="primary" title="Bundle the selected blocks under one new task; the blocks themselves are unchanged">Group Into New Task</button>
     <button id="ctxNewGroup" title="Put only this block into its own new task group, on its own.">Put This Block In Its Own Task</button>
     <select id="ctxGroupSelect"></select>
-    <button id="ctxAssignGroup" title="Add the selected block(s) to the task group chosen above, instead of creating a new one.">Assign To Selected Task Above</button>
-    <button id="ctxRemoveFromGroup" title="Take this block out of its task group. It becomes an ungrouped draft block again; nothing about the block itself changes.">Remove From Task Group</button>
+    <button id="ctxAssignGroup" title="Add the selected blocks to the task group chosen above">Assign To Selected Task Above</button>
+    <button id="ctxRemoveFromGroup" title="Return this block to the draft state; the block itself is unchanged">Remove From Task Group</button>
 
     <div class="label" style="margin-top:10px">Scale-Up</div>
     <button id="ctxSplitBlockGroup" title="Split the task group that contains this block into parallel units">Split This Task Group</button>
 
     <div class="label" style="margin-top:10px">Block Editing (Step 1) — changes the blocks themselves</div>
-    <button id="ctxMergeBlocks" title="Fuse the selected adjacent blocks into a single block: their text is concatenated and their streams/phenomena/conditions are combined into one. The block count goes down — this cannot be split back automatically.">Merge Into One Block</button>
+    <button id="ctxMergeBlocks" title="Fuse adjacent blocks into one; cannot be split back automatically">Merge Into One Block</button>
     <button id="ctxDeleteBlock" class="danger-button">Delete Block</button>
   </div>
 
@@ -361,7 +363,7 @@ APP_HTML = r"""<!doctype html>
     <button id="ctxRemoveLinks">Remove Arrows For This Group</button>
     <button id="ctxAddManualBlockToGroup">Add Empty Block To This Task</button>
     <div class="label" style="margin-top:10px">Scale-Up</div>
-    <button id="ctxSplitGroup" title="Split this group into N parallel units, each handling 1/N of its material flow while keeping declared durations until resized estimates are entered">Split Into Parallel Units</button>
+    <button id="ctxSplitGroup" title="Split into N parallel units, each with 1/N of the material flow">Split Into Parallel Units</button>
   </div>
 
   <div id="streamMenu" class="context-menu" hidden>
@@ -457,6 +459,21 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
+  <div id="helpModal" class="modal-backdrop" hidden>
+    <section class="modal-panel help-panel" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+      <div class="modal-head">
+        <div>
+          <div class="label">Help</div>
+          <h2 id="helpModalTitle">Help</h2>
+        </div>
+        <button id="closeHelpModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="helpModalBody" class="help-body"></div>
+      </div>
+    </section>
+  </div>
+
   <div id="flowsheetModal" class="modal-backdrop" hidden>
     <section class="modal-panel flowsheet-panel" role="dialog" aria-modal="true" aria-labelledby="flowsheetTitle">
       <div class="modal-head">
@@ -465,6 +482,7 @@ APP_HTML = r"""<!doctype html>
           <h2 id="flowsheetTitle">Flowsheet View</h2>
         </div>
         <div class="row flowsheet-toolbar">
+          <button class="help-button" data-help-topic="flowsheet" title="Help for the flowsheet" aria-label="Help for the flowsheet">?</button>
           <button id="downloadFlowsheetPptx" class="mini-button primary" title="Download an editable PowerPoint slide made from native shapes, lines, and text boxes">Export PowerPoint</button>
           <div class="header-dropdown flowsheet-options-dropdown">
             <button id="flowsheetOptionsToggle" class="mini-button" aria-haspopup="true" aria-expanded="false" title="Show secondary flowsheet view and export actions">Options ▾</button>
@@ -483,7 +501,7 @@ APP_HTML = r"""<!doctype html>
           <span>View</span>
           <button id="flowsheetCleanPreset" class="mini-button" title="Clean presentation view: main units and process arrows only">Clean</button>
           <button id="flowsheetAuditPreset" class="mini-button primary" title="Audit view: labels, recycle/waste/vent arrows, and unit details">Audit</button>
-          <label class="flowsheet-basis-control" title="Quantities on the drawing: the declared lab batch, the scaled industrial batch from the scale-up model, or per kg of product">
+          <label class="flowsheet-basis-control" title="Quantities shown: lab batch, scaled batch, or per kg product">
             <span>Basis</span>
             <select id="flowsheetBasisSelect">
               <option value="lab">Lab batch</option>
@@ -510,6 +528,7 @@ APP_HTML = r"""<!doctype html>
           <div class="label">User-guided reaction definition</div>
           <h2 id="conversionModalTitle">Reaction Balance</h2>
         </div>
+        <button class="help-button" data-help-topic="reaction" title="Help for the reaction balance" aria-label="Help for the reaction balance">?</button>
         <button id="closeConversionModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="conversionModalBody" class="modal-body"></div>
@@ -523,6 +542,7 @@ APP_HTML = r"""<!doctype html>
           <div class="label">Integrated production schedule</div>
           <h2 id="ganttModalTitle">Schedule &amp; Gantt</h2>
         </div>
+        <button class="help-button" data-help-topic="scale" title="Help for the schedule" aria-label="Help for the schedule">?</button>
         <button id="closeGanttModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="ganttModalBody" class="modal-body"></div>
@@ -549,6 +569,7 @@ APP_HTML = r"""<!doctype html>
           <div id="separationSimulatorEyebrow" class="label">Optional KB3.1 sandbox</div>
           <h2 id="separationSimulatorTitle">Separation Simulator</h2>
         </div>
+        <button class="help-button" data-help-topic="lutze" title="Help for the separation screening" aria-label="Help for the separation screening">?</button>
         <button id="closeSeparationSimulator" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div id="separationSimulatorBody" class="modal-body"></div>
@@ -562,6 +583,7 @@ APP_HTML = r"""<!doctype html>
           <div class="label">Heuristic Rule Application</div>
           <h2 id="aiRefineTitle">Heuristic Rule Check</h2>
         </div>
+        <button class="help-button" data-help-topic="heuristics" title="Help for the rule check" aria-label="Help for the rule check">?</button>
         <button id="closeAiRefineModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
@@ -651,6 +673,7 @@ APP_HTML = r"""<!doctype html>
   <script src="/project_persistence.js"></script>
   <script src="/separation_core.js"></script>
   <script src="/heuristic_rules.js"></script>
+  <script src="/help_topics.js"></script>
   <script src="/examples.js"></script>
   <script src="/process_catalogs.js"></script>
   <script src="/app.js"></script>
@@ -668,6 +691,7 @@ STATIC_ROUTES = {
     "/project_persistence.js": ("project_persistence.js", "application/javascript; charset=utf-8"),
     "/separation_core.js": ("separation_core.js", "application/javascript; charset=utf-8"),
     "/heuristic_rules.js": ("heuristic_rules.js", "application/javascript; charset=utf-8"),
+    "/help_topics.js": ("help_topics.js", "application/javascript; charset=utf-8"),
     "/examples.js": ("examples.js", "application/javascript; charset=utf-8"),
     "/process_catalogs.js": ("process_catalogs.js", "application/javascript; charset=utf-8"),
     "/pubchem_core.js": ("pubchem_core.js", "application/javascript; charset=utf-8"),

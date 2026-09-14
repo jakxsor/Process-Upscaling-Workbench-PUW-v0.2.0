@@ -8076,3 +8076,63 @@
     .confirm-modal-prompt-row input {
       width: 100%;
     }
+
+    /* "?" help buttons and the help modal: explanations moved out of hover tooltips. */
+    .help-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      min-height: 20px;
+      padding: 0;
+      margin-left: 6px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      vertical-align: middle;
+      cursor: pointer;
+    }
+
+    .help-button:hover,
+    .help-button:focus-visible {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    h2 .help-button { font-weight: 700; }
+
+    .help-panel {
+      width: min(720px, calc(100vw - 28px));
+      max-height: min(820px, calc(100vh - 28px));
+    }
+
+    .help-body {
+      display: grid;
+      gap: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .help-section { display: grid; gap: 10px; }
+
+    .help-section h3 {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .help-topic {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .help-topic strong { display: block; margin-bottom: 4px; font-size: 13px; }
+
+    .help-topic p { margin: 0; color: var(--ink-2); max-width: 66ch; }
