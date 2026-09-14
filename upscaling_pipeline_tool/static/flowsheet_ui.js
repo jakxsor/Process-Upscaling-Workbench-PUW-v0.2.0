@@ -53,6 +53,8 @@
       if (!streams.length) issues.push("no streams mapped");
       if (streams.some(stream => !String(stream.quantity || "").trim())) issues.push("stream quantity missing");
       if (streams.some(stream => !String(stream.phase || "").trim() || stream.phase === "unknown")) issues.push("stream phase unknown");
+      if (box.balance?.status === "off") issues.push(`mass balance off by ${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%`);
+      if (box.balance?.status === "open") issues.push(`${box.balance.unknown} stream${box.balance.unknown === 1 ? "" : "s"} without a usable mass`);
       return issues;
     }
 
@@ -92,7 +94,14 @@
         </div>
         <div class="flowsheet-detail-task">${escapeHtml(selected.task || "No task label")}</div>
         <div class="flowsheet-detail-kpis">
-          <span><strong>${formatNumber(selected.totalOutputKg || 0)}</strong> kg/batch out</span>
+          <span><strong>${flowsheetKgText(selected.balance?.inKg || 0)}</strong> kg in</span>
+          <span><strong>${flowsheetKgText(selected.balance?.outKg || 0)}</strong> kg out</span>
+          <span><strong>${selected.balance
+            ? selected.balance.status === "closed" ? "closed"
+              : selected.balance.status === "open" ? `${selected.balance.unknown} n.q.`
+              : selected.balance.status === "off" ? `${selected.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(selected.balance.deltaPercent)}%`
+              : "no data"
+            : "-"}</strong> balance</span>
           <span><strong>${selected.stage + 1}</strong> stage</span>
         </div>
         ${(selected.specs || []).length ? `
@@ -131,6 +140,7 @@
       state.flowsheetShowStreamLabels = !clean;
       state.flowsheetShowAuxiliaryArrows = !clean;
       state.flowsheetShowUnitDetails = !clean;
+      state.flowsheetShowStreamTable = !clean;
       renderFlowsheetModal();
       renderExport();
     }
@@ -150,6 +160,10 @@
       const auditPreset = $("flowsheetAuditPreset");
       if (cleanPreset) cleanPreset.classList.toggle("primary", state.flowsheetViewPreset === "clean");
       if (auditPreset) auditPreset.classList.toggle("primary", state.flowsheetViewPreset !== "clean");
+      const basisSelect = $("flowsheetBasisSelect");
+      if (basisSelect) basisSelect.value = flowsheetBasisKey();
+      const tableToggle = $("flowsheetStreamTableToggle");
+      if (tableToggle) tableToggle.checked = state.flowsheetShowStreamTable !== false;
     }
 
     function renderFlowsheetModal() {
@@ -268,17 +282,41 @@
       URL.revokeObjectURL(url);
     }
 
+    // The export carries the routes the SVG actually drew, the arrow labels, the stream table and
+    // the title block, so the slide is a conversion of the drawing rather than a second drawing.
     function buildFlowsheetPowerPointExport() {
-      const model = buildFlowsheetModel();
+      const rendered = buildFlowsheetSvg();
+      const model = rendered.model || buildFlowsheetModel();
+      const geometry = rendered.geometry || {};
+      const labelFor = link => {
+        const from = model.byId.get(link.from);
+        const to = model.byId.get(link.to);
+        if (!from || !to) return link.tag || "";
+        if (!link.kind || link.kind === "process") return flowsheetProcessLabelForLink(from, to, link);
+        if (link.kind === "recycle") return `${link.tag ? `${link.tag} ` : ""}recycle ${link.from} to ${link.to}${(link.directStreams || []).length ? `: ${flowsheetStreamsLabel(link.directStreams)}` : ""}`;
+        return `${flowsheetAuxStyle(link.kind).label}: ${flowsheetLinkStreamSummary(link)}`;
+      };
+      const withGeometry = link => ({
+        ...link,
+        points: geometry[`${link.from}->${link.to}:${link.kind || "process"}`] || null,
+        label: labelFor(link)
+      });
       return {
         title: "Generated Process Flowsheet",
         basis: flowsheetProductBasisText(model),
         width: model.width,
-        height: model.height + 88,
+        height: rendered.height || model.height + 88,
         productGroupId: model.productGroupId,
         feedBox: model.feedBox,
+        feedStreams: model.feedStreams || [],
         productBox: model.productBox,
+        streamTable: rendered.streamTable || [],
+        tableTop: rendered.tableTop,
+        legendY: rendered.legendY,
+        titleBlock: rendered.titleBlock,
         groups: model.groups.map(group => ({
+          detailLines: flowsheetUnitDetailLines(group),
+          balance: group.balance,
           id: group.id,
           unitNumber: group.unitNumber,
           task: group.task,
@@ -300,9 +338,9 @@
           ventStreams: group.ventStreams,
           recycleStreams: group.recycleStreams
         })),
-        forwardLinks: model.forwardLinks,
-        auxiliaryLinks: state.flowsheetShowAuxiliaryArrows === false ? [] : model.auxiliaryLinks,
-        recycleLinks: state.flowsheetShowAuxiliaryArrows === false ? [] : model.recycleLinks
+        forwardLinks: model.forwardLinks.map(withGeometry),
+        auxiliaryLinks: state.flowsheetShowAuxiliaryArrows === false ? [] : model.auxiliaryLinks.map(withGeometry),
+        recycleLinks: state.flowsheetShowAuxiliaryArrows === false ? [] : model.recycleLinks.map(withGeometry)
       };
     }
 

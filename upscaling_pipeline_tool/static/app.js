@@ -1057,14 +1057,18 @@
     function loadBaseExampleProject() {
       const basis = octocryleneExampleBasis;
       const chemical = {
-        benzophenone: { name: "benzophenone", phase: "S", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22" },
-        cyanoacetate: { name: "2-ethylhexyl cyanoacetate", phase: "L", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28" },
-        catalyst: { name: "ammonium acetate", phase: "S", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08" },
-        cyclohexane: { name: "cyclohexane", phase: "L", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87" },
-        octocrylene: { name: "octocrylene", phase: "L", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: basis.productMw },
-        water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15" },
-        brine: { name: "saturated sodium chloride brine", phase: "L" },
-        ethylAcetate: { name: "ethyl acetate", phase: "L" }
+        // Densities (kg/m3, 20-25 degC) let the flowsheet weigh the volume-declared charges; Tb/Tm
+        // in K and Pvap in Pa at 25 degC are handbook values for the well-characterised
+        // components so the Lutze screening has evidence to work with. Values for the case-specific
+        // esters are left to PubChem autofill or the authors.
+        benzophenone: { name: "benzophenone", phase: "S", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", tb: "578.6", tm: "321.4", pvap: "0.13", density: "1110" },
+        cyanoacetate: { name: "2-ethylhexyl cyanoacetate", phase: "L", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", density: "985" },
+        catalyst: { name: "ammonium acetate", phase: "S", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", tm: "387", density: "1170" },
+        cyclohexane: { name: "cyclohexane", phase: "L", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", tm: "279.6", pvap: "13000", density: "779" },
+        octocrylene: { name: "octocrylene", phase: "L", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: basis.productMw, density: "1050" },
+        water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997" },
+        brine: { name: "saturated sodium chloride brine", phase: "L", density: "1200" },
+        ethylAcetate: { name: "ethyl acetate", phase: "L", pubchemQuery: "ethyl acetate", pubchemCid: "8857", mw: "88.11", tb: "350.2", tm: "189.6", pvap: "12400", density: "902" }
       };
       const chemicalRole = {
         benzophenone: "reactant",
@@ -15929,6 +15933,14 @@
     });
     $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
     $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    $("flowsheetBasisSelect")?.addEventListener("change", event => {
+      state.flowsheetBasis = event.target.value;
+      renderFlowsheetModal();
+    });
+    $("flowsheetStreamTableToggle")?.addEventListener("change", event => {
+      state.flowsheetShowStreamTable = event.target.checked;
+      renderFlowsheetModal();
+    });
     $("downloadFlowsheet").addEventListener("click", () => {
       closeFlowsheetOptionsMenu();
       downloadFlowsheetSvg();

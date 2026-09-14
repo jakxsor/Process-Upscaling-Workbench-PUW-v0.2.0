@@ -139,19 +139,193 @@
       return `<rect x="${x + w * 0.08}" y="${y + h * 0.16}" width="${w * 0.84}" height="${h * 0.64}" rx="6" fill="${shellFill}" stroke="${stroke}" stroke-width="1.8"></rect>`;
     }
 
+    const flowsheetWasteFates = ["wastewater", "solid waste", "purge", "loss"];
+
+    // Quantities on the drawing follow the selected basis: the declared lab batch, the scaled
+    // industrial batch from the scale-up model, or per kg of product.
+    function flowsheetBasisKey() {
+      return ["lab", "scaled", "perKg"].includes(state.flowsheetBasis) ? state.flowsheetBasis : "lab";
+    }
+
+    function flowsheetLabProductKg() {
+      const candidates = state.blocks.flatMap(block => (block.streams || [])
+        .filter(stream => stream.role === "output" && stream.fate === "product")
+        .map(stream => ({ stream, final: /final output/i.test(String(stream.timing || "")) })));
+      const chosen = candidates.find(item => item.final) || candidates[candidates.length - 1];
+      return chosen ? massToKg(chosen.stream.quantity, chosen.stream.unit) : NaN;
+    }
+
+    function flowsheetQuantityAccessor() {
+      const basis = flowsheetBasisKey();
+      if (basis === "scaled" && typeof scaleModel === "function") {
+        const rows = new Map((scaleModel().rows || []).map(row => [`${row.blockId}|${row.streamId}`, row]));
+        return (stream, block) => {
+          const row = rows.get(`${block.id}|${stream.id}`);
+          return row && row.scaledQuantity
+            ? { quantity: row.scaledQuantity, unit: row.scaledUnit || stream.unit }
+            : { quantity: "", unit: stream.unit };
+        };
+      }
+      if (basis === "perKg") {
+        const productKg = flowsheetLabProductKg();
+        return stream => {
+          const numeric = parseStreamQuantity(stream.quantity);
+          return Number.isFinite(numeric) && Number.isFinite(productKg) && productKg > 0
+            ? { quantity: formatNumber(numeric / productKg), unit: stream.unit }
+            : { quantity: "", unit: stream.unit };
+        };
+      }
+      return stream => ({ quantity: stream.quantity, unit: stream.unit });
+    }
+
+    function flowsheetBasisLabel() {
+      const basis = flowsheetBasisKey();
+      if (basis === "scaled") {
+        const target = typeof scaleModel === "function" ? scaleModel().target : null;
+        return target?.kgPerBatch ? `scaled batch, ${target.kgPerBatch} kg product` : "scaled batch (target not set)";
+      }
+      if (basis === "perKg") return "per kg product";
+      const labKg = flowsheetLabProductKg();
+      return Number.isFinite(labKg) ? `lab batch, ${formatNumber(labKg)} kg product` : "lab batch";
+    }
+
+    // Density for a volume stream: declared on the stream, else on a same-named stream anywhere
+    // in the project (properties are entered once per substance, not once per block).
+    function projectSubstanceDensityKgM3(name) {
+      const key = String(name || "").trim().toLowerCase();
+      if (!key) return NaN;
+      for (const block of state.blocks) {
+        for (const stream of block.streams || []) {
+          if (String(stream.name || "").trim().toLowerCase() !== key) continue;
+          const density = densityToKgM3(stream.density, "kg/m3");
+          if (Number.isFinite(density) && density > 0) return density;
+        }
+      }
+      return NaN;
+    }
+
+    // Mass of a stream for line widths, labels and balances. Volumes count when a density is
+    // known; otherwise the stream is volume-only: left out of the mass totals and said so on the
+    // drawing. Before, a 2.5 L solvent charge - the bulk of the flow - weighed nothing at all.
+    function flowsheetStreamKg(stream) {
+      const direct = massToKg(stream.quantity, stream.unit);
+      if (Number.isFinite(direct)) return { kg: direct, source: "mass" };
+      const m3 = volumeToM3(stream.quantity, stream.unit);
+      if (!Number.isFinite(m3)) {
+        return { kg: NaN, source: Number.isFinite(parseStreamQuantity(stream.quantity)) ? "unit not convertible" : "quantity missing" };
+      }
+      const own = densityToKgM3(stream.density, "kg/m3");
+      const density = Number.isFinite(own) && own > 0 ? own : projectSubstanceDensityKgM3(stream.name);
+      if (Number.isFinite(density) && density > 0) return { kg: m3 * density, source: "volume x density", densityKgM3: density };
+      return { kg: NaN, source: "volume only, density missing" };
+    }
+
+    function flowsheetStreamsKgTotal(streams) {
+      return (streams || []).reduce((acc, stream) => {
+        const { kg } = flowsheetStreamKg(stream);
+        if (Number.isFinite(kg)) acc.kg += kg; else acc.unknown += 1;
+        return acc;
+      }, { kg: 0, unknown: 0 });
+    }
+
+    function flowsheetKgText(kg) {
+      if (!Number.isFinite(kg)) return "";
+      const magnitude = Math.abs(kg);
+      const digits = magnitude >= 1000 ? 0 : magnitude >= 100 ? 1 : magnitude >= 1 ? 2 : 3;
+      return String(Number(kg.toFixed(digits)));
+    }
+
+    // One source of truth for what a unit takes in and sends out: the same block streams the
+    // Group Aggregate View uses, with intra-group hand-offs (internalTransfer) excluded and the
+    // remaining streams merged per role, name, fate and unit. Reading raw block streams counted
+    // every substance once per block that carried it, so a three-block reactor "produced" three
+    // times its outlet and the next arrow was drawn twice as thick as the one before it.
+    function flowsheetAggregatedStreams(group) {
+      const quantityOf = flowsheetQuantityAccessor();
+      const merged = new Map();
+      group.blocks.forEach(block => {
+        ensureBlockFlowFields(block);
+        (block.streams || []).forEach(stream => {
+          if (!String(stream.name || "").trim() || stream.internalTransfer) return;
+          const atBasis = quantityOf(stream, block);
+          const key = [stream.role, stream.name.trim().toLowerCase(), stream.fate || "", atBasis.unit || ""].join("|");
+          if (!merged.has(key)) {
+            merged.set(key, {
+              ...stream,
+              blockId: block.id,
+              sourceBlocks: [],
+              entries: [],
+              unit: atBasis.unit || stream.unit || "",
+              numericTotal: 0,
+              allNumeric: true
+            });
+          }
+          const item = merged.get(key);
+          const numeric = parseStreamQuantity(atBasis.quantity);
+          if (Number.isFinite(numeric)) item.numericTotal += numeric; else item.allNumeric = false;
+          item.sourceBlocks.push(block.id);
+          item.entries.push({ blockId: block.id, quantity: atBasis.quantity, unit: atBasis.unit, status: stream.status, timing: stream.timing, phase: stream.phase });
+          if (!String(item.destinationGroup || "").trim() && String(stream.destinationGroup || "").trim()) item.destinationGroup = stream.destinationGroup;
+          if ((!item.phase || item.phase === "unknown") && stream.phase && stream.phase !== "unknown") item.phase = stream.phase;
+          if (!item.density && stream.density) item.density = stream.density;
+        });
+      });
+      return Array.from(merged.values()).map(item => ({
+        ...item,
+        quantity: item.allNumeric ? formatNumber(item.numericTotal) : "",
+        quantityMissing: !item.allNumeric
+      }));
+    }
+
+    // Per-unit closure on the mass-convertible streams. Reported, never silently balanced: the
+    // number of streams without a usable mass travels with the result, so a unit with two
+    // unknown outlets reads "open", not "closed".
+    function flowsheetUnitBalance(inputStreams, outletStreams) {
+      const inputs = flowsheetStreamsKgTotal(inputStreams);
+      const outlets = flowsheetStreamsKgTotal(outletStreams);
+      const reference = Math.max(inputs.kg, outlets.kg);
+      const deltaKg = outlets.kg - inputs.kg;
+      const deltaPercent = reference > 0 ? (deltaKg / reference) * 100 : NaN;
+      const unknown = inputs.unknown + outlets.unknown;
+      return {
+        inKg: inputs.kg,
+        outKg: outlets.kg,
+        deltaKg,
+        deltaPercent,
+        unknown,
+        status: !(inputs.kg > 0 || outlets.kg > 0) ? "no data" : unknown ? "open" : Math.abs(deltaPercent) > 2 ? "off" : "closed"
+      };
+    }
+
     function flowsheetGroupStreams(group) {
-      const streams = group.blocks.flatMap(block => (block.streams || []).filter(stream => stream.name.trim()));
+      const streams = flowsheetAggregatedStreams(group);
       const isProduct = streams.some(stream => stream.role === "output" && stream.fate === "product");
-      const wasteStreams = streams.filter(stream => ["wastewater", "solid waste", "purge", "loss"].includes(stream.fate));
+      const wasteStreams = streams.filter(stream => flowsheetWasteFates.includes(stream.fate));
       const ventStreams = streams.filter(stream => stream.fate === "vent");
-      const recycleStreams = streams.filter(stream => ["recycled input", "recovered solvent"].includes(stream.fate) && stream.destinationGroup.trim());
+      const recycleStreams = streams.filter(stream => ["recycled input", "recovered solvent"].includes(stream.fate) && String(stream.destinationGroup || "").trim());
       const outputStreams = streams.filter(stream => stream.role === "output");
       const inputStreams = streams.filter(stream => stream.role === "input");
-      const totalOutputKg = outputStreams.reduce((sum, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        return sum + (Number.isFinite(kg) ? kg : 0);
-      }, 0);
-      return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, totalOutputKg };
+      // Main-route load: what leaves towards the next unit, not what goes to waste or vent.
+      const mainOutlets = outputStreams.filter(stream => !flowsheetWasteFates.includes(stream.fate) && stream.fate !== "vent");
+      const totalOutputKg = flowsheetStreamsKgTotal(mainOutlets).kg;
+      // Everything that leaves the unit closes the balance: outputs plus every waste-role stream,
+      // whatever its fate wording ("unreacted reagent", "purge", ...), plus vents.
+      const outlets = [
+        ...outputStreams,
+        ...streams.filter(stream => stream.role === "waste"),
+        ...ventStreams.filter(stream => stream.role !== "output" && stream.role !== "waste")
+      ];
+      const balance = flowsheetUnitBalance(inputStreams, outlets);
+      return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, allStreams: streams, totalOutputKg, balance };
+    }
+
+    function flowsheetDirectStreamsAtBasis(group, toId) {
+      const dest = String(toId || "").trim().toUpperCase();
+      if (!group || !dest) return [];
+      const quantityOf = flowsheetQuantityAccessor();
+      return group.blocks.flatMap(block => (block.streams || [])
+        .filter(stream => String(stream.destinationGroup || "").trim().toUpperCase() === dest && String(stream.name || "").trim())
+        .map(stream => ({ ...stream, ...quantityOf(stream, block), blockId: block.id })));
     }
 
     // An input stream counts as "external" (a fresh reagent/utility charge, not the bulk material
@@ -186,10 +360,7 @@
     }
 
     function flowsheetStreamListKg(streams) {
-      return (streams || []).reduce((sum, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        return sum + (Number.isFinite(kg) ? kg : 0);
-      }, 0);
+      return flowsheetStreamsKgTotal(streams).kg;
     }
 
     function flowsheetProcessMagnitudeKg(fromBox, toBox) {
@@ -197,16 +368,30 @@
       return routedKg > 0 ? routedKg : fromBox.totalOutputKg;
     }
 
-    function flowsheetProcessLabelText(fromBox, toBox) {
-      const streams = flowsheetStreamsBetweenGroups(fromBox, toBox);
-      if (!streams.length) return flowsheetConnectorLabelText(fromBox);
-      const primary = streams.reduce((best, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        const bestKg = massToKg(best.quantity, best.unit);
+    // The arrow says what the whole stream weighs and how many substances it carries; the
+    // composition lives in the stream table and the tooltip. Printing the largest component's
+    // own quantity as if it were the stream read "cyanoacetate, 0.55 kg" on a 3 kg flow.
+    function flowsheetStreamsLabel(streams, tag = "") {
+      const list = (streams || []).filter(stream => String(stream?.name || "").trim());
+      if (!list.length) return tag;
+      const primary = list.reduce((best, stream) => {
+        const kg = flowsheetStreamKg(stream).kg;
+        const bestKg = flowsheetStreamKg(best).kg;
         return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
-      }, streams[0]);
-      const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
-      return `${primary.name}${qty ? `, ${qty}` : ""}`;
+      }, list[0]);
+      const total = flowsheetStreamsKgTotal(list);
+      const mass = total.kg > 0 ? `${flowsheetKgText(total.kg)} kg` : "";
+      const unknown = total.unknown ? `${total.unknown} n.q.` : "";
+      const extra = list.length > 1 ? ` +${list.length - 1}` : "";
+      const detail = [mass, unknown].filter(Boolean).join(", ");
+      return `${tag ? `${tag} ` : ""}${primary.name}${extra}${detail ? `, ${detail}` : ""}`;
+    }
+
+    function flowsheetProcessLabelText(fromBox, toBox, link = null) {
+      const streams = flowsheetStreamsBetweenGroups(fromBox, toBox);
+      const tag = link?.tag || "";
+      if (!streams.length) return flowsheetConnectorLabelText(fromBox, tag);
+      return flowsheetStreamsLabel(streams, tag);
     }
 
     function flowsheetProcessTooltip(fromBox, toBox) {
@@ -238,15 +423,8 @@
     }
 
     function flowsheetProcessLabelForLink(fromBox, toBox, link) {
-      if (!link || !(link.directStreams || []).length) return flowsheetProcessLabelText(fromBox, toBox);
-      const streams = link.directStreams;
-      const primary = streams.reduce((best, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        const bestKg = massToKg(best.quantity, best.unit);
-        return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
-      }, streams[0]);
-      const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
-      return `${primary.name}${qty ? `, ${qty}` : ""}`;
+      if (!link || !(link.directStreams || []).length) return flowsheetProcessLabelText(fromBox, toBox, link);
+      return flowsheetStreamsLabel(link.directStreams, link.tag || "");
     }
 
     function flowsheetMagnitudeForLink(fromBox, toBox, link) {
@@ -391,9 +569,19 @@
         flowsheetTopStreamSummary(box.inputStreams, "In"),
         flowsheetTopStreamSummary(box.outputStreams, "Out")
       ].filter(Boolean).join(" | ");
+      const balance = box.balance;
+      const balanceText = balance && balance.status !== "no data"
+        ? balance.status === "closed"
+          ? `balance closed (${flowsheetKgText(balance.inKg)} in / ${flowsheetKgText(balance.outKg)} out)`
+          : balance.status === "open"
+            ? `balance open, ${balance.unknown} n.q.`
+            : `balance off ${balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(balance.deltaPercent)}%`
+        : "";
       return [
         box.equipmentSizeLine,
-        box.totalOutputKg > 0 ? `Load: ${formatNumber(box.totalOutputKg)} kg/batch out` : "",
+        box.totalOutputKg > 0
+          ? `Load: ${flowsheetKgText(box.totalOutputKg)} kg out${balanceText ? `; ${balanceText}` : ""}`
+          : (balanceText ? `Load: ${balanceText}` : ""),
         (box.specs || []).length ? `Operating: ${box.specs.join(" / ")}` : "",
         materialLine ? `MFA: ${materialLine}` : ""
       ].filter(Boolean).slice(0, 3);
@@ -503,17 +691,11 @@
     // unreadable at this scale, but the hover tooltip (flowsheetFlowTooltip) still has everything.
     // Not truncated here - the available space varies per connector (adjacent boxes only leave a
     // narrow gap, a routed detour leaves much more), so flowsheetConnectorLabelMarkup fits it later.
-    function flowsheetConnectorLabelText(fromBox) {
+    function flowsheetConnectorLabelText(fromBox, tag = "") {
       const candidates = (fromBox.outputStreams || [])
         .filter(stream => stream.name.trim() && !["wastewater", "solid waste", "purge", "loss", "vent"].includes(stream.fate));
-      if (!candidates.length) return "";
-      const primary = candidates.reduce((best, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        const bestKg = massToKg(best.quantity, best.unit);
-        return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
-      }, candidates[0]);
-      const qty = primary.quantity ? `${primary.quantity} ${primary.unit || ""}`.trim() : "";
-      return `${primary.name}${qty ? `, ${qty}` : ""}`;
+      if (!candidates.length) return tag;
+      return flowsheetStreamsLabel(candidates, tag);
     }
 
     // Prints a stream label directly on the diagram instead of only in the hover tooltip - the
@@ -602,7 +784,7 @@
         const key = `${from}->${to}`;
         if (from === to || seenLinks.has(key)) return;
         seenLinks.add(key);
-        const directStreams = flowsheetDirectStreamsToGroup(fromBox.group, to);
+        const directStreams = flowsheetDirectStreamsAtBasis(fromBox.group, to);
         linkMeta.push({ from, to, kind: flowsheetLinkKind(fromBox, toBox, { from, to }), directStreams });
       });
       const layout = flowsheetPublicationLayout(groupIds, rawById, linkMeta);
@@ -636,7 +818,15 @@
           w: boxW,
           h: boxH,
           isService: stageRow > 0,
-          ...flowsheetGroupStreams(raw.group)
+          isProduct: raw.isProduct,
+          wasteStreams: raw.wasteStreams,
+          ventStreams: raw.ventStreams,
+          recycleStreams: raw.recycleStreams,
+          outputStreams: raw.outputStreams,
+          inputStreams: raw.inputStreams,
+          allStreams: raw.allStreams,
+          totalOutputKg: raw.totalOutputKg,
+          balance: raw.balance
         };
       });
       const byId = new Map(groups.map(item => [item.id, item]));
@@ -649,7 +839,38 @@
         else if (link.kind === "process") forwardLinks.push(link);
         else auxiliaryLinks.push(link);
       });
+      // Stream numbers in reading order: process train first (by stage), then service links, then
+      // recycles. The same numbers label the arrows, the stream table and the PowerPoint export.
+      const stageOf = id => byId.get(id)?.stage ?? 0;
+      forwardLinks.sort((a, b) => stageOf(a.from) - stageOf(b.from) || stageOf(a.to) - stageOf(b.to));
+      let streamNumber = 0;
+      [...forwardLinks, ...auxiliaryLinks, ...recycleLinks].forEach(link => {
+        streamNumber += 1;
+        link.streamNumber = streamNumber;
+        link.tag = `S${streamNumber}`;
+        // A process link with no explicitly routed streams carries the upstream outlets whose
+        // names the downstream unit takes in (the same rule the arrow width already used).
+        const fromBox = byId.get(link.from);
+        const toBox = byId.get(link.to);
+        const routed = (link.directStreams || []).length
+          ? link.directStreams
+          : link.kind === "process" && fromBox && toBox ? flowsheetStreamsBetweenGroups(fromBox, toBox) : [];
+        link.tableStreams = routed;
+        const totals = flowsheetStreamsKgTotal(routed);
+        link.massKg = routed.length ? totals.kg : NaN;
+        link.unknownCount = totals.unknown;
+      });
       const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
+      const missingSubstances = new Set();
+      groups.forEach(item => (item.allStreams || []).forEach(stream => {
+        if (!Number.isFinite(flowsheetStreamKg(stream).kg)) missingSubstances.add(`${String(stream.name || "").trim().toLowerCase()}|${stream.unit || ""}`);
+      }));
+      const missingQuantityCount = missingSubstances.size;
+      // The feed box lists what actually enters from outside: fresh charges of the first unit.
+      // Recycled solvent arrives on its own arrow, and a vent is not a feed.
+      const firstInputs = groups.length ? groups[0].inputStreams : [];
+      const freshInputs = firstInputs.filter(stream => stream.fate === "fresh input");
+      const feedStreams = freshInputs.length ? freshInputs : firstInputs.filter(stream => stream.fate !== "vent");
       const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
       const stubLaneH = 34;
       const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
@@ -680,7 +901,11 @@
       const maxDiagramRight = Math.max(maxBoxRight, productBox ? productBox.x + productBox.w : 0);
       const width = Math.max(1880, maxDiagramRight + 120);
       const height = Math.max(660, recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 74 : maxBoxBottom + wasteAreaH + 118);
-      return { groups, byId, forwardLinks, auxiliaryLinks, recycleLinks, feedBox, productBox, productGroupId: productGroup?.id || "", width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg };
+      return {
+        groups, byId, forwardLinks, auxiliaryLinks, recycleLinks, feedBox, productBox,
+        productGroupId: productGroup?.id || "", width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg,
+        feedStreams, missingQuantityCount, basis: flowsheetBasisKey(), basisLabel: flowsheetBasisLabel()
+      };
     }
 
     function flowsheetBoxCenter(box) {
@@ -781,14 +1006,8 @@
 
     function flowsheetLinkStreamSummary(link) {
       const streams = link.directStreams || [];
-      if (!streams.length) return "";
-      const totalKg = streams.reduce((sum, stream) => {
-        const kg = massToKg(stream.quantity, stream.unit);
-        return sum + (Number.isFinite(kg) ? kg : 0);
-      }, 0);
-      const first = streams[0];
-      const name = streams.length > 1 ? `${first.name} +${streams.length - 1}` : first.name;
-      return `${name}${totalKg > 0 ? `, ${formatNumber(totalKg)} kg/batch` : ""}`;
+      if (!streams.length) return link.tag || "";
+      return flowsheetStreamsLabel(streams, link.tag || "");
     }
 
     function flowsheetAuxTooltip(from, to, link) {
@@ -808,14 +1027,20 @@
       const productStream = productGroup?.outputStreams?.find(stream => (
         stream.fate === "product" && /final output/i.test(String(stream.timing || ""))
       )) || productGroup?.outputStreams?.find(stream => stream.fate === "product");
-      const productKg = productStream ? massToKg(productStream.quantity, productStream.unit) : NaN;
+      const productKg = productStream ? flowsheetStreamKg(productStream).kg : NaN;
       const productName = productStream?.name || state.scaleBasis?.targetProduct || "product";
       const target = state.scaleBasis?.targetAmount && state.scaleBasis?.targetUnit
         ? `; scale target ${state.scaleBasis.targetAmount} ${state.scaleBasis.targetUnit}`
         : "";
-      return Number.isFinite(productKg) && productKg > 0
-        ? `Mass basis: ${formatNumber(productKg)} kg ${productName}/batch; line widths and stream labels use routed kg/batch${target}.`
-        : `Mass basis: routed kg/batch where available${target}.`;
+      const basis = flowsheetBasisKey();
+      const perWhat = basis === "perKg" ? "per kg product" : "per batch";
+      const missing = model.missingQuantityCount
+        ? `; ${model.missingQuantityCount} substance${model.missingQuantityCount === 1 ? "" : "s"} without a usable mass`
+        : "";
+      const head = basis !== "scaled" && Number.isFinite(productKg) && productKg > 0
+        ? `Basis: ${flowsheetBasisLabel()} (${flowsheetKgText(productKg)} kg ${productName})`
+        : `Basis: ${flowsheetBasisLabel()}`;
+      return `${head}; line widths and labels use kg ${perWhat}, volumes converted with declared densities${target}${missing}.`;
     }
 
     function buildFlowsheetSvg() {
@@ -845,14 +1070,23 @@
         return Math.min(4.8, Math.max(2.2, (kg / model.maxOutputKg) * 3.1 + 1.7));
       };
 
-      const flowPathMarkup = (points, strokeWidth, tooltip, marker = "url(#fsArrow)", color = "#172027", dash = "", labelText = "") => {
+      const flowPathMarkup = (points, strokeWidth, tooltip, marker = "url(#fsArrow)", color = "#172027", dash = "", labelText = "", missing = false) => {
         const d = orthogonalPath(points, 14);
+        // An arrow whose mass is unknown is drawn dashed grey: the reader sees a route, not a flow.
+        const stroke = missing ? "#8a949a" : color;
+        const dashes = missing && !dash ? "3 5" : dash;
+        const markerRef = missing && marker === "url(#fsArrow)" ? "url(#fsArrowGrey)" : marker;
         return `
           <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 5}" stroke-linejoin="round" stroke-linecap="round" fill="none"></path>
-          <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="${color}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" ${dash ? `stroke-dasharray="${dash}"` : ""} ${marker ? `marker-end="${marker}"` : ""}></path>
-          ${flowsheetConnectorLabelMarkup(points, labelText, color)}
+          <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${d}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" fill="none" ${dashes ? `stroke-dasharray="${dashes}"` : ""} ${markerRef ? `marker-end="${markerRef}"` : ""}></path>
+          ${flowsheetConnectorLabelMarkup(points, labelText, stroke)}
         `;
       };
+      // Every drawn route is recorded so the PowerPoint export reproduces this geometry instead
+      // of re-routing the arrows with rules of its own.
+      const geometry = {};
+      model.geometry = geometry;
+      const linkGeometryKey = link => `${link.from}->${link.to}:${link.kind || "process"}`;
 
       const renderedForward = new Set();
       const forwardLinkKey = (fromId, toId) => `${fromId}->${toId}`;
@@ -888,7 +1122,8 @@
         targetPorts.forEach(({ target, point }) => {
           const link = forwardLinkByKey.get(forwardLinkKey(from.id, target.id));
           const branchKg = flowsheetMagnitudeForLink(from, target, link);
-          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(from, target, link), "url(#fsArrow)", "#172027", "", flowsheetProcessLabelForLink(from, target, link)));
+          if (link) geometry[linkGeometryKey(link)] = [source, { x: manifoldX, y: source.y }, { x: manifoldX, y: point.y }, point];
+          forwardGroups.push(flowPathMarkup([{ x: manifoldX, y: point.y }, point], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(from, target, link), "url(#fsArrow)", "#172027", "", flowsheetProcessLabelForLink(from, target, link), !(branchKg > 0)));
           renderedForward.add(forwardLinkKey(from.id, target.id));
         });
       });
@@ -906,7 +1141,8 @@
         sourcePorts.forEach(({ source, point }) => {
           const link = forwardLinkByKey.get(forwardLinkKey(source.id, to.id));
           const branchKg = flowsheetMagnitudeForLink(source, to, link);
-          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(source, to, link), "", "#172027", "", flowsheetProcessLabelForLink(source, to, link)));
+          if (link) geometry[linkGeometryKey(link)] = [point, { x: manifoldX, y: point.y }, { x: manifoldX, y: target.y }, target];
+          forwardGroups.push(flowPathMarkup([point, { x: manifoldX, y: point.y }], sankeyWidth(branchKg), flowsheetProcessTooltipForLink(source, to, link), "", "#172027", "", flowsheetProcessLabelForLink(source, to, link), !(branchKg > 0)));
           renderedForward.add(forwardLinkKey(source.id, to.id));
         });
         const yValues = [target.y, ...sourcePorts.map(item => item.point.y)];
@@ -920,10 +1156,11 @@
         const to = model.byId.get(link.to);
         if (!from || !to) return;
         const points = flowsheetConnectorPoints(model, from, to);
-        const magnitudeKg = flowsheetProcessMagnitudeKg(from, to);
+        geometry[linkGeometryKey(link)] = points;
+        const magnitudeKg = flowsheetMagnitudeForLink(from, to, link);
         const strokeWidth = sankeyWidth(magnitudeKg);
-        const tooltip = flowsheetProcessTooltip(from, to);
-        forwardGroups.push(flowPathMarkup(points, strokeWidth, tooltip, "url(#fsArrow)", "#172027", "", flowsheetProcessLabelText(from, to)));
+        const tooltip = flowsheetProcessTooltipForLink(from, to, link);
+        forwardGroups.push(flowPathMarkup(points, strokeWidth, tooltip, "url(#fsArrow)", "#172027", "", flowsheetProcessLabelForLink(from, to, link), !(magnitudeKg > 0)));
       });
       const forwardPaths = forwardGroups.join("");
 
@@ -938,10 +1175,8 @@
         auxLaneCounter.set(laneKey, laneIndex + 1);
         const style = flowsheetAuxStyle(link.kind);
         const points = flowsheetAuxConnectorPoints(from, to, laneIndex);
-        const totalKg = (link.directStreams || []).reduce((sum, stream) => {
-          const kg = massToKg(stream.quantity, stream.unit);
-          return sum + (Number.isFinite(kg) ? kg : 0);
-        }, 0);
+        geometry[linkGeometryKey(link)] = points;
+        const totalKg = flowsheetStreamListKg(link.directStreams || []);
         const strokeWidth = Math.max(1.8, Math.min(3.2, totalKg > 0 && model.maxOutputKg > 0 ? (totalKg / model.maxOutputKg) * 2.2 + 1.5 : 2));
         return flowPathMarkup(
           points,
@@ -950,7 +1185,8 @@
           style.marker,
           style.color,
           style.dash,
-          `${style.label}: ${flowsheetLinkStreamSummary(link)}`
+          `${style.label}: ${flowsheetLinkStreamSummary(link)}`,
+          !(totalKg > 0)
         );
       }).join("");
 
@@ -970,11 +1206,10 @@
         ];
         const d = orthogonalPath(points, 12);
         const recycleStreams = (link.directStreams || []).length ? link.directStreams : from.recycleStreams;
-        const recycleKg = recycleStreams.reduce((sum, s) => {
-          const kg = massToKg(s.quantity, s.unit);
-          return sum + (Number.isFinite(kg) ? kg : 0);
-        }, 0);
+        geometry[linkGeometryKey(link)] = points;
+        const recycleKg = flowsheetStreamListKg(recycleStreams);
         const strokeWidth = Math.max(2, sankeyWidth(recycleKg) * 0.75);
+        const recycleLabel = `${link.tag ? `${link.tag} ` : ""}recycle ${link.from} to ${link.to}${recycleStreams.length ? `: ${flowsheetStreamsLabel(recycleStreams)}` : ""}`;
         const recycleTooltip = [
           `recycle ${link.from} -> ${link.to}`,
           recycleStreams.length
@@ -983,12 +1218,12 @@
         ].join("\n");
         return `
           <path d="${d}" stroke="#ffffff" stroke-width="${strokeWidth + 4}" stroke-linecap="round" fill="none"></path>
-          <path class="tip" data-tip="${escapeAttr(recycleTooltip)}" d="${d}" stroke="#25834a" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
-          <text x="${(startX + endX) / 2}" y="${laneY - 6}" font-size="11" fill="#286d3f" text-anchor="middle">recycle ${escapeHtml(link.from)} to ${escapeHtml(link.to)}</text>
+          <path class="tip" data-tip="${escapeAttr(recycleTooltip)}" d="${d}" stroke="${recycleKg > 0 ? "#25834a" : "#8a949a"}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="7 5" fill="none" marker-end="url(#fsArrowGreen)"></path>
+          <text x="${(startX + endX) / 2}" y="${laneY - 6}" font-size="11" fill="${recycleKg > 0 ? "#286d3f" : "#6c7680"}" text-anchor="middle"><title>${escapeHtml(recycleLabel)}</title>${escapeHtml(flowsheetClipText(recycleLabel, 64, 12))}</text>
         `;
       }).join("");
 
-      const feedStreams = model.groups[0]?.inputStreams?.filter(stream => stream.name.trim()) || [];
+      const feedStreams = (model.feedStreams || []).filter(stream => stream.name.trim());
       const feedBoxMarkup = model.feedBox && model.groups.length ? (() => {
         const box = model.feedBox;
         const first = model.groups[0];
@@ -1129,6 +1364,7 @@
             <text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 18 : 34)}" font-size="10.2" text-anchor="middle" fill="#657480"><title>${escapeHtml(box.task)}</title>${escapeHtml(taskLine)}</text>
             ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 34 : 50)}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
+            ${box.balance?.status === "off" ? `<text x="${box.x + box.w - 4}" y="${box.y + box.h + 6}" font-size="10" font-weight="900" text-anchor="end" fill="#a23b3b"><title>${escapeHtml(`Mass balance off: ${flowsheetKgText(box.balance.inKg)} kg in, ${flowsheetKgText(box.balance.outKg)} kg out (${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%)`)}</title>&#9650; ${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%</text>` : ""}
             ${wasteVentHtml}
             ${inletHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
@@ -1143,8 +1379,18 @@
         { label: "Vent/VOC", color: "#657480", dash: "4 4" }
       ];
       const legendCategoryItems = Object.values(flowsheetCategoryStyle);
-      const drawingHeight = model.height + 88;
+      const streamTable = flowsheetStreamTableRows(model);
+      const showTable = state.flowsheetShowStreamTable !== false && streamTable.length > 0;
+      const tableRowH = 15;
+      const tableHeight = showTable ? 40 + streamTable.length * tableRowH + 12 : 0;
+      const tableTop = model.height + 8;
+      const drawingHeight = model.height + 88 + tableHeight;
       const titleBlockX = Math.max(620, model.width - 470);
+      const tableMarkup = showTable ? flowsheetStreamTableMarkup(streamTable, tableTop, model.width) : "";
+      const todayIso = new Date().toISOString().slice(0, 10);
+      model.streamTable = streamTable;
+      model.tableTop = showTable ? tableTop : null;
+      model.drawingHeight = drawingHeight;
 
       const svg = `
         <svg class="flowsheet-svg" width="${model.width}" height="${drawingHeight}" viewBox="0 0 ${model.width} ${drawingHeight}" xmlns="http://www.w3.org/2000/svg">
@@ -1160,6 +1406,7 @@
           ${recyclePaths}
           ${boxes}
           ${productMarkup}
+          ${tableMarkup}
           <g transform="translate(36, ${drawingHeight - 70})">
             ${legendLineItems.map((item, i) => `
               <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
@@ -1176,10 +1423,10 @@
             <line x1="120" y1="0" x2="120" y2="56" stroke="#172027" stroke-width="0.7"></line>
             <line x1="285" y1="27" x2="285" y2="56" stroke="#172027" stroke-width="0.7"></line>
             <text x="10" y="18" font-size="10" font-weight="800" fill="#172027">DRAWING</text>
-            <text x="130" y="18" font-size="10" fill="#172027">Scale-up support flowsheet</text>
+            <text x="130" y="18" font-size="10" fill="#172027">PFD-01 · ${model.groups.length} units · ${escapeHtml(todayIso)}</text>
             <text x="10" y="45" font-size="10" font-weight="800" fill="#172027">BASIS</text>
-            <text x="130" y="45" font-size="10" fill="#172027">${model.groups.length} grouped operations</text>
-            <text x="296" y="45" font-size="10" fill="#172027">Rev. draft</text>
+            <text x="130" y="45" font-size="10" fill="#172027"><title>${escapeHtml(model.basisLabel || "lab batch")}</title>${escapeHtml(flowsheetClipText(model.basisLabel || "lab batch", 27, 10))}</text>
+            <text x="296" y="45" font-size="10" fill="#172027">${model.missingQuantityCount ? `${model.missingQuantityCount} n.q. · ` : ""}Rev. draft</text>
           </g>
         </svg>
       `;
@@ -1190,6 +1437,83 @@
         height: drawingHeight,
         groupCount: model.groups.length,
         forwardLinkCount: model.forwardLinks.length,
-        recycleLinkCount: model.recycleLinks.length
+        recycleLinkCount: model.recycleLinks.length,
+        model,
+        geometry,
+        streamTable: showTable ? streamTable : [],
+        tableTop: showTable ? tableTop : null,
+        legendY: drawingHeight - 70,
+        titleBlock: { drawing: "PFD-01", basis: model.basisLabel || "lab batch", date: todayIso, revision: "draft", missing: model.missingQuantityCount || 0 }
       };
+    }
+
+    // Classic PFD stream table: the drawing carries the topology, the table carries the numbers,
+    // so no figure depends on what fits on an arrow. Rows follow the stream numbers on the arrows.
+    function flowsheetStreamTableRows(model) {
+      const rows = [];
+      const describe = (link, kindLabel) => {
+        const streams = link.tableStreams || link.directStreams || [];
+        const totals = flowsheetStreamsKgTotal(streams);
+        const composition = streams
+          .map(stream => ({ stream, kg: flowsheetStreamKg(stream).kg }))
+          .sort((a, b) => (Number.isFinite(b.kg) ? b.kg : -1) - (Number.isFinite(a.kg) ? a.kg : -1))
+          .map(({ stream, kg }) => `${stream.name} ${Number.isFinite(kg) ? `${flowsheetKgText(kg)} kg` : stream.quantity ? `${stream.quantity} ${stream.unit || ""}`.trim() : "n.q."}`);
+        const phases = [...new Set(streams.map(stream => stream.phase).filter(phase => phase && phase !== "unknown"))];
+        rows.push({
+          tag: link.tag || "",
+          kind: kindLabel,
+          from: link.from,
+          to: link.to,
+          totalKg: streams.length && totals.kg > 0 ? totals.kg : NaN,
+          unknown: totals.unknown,
+          count: streams.length,
+          composition,
+          phase: phases.join("/")
+        });
+      };
+      model.forwardLinks.forEach(link => describe(link, "process"));
+      model.auxiliaryLinks.forEach(link => describe(link, link.kind || "service"));
+      model.recycleLinks.forEach(link => describe(link, "recycle"));
+      return rows;
+    }
+
+    function flowsheetStreamTableMarkup(rows, top, width) {
+      const x0 = 36;
+      const columns = [
+        { label: "No.", x: 0, width: 46 },
+        { label: "From > To", x: 46, width: 110 },
+        { label: "Type", x: 156, width: 70 },
+        { label: "Total", x: 226, width: 120 },
+        { label: "Phase", x: 346, width: 60 },
+        { label: "Composition (largest first)", x: 406, width: Math.max(300, width - 72 - 406) }
+      ];
+      const rowH = 15;
+      const headerY = top + 26;
+      const cell = (column, value, y, bold = false) => {
+        const maxChars = Math.max(6, Math.floor(column.width / 5.6));
+        return `<text x="${x0 + column.x}" y="${y}" font-size="9.6" ${bold ? 'font-weight="800"' : ""} fill="#172027"><title>${escapeHtml(value)}</title>${escapeHtml(flowsheetClipText(value, maxChars, 4))}</text>`;
+      };
+      const body = rows.map((row, index) => {
+        const y = headerY + 17 + index * rowH;
+        const mass = Number.isFinite(row.totalKg)
+          ? `${flowsheetKgText(row.totalKg)} kg${row.unknown ? ` (+${row.unknown} n.q.)` : ""}`
+          : row.count ? `n.q. (${row.count} stream${row.count === 1 ? "" : "s"})` : "no declared streams";
+        return [
+          index % 2 ? `<rect x="${x0 - 4}" y="${y - 11}" width="${width - 64}" height="${rowH}" fill="#f4f7f9"></rect>` : "",
+          cell(columns[0], row.tag, y, true),
+          cell(columns[1], `${row.from} > ${row.to}`, y),
+          cell(columns[2], row.kind, y),
+          cell(columns[3], mass, y),
+          cell(columns[4], row.phase || "-", y),
+          cell(columns[5], row.composition.join("; "), y)
+        ].join("");
+      }).join("");
+      return `
+        <g class="flowsheet-stream-table">
+          <text x="${x0}" y="${top + 12}" font-size="11" font-weight="900" fill="#172027">Stream table</text>
+          <line x1="${x0 - 4}" y1="${headerY + 5}" x2="${width - 32}" y2="${headerY + 5}" stroke="#172027" stroke-width="0.8"></line>
+          ${columns.map(column => `<text x="${x0 + column.x}" y="${headerY}" font-size="9.2" font-weight="800" fill="#657480">${escapeHtml(column.label)}</text>`).join("")}
+          ${body}
+        </g>
+      `;
     }

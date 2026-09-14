@@ -492,6 +492,15 @@ APP_HTML = r"""<!doctype html>
           <span>View</span>
           <button id="flowsheetCleanPreset" class="mini-button" title="Clean presentation view: main units and process arrows only">Clean</button>
           <button id="flowsheetAuditPreset" class="mini-button primary" title="Audit view: labels, recycle/waste/vent arrows, and unit details">Audit</button>
+          <label class="flowsheet-basis-control" title="Quantities on the drawing: the declared lab batch, the scaled industrial batch from the scale-up model, or per kg of product">
+            <span>Basis</span>
+            <select id="flowsheetBasisSelect">
+              <option value="lab">Lab batch</option>
+              <option value="scaled">Scaled batch</option>
+              <option value="perKg">Per kg product</option>
+            </select>
+          </label>
+          <label class="flowsheet-table-control" title="Print the stream table (numbers, totals, composition, phases) under the drawing"><input type="checkbox" id="flowsheetStreamTableToggle" checked> Stream table</label>
         </div>
       </div>
       <div class="modal-body">

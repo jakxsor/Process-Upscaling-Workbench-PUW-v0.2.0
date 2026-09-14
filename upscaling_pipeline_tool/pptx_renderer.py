@@ -219,6 +219,29 @@ def _route(from_box: dict[str, Any], to_box: dict[str, Any]) -> list[tuple[float
     return [start, (start[0], mid_y), (end[0], mid_y), end]
 
 
+def _link_points(link: dict[str, Any], src: dict[str, Any], dst: dict[str, Any]) -> list[tuple[float, float]]:
+    """The route the SVG drew for this link, if the export carried it; else a local route.
+
+    The slide used to re-route every arrow with its own rules, so it never matched the
+    drawing on screen. The check fixture carries no points, so the fallback stays.
+    """
+    raw = link.get("points")
+    points: list[tuple[float, float]] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict) and "x" in item and "y" in item:
+                points.append((_float(item.get("x")), _float(item.get("y"))))
+    if len(points) >= 2:
+        return points
+    return _route(src, dst)
+
+
+def _link_label(link: dict[str, Any], kind: str = "process") -> str:
+    """Prefer the label the SVG printed (stream number, total mass); else the local compact one."""
+    label = _clean(link.get("label"))
+    return label if label else _compact_link_label(link, kind)
+
+
 def _draw_polyline(writer: _ShapeWriter, points: list[tuple[float, float]], *, color: str, width: float, arrow: bool = True, dash: bool = False) -> None:
     clean_points = [point for index, point in enumerate(points) if index == 0 or point != points[index - 1]]
     for index in range(len(clean_points) - 1):
@@ -253,9 +276,81 @@ def _draw_link_label(writer: _ShapeWriter, points: list[tuple[float, float]], la
     writer.label(x, y, min(available, max(74, len(compact) * 5.6 + 18)), compact, color=color, name="Stream label")
 
 
-def _draw_legend(writer: _ShapeWriter, diagram_w: float, diagram_h: float, category_styles: dict[str, tuple[str, str]]) -> None:
+def _draw_stream_table(writer: _ShapeWriter, flowsheet: dict[str, Any]) -> None:
+    """The stream table from the drawing as a real, editable PowerPoint table."""
+    rows = [row for row in flowsheet.get("streamTable") or [] if isinstance(row, dict)]
+    top = _float(flowsheet.get("tableTop"), 0)
+    if not rows or top <= 0:
+        return
+    width_px = max(600, _float(flowsheet.get("width"), 1200) - 72)
+    row_h = 15
+    left = writer.map_x(36)
+    table_top = writer.map_y(top + 4)
+    table_w = writer.map_len(width_px)
+    table_h = writer.map_len(row_h * (len(rows) + 1) + 6)
+    shape = writer.slide.shapes.add_table(len(rows) + 1, 6, Emu(left), Emu(table_top), Emu(table_w), Emu(table_h))
+    shape.name = "Stream table"
+    table = shape.table
+    widths = [0.05, 0.11, 0.08, 0.13, 0.07, 0.56]
+    for index, fraction in enumerate(widths):
+        table.columns[index].width = Emu(int(table_w * fraction))
+    headers = ["No.", "From > To", "Type", "Total", "Phase", "Composition (largest first)"]
+
+    def write_cell(cell: Any, text: str, *, bold: bool = False) -> None:
+        cell.text = text
+        for paragraph in cell.text_frame.paragraphs:
+            for run in paragraph.runs:
+                run.font.size = Pt(7.5)
+                run.font.bold = bold
+                run.font.color.rgb = RGBColor.from_string("172027")
+        cell.margin_left = Emu(int(0.04 * EMU_PER_INCH))
+        cell.margin_right = Emu(int(0.04 * EMU_PER_INCH))
+        cell.margin_top = Emu(int(0.01 * EMU_PER_INCH))
+        cell.margin_bottom = Emu(int(0.01 * EMU_PER_INCH))
+
+    for column, header in enumerate(headers):
+        write_cell(table.cell(0, column), header, bold=True)
+    for row_index, row in enumerate(rows, start=1):
+        total_kg = row.get("totalKg")
+        unknown = int(_float(row.get("unknown"), 0))
+        count = int(_float(row.get("count"), 0))
+        if isinstance(total_kg, (int, float)) and total_kg == total_kg:
+            mass = f"{total_kg:.3g} kg" if total_kg < 100 else f"{total_kg:.0f} kg"
+            if unknown:
+                mass += f" (+{unknown} n.q.)"
+        else:
+            mass = f"n.q. ({count} streams)" if count else "no declared streams"
+        composition = row.get("composition") if isinstance(row.get("composition"), list) else []
+        values = [
+            _clean(row.get("tag")),
+            f"{_clean(row.get('from'))} > {_clean(row.get('to'))}",
+            _clean(row.get("kind")),
+            mass,
+            _clean(row.get("phase"), "-"),
+            "; ".join(_clean(item) for item in composition),
+        ]
+        for column, value in enumerate(values):
+            write_cell(table.cell(row_index, column), value, bold=column == 0)
+
+
+def _draw_title_block(writer: _ShapeWriter, flowsheet: dict[str, Any], diagram_w: float, diagram_h: float) -> None:
+    block = flowsheet.get("titleBlock")
+    if not isinstance(block, dict):
+        return
+    x = max(620, diagram_w - 470)
+    y = diagram_h - 92
+    writer.rect(x, y, 440, 56, fill="FFFFFF", line="172027", name="Title block")
+    writer.textbox(x + 8, y + 4, 110, 18, "DRAWING", size=8, bold=True)
+    missing = int(_float(block.get("missing"), 0))
+    writer.textbox(x + 120, y + 4, 310, 18, f"{_clean(block.get('drawing'), 'PFD-01')} - {_clean(block.get('date'))} - rev. {_clean(block.get('revision'), 'draft')}", size=8)
+    writer.textbox(x + 8, y + 30, 110, 18, "BASIS", size=8, bold=True)
+    basis = _clean(block.get("basis"), "lab batch")
+    writer.textbox(x + 120, y + 30, 310, 18, f"{basis}{f' - {missing} n.q.' if missing else ''}", size=8)
+
+
+def _draw_legend(writer: _ShapeWriter, diagram_w: float, diagram_h: float, category_styles: dict[str, tuple[str, str]], legend_y: float | None = None) -> None:
     x = 36
-    y = max(96, diagram_h - 78)
+    y = max(96, diagram_h - 78) if legend_y is None else legend_y
     writer.rect(x - 10, y - 18, min(790, diagram_w - 52), 58, fill="FFFFFF", line="D6E0E5", radius=True, name="Legend Panel")
     writer.textbox(x, y - 12, 72, 14, "Legend", size=9.5, color="657480", bold=True, name="Legend title")
 
@@ -326,9 +421,10 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         src, dst = by_id.get(_clean(link.get("from"))), by_id.get(_clean(link.get("to")))
         if not src or not dst:
             continue
-        points = _route(src, dst)
-        _draw_polyline(writer, points, color="172027", width=stroke_width(link), arrow=True)
-        _draw_link_label(writer, points, _compact_link_label(link, "process"), "172027")
+        points = _link_points(link, src, dst)
+        known_mass = _float(link.get("massKg"), 0) > 0 or _link_mass_kg(link) > 0
+        _draw_polyline(writer, points, color="172027" if known_mass else "8A949A", width=stroke_width(link), arrow=True, dash=not known_mass)
+        _draw_link_label(writer, points, _link_label(link, "process"), "172027" if known_mass else "6C7680")
 
     for link in flowsheet.get("auxiliaryLinks") or []:
         if not isinstance(link, dict):
@@ -338,10 +434,10 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
             continue
         kind = _clean(link.get("kind"), "waste")
         color = "657480" if kind == "vent" else "25834A" if kind == "recovery" else "965D00"
-        points = _route(src, dst)
+        points = _link_points(link, src, dst)
         _draw_polyline(writer, points, color=color, width=2.0, arrow=True, dash=kind in ("vent", "recovery"))
         if kind in ("waste", "vent", "recovery"):
-            _draw_link_label(writer, points, _compact_link_label(link, kind), color)
+            _draw_link_label(writer, points, _link_label(link, kind), color)
 
     for link in flowsheet.get("recycleLinks") or []:
         if not isinstance(link, dict):
@@ -352,15 +448,19 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         s = (_float(src.get("x")) + _float(src.get("w")) * 0.3, _float(src.get("y")) + _float(src.get("h")) + 12)
         e = (_float(dst.get("x")) + _float(dst.get("w")) * 0.7, _float(dst.get("y")) + _float(dst.get("h")) + 16)
         lane = max(_float(src.get("y")) + _float(src.get("h")), _float(dst.get("y")) + _float(dst.get("h"))) + 72
-        points = [s, (s[0], lane), (e[0], lane), e]
+        fallback = [s, (s[0], lane), (e[0], lane), e]
+        raw_points = _link_points(link, src, dst)
+        points = raw_points if isinstance(link.get("points"), list) and len(raw_points) >= 2 else fallback
         _draw_polyline(writer, points, color="25834A", width=2.3, arrow=True, dash=True)
-        _draw_link_label(writer, points, f"recycle {_clean(link.get('from'))} to {_clean(link.get('to'))}", "25834A")
+        _draw_link_label(writer, points, _link_label(link, "recycle") if link.get("label") else f"recycle {_clean(link.get('from'))} to {_clean(link.get('to'))}", "25834A")
 
     feed_box = flowsheet.get("feedBox")
     if isinstance(feed_box, dict):
         writer.rect(feed_box.get("x"), feed_box.get("y"), feed_box.get("w"), feed_box.get("h"), fill="E9F7ED", line="25834A", radius=True, name="Feed")
         writer.textbox(_float(feed_box.get("x")) + 10, _float(feed_box.get("y")) + 14, _float(feed_box.get("w")) - 20, 22, "FEED / STORAGE", size=10, color="25834A", bold=True)
-        feed_streams = [item for item in (groups[0].get("inputStreams") if groups else []) or [] if isinstance(item, dict)]
+        exported_feeds = flowsheet.get("feedStreams")
+        feed_source = exported_feeds if isinstance(exported_feeds, list) and exported_feeds else (groups[0].get("inputStreams") if groups else [])
+        feed_streams = [item for item in feed_source or [] if isinstance(item, dict)]
         for index, stream in enumerate(feed_streams[:3]):
             row_y = _float(feed_box.get("y")) + 40 + index * 22
             writer.label(
@@ -400,8 +500,14 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         task = _clip_words(_clean(group.get("task")), 42)
         if task:
             writer.textbox(x + 20, y + h * 0.82, w - 40, 18, task, size=7.8, color="657480")
+        detail_lines = [_clean(line) for line in (group.get("detailLines") or []) if _clean(line)]
+        for index, line in enumerate(detail_lines[:2]):
+            writer.textbox(x + 14, y + h + 22 + index * 13, w - 8, 13, _clip_words(line, 44), size=7.2, color="40515D", max_lines=1)
 
-    _draw_legend(writer, diagram_w, diagram_h, category_styles)
+    _draw_stream_table(writer, flowsheet)
+    _draw_title_block(writer, flowsheet, diagram_w, diagram_h)
+    legend_y = _float(flowsheet.get("legendY"), 0)
+    _draw_legend(writer, diagram_w, diagram_h, category_styles, legend_y if legend_y > 0 else None)
 
     presentation.core_properties.title = "Editable process flowsheet"
     presentation.core_properties.author = "Process Upscaling Workbench"
