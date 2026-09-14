@@ -2367,6 +2367,12 @@
       return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
     }
 
+    // Same code as plain text with the glossary on hover: a list of phenomena is information,
+    // not a row of state badges.
+    function phenomenonCode(code) {
+      return `<span class="phen-code" title="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
+    }
+
     function phenomenonOptionButton(code, active, disabled) {
       return `<button class="phen-option tip ${active ? "active" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}</button>`;
     }
@@ -7917,9 +7923,9 @@
       $("blockInspectorFields").hidden = !hasBlock;
       const sourceMeta = blockSourceMeta(block);
       $("selectedBlockInfo").innerHTML = block
-        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span><span class="pill">${escapeHtml(sourceMeta.label)}</span><div class="muted small">${escapeHtml(sourceMeta.description)} ${block.source === "protocol" ? "Edit this text when the extracted selection needs correction." : "Record the engineering basis in notes and selection rationale."}</div>`
+        ? `<strong>${block.id}</strong> <span class="muted small">· ${escapeHtml(block.groupId || "ungrouped")} · ${escapeHtml(sourceMeta.label)}</span><div class="muted small">${escapeHtml(sourceMeta.description)} ${block.source === "protocol" ? "Edit this text when the extracted selection needs correction." : "Record the engineering basis in notes and selection rationale."}</div>`
         : group
-          ? `<strong>${escapeHtml(group.id)}</strong> <span class="pill blue">group selected</span><div class="muted small">Select one of its blocks to edit description and phenomena.</div>`
+          ? `<strong>${escapeHtml(group.id)}</strong> <span class="muted small">· group selected</span><div class="muted small">Select one of its blocks to edit description and phenomena.</div>`
           : "No block selected.";
       $("behaviorSelect").value = block?.behavior || "unassigned";
       renderBehaviorPresetHelp(block?.behavior || "unassigned");
@@ -13281,14 +13287,14 @@
             <span class="step-flag" data-step-flag="4"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span><span class="step-flag-note"></span></span>
             <div class="label">Group Aggregate View</div>
             <strong>${escapeHtml(group.id)}</strong>
-            <span class="pill blue">${escapeHtml(group.task)}</span>
+            <span class="drawer-head-task">${escapeHtml(group.task)}</span>
           </div>
           <div class="mfa-summary-strip">
-            <span class="pill">${group.blocks.length} blocks</span>
-            <span class="pill blue">${mfaCount} MFA groups</span>
-            <span class="pill warn">${conditions.length} conditions</span>
+            <span class="drawer-head-counts">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"} · ${mfaCount} material row${mfaCount === 1 ? "" : "s"} · ${conditions.length} condition${conditions.length === 1 ? "" : "s"}</span>
             <span class="drawer-head-phenomena drawer-head-phenomena-inline">
-              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena assigned.</span>`}
+              ${group.phenomena.length
+                ? `<span class="drawer-head-counts">Phenomena:</span> ${group.phenomena.map(p => phenomenonCode(p)).join(`<span class="drawer-head-counts"> · </span>`)}`
+                : `<span class="muted small">No phenomena assigned.</span>`}
             </span>
           </div>
         </div>
@@ -13311,7 +13317,7 @@
               <section class="mfa-section role-${escapeAttr(roleGroup.role)}">
                 <div class="mfa-section-head">
                   <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
-                  <span class="pill">${roleGroup.items.length}</span>
+                  <span class="mfa-count">${roleGroup.items.length}</span>
                 </div>
                 <div class="mfa-rows">
                   ${roleGroup.items.length
@@ -13324,7 +13330,7 @@
           <details class="group-drawer-details" open>
             <summary>
               <span><strong>Conditions</strong><small>Composite operating profile</small></span>
-              <span class="pill">${conditions.length} values</span>
+              <span class="mfa-count">${conditions.length} values</span>
             </summary>
             <div class="condition-panel group-drawer-panel">
               <div class="condition-body">
