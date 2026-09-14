@@ -360,17 +360,38 @@
       const summary = $("dataReadinessSummary");
       const panel = $("dataReadinessPanel");
       if (!summary || !panel) return;
+      // One "Data quality" line instead of three cards (readiness, provenance, inventory): the
+      // three summaries read as one sentence, and the detail of all three opens with one button.
+      const hasStreams = state.blocks.some(block => (block.streams || []).some(stream => String(stream.name || "").trim()));
+      const toggle = $("toggleReadiness");
+      const details = $("dataQualityDetails");
+      if (!hasStreams) {
+        summary.textContent = "Appears once material streams are declared (step 4).";
+        summary.className = "muted small";
+        panel.hidden = true;
+        if (details) details.hidden = true;
+        if (toggle) toggle.hidden = true;
+        return;
+      }
+      if (toggle) toggle.hidden = false;
       const model = dataReadinessModel();
+      const provenance = dataProvenanceModel();
+      const reportedPercent = provenance.total ? Math.round((provenance.counts.reported || 0) / provenance.total * 100) : 0;
       const parts = [];
       if (model.missingCritical) parts.push(`${model.missingCritical} critical missing`);
       if (model.missingImportant) parts.push(`${model.missingImportant} important missing`);
-      if (model.confirmCount) parts.push(`${model.confirmCount} to confirm manually`);
-      summary.textContent = parts.length ? parts.join(", ") + "." : "All checkable items covered.";
+      if (model.confirmCount) parts.push(`${model.confirmCount} to confirm`);
+      if (!parts.length) parts.push("required values present");
+      parts.push(`${reportedPercent}% reported`);
+      state.showLcaReadiness = state.showDataReadiness;
+      const inventoryIssues = renderLcaReadiness();
+      if (Number.isFinite(inventoryIssues)) parts.push(`${inventoryIssues} inventory issue${inventoryIssues === 1 ? "" : "s"}`);
+      summary.textContent = `${parts.join(" · ")}.`;
       summary.className = model.missingCritical ? "small readiness-summary critical" : model.missingImportant ? "small readiness-summary important" : "small readiness-summary ok";
       panel.hidden = !state.showDataReadiness;
-      $("toggleReadiness").textContent = state.showDataReadiness ? "Hide" : "Details";
+      if (details) details.hidden = !state.showDataReadiness;
+      if (toggle) toggle.textContent = state.showDataReadiness ? "Hide" : "Details";
       renderDataProvenance();
-      renderLcaReadiness();
       if (!state.showDataReadiness) return;
       panel.innerHTML = model.categories.map(category => `
         <div class="readiness-category">
@@ -416,8 +437,8 @@
       const summary = $("lcaReadinessSummary");
       const panel = $("lcaReadinessPanel");
       const toggle = $("toggleLcaReadiness");
-      if (!summary || !panel) return;
-      if (state.activeInspectorTab && state.activeInspectorTab !== "inspect") return;
+      if (!summary || !panel) return NaN;
+      if (state.activeInspectorTab && state.activeInspectorTab !== "inspect") return NaN;
       let bridge = null;
       try {
         bridge = lcaReadinessSnapshot();
@@ -429,7 +450,7 @@
         summary.className = "muted small";
         panel.hidden = true;
         if (toggle) toggle.textContent = "Details";
-        return;
+        return NaN;
       }
       const issues = bridge.readiness?.issues || [];
       const counts = `${bridge.externalInputs.length} input${bridge.externalInputs.length === 1 ? "" : "s"}, ${bridge.emissions.length} emission${bridge.emissions.length === 1 ? "" : "s"}, ${bridge.wasteTreatments.length} waste treatment${bridge.wasteTreatments.length === 1 ? "" : "s"}`;
@@ -439,7 +460,7 @@
       summary.className = issues.length ? "small readiness-summary important" : "small readiness-summary ok";
       panel.hidden = !state.showLcaReadiness;
       if (toggle) toggle.textContent = state.showLcaReadiness ? "Hide" : "Details";
-      if (!state.showLcaReadiness) return;
+      if (!state.showLcaReadiness) return issues.length;
       const product = bridge.referenceProduct;
       const productName = product ? (product.name || product.canonicalName || product.rawName || "product") : "";
       const productKg = product?.amount?.kg;

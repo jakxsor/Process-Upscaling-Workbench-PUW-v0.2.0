@@ -1557,8 +1557,10 @@
       state.ruleChecks = [];
       state.aiRefine = null;
       state.selectedBlockId = null;
-      state.selectedGroupId = "G2";
-      state.selectedIds = ["B2", "B3", "B4"];
+      // Nothing is selected on load: the group drawer and the selected-item card stay closed until
+      // the user picks something, instead of opening on G2 with its full material editor.
+      state.selectedGroupId = null;
+      state.selectedIds = [];
       state.menuBlockId = null;
       state.menuGroupId = null;
       state.menuStreamId = null;
@@ -1723,8 +1725,8 @@
       state.ruleChecks = [];
       state.aiRefine = null;
       state.selectedBlockId = null;
-      state.selectedGroupId = "G1";
-      state.selectedIds = ["B1"];
+      state.selectedGroupId = null;
+      state.selectedIds = [];
       state.menuBlockId = null;
       state.menuGroupId = null;
       state.menuStreamId = null;
@@ -4901,12 +4903,18 @@
       };
     }
 
+    // The reactor to size is chosen from evidence, in a fixed order: the first group that
+    // declares a reaction phenomenon, then the group that makes the reference product if it
+    // looks like a reactor, then the selected group, then a wording match. The selected group
+    // used to come first, so the sizing basis changed with whatever the user had clicked.
     function reactorSizingGroupId(basis, reference) {
-      const selected = selectedGroup();
-      if (selected && reactionReactorLikeGroup(selected)) return selected.id;
+      const ids = groupIdsInTextOrder();
+      const declaredReaction = ids.find(id => (groupModel(id)?.phenomena || []).some(code => code.startsWith("R(")));
+      if (declaredReaction) return declaredReaction;
       const referenceGroup = reference?.block?.groupId ? groupModel(reference.block.groupId) : null;
       if (referenceGroup && reactionReactorLikeGroup(referenceGroup)) return referenceGroup.id;
-      const ids = groupIdsInTextOrder();
+      const selected = selectedGroup();
+      if (selected && reactionReactorLikeGroup(selected)) return selected.id;
       const reactionId = ids.find(id => reactionReactorLikeGroup(groupModel(id)));
       if (reactionId) return reactionId;
       return ids.find(id => /reactor|vessel|tank|batch|semi-batch|cstr/i.test(`${ensureGroup(id).selectedUnit || ""} ${ensureGroup(id).task || ""}`)) || "";

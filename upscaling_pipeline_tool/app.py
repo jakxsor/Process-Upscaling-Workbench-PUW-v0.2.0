@@ -263,34 +263,25 @@ APP_HTML = r"""<!doctype html>
           <div class="card stack">
             <div class="row between">
               <div>
-                <div class="label">Data Readiness</div>
+                <div class="label">Data Quality</div>
                 <div id="dataReadinessSummary" class="muted small">No project data yet.</div>
               </div>
               <button id="toggleReadiness" class="mini-button">Details</button>
             </div>
             <div id="dataReadinessPanel" hidden></div>
-          </div>
-
-          <div class="card stack">
-            <div class="row between">
-              <div>
-                <div class="label">Inventory Readiness</div>
-                <div id="lcaReadinessSummary" class="muted small">No streams yet.</div>
+            <div id="dataQualityDetails" class="data-quality-details" hidden>
+              <div class="readiness-category">
+                <div class="label">Data provenance</div>
+                <div class="muted small">How much of the declared stream data is measured, sourced, or assumed.</div>
+                <div id="dataProvenanceSummary"></div>
               </div>
-              <button id="toggleLcaReadiness" class="mini-button">Details</button>
+              <div class="readiness-category">
+                <div class="label">Inventory readiness</div>
+                <div id="lcaReadinessSummary" class="muted small">No streams yet.</div>
+                <div id="lcaReadinessPanel" hidden></div>
+              </div>
             </div>
-            <div id="lcaReadinessPanel" hidden></div>
           </div>
-
-          <details class="card inspector-details">
-            <summary>
-              <span><strong>Data Provenance</strong><small>Measured, database and assumed values</small></span>
-            </summary>
-            <div class="inspector-details-body">
-              <div class="muted small">Shows how much declared stream data is measured, sourced, or assumed. Data Readiness only checks whether required values are present.</div>
-              <div id="dataProvenanceSummary"></div>
-            </div>
-          </details>
         </div>
 
         <div id="heuristicsPanelTab" class="tab-view scale-tab" hidden>

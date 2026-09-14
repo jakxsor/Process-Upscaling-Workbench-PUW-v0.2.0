@@ -7658,6 +7658,8 @@
       .group-flow { min-height: 420px; }
     }
 
+    .data-quality-details { display: grid; gap: 10px; }
+
     .readiness-summary.critical { color: var(--red); }
     .readiness-summary.important { color: var(--orange); }
     .readiness-summary.ok { color: var(--green); }
