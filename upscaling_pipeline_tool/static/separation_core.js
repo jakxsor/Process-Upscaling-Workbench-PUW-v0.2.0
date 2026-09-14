@@ -1252,6 +1252,13 @@
     const nextOptions = pathwayOptionsForActive(groupId, simulatorModel, active, mainProduct);
     const outcome = pathwayOutcome(simulatorModel.substances, active, mainProduct, steps);
     const hasMissingEvidence = activePairs.some(pair => separationMissingForPair(pair).length > 0);
+    // What is actually missing, per property and per substance, so a blocked screening can say
+    // "Tb missing for X and Y" instead of repeating the outcome checks.
+    const lacks = prop => active.filter(item => !Number.isFinite(parseFloat(item[prop]))).map(item => item.name);
+    const propertyGaps = { tb: lacks("tb"), pvap: lacks("pvap"), tm: lacks("tm") };
+    const missingEvidence = activePairs
+      .map(pair => ({ pair: `${pair.a.name} / ${pair.b.name}`, missing: separationMissingForPair(pair) }))
+      .filter(item => item.missing.length);
     const status = pathwayStatus(pathway, outcome, nextOptions, editIndex, hasMissingEvidence);
     const alternatives = editIndex >= 0 ? [] : generatePathwayAlternatives(groupId, simulatorModel, mainProduct);
     return {
@@ -1270,6 +1277,8 @@
       alternatives,
       outcome,
       unresolved: outcome.unresolved,
+      propertyGaps,
+      missingEvidence,
       status,
       complete: status === "complete" || status === "applied",
       canApply: status === "complete" && steps.length > 0 && editIndex < 0

@@ -3507,8 +3507,10 @@
       align-items: end;
     }
 
+    /* Same six tracks as the manual mode: conversion and selectivity now sit in the row instead
+       of a collapsed "Residual assumptions" details block. */
     .conversion-basis-grid.automatic {
-      grid-template-columns: minmax(140px, 1fr) 72px minmax(100px, 0.65fr) minmax(210px, 1.15fr);
+      grid-template-columns: minmax(126px, 1fr) 62px repeat(3, minmax(88px, 0.62fr)) minmax(184px, 1.25fr);
     }
 
     .conversion-basis-grid label {
@@ -4859,6 +4861,61 @@
 
     .gantt-timeline-bar.bottleneck {
       background: var(--orange);
+    }
+
+    /* A task with no duration keeps its row as a hatched placeholder: the chart shows the whole
+       process and where the timing data stops. */
+    .gantt-timeline-row.unscheduled .gantt-timeline-label { opacity: 0.7; }
+
+    .gantt-timeline-bar.unscheduled {
+      background: repeating-linear-gradient(135deg, #e6ebee 0 6px, #f7f9fa 6px 12px);
+      border: 1px dashed #b3bfc6;
+      box-sizing: border-box;
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 12px;
+      padding-left: 6px;
+      min-width: 0;
+    }
+
+    .gantt-timeline-bar.ghost {
+      opacity: 0.32;
+      outline: 1px dashed currentColor;
+      outline-offset: -1px;
+    }
+
+    .gantt-timeline-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      border-left: 2px dashed var(--accent);
+      z-index: 1;
+    }
+
+    .gantt-timeline-marker span {
+      position: absolute;
+      top: -2px;
+      left: 4px;
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .gantt-timeline-legend .unscheduled::before {
+      background: repeating-linear-gradient(135deg, #e6ebee 0 3px, #f7f9fa 3px 6px);
+      border: 1px dashed #b3bfc6;
+    }
+
+    .gantt-timeline-legend .ghost::before { background: var(--blue); opacity: 0.32; }
+
+    .conversion-consistency-warning {
+      grid-column: 1 / -1;
+      color: var(--red);
+      background: var(--red-soft);
+      border-radius: 6px;
+      padding: 6px 8px;
     }
 
     .gantt-decision-card {

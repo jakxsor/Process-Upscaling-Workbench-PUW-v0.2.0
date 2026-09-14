@@ -72,3 +72,26 @@ audit recommends.
 
 Split-mode labels after a Gantt split; a dedicated undo for the last split; a
 paper-summary export; a layout-engine experiment behind a toggle.
+
+## Addendum, 2026-09-14: second pass
+
+Applied on top of `9af42a7` (the examples/catalog refactor from the other
+session), with the three non-board commits from the parked branch
+cherry-picked first.
+
+- Flowsheet reads the group-aggregated MFA (intra-group hand-offs excluded),
+  converts volumes with declared densities, numbers every stream, prints a
+  stream table and a title block, offers a basis selector (lab / scaled / per
+  kg), reports the per-unit balance, and exports the drawn routes, labels and
+  table to PowerPoint.
+- The octocrylene example declares densities and handbook Tb/Tm/Pvap for its
+  well-characterised substances; the Lutze screening now produces three
+  candidate pathways for G2 instead of "blocked by missing data", and a blocked
+  screening names the missing properties and substances.
+- Reaction Balance shows yield, conversion and selectivity side by side with a
+  live consistency check and the scaled-target equivalent.
+- The Gantt timeline keeps every task on its row (hatched when no duration)
+  and draws the next batch as a ghost at the plant cycle time in the
+  overlapped scenario.
+- The board layout is the original one; the grid layout from the first pass
+  stays parked on `review-fixes-20260912`.

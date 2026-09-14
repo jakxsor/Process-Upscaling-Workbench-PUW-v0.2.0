@@ -6732,29 +6732,49 @@
     // glance instead of only inferable from reading numbers row by row.
     function ganttTimelineHtml(gantt) {
       const makespan = gantt.estimatedCycleTimeH;
-      const tasks = gantt.tasks.filter(task => Number.isFinite(task.startH) && Number.isFinite(task.finishH) && task.finishH > task.startH);
-      if (!Number.isFinite(makespan) || makespan <= 0 || !tasks.length) return "";
+      const placed = gantt.tasks.filter(task => Number.isFinite(task.startH) && Number.isFinite(task.finishH) && task.finishH > task.startH);
+      if (!Number.isFinite(makespan) || makespan <= 0 || !placed.length) return "";
+      // Every task keeps its row: the ones without a duration are drawn as hatched placeholders in
+      // sequence, so the chart shows the whole process and where the timing data stops, instead
+      // of three bars for a nine-task process. In the overlapped scenario the next batch is drawn
+      // as a ghost starting at the plant cycle time, which is what "overlapped" means on a chart.
+      const overlapped = ensureScaleBasis().planningScenario === "overlapped";
+      const plantCycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
+      const showNextBatch = overlapped && Number.isFinite(plantCycle) && plantCycle < makespan;
+      const span = showNextBatch ? makespan + plantCycle : makespan;
       const tickCount = 5;
-      const ticks = Array.from({ length: tickCount + 1 }, (_, i) => makespan * i / tickCount);
+      const ticks = Array.from({ length: tickCount + 1 }, (_, i) => span * i / tickCount);
+      const pct = value => (value / span * 100).toFixed(2);
+      const unplacedCount = gantt.tasks.length - placed.length;
+      const bar = (task, offsetH, ghost) => {
+        const leftPct = Math.max(0, Math.min(100, (task.startH + offsetH) / span * 100));
+        const widthPct = Math.max(0.8, Math.min(100 - leftPct, (task.finishH - task.startH) / span * 100));
+        const tone = task.isBottleneck ? "bottleneck" : task.onCriticalPath ? "critical" : "";
+        const title = ghost
+          ? `${task.groupId} - next batch: ${formatNumber(task.startH + offsetH)}–${formatNumber(task.finishH + offsetH)} h (starts at the plant cycle time)`
+          : `${task.groupId} - ${task.task}: ${formatNumber(task.startH)}–${formatNumber(task.finishH)} h${task.isBottleneck ? " (bottleneck)" : task.onCriticalPath ? " (critical path)" : ""}`;
+        return `<div class="gantt-timeline-bar ${tone} ${ghost ? "ghost" : ""}" style="left:${leftPct}%; width:${widthPct}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"></div>`;
+      };
       return `
-        <div class="gantt-timeline" role="img" aria-label="${escapeAttr(`Gantt timeline with ${tasks.length} tasks over ${formatNumber(makespan)} hours.`)}">
+        <div class="gantt-timeline" role="img" aria-label="${escapeAttr(`Gantt timeline with ${placed.length} scheduled tasks over ${formatNumber(makespan)} hours${unplacedCount ? ` and ${unplacedCount} without a duration` : ""}.`)}">
           <div class="gantt-timeline-legend" aria-hidden="true">
-            <span class="standard">Scheduled</span><span class="critical">Critical path</span><span class="bottleneck">Bottleneck</span>
+            <span class="standard">Scheduled</span><span class="critical">Critical path</span><span class="bottleneck">Bottleneck</span>${unplacedCount ? `<span class="unscheduled">No duration</span>` : ""}${showNextBatch ? `<span class="ghost">Next batch</span>` : ""}
           </div>
           <div class="gantt-timeline-axis">
-            ${ticks.map(tick => `<span style="left:${(tick / makespan * 100).toFixed(2)}%">${formatNumber(tick)} h</span>`).join("")}
+            ${ticks.map(tick => `<span style="left:${pct(tick)}%">${formatNumber(Math.round(tick * 10) / 10)} h</span>`).join("")}
           </div>
           <div class="gantt-timeline-body">
-            ${ticks.map(tick => `<div class="gantt-timeline-grid" style="left:${(tick / makespan * 100).toFixed(2)}%"></div>`).join("")}
-            ${tasks.map(task => {
-              const leftPct = Math.max(0, Math.min(100, task.startH / makespan * 100));
-              const widthPct = Math.max(0.8, Math.min(100 - leftPct, (task.finishH - task.startH) / makespan * 100));
-              const tone = task.isBottleneck ? "bottleneck" : task.onCriticalPath ? "critical" : "";
+            ${ticks.map(tick => `<div class="gantt-timeline-grid" style="left:${pct(tick)}%"></div>`).join("")}
+            ${showNextBatch ? `<div class="gantt-timeline-marker" style="left:${pct(plantCycle)}%" title="${escapeAttr(`Plant cycle ${formatNumber(plantCycle)} h: the next batch can start here`)}"><span>next batch ${formatNumber(plantCycle)} h</span></div>` : ""}
+            ${gantt.tasks.map(task => {
+              const isPlaced = placed.includes(task);
               return `
-                <div class="gantt-timeline-row">
+                <div class="gantt-timeline-row ${isPlaced ? "" : "unscheduled"}">
                   <span class="gantt-timeline-label" title="${escapeAttr(task.task)}"><strong>${escapeHtml(task.groupId)}</strong><small>${escapeHtml(task.task)}</small></span>
                   <div class="gantt-timeline-track">
-                    <div class="gantt-timeline-bar ${tone}" style="left:${leftPct.toFixed(2)}%; width:${widthPct.toFixed(2)}%" title="${escapeAttr(task.groupId)} - ${escapeAttr(task.task)}: ${formatNumber(task.startH)}–${formatNumber(task.finishH)} h${task.isBottleneck ? " (bottleneck)" : task.onCriticalPath ? " (critical path)" : ""}" aria-label="${escapeAttr(`${task.groupId} ${task.task}: starts at ${formatNumber(task.startH)} hours and finishes at ${formatNumber(task.finishH)} hours.`)}"></div>
+                    ${isPlaced
+                      ? `${bar(task, 0, false)}${showNextBatch ? bar(task, plantCycle, true) : ""}`
+                      : `<div class="gantt-timeline-bar unscheduled" style="left:0; width:100%" title="${escapeAttr(`${task.groupId} - ${task.task}: no duration yet; add it in the task row below or use Fill Example Durations`)}"><span>no duration</span></div>`}
                   </div>
                 </div>
               `;
@@ -9647,22 +9667,21 @@
                     <span class="unit-badge">%</span>
                   </div>
                 </label>
-                ${productMode === "from reactants" ? "" : `
-                  <label class="conversion-field-conversion">
-                    <span class="label">Conversion ${conversionInfoIcon("Fraction of the limiting reactant consumed. This value determines every unreacted reagent residual.")}</span>
-                    <div class="conversion-percent-controls">
-                      <input type="number" min="0" max="100" step="1" id="reactionConversionPercent" value="${conversionPercent}" title="Limiting-reactant conversion used for stoichiometric consumption and residual streams.">
-                      <span class="unit-badge">%</span>
-                    </div>
-                  </label>
-                  <label class="conversion-field-selectivity">
-                    <span class="label">Selectivity ${conversionInfoIcon("Fraction of converted limiting reactant directed to the selected main product. Yield cannot exceed conversion multiplied by selectivity.")}</span>
-                    <div class="conversion-percent-controls">
-                      <input type="number" min="0" max="100" step="1" id="reactionSelectivityPercent" value="${selectivityPercent}" title="Selectivity toward the selected main product.">
-                      <span class="unit-badge">%</span>
-                    </div>
-                  </label>
-                `}
+                <label class="conversion-field-conversion">
+                  <span class="label">Conversion ${conversionInfoIcon("Fraction of the limiting reactant consumed. This value determines every unreacted reagent residual.")}</span>
+                  <div class="conversion-percent-controls">
+                    <input type="number" min="0" max="100" step="1" id="reactionConversionPercent" value="${conversionPercent}" title="Limiting-reactant conversion used for stoichiometric consumption and residual streams.">
+                    <span class="unit-badge">%</span>
+                  </div>
+                </label>
+                <label class="conversion-field-selectivity">
+                  <span class="label">Selectivity ${conversionInfoIcon("Fraction of converted limiting reactant directed to the selected main product. Yield cannot exceed conversion multiplied by selectivity.")}</span>
+                  <div class="conversion-percent-controls">
+                    <input type="number" min="0" max="100" step="1" id="reactionSelectivityPercent" value="${selectivityPercent}" title="Selectivity toward the selected main product.">
+                    <span class="unit-badge">%</span>
+                  </div>
+                </label>
+                ${conversionConsistencyWarningHtml(percent, conversionPercent, selectivityPercent)}
                 ${calc.balanceMethod === "stoichiometric"
                   ? `<div class="conversion-mode-field conversion-fixed-mode"><span class="label">Product amount basis</span><strong>Calculated from reaction inputs</strong></div>`
                   : `<label class="conversion-mode-field" title="${escapeAttr(productModeTooltip(productMode))}">
@@ -9672,22 +9691,7 @@
                 <div class="conversion-mode-help" title="${escapeAttr(productModeTooltip(productMode))}">${escapeHtml(productModeHelpText(productMode, percent))}</div>
               </div>
               ${conversionAutomaticProductHtml(calc)}
-              ${productMode === "from reactants" ? `
-                <details class="conversion-performance-details">
-                  <summary><span>Residual assumptions</span><small>${formatNumber(conversionPercent)}% conversion · ${formatNumber(selectivityPercent)}% selectivity</small></summary>
-                  <div>
-                    <label>
-                      <span class="label">Conversion ${conversionInfoIcon("Fraction of the limiting reactant consumed. This determines unreacted reagent quantities.")}</span>
-                      <div class="conversion-percent-controls"><input type="number" min="0" max="100" step="1" id="reactionConversionPercent" value="${conversionPercent}"><span class="unit-badge">%</span></div>
-                    </label>
-                    <label>
-                      <span class="label">Selectivity ${conversionInfoIcon("Fraction of converted limiting reactant directed to the selected product.")}</span>
-                      <div class="conversion-percent-controls"><input type="number" min="0" max="100" step="1" id="reactionSelectivityPercent" value="${selectivityPercent}"><span class="unit-badge">%</span></div>
-                    </label>
-                    <span>Yield determines product kg. Conversion determines unreacted kg; selectivity documents how much converted material forms the selected product.</span>
-                  </div>
-                </details>
-              ` : ""}
+              ${conversionScaledEquivalentHtml(calc, productQty, percent)}
               ${reactionDefinitionHtml(calc)}
               ${conversionYieldBasisStatementHtml(calc, productEntryQuantity)}
               ${conversionAnalysisHtml(calc)}
@@ -11716,11 +11720,57 @@
       `;
     }
 
+    // A blocked screening names the missing properties and substances. The outcome checks
+    // ("cyclohexane: still present but assigned to recycle") describe a pathway that has no steps
+    // yet, which is the consequence, not the cause.
+    // Yield, conversion and selectivity are the three numbers the framework's reaction stage
+    // rests on, so they sit side by side and their one constraint is checked as you type: the
+    // yield cannot exceed conversion x selectivity. They used to hide in a collapsed
+    // "Residual assumptions" row in the stoichiometric mode.
+    function conversionConsistencyWarningHtml(yieldPercent, conversionPercent, selectivityPercent) {
+      const y = Number(yieldPercent);
+      const c = Number(conversionPercent);
+      const s = Number(selectivityPercent);
+      if (![y, c, s].every(Number.isFinite)) return "";
+      const ceiling = c * s / 100;
+      if (y <= ceiling + 1e-9) return "";
+      return `<div class="conversion-mode-help conversion-consistency-warning">Yield ${formatNumber(y)}% exceeds conversion x selectivity = ${formatNumber(Math.round(ceiling * 100) / 100)}%. Lower the yield, or raise conversion or selectivity.</div>`;
+    }
+
+    // The same reaction at the scale-up target, so the lab balance and the industrial batch are
+    // one screen apart instead of two panels apart.
+    function conversionScaledEquivalentHtml(calc, productQty, yieldPercent) {
+      if (typeof scaleModel !== "function") return "";
+      const targetKg = parseStreamQuantity(scaleModel()?.target?.kgPerBatch);
+      const theoreticalKg = parseStreamQuantity(productQty);
+      const y = parseStreamQuantity(yieldPercent);
+      if (!Number.isFinite(targetKg) || targetKg <= 0 || !Number.isFinite(theoreticalKg) || theoreticalKg <= 0) return "";
+      const labProductKg = theoreticalKg * (Number.isFinite(y) ? y : 100) / 100;
+      if (!(labProductKg > 0)) return "";
+      const factor = targetKg / labProductKg;
+      return `<div class="conversion-mode-help">At the scale-up target this batch makes ${formatDisplayNumber(targetKg)} kg of product: every reagent charge and residual below scales by ${formatDisplayNumber(factor)}.</div>`;
+    }
+
+    function pathwayMissingEvidenceText(path) {
+      const gaps = path.propertyGaps || {};
+      const parts = [];
+      const list = names => names.length > 4 ? `${names.slice(0, 4).join(", ")} and ${names.length - 4} more` : names.join(", ");
+      if ((gaps.tb || []).length) parts.push(`boiling point (Tb) for ${list(gaps.tb)}`);
+      if ((gaps.pvap || []).length) parts.push(`vapour pressure (Pvap) for ${list(gaps.pvap)}`);
+      if ((gaps.tm || []).length) parts.push(`melting point (Tm) for ${list(gaps.tm)}`);
+      if (!parts.length && (path.missingEvidence || []).length) {
+        return `Binary evidence missing: ${path.missingEvidence.slice(0, 3).map(item => `${item.pair}: ${item.missing.join(", ")}`).join("; ")}.`;
+      }
+      if (!parts.length) return "";
+      return `Missing ${parts.join("; ")}. Use Autofill properties in Mixture, or enter values under Advanced properties.`;
+    }
+
     function pathwayStatusPresentation(path) {
+      const missingText = pathwayMissingEvidenceText(path);
       const labels = {
         not_started: ["Define mixture objective", "Add a main product and assign a destination to each substance.", "partial"],
         in_progress: ["Pathway in progress", `${path.active.length} components remain; ${path.unresolved.length} outcome check${path.unresolved.length === 1 ? "" : "s"} unresolved.`, "partial"],
-        blocked_missing_data: ["Blocked by missing data", path.unresolved.join("; ") || "Complete phases, destinations, and binary evidence.", "blocked"],
+        blocked_missing_data: ["Blocked by missing property data", missingText || path.unresolved.join("; ") || "Complete phases, destinations, and binary evidence.", "blocked"],
         blocked_no_route: ["No eligible next route", path.unresolved.join("; ") || "The current evidence does not justify another separation move.", "blocked"],
         complete: ["Complete screening pathway", "Every substance has a declared destination and the product-rich stream is resolved.", "ready"],
         applied: ["Pathway applied", "This screened pathway has been written to the main flowsheet.", "ready"]
