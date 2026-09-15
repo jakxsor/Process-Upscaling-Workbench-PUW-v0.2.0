@@ -948,6 +948,28 @@ const bioDecantGroup = bioApplied.map(id => state.groups[id]).find(group => grou
 assert(bioDecantGroup.task.includes("glycerol + sodium hydroxide from methyl oleate"), "The decanter task should be named by what leaves and what stays, got " + bioDecantGroup.task);
 assert(state.links.some(link => link.from === "G2" && link.to === "G3") && state.links.some(link => link.from === "G3" && link.to === "G4"), "The applied separators should chain from the reactor");
 
+// Project substance table: one row per substance across every stream, conflicts reported, and a
+// value entered once reaching every stream and the screening substances.
+loadBiodieselExampleProject();
+const substanceRows = projectSubstanceTableModel();
+const methanolRow = substanceRows.find(row => row.name === "methanol");
+assert(methanolRow && methanolRow.streamCount >= 8 && methanolRow.fields.mw.value === "32.04", "Methanol should be one row covering its streams with the declared MW, got " + JSON.stringify(methanolRow && { streams: methanolRow.streamCount, mw: methanolRow.fields.mw.value }));
+assert(substanceRows.filter(row => row.lutzeComplete).length >= 2, "Methanol and glycerol carry MW, Tb, Tm and Pvap and should count as screening-complete");
+assert(substanceRows.every(row => !row.conflicts.length), "The biodiesel case declares every property consistently: " + JSON.stringify(substanceRows.filter(row => row.conflicts.length).map(row => [row.name, row.conflicts])));
+const methanolStreamB2 = state.blocks.find(block => block.id === "B2").streams.find(stream => stream.name === "methanol");
+methanolStreamB2.density = "800";
+withRenderPass(() => {
+  const conflicted = projectSubstanceTableModel().find(row => row.name === "methanol");
+  assert(conflicted.conflicts.includes("density") && conflicted.fields.density.values.length === 2, "A density differing on one methanol stream should be reported as a conflict");
+});
+applyProjectSubstanceProperty("methanol", "density", "792");
+assert(state.blocks.every(block => block.streams.filter(stream => stream.name === "methanol").every(stream => stream.density === "792")), "Applying a property should reach every methanol stream");
+applyProjectSubstanceProperty("methanol", "tb", "338");
+assert(ensureGroup("G2").separationSimulator.substances.find(item => item.name === "methanol").tb === "338", "Applying a property should reach the screening substance of the same key");
+withRenderPass(() => {
+  assert(!projectSubstanceTableModel().find(row => row.name === "methanol").conflicts.length, "Unifying the value should clear the conflict");
+});
+
 console.log("Complete separation flow check passed.");
 `;
 

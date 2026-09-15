@@ -301,6 +301,16 @@ APP_HTML = r"""<!doctype html>
             </div>
           </details>
 
+          <details class="card inspector-details" id="projectSubstancesCard">
+            <summary>
+              <span><strong>Substances</strong><small id="projectSubstancesSummary">No substances declared yet.</small></span>
+            </summary>
+            <div class="inspector-details-body">
+              <div class="muted small">One row per substance across the whole project. Enter a property once here and every stream of that substance, and the Lutze screening, receive it.</div>
+              <div id="projectSubstances"></div>
+            </div>
+          </details>
+
           <pre id="jsonOut" hidden>{}</pre>
 
           <div class="card stack">

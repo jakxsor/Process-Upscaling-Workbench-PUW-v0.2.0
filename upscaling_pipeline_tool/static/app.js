@@ -8482,6 +8482,7 @@
       $("blockText").value = block?.text || "";
       renderPhenomenaGrid(block);
       renderGroupProperties(group || (block?.groupId ? groupModel(block.groupId) : null));
+      renderProjectSubstances();
 
       // Hidden tabs are drawn when they are opened (setInspectorTab), not on every pass: the
       // Scale-Up and Heuristics panels cost about 90 ms together and were rebuilt unseen.
@@ -11072,6 +11073,205 @@
     // name that contains one ("recovered cyclohexane (98%)") maps to it. This used to be a fixed
     // list of the octocrylene case's five substances, so any other protocol fell through to
     // generic word-stripping and its recycle, product and reactant streams never lined up.
+    // One row per substance across the project. Properties belong to a substance, not to a
+    // stream: the biodiesel case carries the same six substances on some sixty streams, and a
+    // molar mass typed on one of them reached none of the others. The table reads every stream,
+    // reports where the same substance carries two different values, and writes a value entered
+    // here to every stream of that substance and to the screening substances that share its key.
+    const projectSubstanceFields = [
+      { id: "mw", label: "MW", unit: "g/mol", lutze: true },
+      { id: "tb", label: "Tb", unit: "K", lutze: true },
+      { id: "tm", label: "Tm", unit: "K", lutze: true },
+      { id: "pvap", label: "Pvap", unit: "Pa", lutze: true },
+      { id: "pvapTemperature", label: "Pvap T", unit: "K" },
+      { id: "density", label: "Density", unit: "kg/m3" },
+      { id: "solubilityParameter", label: "Sol. par.", unit: "" },
+      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol" },
+      { id: "pubchemCid", label: "CID", unit: "" }
+    ];
+
+    function projectSubstanceEntries() {
+      const entries = new Map();
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        const name = String(stream.name || "").trim();
+        if (!name) return;
+        const key = canonicalChemicalKey(name);
+        if (!key) return;
+        if (!entries.has(key)) entries.set(key, { key, name, streams: [], blockIds: [] });
+        const entry = entries.get(key);
+        entry.streams.push({ block, stream });
+        if (!entry.blockIds.includes(block.id)) entry.blockIds.push(block.id);
+      }));
+      return entries;
+    }
+
+    function projectSubstanceTableModel() {
+      return memoInPass("projectSubstanceTable", undefined, () => {
+        const rows = [];
+        projectSubstanceEntries().forEach(entry => {
+          const fields = {};
+          const conflicts = [];
+          projectSubstanceFields.forEach(def => {
+            const values = [...new Set(entry.streams.map(({ stream }) => String(stream[def.id] || "").trim()).filter(Boolean))];
+            fields[def.id] = { value: values[0] || "", values, conflict: values.length > 1 };
+            if (values.length > 1) conflicts.push(def.id);
+          });
+          rows.push({
+            key: entry.key,
+            name: entry.name,
+            streamCount: entry.streams.length,
+            blockIds: entry.blockIds,
+            fields,
+            conflicts,
+            identified: Boolean(fields.mw.value || fields.pubchemCid.value),
+            lutzeComplete: projectSubstanceFields.filter(def => def.lutze).every(def => fields[def.id].value),
+            provenance: weakestProvenance(entry.streams.map(({ stream }) => stream.status))
+          });
+        });
+        return rows.sort((a, b) => b.streamCount - a.streamCount || a.name.localeCompare(b.name));
+      });
+    }
+
+    function applyProjectSubstanceProperty(key, field, value) {
+      const text = String(value ?? "").trim();
+      let touched = 0;
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        if (canonicalChemicalKey(stream.name) !== key) return;
+        if (String(stream[field] || "").trim() !== text) touched += 1;
+        stream[field] = text;
+      }));
+      Object.values(state.groups).forEach(group => {
+        (group.separationSimulator?.substances || []).forEach(substance => {
+          if (substanceChemicalKey(substance) !== key && canonicalChemicalKey(substance.name) !== key) return;
+          substance[field] = text;
+        });
+      });
+      return touched;
+    }
+
+    function projectSubstancesSummaryText(rows) {
+      if (!rows.length) return "No substances declared yet.";
+      const conflicts = rows.filter(row => row.conflicts.length).length;
+      const ready = rows.filter(row => row.lutzeComplete).length;
+      return `${rows.length} substance${rows.length === 1 ? "" : "s"} · ${ready} with MW, Tb, Tm and Pvap${conflicts ? ` · ${conflicts} with conflicting values` : ""}`;
+    }
+
+    function projectSubstancesTableHtml(rows) {
+      if (!rows.length) return `<div class="mfa-empty">Declare streams with substance names first; every substance then gets one row here.</div>`;
+      const cell = (row, def) => {
+        const field = row.fields[def.id];
+        const title = field.conflict
+          ? `${def.label}: differs between streams (${field.values.join(" | ")}). Pick one below or type a value; it is written to every stream of ${row.name}.`
+          : `${def.label}${def.unit ? ` (${def.unit})` : ""} for every stream of ${row.name}`;
+        return `
+          <td class="${field.conflict ? "conflict" : ""}">
+            <input data-substance-field="${escapeAttr(def.id)}" data-substance-key="${escapeAttr(row.key)}" value="${escapeAttr(field.value)}" placeholder="${escapeAttr(def.unit || "-")}" title="${escapeAttr(title)}" inputmode="decimal">
+            ${field.conflict ? `<div class="substance-conflict">${field.values.map(value => `<button type="button" data-unify-substance="${escapeAttr(row.key)}" data-unify-field="${escapeAttr(def.id)}" data-unify-value="${escapeAttr(value)}" title="Use ${escapeAttr(value)} on every stream">${escapeHtml(value)}</button>`).join("")}</div>` : ""}
+          </td>`;
+      };
+      return `
+        <div class="substance-table-wrap">
+          <table class="substance-table">
+            <thead>
+              <tr>
+                <th>Substance</th>
+                <th title="Streams carrying this substance, and the blocks they belong to">Streams</th>
+                ${projectSubstanceFields.map(def => `<th title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr class="${row.conflicts.length ? "has-conflict" : ""}">
+                  <td class="substance-name"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
+                  <td class="num" title="${escapeAttr(row.blockIds.join(", "))}">${row.streamCount}<small>${escapeHtml(row.blockIds.slice(0, 4).join(" "))}${row.blockIds.length > 4 ? " …" : ""}</small></td>
+                  ${projectSubstanceFields.map(def => cell(row, def)).join("")}
+                  <td><button type="button" class="mini-button" data-fetch-substance-pubchem="${escapeAttr(row.key)}" title="Fetch MW, boiling and melting points, vapour pressure, density and CID from PubChem and write them to every stream of ${escapeAttr(row.name)}">PubChem</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="muted small">A value typed here is written to every stream of the substance and to the Lutze screening; a cell marked amber carries two different values on different streams.</div>
+      `;
+    }
+
+    function renderProjectSubstances() {
+      const root = $("projectSubstances");
+      const summary = $("projectSubstancesSummary");
+      if (!root || !summary) return;
+      const rows = projectSubstanceTableModel();
+      summary.textContent = projectSubstancesSummaryText(rows);
+      const card = $("projectSubstancesCard");
+      // The table is drawn only while the card is open: one row per substance is cheap, but a
+      // closed card does not need it on every pass.
+      if (card && !card.open) {
+        root.innerHTML = "";
+        return;
+      }
+      root.innerHTML = projectSubstancesTableHtml(rows);
+      root.querySelectorAll("[data-substance-field][data-substance-key]").forEach(input => {
+        input.addEventListener("change", () => {
+          pushUndo();
+          applyProjectSubstanceProperty(input.dataset.substanceKey, input.dataset.substanceField, input.value);
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-unify-substance][data-unify-field][data-unify-value]").forEach(button => {
+        button.addEventListener("click", () => {
+          pushUndo();
+          applyProjectSubstanceProperty(button.dataset.unifySubstance, button.dataset.unifyField, button.dataset.unifyValue);
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-fetch-substance-pubchem]").forEach(button => {
+        button.addEventListener("click", async () => {
+          await fetchPubChemForSubstance(button.dataset.fetchSubstancePubchem, button);
+        });
+      });
+    }
+
+    async function fetchPubChemForSubstance(key, button = null) {
+      if (typeof lookupPubChem !== "function" || typeof applyPubChemLookup !== "function") return;
+      const entry = projectSubstanceEntries().get(key);
+      if (!entry) return;
+      const lookupName = entry.streams.map(({ stream }) => streamPubChemLookupName(stream)).find(Boolean) || entry.name;
+      const previousText = button?.textContent;
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Fetching...";
+      }
+      try {
+        const data = await lookupPubChem(lookupName);
+        if (!data.ok) {
+          await alertModal(data.error || `PubChem did not resolve "${lookupName}". Give one of its streams a clearer PubChem lookup name.`);
+          return;
+        }
+        pushUndo();
+        entry.streams.forEach(({ block, stream }) => {
+          applyPubChemLookup(stream, data);
+          if (stream.status === "missing") stream.status = "estimated";
+          syncLegacyStreamLists(block);
+        });
+        Object.values(state.groups).forEach(group => {
+          (group.separationSimulator?.substances || []).forEach(substance => {
+            if (substanceChemicalKey(substance) === key || canonicalChemicalKey(substance.name) === key) applyPubChemLookup(substance, data);
+          });
+        });
+        invalidateAiRefine();
+        renderAll();
+      } catch (error) {
+        await alertModal(`PubChem lookup failed: ${error.message}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = previousText || "PubChem";
+        }
+      }
+    }
+
     function projectSubstanceVocabulary() {
       const names = new Set();
       state.blocks.forEach(block => (block.streams || []).forEach(stream => {
@@ -16519,6 +16719,7 @@
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
+    $("projectSubstancesCard")?.addEventListener("toggle", () => renderProjectSubstances());
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
