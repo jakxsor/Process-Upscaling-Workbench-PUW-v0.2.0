@@ -221,18 +221,28 @@
     }
 
     function flowsheetStreamsKgTotal(streams) {
-      return (streams || []).reduce((acc, stream) => {
+      const list = streams || [];
+      const total = list.reduce((acc, stream) => {
         const { kg } = flowsheetStreamKg(stream);
         if (Number.isFinite(kg)) acc.kg += kg; else acc.unknown += 1;
         return acc;
       }, { kg: 0, unknown: 0 });
+      // A total is as good as its weakest contributor.
+      total.provenance = weakestProvenance(list.map(flowsheetStreamProvenance));
+      return total;
     }
 
-    function flowsheetKgText(kg) {
+    // A volume weighed with a density is a calculation even when the volume was reported.
+    function flowsheetStreamProvenance(stream) {
+      const status = provenanceKey(stream?.status);
+      return status === "reported" && flowsheetStreamKg(stream).source === "volume x density" ? "calculated" : status;
+    }
+
+    // Mass text with the figures its provenance supports (see significantText in app.js). Without
+    // a status, three significant figures: enough for a percentage or a basis line.
+    function flowsheetKgText(kg, status = "") {
       if (!Number.isFinite(kg)) return "";
-      const magnitude = Math.abs(kg);
-      const digits = magnitude >= 1000 ? 0 : magnitude >= 100 ? 1 : magnitude >= 1 ? 2 : 3;
-      return String(Number(kg.toFixed(digits)));
+      return significantText(kg, status ? provenanceDigits(status) : 3);
     }
 
     // One source of truth for what a unit takes in and sends out: the same block streams the
@@ -272,7 +282,8 @@
       });
       return Array.from(merged.values()).map(item => ({
         ...item,
-        quantity: item.allNumeric ? formatNumber(item.numericTotal) : "",
+        status: weakestProvenance(item.entries.map(entry => entry.status)),
+        quantity: item.allNumeric ? significantText(item.numericTotal, provenanceDigits(weakestProvenance(item.entries.map(entry => entry.status)))) : "",
         quantityMissing: !item.allNumeric
       }));
     }
@@ -293,6 +304,7 @@
         deltaKg,
         deltaPercent,
         unknown,
+        provenance: weakestProvenance([inputs.provenance, outlets.provenance]),
         status: !(inputs.kg > 0 || outlets.kg > 0) ? "no data" : unknown ? "open" : Math.abs(deltaPercent) > 2 ? "off" : "closed"
       };
     }
@@ -387,7 +399,7 @@
         return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
       }, list[0]);
       const total = flowsheetStreamsKgTotal(list);
-      const mass = total.kg > 0 ? `${flowsheetKgText(total.kg)} kg` : "";
+      const mass = total.kg > 0 ? `${flowsheetKgText(total.kg, total.provenance)} kg` : "";
       const unknown = total.unknown ? `${total.unknown} n.q.` : "";
       const extra = list.length > 1 ? ` +${list.length - 1}` : "";
       const detail = [mass, unknown].filter(Boolean).join(", ");
@@ -579,7 +591,7 @@
       const balance = box.balance;
       const balanceText = balance && balance.status !== "no data"
         ? balance.status === "closed"
-          ? `balance closed (${flowsheetKgText(balance.inKg)} in / ${flowsheetKgText(balance.outKg)} out)`
+          ? `balance closed (${flowsheetKgText(balance.inKg, balance.provenance)} in / ${flowsheetKgText(balance.outKg, balance.provenance)} out)`
           : balance.status === "open"
             ? `balance open, ${balance.unknown} n.q.`
             : `balance off ${balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(balance.deltaPercent)}%`
@@ -587,7 +599,7 @@
       return [
         box.equipmentSizeLine,
         box.totalOutputKg > 0
-          ? `Load: ${flowsheetKgText(box.totalOutputKg)} kg out${balanceText ? `; ${balanceText}` : ""}`
+          ? `Load: ${flowsheetKgText(box.totalOutputKg, weakestProvenance((box.outputStreams || []).map(stream => stream.status)))} kg out${balanceText ? `; ${balanceText}` : ""}`
           : (balanceText ? `Load: ${balanceText}` : ""),
         (box.specs || []).length ? `Operating: ${box.specs.join(" / ")}` : "",
         materialLine ? `MFA: ${materialLine}` : ""
@@ -1371,7 +1383,7 @@
             <text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 18 : 34)}" font-size="10.2" text-anchor="middle" fill="#657480"><title>${escapeHtml(box.task)}</title>${escapeHtml(taskLine)}</text>
             ${box.concurrent ? `<text x="${box.x + box.w - 8}" y="${box.y + 6}" font-size="9.5" font-weight="800" text-anchor="end" fill="#6c7680">concurrent</text>` : ""}
             ${box.isProduct ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + (showUnitDetails ? 34 : 50)}" font-size="11" font-weight="700" text-anchor="middle" fill="#286d3f">final product</text>` : ""}
-            ${box.balance?.status === "off" ? `<text x="${box.x + box.w - 4}" y="${box.y + box.h + 6}" font-size="10" font-weight="900" text-anchor="end" fill="#a23b3b"><title>${escapeHtml(`Mass balance off: ${flowsheetKgText(box.balance.inKg)} kg in, ${flowsheetKgText(box.balance.outKg)} kg out (${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%)`)}</title>&#9650; ${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%</text>` : ""}
+            ${box.balance?.status === "off" ? `<text x="${box.x + box.w - 4}" y="${box.y + box.h + 6}" font-size="10" font-weight="900" text-anchor="end" fill="#a23b3b"><title>${escapeHtml(`Mass balance off: ${flowsheetKgText(box.balance.inKg, box.balance.provenance)} kg in, ${flowsheetKgText(box.balance.outKg, box.balance.provenance)} kg out (${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%)`)}</title>&#9650; ${box.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(box.balance.deltaPercent)}%</text>` : ""}
             ${wasteVentHtml}
             ${inletHtml}
             <rect class="flowsheet-drag-handle tip" data-tip="${escapeAttr(dragTip)}" x="${box.x - 12}" y="${box.y - 12}" width="${box.w + 24}" height="${box.h + 62}" fill="transparent"></rect>
@@ -1464,7 +1476,7 @@
         const composition = streams
           .map(stream => ({ stream, kg: flowsheetStreamKg(stream).kg }))
           .sort((a, b) => (Number.isFinite(b.kg) ? b.kg : -1) - (Number.isFinite(a.kg) ? a.kg : -1))
-          .map(({ stream, kg }) => `${stream.name} ${Number.isFinite(kg) ? `${flowsheetKgText(kg)} kg` : stream.quantity ? `${stream.quantity} ${stream.unit || ""}`.trim() : "n.q."}`);
+          .map(({ stream, kg }) => `${stream.name} ${Number.isFinite(kg) ? `${flowsheetKgText(kg, flowsheetStreamProvenance(stream))} kg` : stream.quantity ? `${stream.quantity} ${stream.unit || ""}`.trim() : "n.q."}`);
         const phases = [...new Set(streams.map(stream => stream.phase).filter(phase => phase && phase !== "unknown"))];
         rows.push({
           tag: link.tag || "",
@@ -1473,6 +1485,7 @@
           to: link.to,
           totalKg: streams.length && totals.kg > 0 ? totals.kg : NaN,
           unknown: totals.unknown,
+          provenance: totals.provenance,
           count: streams.length,
           composition,
           phase: phases.join("/")
@@ -1503,7 +1516,7 @@
       const body = rows.map((row, index) => {
         const y = headerY + 17 + index * rowH;
         const mass = Number.isFinite(row.totalKg)
-          ? `${flowsheetKgText(row.totalKg)} kg${row.unknown ? ` (+${row.unknown} n.q.)` : ""}`
+          ? `${flowsheetKgText(row.totalKg, row.provenance)} kg${row.unknown ? ` (+${row.unknown} n.q.)` : ""}`
           : row.count ? `n.q. (${row.count} stream${row.count === 1 ? "" : "s"})` : "no declared streams";
         return [
           index % 2 ? `<rect x="${x0 - 4}" y="${y - 11}" width="${width - 64}" height="${rowH}" fill="#f4f7f9"></rect>` : "",

@@ -94,8 +94,8 @@
         </div>
         <div class="flowsheet-detail-task">${escapeHtml(selected.task || "No task label")}</div>
         <div class="flowsheet-detail-kpis">
-          <span><strong>${flowsheetKgText(selected.balance?.inKg || 0)}</strong> kg in</span>
-          <span><strong>${flowsheetKgText(selected.balance?.outKg || 0)}</strong> kg out</span>
+          <span><strong>${flowsheetKgText(selected.balance?.inKg || 0, selected.balance?.provenance)}</strong> kg in</span>
+          <span><strong>${flowsheetKgText(selected.balance?.outKg || 0, selected.balance?.provenance)}</strong> kg out</span>
           <span><strong>${selected.balance
             ? selected.balance.status === "closed" ? "closed"
               : selected.balance.status === "open" ? `${selected.balance.unknown} n.q.`

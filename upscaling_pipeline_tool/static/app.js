@@ -4477,8 +4477,9 @@
         const canSum = numeric.every(value => Number.isFinite(value)) && unit;
         if (canSum) {
           const total = numeric.reduce((sum, value) => sum + value, 0);
-          totals.push({ total, unit, timing });
-          lines.push(`${timing}: ${formatNumber(total)} ${unit} (${group.map(stream => stream.blockId).join(", ")})`);
+          const provenance = weakestProvenance(group.map(stream => stream.status));
+          totals.push({ total, unit, timing, provenance });
+          lines.push(`${timing}: ${quantityTextByProvenance(total, provenance, unit)} (${group.map(stream => stream.blockId).join(", ")})`);
         } else {
           group.forEach(stream => {
             const quantity = stream.quantity ? `${stream.quantity} ${stream.unit}` : "quantity missing";
@@ -4514,7 +4515,8 @@
       if (units.size !== 1) return { text: "", value: null, unit: "" };
       const total = totals.reduce((sum, item) => sum + item.total, 0);
       const unit = totals[0].unit;
-      return { text: `${formatNumber(total)} ${unit}`, value: formatNumber(total), unit };
+      const provenance = weakestProvenance(totals.map(item => item.provenance));
+      return { text: quantityTextByProvenance(total, provenance, unit), value: formatNumber(total), unit, provenance };
     }
 
     function parseStreamQuantity(value) {
@@ -4527,6 +4529,51 @@
       return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000);
     }
 
+    // Significant figures by provenance. "3 decimals" gave a 2.5 L charge and a 0.002533 kg
+    // residual the same treatment and printed 0.507 for a back-calculated 0.5066: false
+    // precision for the one, lost precision for the other. A reported value is shown with four
+    // figures (its own text wherever it is displayed as entered), a calculated one with three, an
+    // estimated, assumed or missing one with two. A total inherits its weakest contributor. The
+    // integer part is never rounded away: 4444 kg stays 4444, not 4400.
+    const provenanceRank = { reported: 0, calculated: 1, estimated: 2, assumed: 3, missing: 4 };
+
+    function provenanceKey(status) {
+      const key = String(status || "").trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(provenanceRank, key) ? key : "missing";
+    }
+
+    function weakestProvenance(statuses) {
+      let worst = "";
+      let worstRank = -1;
+      (statuses || []).forEach(status => {
+        const key = provenanceKey(status);
+        if (provenanceRank[key] > worstRank) {
+          worstRank = provenanceRank[key];
+          worst = key;
+        }
+      });
+      return worst || "missing";
+    }
+
+    function provenanceDigits(status) {
+      const rank = provenanceRank[provenanceKey(status)];
+      return rank === 0 ? 4 : rank === 1 ? 3 : 2;
+    }
+
+    function significantText(value, digits = 3) {
+      const number = typeof value === "number" ? value : parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return "";
+      if (number === 0) return "0";
+      const magnitude = Math.floor(Math.log10(Math.abs(number)));
+      const decimals = Math.max(0, Math.min(12, digits - 1 - magnitude));
+      return String(Number(number.toFixed(decimals)));
+    }
+
+    function quantityTextByProvenance(value, status, unit = "") {
+      const text = significantText(value, provenanceDigits(status));
+      return text ? `${text}${unit ? ` ${unit}` : ""}` : "";
+    }
+
     // Display-only rounding for derived screening figures (batches/year, kg/year, operating
     // days). The model strings keep formatNumber's three decimals because the checks compare
     // them exactly, but "204.082 batches/year" on screen is false precision for a screening
@@ -4534,9 +4581,11 @@
     function formatDisplayNumber(value) {
       const number = typeof value === "number" ? value : parseStreamQuantity(value);
       if (!Number.isFinite(number)) return typeof value === "string" ? value : "";
-      const magnitude = Math.abs(number);
-      const digits = magnitude >= 1000 ? 0 : magnitude >= 100 ? 1 : magnitude >= 10 ? 2 : 3;
-      return String(Number(number.toFixed(digits)));
+      // The scale basis declares its own confidence (rough / estimated / validated); the figures
+      // it produces are shown with two, three or four significant figures accordingly.
+      const confidence = String(state.scaleBasis?.confidence || "rough");
+      const digits = confidence === "validated" ? 4 : confidence === "estimated" ? 3 : 2;
+      return significantText(number, digits);
     }
 
     function massToKg(value, unit) {
@@ -11481,8 +11530,8 @@
                   <strong>${escapeHtml(row.name)}</strong>
                   <span class="muted small">${escapeHtml(row.role)} · stoich ${escapeHtml(row.stoich || "-")}</span>
                 </div>
-                <span>${formatReactionMass(row.initialMassKg)}</span>
-                <span>${formatReactionMass(row.finalMassKg)}</span>
+                <span>${formatReactionMass(row.initialMassKg, row.confidence)}</span>
+                <span>${formatReactionMass(row.finalMassKg, row.confidence)}</span>
                 <span class="pill ${row.confidence === "estimated" ? "blue" : "warn"}">${escapeHtml(row.confidence)}</span>
                 <span class="muted small">${escapeHtml(row.basis)}</span>
               </div>
@@ -11493,8 +11542,8 @@
       `;
     }
 
-    function formatReactionMass(value) {
-      return Number.isFinite(value) ? `${formatNumber(value)} kg` : "missing";
+    function formatReactionMass(value, status = "estimated") {
+      return Number.isFinite(value) ? quantityTextByProvenance(value, status, "kg") : "missing";
     }
 
     function reactionProductOptionHtml(options, rows, selected) {
@@ -11509,7 +11558,7 @@
       const percent = Number.isFinite(result.conversion) ? formatNumber(Math.max(0, 100 - result.conversion * 100)) : "unknown";
       const parts = result.residualRows
         .slice(0, 3)
-        .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg)}`);
+        .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg, row.confidence)}`);
       return `${percent}% unconverted basis; ${parts.join(", ")}${result.residualRows.length > 3 ? "..." : ""}`;
     }
 
@@ -11539,8 +11588,8 @@
     function reactionBalanceRecognitionItemHtml(row) {
       const isResidual = row.role === "reactant" && Number.isFinite(row.finalMassKg) && row.finalMassKg > 0.000001;
       const amount = isResidual
-        ? `${formatReactionMass(row.finalMassKg)} unreacted`
-        : `${formatReactionMass(row.finalMassKg)} final`;
+        ? `${formatReactionMass(row.finalMassKg, row.confidence)} unreacted`
+        : `${formatReactionMass(row.finalMassKg, row.confidence)} final`;
       return `
         <div class="sep-recognition-item role-${escapeAttr(row.role)}">
           <div>

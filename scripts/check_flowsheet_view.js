@@ -117,6 +117,26 @@ const bioReactor = bioModel.byId.get("G2");
 assert(bioReactor && bioReactor.balance && bioReactor.balance.status === "closed", "Biodiesel reactor mass balance should close on the declared data: " + JSON.stringify(bioReactor && bioReactor.balance));
 assert(bioModel.recycleLinks.length >= 1, "Biodiesel flowsheet should draw the methanol recycle");
 
+// Figures follow provenance: a calculated total prints three significant figures, an estimated
+// one two, a total inherits its weakest contributor, and the integer part is never rounded.
+assert.strictEqual(significantText(0.50662742, 4), "0.5066");
+assert.strictEqual(significantText(0.002533, 3), "0.00253");
+assert.strictEqual(significantText(0.0413, 2), "0.041");
+assert.strictEqual(significantText(4444.44, 2), "4444", "the integer part is never rounded away");
+assert.strictEqual(significantText(0, 3), "0");
+assert.strictEqual(weakestProvenance(["reported", "calculated", "estimated"]), "estimated");
+assert.strictEqual(weakestProvenance(["reported", "reported"]), "reported");
+assert.strictEqual(weakestProvenance([]), "missing");
+assert.strictEqual(flowsheetKgText(1.22715, "calculated"), "1.23");
+assert.strictEqual(flowsheetKgText(0.04134, "estimated"), "0.041");
+assert.strictEqual(flowsheetKgText(0.9795, "reported"), "0.9795");
+const bioTableRows = flowsheetStreamTableRows(bioModel);
+const bioReactorRow = bioTableRows.find(row => row.from === "G2" && row.to === "G3");
+assert(bioReactorRow && bioReactorRow.provenance === "calculated", "The reactor outlet row should carry the weakest provenance of its streams (calculated), got " + JSON.stringify(bioReactorRow && bioReactorRow.provenance));
+const bioWashRow = bioTableRows.find(row => row.from === "G5" && row.to === "G6");
+assert(bioWashRow && bioWashRow.provenance === "estimated", "The washed-ester row includes an estimated loss and should say so");
+assert(bioReactor.balance.provenance === "calculated", "The reactor balance provenance should be calculated");
+
 console.log("Flowsheet view regression check passed.");
 `;
 
