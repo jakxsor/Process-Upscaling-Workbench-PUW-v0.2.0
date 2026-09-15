@@ -285,6 +285,9 @@
       );
 
       const item = (name, level, ok, note) => ({ name, level, ok, note });
+      const phaseConflictBlocks = typeof phenomenaPhaseConflicts === "function"
+        ? blocks.map(block => ({ id: block.id, codes: phenomenaPhaseConflicts(block) })).filter(entry => entry.codes.length)
+        : [];
 
       const synthesis = [
         item("Reaction type and objective", "critical",
@@ -320,7 +323,12 @@
           "Record protocol-level time evidence where it exists; Gantt durations are checked separately in Scale-Up."),
         item("Agitation / mixing", "important",
           mixingBlocks.length ? mixingBlocks.every(block => hasCondition(block, ["mixing_time", "agitation_speed", "agitation_note"])) : blocks.length > 0,
-          "Blocks with mixing phenomena need a qualitative mixing descriptor.")
+          "Blocks with mixing phenomena need a qualitative mixing descriptor."),
+        item("Phenomena consistent with stream phases", "important",
+          blocks.length ? !phaseConflictBlocks.length : false,
+          phaseConflictBlocks.length
+            ? `${phaseConflictBlocks.map(entry => `${entry.id}: ${entry.codes.join(", ")}`).join("; ")} - declared on streams with no matching phase. Declare the phase or remove the code.`
+            : "Every assigned phenomenon has a stream phase that can carry it.")
       ];
 
       const processes = [

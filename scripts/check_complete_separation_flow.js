@@ -871,6 +871,19 @@ const secondPathwayInputs = groupModel("G4").blocks[0].streams.filter(stream => 
 assert.strictEqual(secondPathwayInputs.length, 4, "The second pathway step should receive the four components retained by the first split, not one summed stream");
 assert(secondPathwayInputs.every(stream => stream.mw), "Pure-component MW values should propagate into the next LUTZE subprocess inputs");
 
+// Phenomena that the declared phases cannot carry are reported, never pruned: the octocrylene
+// distillation (B9) keeps its PT(VL)/PS(VL) although its streams are declared liquid, the
+// conflict is listed on the block, and Data Quality names the block.
+loadBaseExampleProject();
+const octoStill = state.blocks.find(block => block.id === "B9");
+assert(octoStill.phenomena.includes("PT(VL)") && octoStill.phenomena.includes("PS(VL)"), "Declared vapour-liquid phenomena must survive rendering even when the streams are declared liquid");
+assert.deepStrictEqual(phenomenaPhaseConflicts(octoStill), ["PT(VL)", "PS(VL)"], "The vapour-liquid phenomena on the liquid-only still should be reported as phase conflicts");
+assert(/vapour/.test(phenomenonConflictTip("PT(VL)", octoStill)), "The conflict tip should say which phase is missing");
+const octoReadiness = dataReadinessModel().categories.flatMap(category => category.items).find(item => item.name === "Phenomena consistent with stream phases");
+assert(octoReadiness && octoReadiness.ok === false && /B9/.test(octoReadiness.note), "Data Quality should flag B9's phase conflicts, got " + JSON.stringify(octoReadiness));
+octoStill.streams.push(createStream("output", { id: "B9-vapour-test", name: "octocrylene distillate", quantity: "1", unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }));
+assert.deepStrictEqual(phenomenaPhaseConflicts(octoStill), [], "Declaring a vapour stream should clear the conflict without touching the phenomena list");
+
 // Biodiesel case: a recognisable transesterification with literature quantities. It must load in
 // process order, balance stoichiometrically, expose the screening on the reactor and on the
 // decanter, recycle methanol, and give the Lutze screening enough property data for a pathway.

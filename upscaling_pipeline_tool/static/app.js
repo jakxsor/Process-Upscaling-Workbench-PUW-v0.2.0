@@ -2245,10 +2245,31 @@
       return ["V", "L", "S"].filter(part => normalized.includes(part));
     }
 
-    function sanitizeBlockPhenomena(block) {
+    // Phenomena that the declared stream phases cannot support (a PT(VL) on a block whose
+    // streams are all liquid). They used to be deleted silently on every render, which took the
+    // framework's primary evidence away without a trace: the octocrylene distillation lost its
+    // vapour-liquid phenomena because its distillate was declared liquid. Now they stay and are
+    // flagged, here and in Data Quality, and the user decides: add the phase or remove the code.
+    function phenomenaPhaseConflicts(block) {
+      if (!block) return [];
+      ensureBlockFlowFields(block);
       const context = blockPhaseContext(block);
-      if (!context.hasKnown) return;
-      block.phenomena = block.phenomena.filter(code => phenomenonCompatibleWithPhase(code, context));
+      if (!context.hasKnown) return [];
+      return (block.phenomena || []).filter(code => !phenomenonCompatibleWithPhase(code, context));
+    }
+
+    function phenomenonConflictTip(code, block) {
+      const context = blockPhaseContext(block);
+      const match = String(code).match(/\(([^)]+)\)$/);
+      const needed = match ? phaseComponents(match[1].replace(/^M/, "")).filter(part => !context.components.has(part)) : [];
+      const phaseName = { V: "vapour", L: "liquid", S: "solid" };
+      const missing = needed.map(part => phaseName[part] || part).join(" and ");
+      return `${code}: no ${missing || "matching"} phase is declared on this block's streams. Declare a ${missing || "matching"} stream (for example the distillate or vent) or remove the phenomenon.`;
+    }
+
+    function sanitizeBlockPhenomena(block) {
+      // Kept as a no-op for callers and tests: pruning is now reported, not applied.
+      return phenomenaPhaseConflicts(block);
     }
 
     function phenomenonCompatibleWithPhase(code, context) {
@@ -2666,14 +2687,18 @@
       return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
     }
 
+    function phenomenonConflictPill(code, block) {
+      return `<span class="pill warn tip phen-conflict" data-tip="${escapeAttr(phenomenonConflictTip(code, block))}">${escapeHtml(code)} !</span>`;
+    }
+
     // Same code as plain text with the glossary on hover: a list of phenomena is information,
     // not a row of state badges.
     function phenomenonCode(code) {
       return `<span class="phen-code" title="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
     }
 
-    function phenomenonOptionButton(code, active, disabled) {
-      return `<button class="phen-option tip ${active ? "active" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}</button>`;
+    function phenomenonOptionButton(code, active, disabled, conflictTip = "") {
+      return `<button class="phen-option tip ${active ? "active" : ""} ${conflictTip ? "phen-conflict" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(conflictTip || phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}${conflictTip ? " !" : ""}</button>`;
     }
 
     async function loadTextView() {
@@ -13272,21 +13297,22 @@
     }
 
     function renderPhenomenaGrid(block) {
-      if (block) sanitizeBlockPhenomena(block);
       const container = $("phenomenaGridSection");
       if (!container) return;
       const expanded = Boolean(state.phenomenaGridExpanded);
 
       if (!expanded) {
         const assigned = block ? block.phenomena : [];
+        const conflicts = new Set(phenomenaPhaseConflicts(block));
         container.innerHTML = `
           <div class="phen-summary-head">
             <div class="label">Phenomena On This Block</div>
             <button class="mini-button" data-toggle-phenomena-grid="true">Edit phenomena</button>
           </div>
           <div class="phen-summary-chips">
-            ${assigned.length ? assigned.map(phenomenonPill).join("") : `<span class="muted small">No phenomena assigned yet.</span>`}
+            ${assigned.length ? assigned.map(code => conflicts.has(code) ? phenomenonConflictPill(code, block) : phenomenonPill(code)).join("") : `<span class="muted small">No phenomena assigned yet.</span>`}
           </div>
+          ${conflicts.size ? `<div class="phen-conflict-note">${conflicts.size} phenomen${conflicts.size === 1 ? "on has" : "a have"} no matching stream phase on this block. Hover a marked code for what to add or remove.</div>` : ""}
         `;
         container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
           button.addEventListener("click", () => {
@@ -13297,11 +13323,14 @@
         return;
       }
 
-      const options = availablePhenomenaForBlock(block);
+      const conflicts = phenomenaPhaseConflicts(block);
+      const options = [...availablePhenomenaForBlock(block), ...conflicts];
       const phaseContext = block ? blockPhaseContext(block) : null;
       const phaseHint = block && !phaseContext.hasKnown
         ? `<div class="muted small" style="margin-bottom:6px">Add stream phases to filter Lutze-compatible phenomena.</div>`
-        : "";
+        : conflicts.length
+          ? `<div class="phen-conflict-note">${conflicts.join(", ")}: assigned but no matching stream phase is declared. Declare the phase or click the code to remove it.</div>`
+          : "";
       container.innerHTML = `
         <div class="phen-summary-head">
           <div class="label">Phenomena On This Block</div>
@@ -13309,7 +13338,7 @@
         </div>
         ${phaseHint}
         <div class="phen-grid">
-          ${options.map(phen => phenomenonOptionButton(phen, block?.phenomena.includes(phen), !block)).join("")}
+          ${options.map(phen => phenomenonOptionButton(phen, block?.phenomena.includes(phen), !block, conflicts.includes(phen) ? phenomenonConflictTip(phen, block) : "")).join("")}
         </div>
       `;
       container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
@@ -13323,7 +13352,8 @@
           const block = selectedBlock();
           if (!block) return;
           const phen = button.dataset.phen;
-          if (!phenomenonCompatibleWithPhase(phen, blockPhaseContext(block))) return;
+          // An incompatible code can always be removed; it just cannot be added.
+          if (!block.phenomena.includes(phen) && !phenomenonCompatibleWithPhase(phen, blockPhaseContext(block))) return;
           block.phenomena = block.phenomena.includes(phen)
             ? block.phenomena.filter(item => item !== phen)
             : [...block.phenomena, phen];
@@ -14862,7 +14892,6 @@
       if (event.target.dataset.streamField === "reactionRole" && stream.reactionRole !== "reactant") {
         stream.stoichCoeff = "";
       }
-      if (event.target.dataset.streamField === "phase") sanitizeBlockPhenomena(current);
       syncLegacyStreamLists(current);
       renderExport();
       renderGroupFlow();
@@ -15051,7 +15080,6 @@
       state.blocks = state.blocks.filter(block => !removedIds.has(block.id));
       state.links = state.links.filter(link => !removedIds.has(link.from) && !removedIds.has(link.to));
       removedGroups.forEach(groupId => cleanupGroupIfEmpty(groupId));
-      sanitizeBlockPhenomena(target);
       syncLegacyStreamLists(target);
       state.selectedBlockId = target.id;
       state.selectedIds = [target.id];
@@ -16170,7 +16198,6 @@
           ensureBlockFlowFields(block);
           ensureBlockConditionFields(block);
           if (typeof block.notes !== "string") block.notes = "";
-          sanitizeBlockPhenomena(block);
         });
         renderAnnotatedText();
         renderLinkControls();

@@ -1463,6 +1463,20 @@
       gap: 5px;
     }
 
+    .phen-option.phen-conflict,
+    .pill.phen-conflict {
+      border-color: #d99a2b;
+      background: #fff4e0;
+      color: #8a5a00;
+    }
+
+    .phen-conflict-note {
+      margin-top: 6px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: #8a5a00;
+    }
+
     .header-dropdown {
       position: relative;
       display: inline-flex;

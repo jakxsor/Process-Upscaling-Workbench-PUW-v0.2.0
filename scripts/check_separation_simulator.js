@@ -77,7 +77,7 @@ assert.strictEqual(model.substances.find(item => item.name === "benzophenone").u
 assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").quantity, "0.002742", "2-ethylhexyl cyanoacetate residual should be generated from the same stoichiometric basis");
 assert.strictEqual(model.substances.find(item => item.name === "benzophenone").residualOf, "benzophenone", "benzophenone should be tagged as a residual of the original chemical");
 assert.strictEqual(model.substances.find(item => item.name === "2-ethylhexyl cyanoacetate").residualOf, "2-ethylhexyl cyanoacetate", "2-ethylhexyl cyanoacetate should be tagged as a residual of the original chemical");
-assert.strictEqual(model.substances.find(item => item.name === "water").quantity, "0.049837", "water byproduct should reproduce the SI value of approximately 0.05 kg/kg product");
+assert.strictEqual(model.substances.find(item => item.name === "water").quantity, "0.04984", "water byproduct should reproduce the SI value of approximately 0.05 kg/kg product at four significant figures");
 assert(model.substances.find(item => item.name === "cyclohexane").source.includes("B1"), "cyclohexane should keep source stream traceability");
 const ventStream = state.blocks.find(block => block.id === "B10").streams.find(stream => stream.role === "input" && stream.name === "cyclohexane");
 assert.strictEqual(streamPubChemLookupName(ventStream), "cyclohexane", "Process stream labels should fetch PubChem through a pure-compound lookup name");

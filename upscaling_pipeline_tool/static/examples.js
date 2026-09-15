@@ -5,15 +5,17 @@
     const endpointConversionPercent = 99.5;
     const reactedMol = productKg * 1000 / productMw;
     const chargedMol = reactedMol / (endpointConversionPercent / 100);
-    const mass = (mol, mw, digits = 6) => (mol * mw / 1000).toFixed(digits);
+    // Four significant figures: the charges are back-calculated from a 1 kg basis and a 99.5%
+    // endpoint proxy, so "0.50662742 kg" claimed eight digits the SI never had.
+    const mass = (mol, mw) => String(Number((mol * mw / 1000).toPrecision(4)));
     const cyclohexaneChargeL = 2.5;
     const solventRecoveryTarget = 0.98;
     return Object.freeze({
       productKg: String(productKg),
       productMw: String(productMw),
       endpointConversionPercent: String(endpointConversionPercent),
-      benzophenoneKg: mass(chargedMol, 182.22, 8),
-      cyanoacetateKg: mass(chargedMol, 197.28, 8),
+      benzophenoneKg: mass(chargedMol, 182.22),
+      cyanoacetateKg: mass(chargedMol, 197.28),
       unreactedBenzophenoneKg: mass(chargedMol - reactedMol, 182.22),
       unreactedCyanoacetateKg: mass(chargedMol - reactedMol, 197.28),
       reactionWaterKg: mass(reactedMol, 18.015),
