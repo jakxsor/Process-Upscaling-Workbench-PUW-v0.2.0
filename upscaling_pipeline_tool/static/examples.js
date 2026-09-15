@@ -46,9 +46,31 @@
     .map(([, text]) => text)
     .join("\n\n");
 
+  // Biodiesel by base-catalysed transesterification of a vegetable oil (triolein basis). The
+  // procedure and its numbers are the textbook ones: 6:1 methanol-to-oil molar ratio, 1 wt% NaOH
+  // on oil, 60 degC, 1 h (Freedman, Pryde and Mounts, J. Am. Oil Chem. Soc. 61 (1984) 1638;
+  // Van Gerpen, Fuel Processing Technology 86 (2005) 1097); product quality per EN 14214.
+  const biodieselExampleSteps = Object.freeze({
+    B1: "Dissolve 10 g of sodium hydroxide in 217 g of methanol (6:1 molar ratio of methanol to oil) with stirring at 25 °C to prepare the sodium methoxide solution.",
+    B2: "Charge 1.00 kg of refined vegetable oil (triolein basis, 1.13 mol) to a jacketed stirred reactor and heat to 60 °C. Add the methoxide solution and stir at 600 rpm for 1 h at 60 °C and atmospheric pressure.",
+    B3: "Stop stirring and transfer the mixture to a separating vessel. Allow the phases to settle for 1.5 h at 50 °C and draw off the lower glycerol-rich phase.",
+    B4: "Recover the excess methanol from the ester phase by distillation at 65-70 °C under reduced pressure (200 mbar).",
+    B5: "Wash the ester phase three times with 0.3 L of warm water at 50 °C, settling for 0.5 h after each wash and discarding the aqueous phase.",
+    B6: "Dry the washed ester under vacuum (50 mbar) at 105 °C for 0.5 h until the water content is below 500 mg/kg.",
+    B7: "Filter the dried methyl ester through a 5 µm filter and collect the biodiesel product (ester content at least 96.5 percent by mass, EN 14214).",
+    B8: "[Industrial addition] Recover methanol from the glycerol-rich phase in a dedicated column and return it to methoxide preparation.",
+    B9: "[Industrial addition] Neutralize the crude glycerol phase for valorization and route wash water and drying condensate to the wastewater-treatment interface."
+  });
+  const biodieselSampleText = Object.entries(biodieselExampleSteps)
+    .filter(([id]) => Number(id.slice(1)) <= 7)
+    .map(([, text]) => text)
+    .join("\n\n");
+
   root.ProcessUpscalingExamples = Object.freeze({
     octocryleneExampleBasis,
     octocryleneExampleSteps,
-    sampleText
+    sampleText,
+    biodieselExampleSteps,
+    biodieselSampleText
   });
 })(globalThis);

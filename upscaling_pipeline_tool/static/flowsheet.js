@@ -334,9 +334,16 @@
     // drawn from totalOutputKg, see flowsheetFlowTooltip), so this name match is how we avoid
     // drawing a second arrow for material the reader already sees arriving via the black arrow.
     function flowsheetExternalInputStreams(group, allGroups) {
+      // Only what a linked upstream unit sends counts as internal. Comparing against every unit's
+      // outlets hid the reactor's fresh oil charge in the biodiesel case, because the unreacted
+      // residual leaving the same reactor shares the name. Without links, the old rule stands.
+      const linkedUpstream = new Set((state.links || [])
+        .filter(link => resolvedEndpointId(link.to) === group.id)
+        .map(link => resolvedEndpointId(link.from)));
       const upstreamNames = new Set();
       allGroups.forEach(other => {
         if (other.id === group.id) return;
+        if (linkedUpstream.size && !linkedUpstream.has(other.id)) return;
         (other.outputStreams || []).forEach(stream => {
           const name = stream.name.trim().toLowerCase();
           if (name) upstreamNames.add(name);

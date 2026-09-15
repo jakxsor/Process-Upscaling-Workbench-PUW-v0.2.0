@@ -343,6 +343,18 @@ screening-conversion proxy to demonstrate residual-stream generation; it is not
 presented as a reported yield. Unreported catalyst, extraction-solvent, brine,
 vent, drying-regeneration, and heavy-residue quantities remain blank.
 
+A second, fully quantified case is the base-catalysed transesterification of a
+vegetable oil (triolein basis) to biodiesel: 6:1 methanol-to-oil molar ratio,
+1 wt% NaOH, 60 °C, 1 h, 97.5 % conversion (Freedman, Pryde and Mounts, JAOCS
+61, 1984, 1638; Van Gerpen, Fuel Processing Technology 86, 2005, 1097), with
+glycerol-phase decanting, methanol recovery and recycle, water washing, vacuum
+drying and polishing filtration to EN 14214. Every stream carries a mass, a
+phase, a provenance status and handbook properties (NIST WebBook, CRC,
+PubChem), so the reaction balance closes, the flowsheet balances per unit, and
+the Lutze/Garg screening has the Tb, Tm, vapour-pressure and solubility data
+it needs. Methanol phase partition and wash losses are typical engineering
+values, labelled estimated.
+
 ## Data Sources
 
 The optional pure-component property lookup (compound search/autocomplete and

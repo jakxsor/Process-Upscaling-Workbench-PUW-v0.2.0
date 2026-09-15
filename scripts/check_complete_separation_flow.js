@@ -871,6 +871,25 @@ const secondPathwayInputs = groupModel("G4").blocks[0].streams.filter(stream => 
 assert.strictEqual(secondPathwayInputs.length, 4, "The second pathway step should receive the four components retained by the first split, not one summed stream");
 assert(secondPathwayInputs.every(stream => stream.mw), "Pure-component MW values should propagate into the next LUTZE subprocess inputs");
 
+// Biodiesel case: a recognisable transesterification with literature quantities. It must load in
+// process order, balance stoichiometrically, expose the screening on the reactor and on the
+// decanter, recycle methanol, and give the Lutze screening enough property data for a pathway.
+loadBiodieselExampleProject();
+assert.deepStrictEqual(groupIdsInTextOrder(), ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"], "Biodiesel case should load eight groups in process order");
+const bioReaction = state.blocks.find(block => block.id === "B2");
+const bioFame = bioReaction.streams.find(stream => stream.role === "output" && stream.name === "methyl oleate");
+assert(Math.abs(conversionNumber(bioFame.quantity) - 0.9795) < 0.002, "Methyl oleate mass should follow 97.5% conversion of 1 kg triolein: 3 x 1.1294 mol x 0.975 x 296.49 g/mol");
+const bioBalance = reactionBalanceModel(groupModel("G2"));
+assert(bioBalance && bioBalance.mainProduct && bioBalance.mainProduct.name === "methyl oleate", "Biodiesel reaction balance should recognise methyl oleate as the main product");
+assert(postReactionSeparationSupportApplies(groupModel("G2")), "Biodiesel reactor should expose the separation screening");
+assert(postReactionSeparationSupportApplies(groupModel("G3")), "Biodiesel decanter should expose the separation screening without a reaction of its own");
+const bioPath = separationPathwayModel(groupModel("G2"), separationSimulatorModel(groupModel("G2")));
+assert(bioPath.alternatives.length >= 1, "Biodiesel case should produce at least one complete screening pathway from its property data, got " + bioPath.alternatives.length + " (" + bioPath.status + ": " + bioPath.unresolved.join("; ") + ")");
+assert(state.links.some(link => link.from === "G7" && link.to === "G1") && state.links.some(link => link.from === "G4" && link.to === "G1"), "Recovered methanol should recycle to methoxide preparation from both recovery units");
+const bioInputs = bioReaction.streams.filter(stream => stream.role === "input").reduce((sum, stream) => sum + conversionNumber(stream.quantity), 0);
+const bioOutputs = bioReaction.streams.filter(stream => stream.role === "output").reduce((sum, stream) => sum + conversionNumber(stream.quantity), 0);
+assert(Math.abs(bioInputs - bioOutputs) < 0.001, "Biodiesel reactor streams should balance to the gram: in " + bioInputs.toFixed(4) + " kg, out " + bioOutputs.toFixed(4) + " kg");
+
 console.log("Complete separation flow check passed.");
 `;
 

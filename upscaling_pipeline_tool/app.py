@@ -140,6 +140,7 @@ APP_HTML = r"""<!doctype html>
         <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
           <button id="loadSample" role="menuitem" title="SI-derived case with a readability-normalized cyclohexane protocol">Octocrylene Case</button>
           <button id="loadMethylbenzeneCase" role="menuitem">3-Reagent Case</button>
+          <button id="loadBiodieselCase" role="menuitem" title="Base-catalysed transesterification of vegetable oil to biodiesel with literature quantities (Freedman 1984, Van Gerpen 2005, EN 14214)">Biodiesel Case</button>
         </div>
       </div>
       <button id="openFlowsheet" class="flowsheet-view-button" title="Open the editable flowsheet board generated from the current groups and streams">Flowsheet View</button>

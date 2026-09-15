@@ -108,6 +108,15 @@ assert.strictEqual(pptxModel.groups.length, model.groups.length, "PowerPoint exp
 assert.strictEqual(pptxModel.forwardLinks.length, model.forwardLinks.length, "PowerPoint export should preserve process links");
 assert(pptxModel.width > 0 && pptxModel.height > 0, "PowerPoint export should include diagram dimensions");
 
+// The biodiesel case must draw with the product leaving the drying/filtration unit and a closed
+// reactor balance on its declared masses.
+loadBiodieselExampleProject();
+const bioModel = buildFlowsheetModel();
+assert.strictEqual(bioModel.productGroupId, "G6", "Biodiesel product should leave the drying and filtration unit");
+const bioReactor = bioModel.byId.get("G2");
+assert(bioReactor && bioReactor.balance && bioReactor.balance.status === "closed", "Biodiesel reactor mass balance should close on the declared data: " + JSON.stringify(bioReactor && bioReactor.balance));
+assert(bioModel.recycleLinks.length >= 1, "Biodiesel flowsheet should draw the methanol recycle");
+
 console.log("Flowsheet view regression check passed.");
 `;
 
