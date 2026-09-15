@@ -91,6 +91,10 @@
     }
 
     function workflowStepStatuses() {
+      return memoInPass("workflowStepStatuses", undefined, () => workflowStepStatusesUncached());
+    }
+
+    function workflowStepStatusesUncached() {
       const blocks = blocksInOrder();
       const groupIds = groupIdsInTextOrder();
       const groups = groupIds.map(groupId => groupModel(groupId));
@@ -257,6 +261,10 @@
     }
 
     function dataReadinessModel() {
+      return memoInPass("dataReadinessModel", undefined, () => dataReadinessModelUncached());
+    }
+
+    function dataReadinessModelUncached() {
       const blocks = blocksInOrder();
       const groupIds = groupIdsInTextOrder();
       const groups = groupIds.map(groupId => groupModel(groupId));

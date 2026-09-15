@@ -309,6 +309,52 @@
       { id: "molarVolume", label: "Molar volume", unit: "m3/kmol", placeholder: "size screen" }
     ];
 
+    // Memo for derived models, scoped to one render pass. A full redraw recomputed the scale-up
+    // model five times, the schedule 46 times and the aggregated conditions of nine groups 2,932
+    // times, all from state that does not change while the pass runs. Outside a pass nothing is
+    // cached, so the checks (which stub renderAll) and every edit path keep seeing fresh values.
+    const renderMemo = new Map();
+    let renderPassActive = false;
+    const memoNoArg = Symbol("no-arg");
+
+    function memoInPass(name, key, compute) {
+      if (!renderPassActive) return compute();
+      let byKey = renderMemo.get(name);
+      if (!byKey) {
+        byKey = new Map();
+        renderMemo.set(name, byKey);
+      }
+      const memoKey = key === undefined ? memoNoArg : key;
+      if (byKey.has(memoKey)) return byKey.get(memoKey);
+      const value = compute();
+      byKey.set(memoKey, value);
+      return value;
+    }
+
+    // Trailing debounce for redraws triggered by typing: the state changes on every keystroke,
+    // the expensive redraw happens once the typing pauses.
+    const deferredRenders = new Map();
+    function deferRender(key, fn, delay = 250) {
+      const pending = deferredRenders.get(key);
+      if (pending) clearTimeout(pending);
+      deferredRenders.set(key, setTimeout(() => {
+        deferredRenders.delete(key);
+        fn();
+      }, delay));
+    }
+
+    function withRenderPass(fn) {
+      if (renderPassActive) return fn();
+      renderMemo.clear();
+      renderPassActive = true;
+      try {
+        return fn();
+      } finally {
+        renderPassActive = false;
+        renderMemo.clear();
+      }
+    }
+
     const state = {
       text: "",
       blocks: [],
@@ -2049,6 +2095,10 @@
     }
 
     function unitOperationCandidatesForGroup(group) {
+      return memoInPass("unitOperationCandidatesForGroup", group?.id || group, () => unitOperationCandidatesForGroupUncached(group));
+    }
+
+    function unitOperationCandidatesForGroupUncached(group) {
       if ((group.phenomena || []).length) return scoredUnitCandidates(matchesForGroup(group), group);
       const context = groupPhaseContext(group);
       return unitCatalog
@@ -3978,6 +4028,10 @@
     }
 
     function aggregateGroupConditions(group) {
+      return memoInPass("aggregateGroupConditions", group?.id || group, () => aggregateGroupConditionsUncached(group));
+    }
+
+    function aggregateGroupConditionsUncached(group) {
       const entries = group.blocks.flatMap(block => {
         ensureBlockConditionFields(block);
         return conditionValuesForBlock(block).map(item => ({
@@ -4512,6 +4566,10 @@
     }
 
     function taskScheduleModel() {
+      return memoInPass("taskScheduleModel", undefined, () => taskScheduleModelUncached());
+    }
+
+    function taskScheduleModelUncached() {
       const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
       const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
       resolveTaskPredecessors(tasks);
@@ -4860,6 +4918,10 @@
     }
 
     function scaleModel() {
+      return memoInPass("scaleModel", undefined, () => scaleModelUncached());
+    }
+
+    function scaleModelUncached() {
       const basis = ensureScaleBasis();
       const reference = inferReferenceStream(basis);
       const manualBasisKg = massToKg(basis.basisAmount, basis.basisUnit);
@@ -5223,6 +5285,10 @@
     }
 
     function throughputDiagnosticsModel(scale, gantt = taskScheduleModel()) {
+      return memoInPass("throughputDiagnosticsModel", scale, () => throughputDiagnosticsModelUncached(scale, gantt));
+    }
+
+    function throughputDiagnosticsModelUncached(scale, gantt) {
       const reactorSizing = scale.reactorSizing || reactorSizingModel(scale.basis, parseStreamQuantity(scale.target.kgPerBatch));
       const allowable = Math.max(1, parseStreamQuantity(scale.basis.allowableCapacityUtilizationPercent) || 85);
       const plantCycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
@@ -5329,6 +5395,10 @@
     }
 
     function recycleSummary(scale = scaleModel()) {
+      return memoInPass("recycleSummary", scale, () => recycleSummaryUncached(scale));
+    }
+
+    function recycleSummaryUncached(scale) {
       const scaledByStreamId = new Map((scale.rows || []).map(row => [row.streamId, row]));
       const streams = blocksInOrder().flatMap(block => {
         ensureBlockFlowFields(block);
@@ -5445,6 +5515,10 @@
     }
 
     function energyBridgeModel(scale = scaleModel()) {
+      return memoInPass("energyBridgeModel", scale, () => energyBridgeModelUncached(scale));
+    }
+
+    function energyBridgeModelUncached(scale) {
       return groupIdsInTextOrder().flatMap(groupId => {
         const group = groupModel(groupId);
         const phenomena = new Set(group.phenomena);
@@ -5475,6 +5549,10 @@
     }
 
     function scaleUpAssessmentModel(scale = scaleModel()) {
+      return memoInPass("scaleUpAssessmentModel", scale, () => scaleUpAssessmentModelUncached(scale));
+    }
+
+    function scaleUpAssessmentModelUncached(scale) {
       const energy = energyBridgeModel(scale);
       const recycle = recycleSummary(scale);
       const cards = [];
@@ -5557,6 +5635,10 @@
     }
 
     function heuristicReviewModel(scale = scaleModel()) {
+      return memoInPass("heuristicReviewModel", scale, () => heuristicReviewModelUncached(scale));
+    }
+
+    function heuristicReviewModelUncached(scale) {
       const ctx = heuristicContext(scale);
       const groupIds = groupIdsInTextOrder();
       // heuristicRuleGroupIds below needs every rule checked against every group's own context to
@@ -7933,9 +8015,14 @@
       renderPhenomenaGrid(block);
       renderGroupProperties(group || (block?.groupId ? groupModel(block.groupId) : null));
 
-      renderHeuristicsPanel();
-      renderScaleBasisPanel();
-      refreshReviewPanels();
+      // Hidden tabs are drawn when they are opened (setInspectorTab), not on every pass: the
+      // Scale-Up and Heuristics panels cost about 90 ms together and were rebuilt unseen.
+      if (state.activeInspectorTab === "heuristics") {
+        renderHeuristicsPanel();
+        refreshReviewPanels();
+      } else if (state.activeInspectorTab === "scale") {
+        renderScaleBasisPanel();
+      }
       renderExport();
     }
 
@@ -10308,6 +10395,10 @@
     }
 
     function inferredSeparationSubstances(group) {
+      return memoInPass("inferredSeparationSubstances", group?.id || group, () => inferredSeparationSubstancesUncached(group));
+    }
+
+    function inferredSeparationSubstancesUncached(group) {
       // A stream name is a mixture or a process stream rather than a substance when its wording
       // says so ("organic phase", "crude reaction mixture", "product-rich distillation feed").
       // Judged by these words instead of by a fixed list of the octocrylene case's stream names.
@@ -10584,6 +10675,10 @@
     }
 
     function separationSimulatorModel(group) {
+      return memoInPass("separationSimulatorModel", group?.id || group, () => separationSimulatorModelUncached(group));
+    }
+
+    function separationSimulatorModelUncached(group) {
       return separationCore.separationSimulatorModel(ensureGroup(group.id).separationSimulator, streamPhases);
     }
 
@@ -15782,6 +15877,14 @@
         updateProtocolToggleIcon();
       }
       renderInspectorTabs();
+      withRenderPass(() => {
+        if (state.activeInspectorTab === "heuristics") {
+          renderHeuristicsPanel();
+          refreshReviewPanels();
+        } else if (state.activeInspectorTab === "scale") {
+          renderScaleBasisPanel();
+        }
+      });
       if (window.innerWidth <= 1240 && ["heuristics", "scale"].includes(state.activeInspectorTab)) {
         requestAnimationFrame(() => $("inspectorPanel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
       }
@@ -15813,22 +15916,24 @@
     // before this file (see app.py).
 
     function renderAll() {
-      state.blocks.forEach(block => {
-        ensureBlockFlowFields(block);
-        ensureBlockConditionFields(block);
-        if (typeof block.notes !== "string") block.notes = "";
-        sanitizeBlockPhenomena(block);
+      withRenderPass(() => {
+        state.blocks.forEach(block => {
+          ensureBlockFlowFields(block);
+          ensureBlockConditionFields(block);
+          if (typeof block.notes !== "string") block.notes = "";
+          sanitizeBlockPhenomena(block);
+        });
+        renderAnnotatedText();
+        renderLinkControls();
+        renderGroupFlow();
+        renderStepFlowInspector();
+        renderInspector();
+        renderContextMenuOptions();
+        renderInspectorTabs();
+        renderWorkflowStepper();
+        renderDataReadiness();
+        renderSeparationSimulatorModal();
       });
-      renderAnnotatedText();
-      renderLinkControls();
-      renderGroupFlow();
-      renderStepFlowInspector();
-      renderInspector();
-      renderContextMenuOptions();
-      renderInspectorTabs();
-      renderWorkflowStepper();
-      renderDataReadiness();
-      renderSeparationSimulatorModal();
       if (typeof scheduleProjectAutosave === "function") scheduleProjectAutosave();
     }
 
@@ -16191,14 +16296,17 @@
       if (!block) return;
       block.text = event.target.value;
       invalidateAiRefine();
-      renderGroupFlow();
-      renderExport();
+      // The board only shows an excerpt of this text; redraw it once the typing pauses.
+      deferRender("groupFlow", () => withRenderPass(() => {
+        renderGroupFlow();
+        renderExport();
+      }));
     });
     $("groupTask")?.addEventListener("input", event => {
       const group = selectedGroup();
       if (!group) return;
       ensureGroup(group.id).task = event.target.value;
-      renderAll();
+      deferRender("all", renderAll);
     });
 
     $("ctxCombine").addEventListener("click", () => {

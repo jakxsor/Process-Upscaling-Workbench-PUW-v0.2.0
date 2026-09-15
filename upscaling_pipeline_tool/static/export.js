@@ -50,7 +50,13 @@
       };
     }
 
+    // The export recomputes every derived model; inside one render pass they are shared, so the
+    // autosave and the JSON export stop redoing the schedule 29 times for one file.
     function buildProjectExport() {
+      return typeof withRenderPass === "function" ? withRenderPass(buildProjectExportUncached) : buildProjectExportUncached();
+    }
+
+    function buildProjectExportUncached() {
       const blocks = blocksInOrder().map(block => {
         ensureBlockFlowFields(block);
         return exportBlock(block);

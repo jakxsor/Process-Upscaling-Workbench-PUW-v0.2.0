@@ -69,7 +69,10 @@
       if (projectAutosaveTimer) clearTimeout(projectAutosaveTimer);
       projectAutosaveTimer = setTimeout(() => {
         projectAutosaveTimer = null;
-        writeProjectAutosaveNow();
+        // The write serialises the whole project; do it when the browser is idle rather than in
+        // the middle of the next keystroke.
+        if (typeof requestIdleCallback === "function") requestIdleCallback(() => writeProjectAutosaveNow(), { timeout: 2000 });
+        else writeProjectAutosaveNow();
       }, 900);
     }
 
