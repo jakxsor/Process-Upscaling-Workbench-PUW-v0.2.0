@@ -197,8 +197,8 @@ async function flushTutorialStart() {
 (async () => {
   await openTutorial(0);
   await flushTutorialStart();
-  assert.strictEqual(tutorialSteps.length, 33, "Tutorial should include block creation, G1 unit assignment, reaction residuals, Lutze, heuristics, and scale-up");
-  assert.strictEqual($("tutorialProgress").textContent, "1 / 33", "Tutorial progress should match the new step count");
+  assert.strictEqual(tutorialSteps.length, 34, "Tutorial should include block creation, G1 unit assignment, reaction residuals, Lutze, heuristics, and scale-up");
+  assert.strictEqual($("tutorialProgress").textContent, "1 / 34", "Tutorial progress should match the new step count");
   assert.strictEqual($("tutorialArrow").hidden, false, "Tutorial should show an arrow toward the active control");
 
   state.blocks = [{ id: "B99", groupId: null, start: 0, end: 4, source: "protocol", text: "old", behavior: "unassigned", phenomena: [], streams: [] }];

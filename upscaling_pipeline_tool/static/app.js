@@ -4797,9 +4797,20 @@
       const overlappedBatches = Number.isFinite(plantCycleTime) && plantCycleTime > 0 && Number.isFinite(productiveHours) && Number.isFinite(parallel)
         ? productiveHours * parallel / plantCycleTime
         : NaN;
+      // The declared ranges, when any task carries one: makespan and batches per year across the
+      // lower and upper bounds, as text for the panels.
+      const makespanRange = gantt.makespanRangeH;
+      const cycleRange = basis.planningScenario === "overlapped" ? gantt.plantCycleRangeH : makespanRange;
+      const batchesRange = cycleRange && Number.isFinite(productiveHours) && Number.isFinite(parallel) && cycleRange.min > 0 && basis.scheduleMethod !== "batches_per_day"
+        ? { min: productiveHours * parallel / cycleRange.max, max: productiveHours * parallel / cycleRange.min }
+        : null;
       return {
         method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
+        effectiveBatchesPerYearRange: batchesRange && batchesRange.max - batchesRange.min > 0.05 ? `${significantText(batchesRange.min, 3)}–${significantText(batchesRange.max, 3)}` : "",
+        batchMakespanRangeH: makespanRange && makespanRange.max > makespanRange.min ? rangeHoursText(makespanRange.min, makespanRange.max) : "",
+        plantCycleRangeH: gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max) : "",
+        rangedTaskIds: gantt.rangedTaskIds || [],
         effectiveKgPerBatch: Number.isFinite(targetBatch) ? formatNumber(targetBatch) : "",
         annualCapacityKg: Number.isFinite(targetYear) ? formatNumber(targetYear) : "",
         batchDurationH: Number.isFinite(duration) ? formatNumber(duration) : "",
@@ -4817,17 +4828,35 @@
       };
     }
 
-    function parseDurationHoursValue(value) {
+    // A declared range ("2-3", "18 to 24") stays a range: the midpoint schedules, and the bounds
+    // travel with the task so the makespan and the plant cycle come out as min / mid / max
+    // instead of a midpoint that looks like a measurement.
+    function parseDurationHoursRange(value) {
       const text = String(value || "").trim().replace(",", ".");
-      if (!text) return NaN;
+      const none = { min: NaN, max: NaN, mid: NaN, isRange: false, text };
+      if (!text) return none;
       const range = text.match(/(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(\d+(?:\.\d+)?)/i);
       if (range) {
         const lo = Number(range[1]);
         const hi = Number(range[2]);
-        return Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2 : NaN;
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) return none;
+        const min = Math.min(lo, hi);
+        const max = Math.max(lo, hi);
+        return { min, max, mid: (min + max) / 2, isRange: max > min, text };
       }
       const number = text.match(/[-+]?\d+(?:\.\d+)?/);
-      return number ? Number(number[0]) : NaN;
+      if (!number) return none;
+      const single = Number(number[0]);
+      return { min: single, max: single, mid: single, isRange: false, text };
+    }
+
+    function parseDurationHoursValue(value) {
+      return parseDurationHoursRange(value).mid;
+    }
+
+    function rangeHoursText(min, max, digits = 3) {
+      if (!Number.isFinite(min) || !Number.isFinite(max)) return "";
+      return `${significantText(min, digits)}–${significantText(max, digits)} h`;
     }
 
     // Resolves each task's predecessor(s). "auto" tasks implicitly branch off the nearest earlier
@@ -4949,8 +4978,11 @@
       return memoInPass("taskScheduleModel", undefined, () => taskScheduleModelUncached());
     }
 
-    function taskScheduleModelUncached() {
-      const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
+    // `bound` picks which end of every declared range schedules: the midpoint by default; the
+    // lower and upper bounds are run once more each when any task carries a range, so the
+    // makespan and the plant cycle are reported as min / mid / max.
+    function taskScheduleModelUncached(bound = "mid") {
+      const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index, bound));
       const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
       resolveTaskPredecessors(tasks);
       pruneCyclicPredecessors(tasks);
@@ -4994,6 +5026,18 @@
       const batchesPerYear = Number.isFinite(estimatedCycleTimeH) && estimatedCycleTimeH > 0 && Number.isFinite(productiveHours) && Number.isFinite(parallelTrains)
         ? productiveHours * parallelTrains / estimatedCycleTimeH
         : NaN;
+      const rangedTasks = tasks.filter(task => task.durationIsRange);
+      let makespanRangeH = null;
+      let plantCycleRangeH = null;
+      let batchesPerYearRange = null;
+      if (bound === "mid" && rangedTasks.length) {
+        const low = taskScheduleModelUncached("min");
+        const high = taskScheduleModelUncached("max");
+        const span = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? { min: Math.min(a, b), max: Math.max(a, b) } : null);
+        makespanRangeH = span(low.estimatedCycleTimeH, high.estimatedCycleTimeH);
+        plantCycleRangeH = span(low.plantCycleTimeH, high.plantCycleTimeH);
+        batchesPerYearRange = span(low.batchesPerYear, high.batchesPerYear);
+      }
       return {
         tasks,
         bottleneck,
@@ -5004,18 +5048,28 @@
         estimatedCycleTimeH,
         plantCycleTimeH: maxEffective,
         batchesPerYear,
+        makespanRangeH,
+        plantCycleRangeH,
+        batchesPerYearRange,
+        rangedTaskIds: rangedTasks.map(task => task.groupId),
         ready: timed.length > 0,
         missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length,
         cyclicDependencyGroupIds: tasks.filter(task => task.cyclicDependency).map(task => task.groupId)
       };
     }
 
-    function taskScheduleEntry(group, index) {
+    function taskScheduleEntry(group, index, bound = "mid") {
       const raw = ensureGroup(group.id);
       const schedule = raw.schedule;
       const inferred = inferGroupDurationInfo(group);
-      const manualDuration = parseDurationHoursValue(schedule.durationH);
-      const durationH = Number.isFinite(manualDuration) && manualDuration > 0 ? manualDuration : inferred.durationH;
+      const manualRange = parseDurationHoursRange(schedule.durationH);
+      const manualDuration = manualRange.mid;
+      const useManual = Number.isFinite(manualDuration) && manualDuration > 0;
+      const durationMidH = useManual ? manualDuration : inferred.durationH;
+      const durationMinH = useManual ? manualRange.min : inferred.minH;
+      const durationMaxH = useManual ? manualRange.max : inferred.maxH;
+      const durationIsRange = useManual ? manualRange.isRange : Boolean(inferred.isRange);
+      const durationH = durationIsRange && bound === "min" ? durationMinH : durationIsRange && bound === "max" ? durationMaxH : durationMidH;
       const parallel = Math.max(1, parseDurationHoursValue(schedule.parallelUnits) || 1);
       const hasManualOperationClass = schedule.operationClass && schedule.operationClass !== "auto" && scheduleOperationClassOptions.includes(schedule.operationClass);
       const operationClass = hasManualOperationClass
@@ -5037,6 +5091,9 @@
         blocks: group.blocks.map(block => block.id),
         durationInput: schedule.durationH,
         durationH,
+        durationMinH: durationIsRange ? durationMinH : durationH,
+        durationMaxH: durationIsRange ? durationMaxH : durationH,
+        durationIsRange,
         adjustedDurationH,
         durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
         parallelUnits: parallel,
@@ -5082,13 +5139,18 @@
     function inferGroupDurationInfo(group) {
       const schedule = groupTimeSchedule(group);
       if (schedule.rows.length) {
-        return { durationH: schedule.totalH, source: "task timetable" };
+        // The timetable total may merge concurrent entries; the declared spread of each entry is
+        // carried as an offset on the total rather than re-derived, which keeps concurrency intact.
+        const below = schedule.rows.reduce((sum, row) => sum + (row.durationIsRange ? row.durationH - row.durationMinH : 0), 0);
+        const above = schedule.rows.reduce((sum, row) => sum + (row.durationIsRange ? row.durationMaxH - row.durationH : 0), 0);
+        return { durationH: schedule.totalH, minH: schedule.totalH - below, maxH: schedule.totalH + above, isRange: below > 0 || above > 0, source: "task timetable" };
       }
-      const textDurations = extractDurationHoursAll(group.text);
+      const textDurations = extractDurationRangesAll(group.text);
       if (textDurations.length) {
-        return { durationH: textDurations.reduce((sum, value) => sum + value, 0), source: "text duration" };
+        const sum = key => textDurations.reduce((total, item) => total + item[key], 0);
+        return { durationH: sum("mid"), minH: sum("min"), maxH: sum("max"), isRange: textDurations.some(item => item.isRange), source: "text duration" };
       }
-      return { durationH: NaN, source: "missing" };
+      return { durationH: NaN, minH: NaN, maxH: NaN, isRange: false, source: "missing" };
     }
 
     // Every additive time entry (mixing_time, holding_time, ...) on every block in the group is its
@@ -5100,14 +5162,20 @@
       return aggregateGroupConditions(group)
         .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
         .flatMap(item => item.entries || [])
-        .map(entry => ({
-          key: `${entry.blockId}::${entry.id}`,
-          blockId: entry.blockId,
-          id: entry.id,
-          label: entry.label,
-          phenomena: entry.phenomena || [],
-          durationH: parseDurationHoursValue(entry.value)
-        }))
+        .map(entry => {
+          const range = parseDurationHoursRange(entry.value);
+          return {
+            key: `${entry.blockId}::${entry.id}`,
+            blockId: entry.blockId,
+            id: entry.id,
+            label: entry.label,
+            phenomena: entry.phenomena || [],
+            durationH: range.mid,
+            durationMinH: range.min,
+            durationMaxH: range.max,
+            durationIsRange: range.isRange
+          };
+        })
         .filter(entry => Number.isFinite(entry.durationH) && entry.durationH > 0);
     }
 
@@ -5177,7 +5245,7 @@
       };
     }
 
-    function extractDurationHoursAll(text) {
+    function extractDurationRangesAll(text) {
       const values = [];
       const regex = /(\d+(?:[.,]\d+)?)\s*(?:(?:-|to|–)\s*(\d+(?:[.,]\d+)?))?\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes)\b/gi;
       let match;
@@ -5185,11 +5253,16 @@
         const lo = Number(match[1].replace(",", "."));
         const hi = match[2] ? Number(match[2].replace(",", ".")) : lo;
         if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue;
-        const unit = match[3].toLowerCase();
-        const value = (lo + hi) / 2;
-        values.push(unit.startsWith("min") ? value / 60 : value);
+        const factor = match[3].toLowerCase().startsWith("min") ? 1 / 60 : 1;
+        const min = Math.min(lo, hi) * factor;
+        const max = Math.max(lo, hi) * factor;
+        values.push({ min, max, mid: (min + max) / 2, isRange: max > min });
       }
       return values;
+    }
+
+    function extractDurationHoursAll(text) {
+      return extractDurationRangesAll(text).map(item => item.mid);
     }
 
     function inferGroupScaleSensitivity(group) {
@@ -6732,9 +6805,9 @@
       const metrics = [
         ["Planned kg/batch", model.target.kgPerBatch || "missing"],
         ["Annual target", model.target.kgPerYear ? `${model.target.kgPerYear} kg` : "missing"],
-        ["Annual batches", model.schedule.effectiveBatchesPerYear ? formatDisplayNumber(model.schedule.effectiveBatchesPerYear) : "missing"],
+        ["Annual batches", model.schedule.effectiveBatchesPerYear ? `${formatDisplayNumber(model.schedule.effectiveBatchesPerYear)}${model.schedule.effectiveBatchesPerYearRange ? ` (${model.schedule.effectiveBatchesPerYearRange} across declared ranges)` : ""}` : "missing"],
         ["Scale factor", model.factors.productFactor || "missing"],
-        ["Batch makespan", model.schedule.batchMakespanH ? `${model.schedule.batchMakespanH} h` : "missing"],
+        ["Batch makespan", model.schedule.batchMakespanH ? `${model.schedule.batchMakespanH} h${model.schedule.batchMakespanRangeH ? ` (${model.schedule.batchMakespanRangeH} declared)` : ""}` : "missing"],
         ["Required reactor", model.reactorSizing?.reactorVolumeM3 ? `${model.reactorSizing.reactorVolumeM3} m3` : "incomplete"]
       ];
       const rowGroups = scaledRowsByRole(model);
@@ -6878,8 +6951,8 @@
       const timedCount = gantt.tasks.length - gantt.missingDurationCount;
       return `
         <div class="gantt-summary gantt-summary-compact">
-          <div class="scale-mini-metric"><span class="label">Batch makespan</span><strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong></div>
-          <div class="scale-mini-metric"><span class="label">Plant cycle</span><strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong></div>
+          <div class="scale-mini-metric"><span class="label">Batch makespan</span><strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>${gantt.makespanRangeH && gantt.makespanRangeH.max > gantt.makespanRangeH.min ? `<span class="muted small">${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} declared</span>` : ""}</div>
+          <div class="scale-mini-metric"><span class="label">Plant cycle</span><strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong>${gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? `<span class="muted small">${escapeHtml(rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max))} declared</span>` : ""}</div>
           <div class="scale-mini-metric"><span class="label">Bottleneck</span><strong>${escapeHtml(bottleneck)}</strong></div>
           <div class="scale-mini-metric"><span class="label">Task timing</span><strong>${timedCount}/${gantt.tasks.length} set</strong></div>
         </div>
@@ -7174,12 +7247,12 @@
           <div class="scale-mini-metric">
             <span class="label">Batch makespan</span>
             <strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>
-            <span class="muted small">complete dependency path</span>
+            <span class="muted small">complete dependency path${gantt.makespanRangeH && gantt.makespanRangeH.max > gantt.makespanRangeH.min ? `; ${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} across the declared ranges` : ""}</span>
           </div>
           <div class="scale-mini-metric">
             <span class="label">Plant cycle</span>
             <strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong>
-            <span class="muted small">longest effective stage</span>
+            <span class="muted small">longest effective stage${gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? `; ${escapeHtml(rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max))} across the declared ranges` : ""}</span>
           </div>
           <div class="scale-mini-metric">
             <span class="label">Conservative batches/year</span>
@@ -7225,16 +7298,31 @@
         const leftPct = Math.max(0, Math.min(100, (task.startH + offsetH) / span * 100));
         const widthPct = Math.max(0.8, Math.min(100 - leftPct, (task.finishH - task.startH) / span * 100));
         const tone = task.isBottleneck ? "bottleneck" : task.onCriticalPath ? "critical" : "";
+        const rangeNote = task.durationIsRange ? `; declared ${rangeHoursText(task.durationMinH, task.durationMaxH)}, midpoint drawn` : "";
         const title = ghost
           ? `${task.groupId} - next batch: ${formatNumber(task.startH + offsetH)}–${formatNumber(task.finishH + offsetH)} h (starts at the plant cycle time)`
-          : `${task.groupId} - ${task.task}: ${formatNumber(task.startH)}–${formatNumber(task.finishH)} h${task.isBottleneck ? " (bottleneck)" : task.onCriticalPath ? " (critical path)" : ""}`;
-        return `<div class="gantt-timeline-bar ${tone} ${ghost ? "ghost" : ""}" style="left:${leftPct}%; width:${widthPct}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"></div>`;
+          : `${task.groupId} - ${task.task}: ${formatNumber(task.startH)}–${formatNumber(task.finishH)} h${task.isBottleneck ? " (bottleneck)" : task.onCriticalPath ? " (critical path)" : ""}${rangeNote}`;
+        // A declared range is drawn as such: the bar ends at the midpoint, a thinner extension
+        // reaches the upper bound, so the reader sees an interval rather than a measurement.
+        const extension = !ghost && task.durationIsRange && Number.isFinite(task.durationMaxH) && task.durationH > 0
+          ? (() => {
+            const scale = (task.finishH - task.startH) / task.durationH;
+            const extraPct = Math.max(0, Math.min(100 - leftPct - widthPct, (task.durationMaxH - task.durationH) * scale / span * 100));
+            return extraPct > 0 ? `<div class="gantt-timeline-bar range-extension" style="left:${leftPct + widthPct}%; width:${extraPct}%" title="${escapeAttr(`${task.groupId}: up to ${significantText(task.durationMaxH, 3)} h declared`)}"></div>` : "";
+          })()
+          : "";
+        return `<div class="gantt-timeline-bar ${tone} ${ghost ? "ghost" : ""} ${!ghost && task.durationIsRange ? "ranged" : ""}" style="left:${leftPct}%; width:${widthPct}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"></div>${extension}`;
       };
+      const rangedTasks = gantt.tasks.filter(task => task.durationIsRange);
+      const rangeSummary = rangedTasks.length
+        ? `<div class="gantt-range-note">Declared ranges kept as ranges: ${rangedTasks.map(task => `${escapeHtml(task.groupId)} ${escapeHtml(rangeHoursText(task.durationMinH, task.durationMaxH))}`).join(", ")}. Bars use the midpoint${gantt.makespanRangeH ? `; the makespan spans ${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} across the bounds` : ""}.</div>`
+        : "";
       return `
         <div class="gantt-timeline" role="img" aria-label="${escapeAttr(`Gantt timeline with ${placed.length} scheduled tasks over ${formatNumber(makespan)} hours${unplacedCount ? ` and ${unplacedCount} without a duration` : ""}.`)}">
           <div class="gantt-timeline-legend" aria-hidden="true">
-            <span class="standard">Scheduled</span><span class="critical">Critical path</span><span class="bottleneck">Bottleneck</span>${unplacedCount ? `<span class="unscheduled">No duration</span>` : ""}${showNextBatch ? `<span class="ghost">Next batch</span>` : ""}
+            <span class="standard">Scheduled</span><span class="critical">Critical path</span><span class="bottleneck">Bottleneck</span>${unplacedCount ? `<span class="unscheduled">No duration</span>` : ""}${showNextBatch ? `<span class="ghost">Next batch</span>` : ""}${rangedTasks.length ? `<span class="range-extension">Declared range</span>` : ""}
           </div>
+          ${rangeSummary}
           <div class="gantt-timeline-axis">
             ${ticks.map(tick => `<span style="left:${pct(tick)}%">${formatNumber(Math.round(tick * 10) / 10)} h</span>`).join("")}
           </div>
@@ -7369,7 +7457,7 @@
           ${expanded ? `
             <div>
               <div class="gantt-controls">
-                <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours"></label>
+                <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="${escapeAttr(task.durationIsRange ? `Declared range ${rangeHoursText(task.durationMinH, task.durationMaxH)}: the midpoint ${formatNumber(task.durationH)} h schedules, the bounds give the makespan range` : "Task duration in hours; a range such as 2-3 is kept as a range")}"></label>
                 <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
                 <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
                 <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>

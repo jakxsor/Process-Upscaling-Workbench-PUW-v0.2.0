@@ -884,6 +884,17 @@ assert(octoReadiness && octoReadiness.ok === false && /B9/.test(octoReadiness.no
 octoStill.streams.push(createStream("output", { id: "B9-vapour-test", name: "octocrylene distillate", quantity: "1", unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }));
 assert.deepStrictEqual(phenomenaPhaseConflicts(octoStill), [], "Declaring a vapour stream should clear the conflict without touching the phenomena list");
 
+// Declared ranges stay ranges. The octocrylene wash (2-3 h) and distillation (3-5 h) schedule
+// at their midpoints, and the makespan is also reported across the bounds.
+const r23 = parseDurationHoursRange("2-3");
+assert(r23.isRange && r23.min === 2 && r23.max === 3 && r23.mid === 2.5, "2-3 should parse as a range with midpoint 2.5");
+assert(parseDurationHoursRange("18 to 24").mid === 21 && !parseDurationHoursRange("20").isRange, "'18 to 24' is a range; '20' is not");
+const octoGantt = taskScheduleModel();
+assert(octoGantt.rangedTaskIds.includes("G3") && octoGantt.rangedTaskIds.includes("G6"), "G3 and G6 carry declared duration ranges, got " + JSON.stringify(octoGantt.rangedTaskIds));
+assert(octoGantt.makespanRangeH && octoGantt.makespanRangeH.min < octoGantt.estimatedCycleTimeH && octoGantt.estimatedCycleTimeH < octoGantt.makespanRangeH.max, "The makespan should be bracketed by the schedule at the lower and upper bounds: " + JSON.stringify(octoGantt.makespanRangeH) + " around " + octoGantt.estimatedCycleTimeH);
+const octoScheduleStrings = scheduleModel(ensureScaleBasis());
+assert(/–/.test(octoScheduleStrings.batchMakespanRangeH), "The scale schedule should carry the makespan range as text, got " + JSON.stringify(octoScheduleStrings.batchMakespanRangeH));
+
 // Biodiesel case: a recognisable transesterification with literature quantities. It must load in
 // process order, balance stoichiometrically, expose the screening on the reactor and on the
 // decanter, recycle methanol, and give the Lutze screening enough property data for a pathway.
