@@ -909,7 +909,7 @@
         stream.fate === "product" && /final output/i.test(String(stream.timing || ""))
       ))) || groups.find(group => group.outputStreams.some(stream => (
         stream.fate === "product" && /purified|at least/i.test(String(stream.note || ""))
-      ))) || groups.find(group => group.isProduct) || groups[groups.length - 1];
+      ))) || [...groups].reverse().find(group => group.isProduct) || groups[groups.length - 1];
       const productBox = productGroup ? {
         id: "product",
         x: productGroup.x + productGroup.w + 70,

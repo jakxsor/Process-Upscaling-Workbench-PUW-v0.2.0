@@ -521,8 +521,8 @@ const tutorialSteps = [
   },
   {
     target: "#loadTextSide",
-    title: "Part 1 · 2. Load Text View",
-    body: "Load Text View copies the protocol into the annotated area below. That is the surface where selections become traceable blocks.",
+    title: "Part 1 · 2. Load Protocol",
+    body: "Load Protocol copies the text into the annotated area below. That is the surface where selections become traceable blocks.",
     details: ["You can still edit the source text first.", "Loading a different text intentionally starts a fresh block set."],
     action: tutorialLoadTextView,
     cta: "Load text",
@@ -538,7 +538,7 @@ const tutorialSteps = [
   {
     target: "#createBlockSide",
     title: "Part 1 · 4. Create Block",
-    body: "Click Create Block From Selection to create the block. You can do the same thing with right click on the selected text and Create Block From Selection.",
+    body: "Click Create Block to turn the selection into a block. You can do the same thing with right click on the selected text and Create Block From Selection.",
     details: ["The block keeps a link back to this exact text range.", "This is the point where text becomes structured process evidence."],
     action: tutorialHighlightText,
     cta: "Create block",
@@ -555,7 +555,7 @@ const tutorialSteps = [
     target: "#phenomenaGridSection",
     title: "Part 1 · 6. Edit Phenomena",
     body: "Use the right panel to change the preset or add and remove individual phenomena. This is where you correct the automatic reading before downstream logic uses it.",
-    details: ["For this step, reaction, liquid mixing, heating, temperature, time, and yield are detected from the selected sentence.", "If mixing, phase contact, reaction, filtration, or separation are missing, adjust them here."],
+    details: ["For this step, reaction, liquid mixing, heating, temperature, time, and yield are detected from the selected sentence.", "If mixing, phase contact, reaction, filtration, or separation are missing, adjust them here.", "A code marked with ! has no stream phase that can carry it: declare the phase on a stream or remove the code. Nothing is removed for you."],
     action: tutorialEnsureBlock
   },
   {
@@ -569,6 +569,7 @@ const tutorialSteps = [
   },
   {
     target: "#groupFlow",
+    anchor: ".group-box:has(.selected-group-badge) .group-head, .group-box .group-head",
     title: "Part 1 Complete",
     body: "The created task is now part of the process graph. From here the next job is to add substances, quantities, phases, and product/reagent roles so the later views have real data.",
     details: ["Part 1 order: text, block, verified phenomena, task.", "Part 2 starts from this task and adds the material basis used by unit-operation suggestions, scale-up, LCI, and Lutze."],
@@ -587,6 +588,7 @@ const tutorialSteps = [
   },
   {
     target: ".group-mfa-grid",
+    anchor: ".group-mfa-grid .mfa-section-head",
     title: "Part 2 · 2. Material Basis",
     body: "Now the task has named substances, amounts, units, phases, and reaction roles. This is the auditable MFA basis used by the rest of the tool.",
     details: ["Benzyl alcohol, acetic anhydride, and triethylamine are inputs.", "Benzyl acetate is marked as the product outlet; 90 percent yield leaves residual reactants for recovery screening."],
@@ -637,6 +639,7 @@ const tutorialSteps = [
   },
   {
     target: ".conversion-basis-section",
+    anchor: ".conversion-basis-section .conversion-section-head",
     title: "Part 2 · 8. Yield Basis",
     body: "The reaction balance keeps the reported product amount separate from its theoretical basis. You choose whether the source reports an actual amount, a theoretical amount, or enough reactant data to calculate it.",
     details: ["Here benzyl acetate is the main product.", "Yield, conversion, and selectivity are checked together, but remain user-reviewed assumptions."],
@@ -687,13 +690,15 @@ const tutorialSteps = [
   },
   {
     target: "#separationSimulatorBody",
+    anchor: ".pathway-context",
     title: "Part 3 · 2. Lutze Scene",
-    body: "The objective stays at the top: the product to retain and the component destinations. Use Mixture & objective only when these inputs need correction.",
+    body: "The objective stays at the top: the product to retain and the component destinations. Open Edit mixture only when these inputs need correction.",
     details: ["The pathway workspace stays separate from mixture editing.", "Nothing changes in the main graph until a complete draft is applied."],
     action: tutorialOpenLutzeScene
   },
   {
     target: ".pathway-mode-switch",
+    anchor: ".pathway-mode-switch button",
     title: "Part 3 · 3. Choose A Pathway Mode",
     body: "Recommended pathways calculates complete drafts in the background. Build step by step lets you choose each separation yourself.",
     details: ["Recommended drafts are ranked by phase compatibility, evidence, missing checks, route length, added agents, and thermal exposure.", "Any recommended pathway becomes editable before it is applied."],
@@ -701,6 +706,7 @@ const tutorialSteps = [
   },
   {
     target: ".pathway-alternative-grid",
+    anchor: ".pathway-alternative-grid [data-pathway-use-alternative]",
     title: "Part 3 · 4. Recommended Pathways",
     body: "Each card is a complete route profile: strongest evidence, fewer operations, or lower thermal exposure. These are screening alternatives, not process simulation results.",
     details: ["Compare the full sequence and its evidence score.", "Use as editable draft moves a recommendation into the manual builder."],
@@ -733,6 +739,7 @@ const tutorialSteps = [
   },
   {
     target: "#groupFlow",
+    anchor: ".group-box:last-of-type .group-head",
     title: "Part 3 Complete",
     body: "The applied Lutze route is back in the process graph as editable tasks. The remaining steps check whether the process evidence is coherent enough for reporting.",
     details: ["Everything inserted from Lutze is deliberately labelled as proposed.", "Before publication, replace placeholders with experimental, literature, or vendor-backed values."],
@@ -749,6 +756,7 @@ const tutorialSteps = [
   },
   {
     target: "#heuristicRuleCheckPanel",
+    anchor: "#heuristicRuleCheckPanel .rule-card",
     title: "Part 4 · 2. Review Findings",
     body: "The findings panel is where you decide what to accept, reject, override, or fix. Those decisions become part of the traceable work log.",
     details: ["A warning is not automatically a design error.", "For publication, unresolved warnings should have a note explaining the evidence or limitation."],
@@ -763,17 +771,27 @@ const tutorialSteps = [
   },
   {
     target: "#scaleBasisPanel",
+    anchor: "[data-planning-scenario=\"conservative\"]",
     title: "Part 4 · 4. Scale-Up Decision",
     body: "Choose the planning scenario, calendar, production trains, and working fill. The panel then summarizes the production plan, equipment sizing, and the three most important review areas.",
-    details: ["Conservative uses the complete batch makespan; Overlapped uses the limiting equipment cycle.", "Reference, schedule, and sizing overrides remain available under Advanced assumptions."],
+    details: ["Conservative uses the complete batch makespan; Overlapped uses the limiting equipment cycle.", "Reference, schedule, and sizing overrides remain available under Advanced assumptions.", "Figures are shown with the precision their provenance supports: reported four significant figures, calculated three, estimated two."],
     action: tutorialPrepareScaleUp
+  },
+  {
+    target: "#openFlowsheet",
+    title: "Part 4 · 5. Flowsheet View",
+    body: "Flowsheet View draws the process as a PFD from the tasks, streams and arrows: numbered streams, a mass balance per unit, a stream table and a title block, on the lab, scaled or per-kg basis.",
+    details: ["Units can be dragged and relabelled; the PowerPoint export reproduces the drawing.", "An open balance or a stream without a usable mass is written on the drawing, never hidden."],
+    action: tutorialPrepareScaleUp,
+    cta: "Open flowsheet",
+    ctaAction: () => { if (typeof openFlowsheetModal === "function") openFlowsheetModal(); }
   },
   {
     target: "#workMenuToggle",
     title: "Tutorial Complete",
-    body: "You now have the full loop: text to block, block to task, material basis, recovery task, unit options, Lutze pathway, heuristic review, scale-up, and export-ready state.",
-    details: ["Save the project JSON when you want to reload the editable work later.", "Use the LCI/openLCA/PowerPoint exports only after checking assumptions and unresolved warnings."],
-    action: tutorialPrepareScaleUp
+    body: "You now have the full loop: text to block, block to task, material basis, recovery task, unit options, Lutze pathway, heuristic review, scale-up, flowsheet, and export-ready state.",
+    details: ["Save the project JSON when you want to reload the editable work later.", "Load example offers three worked cases: octocrylene (the manuscript route), the biodiesel case with every quantity sourced, and the biodiesel reaction alone to build its train with Lutze.", "Use the LCI/openLCA/PowerPoint exports only after checking assumptions and unresolved warnings."],
+    action: async () => { await tutorialPrepareScaleUp(); if (typeof closeFlowsheetModal === "function") closeFlowsheetModal(); }
   }
 ];
 
@@ -845,7 +863,8 @@ async function renderTutorialStep() {
   const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
   await Promise.resolve(step.action?.());
   const target = document.querySelector(step.target);
-  tutorialScrollTargetIntoView(target);
+  // Scroll to what the step is about: the anchor when there is one, else the target.
+  tutorialScrollTargetIntoView(tutorialAnchorElement(step) || target);
   positionTutorialStep(step);
   watchTutorialScrollSettle(step);
 }
@@ -881,6 +900,81 @@ function watchTutorialScrollSettle(step) {
   tutorialSettleFrame = requestAnimationFrame(tick);
 }
 
+// The part of the target that is on screen: a 2000 px findings panel counts as what is visible.
+function tutorialTargetRect(target) {
+  if (!target) return { left: 24, top: 90, width: 220, height: 90, right: 244, bottom: 180 };
+  const rect = target.getBoundingClientRect();
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(window.innerWidth, rect.right);
+  const bottom = Math.min(window.innerHeight, rect.bottom);
+  return { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+}
+
+function tutorialTargetIsLarge(rect) {
+  return rect.width > 360 || rect.height > 240;
+}
+
+// Where the arrow points. A small target: its centre. A large one: the step's `anchor` element
+// when it names one (the selected task's head, the first pathway card, the first finding), else
+// the top-left zone where a panel keeps its title. Pointing at the centre of the board or of
+// the Lutze scene pointed at nothing in particular.
+// The first match of the anchor selector that is on screen; else the first match at all (the
+// findings panel is 2000 px tall, and its first card may be scrolled away).
+function tutorialAnchorElement(step) {
+  if (!step.anchor) return null;
+  const matches = Array.from(document.querySelectorAll(step.anchor));
+  const onScreen = matches.find(el => {
+    const a = el.getBoundingClientRect();
+    return a.width > 0 && a.height > 0 && a.bottom > 0 && a.top < window.innerHeight;
+  });
+  return onScreen || matches[0] || null;
+}
+
+function tutorialAnchorPoint(step, target, rect) {
+  const anchorEl = tutorialAnchorElement(step);
+  if (anchorEl) {
+    const a = anchorEl.getBoundingClientRect();
+    if (a.width > 0 && a.height > 0 && a.bottom > 0 && a.top < window.innerHeight) {
+      return { x: a.left + a.width / 2, y: a.top + Math.min(a.height / 2, 24), rect: a, sub: true };
+    }
+  }
+  if (!tutorialTargetIsLarge(rect)) return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, rect, sub: false };
+  return { x: rect.left + Math.min(rect.width / 2, 150), y: rect.top + Math.min(rect.height / 2, 44), rect, sub: false };
+}
+
+// Beside the target when it fits (right, left, below, above, in that order); otherwise the
+// viewport corner that hides the least of the target and never its anchor. The card used to sit
+// on top of large targets - the board, the MFA grid, the Lutze scene - with the arrow buried
+// underneath it.
+function tutorialCardPlacement(rect, anchor, cardWidth, cardHeight) {
+  const gap = 18;
+  const margin = 16;
+  const maxLeft = window.innerWidth - cardWidth - margin;
+  const maxTop = window.innerHeight - cardHeight - margin;
+  const clampLeft = value => Math.max(margin, Math.min(value, maxLeft));
+  const clampTop = value => Math.max(margin, Math.min(value, maxTop));
+  const fits = (left, top) => left >= margin && top >= margin && left <= maxLeft && top <= maxTop;
+  const beside = [
+    { left: rect.right + gap, top: clampTop(rect.top) },
+    { left: rect.left - cardWidth - gap, top: clampTop(rect.top) },
+    { left: clampLeft(rect.left), top: rect.bottom + gap },
+    { left: clampLeft(rect.left), top: rect.top - cardHeight - gap }
+  ].find(candidate => fits(candidate.left, candidate.top));
+  if (beside) return beside;
+  const overlap = candidate => Math.max(0, Math.min(candidate.left + cardWidth, rect.right) - Math.max(candidate.left, rect.left))
+    * Math.max(0, Math.min(candidate.top + cardHeight, rect.bottom) - Math.max(candidate.top, rect.top));
+  const coversAnchor = candidate => anchor.x >= candidate.left - 12 && anchor.x <= candidate.left + cardWidth + 12
+    && anchor.y >= candidate.top - 12 && anchor.y <= candidate.top + cardHeight + 12;
+  return [
+    { left: maxLeft, top: maxTop },
+    { left: margin, top: maxTop },
+    { left: maxLeft, top: margin },
+    { left: margin, top: margin }
+  ].map(candidate => ({ ...candidate, score: overlap(candidate) + (coversAnchor(candidate) ? 1e9 : 0) }))
+    .sort((a, b) => a.score - b.score)[0];
+}
+
 function positionTutorialStep(step) {
   const overlay = $("tutorialOverlay");
   if (overlay.hidden) return;
@@ -888,7 +982,7 @@ function positionTutorialStep(step) {
   const card = $("tutorialCard");
   const spotlight = $("tutorialSpotlight");
   const arrow = $("tutorialArrow");
-  const rect = target ? target.getBoundingClientRect() : { left: 24, top: 90, width: 220, height: 90, right: 244, bottom: 180 };
+  const rect = tutorialTargetRect(target);
   const pad = 8;
   const safeLeft = Math.max(8, rect.left - pad);
   const safeTop = Math.max(8, rect.top - pad);
@@ -915,43 +1009,99 @@ function positionTutorialStep(step) {
     : null;
 
   const cardWidth = Math.min(410, window.innerWidth - 32);
-  const placeRight = rect.right + 18 + cardWidth < window.innerWidth;
-  const placeLeft = rect.left - 18 - cardWidth > 0;
   card.style.width = `${cardWidth}px`;
-  card.style.left = `${placeRight ? rect.right + 18 : placeLeft ? rect.left - cardWidth - 18 : Math.max(16, (window.innerWidth - cardWidth) / 2)}px`;
-  // The clamp used to assume a 260px card, but cards run 250-302px depending on how
-  // much body and detail text a step carries. Whenever the step's target sat low
-  // enough for the clamp to bind, the bottom of the card - which is where Back/Next
-  // live - was pushed past the bottom of the window, and since the overlay is fixed
-  // the user cannot scroll to it: the tutorial simply stops advancing. Measure the
-  // card instead of guessing, and keep a 16px margin below it.
+  // Measure the card rather than guessing its height: the Back/Next row must stay on screen,
+  // and the overlay is fixed so the user cannot scroll to it.
   const cardHeight = card.getBoundingClientRect().height || 260;
-  card.style.top = `${Math.max(16, Math.min(rect.top, window.innerHeight - cardHeight - 16))}px`;
+  const anchor = tutorialAnchorPoint(step, target, rect);
+  const placement = tutorialCardPlacement(rect, anchor, cardWidth, cardHeight);
+  card.style.left = `${placement.left}px`;
+  card.style.top = `${placement.top}px`;
 
-  positionTutorialArrow(target, card, arrow);
+  positionTutorialArrow(target ? anchor : null, card, arrow);
+  positionTutorialAnchorRing(target ? anchor : null, rect);
 }
 
-function positionTutorialArrow(target, card, arrow) {
-  if (!target || !arrow) {
-    if (arrow) arrow.hidden = true;
+// The arrow starts on the card edge that faces the anchor and stops just short of it.
+function positionTutorialArrow(anchor, card, arrow) {
+  if (!arrow) return;
+  const c = card.getBoundingClientRect();
+  const inside = anchor && anchor.x >= c.left && anchor.x <= c.right && anchor.y >= c.top && anchor.y <= c.bottom;
+  if (!anchor || inside) {
+    arrow.hidden = true;
     return;
   }
-  const cardRect = card.getBoundingClientRect();
-  const targetRect = target.getBoundingClientRect();
-  const targetX = targetRect.left + targetRect.width / 2;
-  const targetY = targetRect.top + Math.min(targetRect.height / 2, 92);
-  const cardCenterX = cardRect.left + cardRect.width / 2;
-  const cardCenterY = cardRect.top + cardRect.height / 2;
-  const fromLeft = targetX < cardCenterX;
-  const startX = fromLeft ? cardRect.left : cardRect.right;
-  const startY = Math.max(cardRect.top + 36, Math.min(cardCenterY, cardRect.bottom - 36));
-  const deltaX = targetX - startX;
-  const deltaY = targetY - startY;
-  const length = Math.max(56, Math.hypot(deltaX, deltaY) - 18);
-  const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI;
+  let startX;
+  let startY;
+  if (anchor.x > c.right) {
+    startX = c.right;
+    startY = Math.max(c.top + 28, Math.min(anchor.y, c.bottom - 28));
+  } else if (anchor.x < c.left) {
+    startX = c.left;
+    startY = Math.max(c.top + 28, Math.min(anchor.y, c.bottom - 28));
+  } else if (anchor.y < c.top) {
+    startX = Math.max(c.left + 28, Math.min(anchor.x, c.right - 28));
+    startY = c.top;
+  } else {
+    startX = Math.max(c.left + 28, Math.min(anchor.x, c.right - 28));
+    startY = c.bottom;
+  }
+  const deltaX = anchor.x - startX;
+  const deltaY = anchor.y - startY;
+  const distance = Math.hypot(deltaX, deltaY);
+  // The card sits right next to the anchor: the ring says it all, a 3 px arrow says nothing.
+  if (distance < 34) {
+    arrow.hidden = true;
+    return;
+  }
+  const length = Math.max(24, distance - (anchor.sub ? 10 : 16));
   arrow.hidden = false;
   arrow.style.left = `${startX}px`;
   arrow.style.top = `${startY}px`;
   arrow.style.width = `${length}px`;
-  arrow.style.transform = `rotate(${angle}deg)`;
+  arrow.style.transform = `rotate(${Math.atan2(deltaY, deltaX) * 180 / Math.PI}deg)`;
 }
+
+// On a large target the spotlight frames the whole panel, so a ring marks the exact element
+// (or point) the step is about.
+function positionTutorialAnchorRing(anchor, rect) {
+  const overlay = $("tutorialOverlay");
+  let ring = document.getElementById("tutorialAnchorRing");
+  if (!ring) {
+    ring = document.createElement("div");
+    ring.id = "tutorialAnchorRing";
+    ring.className = "tutorial-anchor-ring";
+    ring.setAttribute("aria-hidden", "true");
+    overlay.appendChild(ring);
+  }
+  const show = Boolean(anchor) && tutorialTargetIsLarge(rect);
+  ring.hidden = !show;
+  if (!show) return;
+  if (anchor.sub) {
+    const r = anchor.rect;
+    ring.style.left = `${r.left - 6}px`;
+    ring.style.top = `${r.top - 6}px`;
+    ring.style.width = `${Math.min(r.width + 12, 460)}px`;
+    ring.style.height = `${Math.min(r.height + 12, 140)}px`;
+  } else {
+    ring.style.left = `${anchor.x - 14}px`;
+    ring.style.top = `${anchor.y - 14}px`;
+    ring.style.width = "28px";
+    ring.style.height = "28px";
+  }
+}
+
+// Arrow keys step through the tutorial; typing in a field is left alone.
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("keydown", event => {
+  const overlay = document.getElementById("tutorialOverlay");
+  if (!overlay || overlay.hidden) return;
+  const tag = String(event.target?.tagName || "").toLowerCase();
+  if (["input", "textarea", "select"].includes(tag) || event.target?.isContentEditable) return;
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    document.getElementById("tutorialNext")?.click();
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    document.getElementById("tutorialPrev")?.click();
+  }
+});

@@ -22,6 +22,9 @@ assert(tutorialSource.includes("Convert To Task"), "Tutorial should include the 
 assert(tutorialSource.includes("Part 2"), "Tutorial should include the post-task material/Lutze section");
 assert(tutorialSource.includes("Part 3"), "Tutorial should include the Lutze pathway section");
 assert(tutorialSource.includes("Part 4"), "Tutorial should include the heuristic/scale-up section");
+assert(tutorialSource.includes("Flowsheet View"), "Tutorial should end with the flowsheet step");
+assert(tutorialSource.includes("tutorialCardPlacement") && tutorialSource.includes("tutorialAnchorPoint"), "Tutorial should place the card beside large targets and point the arrow at an anchor");
+assert(cssSource.includes(".tutorial-anchor-ring"), "The anchor ring on large targets should be styled");
 assert(tutorialSource.includes("Add example substances"), "Tutorial should teach adding material rows after task creation");
 assert(tutorialSource.includes("Open Lutze"), "Tutorial should teach opening the Lutze scene");
 assert(tutorialSource.includes("Create recovery task"), "Tutorial should teach creating a separate recovery task");
