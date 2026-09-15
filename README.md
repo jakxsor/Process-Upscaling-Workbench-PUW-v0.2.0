@@ -353,7 +353,12 @@ phase, a provenance status and handbook properties (NIST WebBook, CRC,
 PubChem), so the reaction balance closes, the flowsheet balances per unit, and
 the Lutze/Garg screening has the Tb, Tm, vapour-pressure and solubility data
 it needs. Methanol phase partition and wash losses are typical engineering
-values, labelled estimated.
+values, labelled estimated. The same menu offers the case as "screen with
+Lutze": the make-up and the reactor alone, with the quantified effluent and the
+known phase behaviour, so the downstream train is built with the Lutze/Garg
+screening. Its first recommended pathway is the plant's own pair of separations,
+methanol by volatility and the glycerol phase (catalyst included) by decanting,
+and applying it puts both units on the board for comparison with the full case.
 
 ## Data Sources
 

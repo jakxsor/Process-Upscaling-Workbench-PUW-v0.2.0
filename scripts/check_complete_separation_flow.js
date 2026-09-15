@@ -903,6 +903,40 @@ const bioInputs = bioReaction.streams.filter(stream => stream.role === "input").
 const bioOutputs = bioReaction.streams.filter(stream => stream.role === "output").reduce((sum, stream) => sum + conversionNumber(stream.quantity), 0);
 assert(Math.abs(bioInputs - bioOutputs) < 0.001, "Biodiesel reactor streams should balance to the gram: in " + bioInputs.toFixed(4) + " kg, out " + bioOutputs.toFixed(4) + " kg");
 
+// Reaction-only biodiesel: the downstream train is built with the screening. The recommended
+// pathway must be the plant's two separations: methanol by volatility and the glycerol phase by
+// decanting, with the catalyst leaving in the glycerol phase (a decanter splits phases, not
+// components). A vapour-pressure ratio between two non-volatile liquids (glycerol against the
+// ester, both far below 100 Pa) must not earn a "matched" volatility route.
+loadBiodieselExampleProject({ reactionOnly: true });
+assert.deepStrictEqual(groupIdsInTextOrder(), ["G1", "G2"], "The reaction-only biodiesel variant should load the make-up and the reactor only");
+assert.deepStrictEqual(state.links.map(link => link.from + "->" + link.to), ["G1->G2"]);
+// Opening the screening syncs the substances from the reactor streams, as the user's path does.
+syncSeparationSimulatorSubstances(groupModel("G2"));
+const bioOnlyModel = separationSimulatorModel(groupModel("G2"));
+assert.strictEqual(bioOnlyModel.substances.find(item => item.name === "methanol").fate, "recycle", "Excess methanol leaving the reactor as unreacted reagent should be assigned to recycle after sync");
+assert.strictEqual(bioOnlyModel.substances.find(item => item.name === "glycerol").fate, "recover", "The glycerol co-product should be recovered separately, not kept in the product");
+const glycerolEsterPair = bioOnlyModel.pairs.find(pair => pair.key === separationPairKey("CS1", "CS2"));
+const glycerolVolatility = separationSuggestionsForPair(glycerolEsterPair).find(item => item.ruleId === "KB3.1-VL-BP-PVAP");
+assert(glycerolVolatility && glycerolVolatility.level !== "matched" && glycerolVolatility.missing.some(text => /below 100 Pa/.test(text)), "Glycerol/methyl oleate volatility should be review-required, both being non-volatile at 25 degC: " + JSON.stringify(glycerolVolatility && { level: glycerolVolatility.level, missing: glycerolVolatility.missing }));
+const bioOnlyPath = separationPathwayModel(groupModel("G2"), bioOnlyModel);
+const bioBest = bioOnlyPath.alternatives[0];
+assert(bioBest && bioBest.status === "complete", "The first recommended biodiesel pathway should be complete");
+const bioVolatile = bioBest.steps.find(step => /volatility/i.test(step.title));
+const bioDecant = bioBest.steps.find(step => /liquid-liquid/i.test(step.title));
+assert(bioVolatile && bioVolatile.separatedIds.join(",") === "CS3", "One step should take the excess methanol off by volatility, got " + JSON.stringify(bioBest.steps.map(step => [step.title, step.separatedIds])));
+assert(bioDecant && bioDecant.separatedIds.includes("CS2") && bioDecant.separatedIds.includes("CS5"), "The decanter step should take glycerol and the catalyst together, got " + JSON.stringify(bioDecant && bioDecant.separatedIds));
+assert(!bioBest.steps.some(step => step.separatedIds.includes("CS4")), "Unconverted glycerides are kept with the ester and must not be separated");
+usePathwayAlternative("G2", bioBest.id);
+applyPathwayToMainFlowsheet("G2");
+const bioApplied = groupIdsInTextOrder();
+assert.strictEqual(bioApplied.length, 4, "Applying the two-step pathway should add two separation groups, got " + bioApplied.join(","));
+const bioUnits = bioApplied.map(id => state.groups[id].selectedUnit);
+assert(bioUnits.some(unit => /evaporation|flash|distillation/i.test(unit)) && bioUnits.includes("Decanter"), "The applied train should contain a volatility unit and a decanter, got " + bioUnits.join(" | "));
+const bioDecantGroup = bioApplied.map(id => state.groups[id]).find(group => group.selectedUnit === "Decanter");
+assert(bioDecantGroup.task.includes("glycerol + sodium hydroxide from methyl oleate"), "The decanter task should be named by what leaves and what stays, got " + bioDecantGroup.task);
+assert(state.links.some(link => link.from === "G2" && link.to === "G3") && state.links.some(link => link.from === "G3" && link.to === "G4"), "The applied separators should chain from the reactor");
+
 console.log("Complete separation flow check passed.");
 `;
 

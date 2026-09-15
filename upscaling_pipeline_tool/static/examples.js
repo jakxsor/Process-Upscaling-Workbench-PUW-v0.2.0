@@ -61,18 +61,23 @@
     B6: "Dry the washed ester under vacuum (50 mbar) at 105 °C for 0.5 h until the water content is below 500 mg/kg.",
     B7: "Filter the dried methyl ester through a 5 µm filter and collect the biodiesel product (ester content at least 96.5 percent by mass, EN 14214).",
     B8: "[Industrial addition] Recover methanol from the glycerol-rich phase in a dedicated column and return it to methoxide preparation.",
-    B9: "[Industrial addition] Neutralize the crude glycerol phase for valorization and route wash water and drying condensate to the wastewater-treatment interface."
+    B9: "[Industrial addition] Neutralize the crude glycerol phase for valorization and route wash water and drying condensate to the wastewater-treatment interface.",
+    // Reaction-only variant: the reactor sentence ends with the effluent to be separated, so the
+    // protocol stops where the screening starts.
+    B2r: "Charge 1.00 kg of refined vegetable oil (triolein basis, 1.13 mol) to a jacketed stirred reactor and heat to 60 °C. Add the methoxide solution and stir at 600 rpm for 1 h at 60 °C and atmospheric pressure. The effluent contains methyl oleate, glycerol, excess methanol, unconverted glycerides and the dissolved catalyst; recover the ester at EN 14214 quality, the glycerol as a co-product and the methanol for recycle."
   });
   const biodieselSampleText = Object.entries(biodieselExampleSteps)
-    .filter(([id]) => Number(id.slice(1)) <= 7)
+    .filter(([id]) => /^B\d+$/.test(id) && Number(id.slice(1)) <= 7)
     .map(([, text]) => text)
     .join("\n\n");
+  const biodieselReactionOnlyText = [biodieselExampleSteps.B1, biodieselExampleSteps.B2r].join("\n\n");
 
   root.ProcessUpscalingExamples = Object.freeze({
     octocryleneExampleBasis,
     octocryleneExampleSteps,
     sampleText,
     biodieselExampleSteps,
-    biodieselSampleText
+    biodieselSampleText,
+    biodieselReactionOnlyText
   });
 })(globalThis);

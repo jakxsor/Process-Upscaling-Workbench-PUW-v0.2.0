@@ -20,7 +20,8 @@
       octocryleneExampleSteps,
       sampleText,
       biodieselExampleSteps,
-      biodieselSampleText
+      biodieselSampleText,
+      biodieselReactionOnlyText
     } = globalThis.ProcessUpscalingExamples || {};
     // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
     // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
@@ -1802,8 +1803,12 @@
     // are handbook values at 25 degC (NIST WebBook, CRC) with PubChem identities; the methanol
     // split between the two phases and the wash losses are typical engineering values, labelled
     // "estimated". Quantities carry four significant figures on a 1 kg oil basis.
-    function loadBiodieselExampleProject() {
-      const text = biodieselSampleText;
+    // `reactionOnly` loads the methoxide make-up and the reactor alone, with the quantified
+    // reaction effluent and the screening data, so the downstream train is built with the Lutze
+    // screening instead of being read from the protocol. Applying the recommended pathway then
+    // gives the decanter and the methanol flash the full case declares.
+    function loadBiodieselExampleProject({ reactionOnly = false } = {}) {
+      const text = reactionOnly ? biodieselReactionOnlyText : biodieselSampleText;
       const steps = biodieselExampleSteps;
       const chem = {
         oil: { name: "triolein", pubchemQuery: "triolein", pubchemCid: "5497163", molecularFormula: "C57H104O6", mw: "885.43", tm: "278", density: "910", phase: "L" },
@@ -1936,6 +1941,28 @@
           { role: "waste", name: "wastewater", quantity: "0.917", unit: "kg", phase: "L", density: "1000", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per kg product", note: "Wash water and drying condensate with the neutralized catalyst salts, soaps and traces of ester: 0.897 + 0.005 + 0.005 + 0.010 kg." }
         ], { agitation_note: "acid neutralization of the crude glycerol phase; wash water to biological treatment" }, {}, "scale-up addition")
       ];
+      if (reactionOnly) {
+        // Keep the make-up and the reactor; the effluent leaves the reactor with no declared
+        // destination, which is exactly what the screening is for.
+        state.blocks = state.blocks.filter(block => ["B1", "B2"].includes(block.id));
+        state.blocks.forEach(block => block.streams.forEach(stream => {
+          if (stream.destinationGroup && !["G1", "G2"].includes(stream.destinationGroup)) stream.destinationGroup = "";
+        }));
+        const effluentBlock = state.blocks.find(block => block.id === "B2");
+        if (effluentBlock) {
+          // With no train declared, the excess methanol leaves as unreacted reagent (to be
+          // recovered), not as an intermediate bound for a unit that does not exist yet.
+          effluentBlock.streams.forEach(stream => {
+            if (stream.role === "output" && stream.name === "methanol") stream.fate = "unreacted reagent";
+          });
+          effluentBlock.text = steps.B2r || effluentBlock.text;
+          const start = text.indexOf(effluentBlock.text);
+          if (start >= 0) {
+            effluentBlock.start = start;
+            effluentBlock.end = start + effluentBlock.text.length;
+          }
+        }
+      }
       const reactionBlock = state.blocks.find(block => block.id === "B2");
       if (reactionBlock) {
         reactionBlock.conversionDetail = {
@@ -1968,13 +1995,19 @@
         { from: "G1", to: "G2" }, { from: "G2", to: "G3" }, { from: "G3", to: "G4" }, { from: "G4", to: "G5" }, { from: "G5", to: "G6" },
         { from: "G3", to: "G7" }, { from: "G7", to: "G1" }, { from: "G4", to: "G1" }, { from: "G7", to: "G8" }, { from: "G5", to: "G8" }, { from: "G6", to: "G8" }
       ];
+      if (reactionOnly) {
+        Object.keys(state.groups).forEach(id => { if (!["G1", "G2"].includes(id)) delete state.groups[id]; });
+        state.groups.G1.schedule.notes = "Dissolution of NaOH in methanol; recycled methanol will return here once the recovery units exist.";
+        state.groups.G2.x = 640;
+        state.links = [{ from: "G1", to: "G2" }];
+      }
       state.scaleBasis = {
         ...scaleBasisDefaults(),
         targetProduct: "methyl oleate",
         targetAmount: "4000",
         targetUnit: "t/year",
-        referenceBlockId: "B7",
-        basisAmount: "0.9736",
+        referenceBlockId: reactionOnly ? "B2" : "B7",
+        basisAmount: reactionOnly ? "0.9795" : "0.9736",
         basisUnit: "kg",
         mode: "batch",
         planningScenario: "conservative",
@@ -2023,10 +2056,10 @@
       const simulator = ensureGroup(groupId).separationSimulator;
       const common = { source: "biodiesel case", propertySource: "NIST WebBook / CRC Handbook via PubChem identity; Hildebrand parameters from Barton", pvapTemperature: "298.15", pvapTemperatureUnit: "K" };
       simulator.substances = [
-        normalizeSeparationSubstance({ ...common, id: "CS1", name: "methyl oleate", role: "product", phase: "L", fate: "product", quantity: "0.9795", unit: "kg", stoichCoeff: "3", pubchemCid: "5364509", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5364509", molecularFormula: "C19H36O2", canonicalSmiles: "CCCCCCCCC=CCCCCCCCC(=O)OC", exactMass: "296.2715", propertyStatus: "database", thermalSensitivity: "medium", mw: "296.49", tb: "622", tm: "253.3", solubilityParameter: "17.0", molarVolume: "339", criticalTemp: "764", note: "Fatty acid methyl ester; normal boiling point extrapolated (218 degC at 20 mmHg); oxidation-sensitive." }),
+        normalizeSeparationSubstance({ ...common, id: "CS1", name: "methyl oleate", role: "product", phase: "L", fate: "product", quantity: "0.9795", unit: "kg", stoichCoeff: "3", pubchemCid: "5364509", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5364509", molecularFormula: "C19H36O2", canonicalSmiles: "CCCCCCCCC=CCCCCCCCC(=O)OC", exactMass: "296.2715", propertyStatus: "database", thermalSensitivity: "medium", mw: "296.49", tb: "622", tm: "253.3", pvap: "0.0002", solubilityParameter: "17.0", molarVolume: "339", criticalTemp: "764", note: "Fatty acid methyl ester; normal boiling point extrapolated (218 degC at 20 mmHg); vapour pressure at 25 degC is an EPI Suite estimate; oxidation-sensitive." }),
         normalizeSeparationSubstance({ ...common, id: "CS2", name: "glycerol", role: "byproduct", phase: "L", fate: "recover", quantity: "0.1014", unit: "kg", stoichCoeff: "1", pubchemCid: "753", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/753", molecularFormula: "C3H8O3", canonicalSmiles: "C(C(CO)O)O", xlogp: "-1.8", exactMass: "92.0473", propertyStatus: "database", thermalSensitivity: "low", mw: "92.09", tb: "563", tm: "291.3", pvap: "0.022", solubilityParameter: "36.1", molarVolume: "73.0", criticalTemp: "850", note: "Immiscible with the ester phase; recovered as crude glycerol co-product." }),
         normalizeSeparationSubstance({ ...common, id: "CS3", name: "methanol", role: "solvent", phase: "L", fate: "recycle", quantity: "0.1113", unit: "kg", reactionFeedQuantity: "0.2171", reactionFeedUnit: "kg", residualOf: "methanol", residualSourceId: "B2-S2", stoichCoeff: "3", pubchemCid: "887", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/887", molecularFormula: "CH4O", canonicalSmiles: "CO", xlogp: "-0.5", exactMass: "32.0262", propertyStatus: "database", thermalSensitivity: "low", mw: "32.04", tb: "337.8", tm: "175.6", pvap: "16900", solubilityParameter: "29.6", molarVolume: "40.5", criticalTemp: "512.6", note: "Excess reagent after 97.5% conversion; recovered by flash/distillation and recycled." }),
-        normalizeSeparationSubstance({ ...common, id: "CS4", name: "triolein", role: "reactant", phase: "L", fate: "keep with mixture", quantity: "0.0250", unit: "kg", reactionFeedQuantity: "1.000", reactionFeedUnit: "kg", residualOf: "triolein", residualSourceId: "B2-S1", stoichCoeff: "1", pubchemCid: "5497163", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5497163", molecularFormula: "C57H104O6", exactMass: "884.7833", propertyStatus: "estimated", thermalSensitivity: "medium", mw: "885.43", tm: "278", solubilityParameter: "16.0", molarVolume: "973", note: "Unconverted glycerides; stay with the ester within the EN 14214 limits. No measurable normal boiling point (decomposes)." }),
+        normalizeSeparationSubstance({ ...common, id: "CS4", name: "triolein", role: "reactant", phase: "L", fate: "keep with mixture", quantity: "0.0250", unit: "kg", reactionFeedQuantity: "1.000", reactionFeedUnit: "kg", residualOf: "triolein", residualSourceId: "B2-S1", stoichCoeff: "1", pubchemCid: "5497163", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5497163", molecularFormula: "C57H104O6", exactMass: "884.7833", propertyStatus: "estimated", thermalSensitivity: "medium", mw: "885.43", tm: "278", pvap: "0.000001", solubilityParameter: "16.0", molarVolume: "973", note: "Unconverted glycerides; stay with the ester within the EN 14214 limits. No measurable normal boiling point (decomposes); vapour pressure entered as negligible." }),
         normalizeSeparationSubstance({ ...common, id: "CS5", name: "sodium hydroxide", role: "catalyst", phase: "L", fate: "waste", quantity: "0.010", unit: "kg", pubchemCid: "14798", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/14798", molecularFormula: "HNaO", exactMass: "39.9925", propertyStatus: "database", thermalSensitivity: "low", mw: "40.00", tb: "1661", tm: "596", note: "Base catalyst dissolved in methanol; follows the glycerol phase and is neutralized." })
       ];
       simulator.reactionBalance = normalizeReactionBalance({
@@ -2038,6 +2071,30 @@
         mainProductId: "CS1",
         note: "Literature balance: triolein + 3 methanol -> 3 methyl oleate + glycerol at 97.5% conversion, 6:1 methanol-to-oil (Freedman et al. 1984; Van Gerpen 2005)."
       });
+      // Binary mixture insights the KB3.1 screening reads. The glycerol phase split is the
+      // defining fact of every biodiesel plant (Van Gerpen 2005); methanol forms no azeotrope
+      // with the ester, the glycerol or the oil.
+      const insight = (note, overrides = {}) => ({ relativeVolatility: "", azeotrope: "unknown", pressureSensitive: "unknown", miscibilityGap: "unknown", eutectic: "unknown", ...overrides, note });
+      simulator.pairInsights = {
+        [separationPairKey("CS1", "CS2")]: insight("Glycerol is immiscible with the methyl ester and settles as the dense lower phase (1261 against 874 kg/m3); decanting is standard practice.", { miscibilityGap: "yes", azeotrope: "no" }),
+        [separationPairKey("CS1", "CS3")]: insight("Methanol/methyl oleate: no azeotrope; screening volatility ratio from the 298.15 K vapour pressures (methyl oleate value is an EPI Suite estimate).", { azeotrope: "no", miscibilityGap: "no", relativeVolatility: "8.5e7" }),
+        [separationPairKey("CS1", "CS4")]: insight("Unconverted glycerides stay dissolved in the ester and are tolerated by EN 14214; no split is sought.", { miscibilityGap: "no", azeotrope: "no" }),
+        [separationPairKey("CS1", "CS5")]: insight("The base catalyst is insoluble in the ester phase and follows the glycerol phase.", { miscibilityGap: "yes" }),
+        [separationPairKey("CS2", "CS3")]: insight("Methanol and glycerol are fully miscible; methanol is stripped from the glycerol phase by distillation.", { azeotrope: "no", miscibilityGap: "no" }),
+        [separationPairKey("CS2", "CS4")]: insight("Glycerol and oil are immiscible.", { miscibilityGap: "yes" }),
+        [separationPairKey("CS2", "CS5")]: insight("The catalyst dissolves in the glycerol phase and is neutralised there.", { miscibilityGap: "no" }),
+        [separationPairKey("CS3", "CS4")]: insight("Methanol is only partly soluble in the oil at 60 degC; the excess separates after reaction.", { azeotrope: "no" }),
+        [separationPairKey("CS3", "CS5")]: insight("Sodium hydroxide dissolves in methanol as methoxide; non-volatile.", { miscibilityGap: "no" }),
+        [separationPairKey("CS4", "CS5")]: insight("The catalyst is insoluble in the oil.", { miscibilityGap: "yes" })
+      };
+      simulator.lookupSummary = normalizeLookupSummary({
+        status: "done",
+        message: "Loaded the biodiesel reaction effluent: methyl oleate product, glycerol co-product, excess methanol, unconverted glycerides and the base catalyst, with handbook properties and the known phase behaviour.",
+        lastUpdated: new Date().toISOString()
+      });
+      simulator.pathway = { steps: [], viewMode: "guided", selectedStepId: "", appliedAt: "" };
+      simulator.tab = "pathway";
+      simulator.notes = "Biodiesel effluent loaded with literature phase behaviour: the glycerol phase split and the methanol volatility are the two facts the plant is built on. The methyl oleate vapour pressure is an EPI Suite estimate.";
     }
 
     function normalizeStream(stream) {
@@ -10988,6 +11045,10 @@
 
     function inferSubstanceFate(stream) {
       const fate = String(stream.fate || "").toLowerCase();
+      // A co-product is recovered as its own stream; "product" here means the stream the
+      // screening retains. An unreacted reagent leaving a reactor is recovered and recycled.
+      if (fate.includes("co-product") || fate.includes("coproduct")) return "recover";
+      if (fate.includes("unreacted")) return "recycle";
       if (fate.includes("product")) return "product";
       if (fate.includes("recover")) return "recycle";
       if (fate.includes("recycle")) return "recycle";
@@ -12501,7 +12562,10 @@
           retained: step.retained?.length ? step.retained : step.retainedIds.map(id => model.substances.find(item => item.id === id)).filter(Boolean)
         };
         const narrative = lutzeRouteNarrative(sourceGroup.id, pair, variant, split, index + 1);
-        newGroup.task = `${step.title || variant.title}: ${pair.a.name} / ${pair.b.name}`;
+        // Named by what leaves and what stays, not by the screening pair that justified it:
+        // "Liquid-liquid split: glycerol + sodium hydroxide from methyl oleate".
+        const retainedMain = split.retained.find(item => item.role === "product") || split.retained[0];
+        newGroup.task = `${String(step.title || variant.title).replace(/ route$/i, "")}: ${split.separated.map(item => item.name).join(" + ")}${retainedMain ? ` from ${retainedMain.name}` : ""}`;
         newGroup.selectedUnit = step.unit || (variant.units || []).find(unit => unit !== "Review candidate unit") || "";
         newGroup.selectionBasis = [
           `Applied from Lutze/Garg separation screening pathway for ${sourceGroup.id}.`,
@@ -16309,6 +16373,12 @@
       if (state.blocks.length && !(await confirmModal("Load the biodiesel transesterification case? This replaces all current blocks, groups, and arrows."))) return;
       if (state.blocks.length) pushUndo();
       loadBiodieselExampleProject();
+    });
+    $("loadBiodieselLutzeCase")?.addEventListener("click", async () => {
+      closeLoadExampleMenu();
+      if (state.blocks.length && !(await confirmModal("Load the biodiesel reaction alone, to build the separation train with the Lutze screening? This replaces all current blocks, groups, and arrows."))) return;
+      if (state.blocks.length) pushUndo();
+      loadBiodieselExampleProject({ reactionOnly: true });
     });
 
     // Auto-Connect and the arrow list/removal used to live in a left-column "Board" sub-tab that

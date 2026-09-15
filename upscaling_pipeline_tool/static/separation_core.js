@@ -636,12 +636,26 @@
     return missing.slice(0, 5);
   }
 
+  // Below this vapour pressure at the comparison temperature a component is, for screening
+  // purposes, non-volatile: a Pvap ratio between two such components (glycerol at 0.02 Pa
+  // against a methyl ester at 0.0002 Pa) says nothing about a vapour-liquid split at process
+  // conditions, so it cannot carry a "matched" volatility route on its own.
+  const usableVaporPressurePa = 100;
+
+  function bothEssentiallyNonVolatile(pair) {
+    const values = pair.components.map(component => numberFromText(component.pvap));
+    return values.every(value => Number.isFinite(value) && value >= 0 && value < usableVaporPressurePa);
+  }
+
   function separationMissingForSuggestion(pair, rule) {
     const missing = [];
     if (rule.id.includes("VL") || rule.id.includes("AZEO")) {
       if (pair.insights.azeotrope === "unknown") missing.push("azeotrope yes/no");
       if (!Number.isFinite(pair.ratios.tb)) missing.push("Tb ratio");
       if (!Number.isFinite(pair.ratios.pvap)) missing.push(pair.propertyChecks?.pvap?.reason || "Pvap ratio at comparable temperature");
+      if (rule.id === "KB3.1-VL-BP-PVAP" && !(pair.ratios.tb >= 1.23) && bothEssentiallyNonVolatile(pair)) {
+        missing.push(`both components below ${usableVaporPressurePa} Pa at the comparison temperature: compare vapour pressures at process temperature`);
+      }
     }
     if (rule.id.includes("LL") && pair.insights.miscibilityGap === "unknown") missing.push("miscibility gap");
     if (rule.id.includes("LS") && !Number.isFinite(pair.ratios.tm) && pair.insights.eutectic === "unknown") missing.push("Tm ratio or eutectic");
@@ -1293,7 +1307,8 @@
         .filter(variant => variant.selectable !== false)
         .map(variant => {
           const split = pathwaySplitTargets(pair, variant, mainProduct);
-          const separatedIds = new Set(split.separated.map(item => item.id));
+          const separated = [...split.separated, ...phaseCompanions(simulatorModel, active, split.separated, mainProduct, variant)];
+          const separatedIds = new Set(separated.map(item => item.id));
           return {
             id: `${pair.key}::${variant.id}`,
             pairKey: pair.key,
@@ -1301,7 +1316,7 @@
             pairLabel: `${pair.a.name} / ${pair.b.name}`,
             variant,
             unit: (variant.units || []).find(unit => unit !== "Review candidate unit") || "",
-            separated: split.separated,
+            separated,
             retained: active.filter(item => !separatedIds.has(item.id)),
             directionConfidence: pathwaySplitConfidence(pair, variant, mainProduct)
           };
@@ -1321,6 +1336,21 @@
     });
     const selectedIds = new Set(firstPerTarget.map(option => option.id));
     return [...firstPerTarget, ...ranked.filter(option => !selectedIds.has(option.id))].slice(0, 10);
+  }
+
+  // A decanter splits phases, not components. Whatever is declared miscible with the phase that
+  // leaves and immiscible with the product phase leaves with it: the base catalyst follows the
+  // glycerol phase in the biodiesel case instead of earning a second decanter of its own. Only
+  // declared miscibility insights count; nothing is inferred from properties.
+  function phaseCompanions(simulatorModel, active, separated, mainProduct, variant) {
+    if (!mainProduct || !/liquid-liquid/i.test(String(variant.title || ""))) return [];
+    const insightFor = (a, b) => (simulatorModel.pairs.find(pair => pair.key === separationPairKey(a.id, b.id)) || {}).insights || {};
+    const separatedIds = new Set(separated.map(item => item.id));
+    return active.filter(item => !separatedIds.has(item.id)
+      && item.id !== mainProduct.id
+      && !pathwayAcceptsInProductStream(item, mainProduct)
+      && insightFor(item, mainProduct).miscibilityGap === "yes"
+      && separated.some(leaving => insightFor(item, leaving).miscibilityGap === "no"));
   }
 
   function pathwaySplitConfidence(pair, variant, mainProduct) {
