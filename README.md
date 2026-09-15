@@ -279,9 +279,10 @@ python3 scripts/validate.py
 ```
 
 The validation runner checks every served JavaScript file, compiles the Python
-entry points, and runs the workflow, physical-plausibility, UI-wiring, PubChem,
-LCI Excel, and PowerPoint export regressions. It automatically prefers the local
-`.venv` interpreter when present so the export dependencies are available.
+entry points, and runs the workflow, physical-plausibility, project import,
+UI-wiring, PubChem, LCI Excel, PowerPoint export, and optional browser smoke
+regressions. It automatically prefers the local `.venv` interpreter when
+present so the export dependencies are available.
 
 The individual commands are:
 

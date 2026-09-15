@@ -109,6 +109,106 @@
         }]));
     }
 
+    function isPlainProjectObject(value) {
+      return value !== null && typeof value === "object" && !Array.isArray(value);
+    }
+
+    function isScalarProjectValue(value) {
+      return value === null || ["string", "number", "boolean"].includes(typeof value);
+    }
+
+    function requireProjectObject(value, path) {
+      if (!isPlainProjectObject(value)) throw new Error(`${path} must be an object.`);
+      return value;
+    }
+
+    function requireProjectArray(value, path) {
+      if (!Array.isArray(value)) throw new Error(`${path} must be an array.`);
+      return value;
+    }
+
+    function validateOptionalProjectObject(value, path) {
+      if (value !== undefined && !isPlainProjectObject(value)) throw new Error(`${path} must be an object.`);
+    }
+
+    function validateOptionalProjectArray(value, path) {
+      if (value !== undefined && !Array.isArray(value)) throw new Error(`${path} must be an array.`);
+    }
+
+    function validateOptionalProjectScalar(value, path) {
+      if (value !== undefined && !isScalarProjectValue(value)) throw new Error(`${path} must be a scalar value.`);
+    }
+
+    function validateProjectStateSnapshot(snapshot) {
+      requireProjectObject(snapshot, "projectState");
+      if (snapshot.schemaVersion && ![currentStateSchemaVersion, `${currentStateSchemaVersion}-reconstructed`].includes(snapshot.schemaVersion)) {
+        throw new Error(`Unsupported workbench state schema: ${snapshot.schemaVersion}. Expected ${currentStateSchemaVersion}.`);
+      }
+
+      const groups = requireProjectObject(snapshot.groups, "projectState.groups");
+      const blocks = requireProjectArray(snapshot.blocks, "projectState.blocks");
+      validateOptionalProjectArray(snapshot.links, "projectState.links");
+      validateOptionalProjectObject(snapshot.scaleBasis, "projectState.scaleBasis");
+      validateOptionalProjectObject(snapshot.heuristicDecisions, "projectState.heuristicDecisions");
+      validateOptionalProjectArray(snapshot.ruleChecks, "projectState.ruleChecks");
+      validateOptionalProjectObject(snapshot.processRuleOptions, "projectState.processRuleOptions");
+      validateOptionalProjectObject(snapshot.board, "projectState.board");
+      validateOptionalProjectObject(snapshot.flowsheet, "projectState.flowsheet");
+
+      Object.entries(groups).forEach(([groupId, group]) => {
+        requireProjectObject(group, `projectState.groups.${groupId}`);
+        if (group.id !== undefined && String(group.id).trim() !== String(groupId)) {
+          throw new Error(`projectState.groups.${groupId}.id must match its group key.`);
+        }
+        validateOptionalProjectObject(group.schedule, `projectState.groups.${groupId}.schedule`);
+        validateOptionalProjectObject(group.properties, `projectState.groups.${groupId}.properties`);
+        validateOptionalProjectObject(group.propertyPredictor, `projectState.groups.${groupId}.propertyPredictor`);
+        validateOptionalProjectObject(group.timeOffsets, `projectState.groups.${groupId}.timeOffsets`);
+        validateOptionalProjectScalar(group.task, `projectState.groups.${groupId}.task`);
+        validateOptionalProjectScalar(group.selectedUnit, `projectState.groups.${groupId}.selectedUnit`);
+        validateOptionalProjectScalar(group.selectionBasis, `projectState.groups.${groupId}.selectionBasis`);
+      });
+
+      blocks.forEach((block, blockIndex) => {
+        const path = `projectState.blocks[${blockIndex}]`;
+        requireProjectObject(block, path);
+        if (!String(block.id || "").trim()) throw new Error(`${path}.id must be a non-empty string.`);
+        if (block.groupId !== undefined) {
+          validateOptionalProjectScalar(block.groupId, `${path}.groupId`);
+          if (String(block.groupId || "").trim() && !groups[String(block.groupId)]) {
+            throw new Error(`${path}.groupId must reference an existing projectState.groups entry.`);
+          }
+        }
+        if (block.start !== undefined && !Number.isFinite(Number(block.start))) throw new Error(`${path}.start must be a finite number.`);
+        if (block.end !== undefined && !Number.isFinite(Number(block.end))) throw new Error(`${path}.end must be a finite number.`);
+        if (block.start !== undefined && block.end !== undefined && Number(block.end) < Number(block.start)) {
+          throw new Error(`${path}.end must be greater than or equal to start.`);
+        }
+        requireProjectArray(block.streams, `${path}.streams`);
+        validateOptionalProjectArray(block.phenomena, `${path}.phenomena`);
+        block.streams.forEach((stream, streamIndex) => {
+          const streamPath = `${path}.streams[${streamIndex}]`;
+          requireProjectObject(stream, streamPath);
+          validateOptionalProjectScalar(stream.role, `${streamPath}.role`);
+          validateOptionalProjectScalar(stream.name, `${streamPath}.name`);
+          validateOptionalProjectScalar(stream.quantity, `${streamPath}.quantity`);
+          validateOptionalProjectScalar(stream.unit, `${streamPath}.unit`);
+          validateOptionalProjectScalar(stream.status, `${streamPath}.status`);
+          validateOptionalProjectScalar(stream.destinationGroup, `${streamPath}.destinationGroup`);
+          if (String(stream.destinationGroup || "").trim() && !groups[String(stream.destinationGroup)]) {
+            throw new Error(`${streamPath}.destinationGroup must reference an existing projectState.groups entry.`);
+          }
+        });
+      });
+
+      (snapshot.links || []).forEach((link, linkIndex) => {
+        const path = `projectState.links[${linkIndex}]`;
+        requireProjectObject(link, path);
+        if (!String(link.from || "").trim()) throw new Error(`${path}.from must be a non-empty string.`);
+        if (!String(link.to || "").trim()) throw new Error(`${path}.to must be a non-empty string.`);
+      });
+    }
+
     function validateProjectImport(project) {
       if (!project || typeof project !== "object" || Array.isArray(project)) {
         throw new Error("The selected JSON is not a project object.");
@@ -118,12 +218,7 @@
       }
       const snapshot = project.projectState;
       if (snapshot !== undefined) {
-        if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
-          throw new Error("projectState must be an object.");
-        }
-        if (snapshot.schemaVersion && ![currentStateSchemaVersion, `${currentStateSchemaVersion}-reconstructed`].includes(snapshot.schemaVersion)) {
-          throw new Error(`Unsupported workbench state schema: ${snapshot.schemaVersion}. Expected ${currentStateSchemaVersion}.`);
-        }
+        validateProjectStateSnapshot(snapshot);
       } else if (!Array.isArray(project.blocks) || !Array.isArray(project.groups)) {
         throw new Error("Legacy project JSON must contain blocks and groups arrays.");
       }

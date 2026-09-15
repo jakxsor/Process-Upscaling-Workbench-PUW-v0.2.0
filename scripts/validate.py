@@ -27,6 +27,9 @@ NODE_CHECKS = [
     "scripts/check_physical_plausibility.js",
     "scripts/check_ui_wiring.js",
 ]
+OPTIONAL_NODE_CHECKS = [
+    "scripts/check_browser_smoke.js",
+]
 PYTHON_CHECKS = [
     "scripts/check_lci_xlsx_export.py",
     "scripts/check_flowsheet_pptx_export.py",
@@ -64,6 +67,9 @@ def main() -> int:
 
         for check in NODE_CHECKS:
             run(check, ["node", check])
+
+        for check in OPTIONAL_NODE_CHECKS:
+            run(f"{check} (optional browser smoke)", ["node", check])
 
         for check in PYTHON_CHECKS:
             run(check, [py, check])

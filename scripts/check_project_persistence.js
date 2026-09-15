@@ -83,6 +83,35 @@ const futureExport = JSON.parse(JSON.stringify(exported));
 futureExport.projectState.schemaVersion = "workbench-state-v999";
 assert.throws(() => validateProjectImport(futureExport), /Unsupported workbench state schema/, "Unknown future state schemas must be rejected instead of loaded silently");
 assert.throws(() => validateProjectImport({ exportSchemaVersion: "upscaling-project-v999", projectState: exported.projectState }), /Unsupported project schema/, "Unknown project schemas must be rejected");
+assert.throws(
+  () => validateProjectImport({ exportSchemaVersion: "upscaling-project-v1", projectState: { schemaVersion: "workbench-state-v1", blocks: "bad", groups: {}, links: [] } }),
+  /projectState\\.blocks must be an array/,
+  "Project imports must reject snapshots whose blocks are not an array"
+);
+assert.throws(
+  () => validateProjectImport({
+    exportSchemaVersion: "upscaling-project-v1",
+    projectState: { schemaVersion: "workbench-state-v1", blocks: [{ id: "B1", groupId: "G1", start: 5, end: 2, streams: [] }], groups: { G1: { id: "G1" } }, links: [] }
+  }),
+  /projectState\\.blocks\\[0\\]\\.end must be greater than or equal to start/,
+  "Project imports must reject inverted block timing"
+);
+assert.throws(
+  () => validateProjectImport({
+    exportSchemaVersion: "upscaling-project-v1",
+    projectState: { schemaVersion: "workbench-state-v1", blocks: [{ id: "B1", groupId: "G1", streams: {} }], groups: { G1: { id: "G1" } }, links: [] }
+  }),
+  /projectState\\.blocks\\[0\\]\\.streams must be an array/,
+  "Project imports must reject malformed stream collections"
+);
+assert.throws(
+  () => validateProjectImport({
+    exportSchemaVersion: "upscaling-project-v1",
+    projectState: { schemaVersion: "workbench-state-v1", blocks: [{ id: "B1", groupId: "missing", streams: [] }], groups: { G1: { id: "G1" } }, links: [] }
+  }),
+  /groupId must reference an existing projectState\\.groups entry/,
+  "Project imports must reject dangling block group references"
+);
 assert.throws(() => applyProjectStateSnapshot({ blocks: [{ streams: [] }], groups: {}, links: [] }, { pushUndo: false }), /reloadable project state/, "Malformed nested block data must be rejected");
 
 state.text = "";
