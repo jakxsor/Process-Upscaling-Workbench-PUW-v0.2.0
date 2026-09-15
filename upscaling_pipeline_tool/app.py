@@ -2,9 +2,11 @@
 """Local Python web app for annotating protocol blocks and grouping phenomena."""
 
 import argparse
+import gzip
 import json
 import os
 import socket
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
@@ -89,6 +91,43 @@ def _compact_project_for_review(project):
 def _read_static(filename):
     with open(os.path.join(STATIC_DIR, filename), "r", encoding="utf-8") as f:
         return f.read()
+
+
+# Static files are served gzip-compressed when the browser accepts it. app.js alone is close to a
+# megabyte, which is fine on localhost and slow on the LAN or a remote link; compression brings
+# the whole bundle under a fifth of its size. Compressed bodies are cached by (name, mtime, size)
+# so a file is compressed once per edit, not once per request; the no-cache headers stay, so an
+# edited file still reaches the browser on the next load.
+GZIP_MIN_BYTES = 1024
+_GZIP_CACHE: dict = {}
+_GZIP_LOCK = threading.Lock()
+
+
+def _gzip_body(cache_key, body):
+    with _GZIP_LOCK:
+        hit = _GZIP_CACHE.get(cache_key)
+        if hit is not None and hit[0] == len(body):
+            return hit[1]
+    compressed = gzip.compress(body, compresslevel=6, mtime=0)
+    with _GZIP_LOCK:
+        _GZIP_CACHE[cache_key] = (len(body), compressed)
+    return compressed
+
+
+def _accepts_gzip(headers):
+    accepted = headers.get("Accept-Encoding", "")
+    for token in accepted.split(","):
+        parts = [part.strip() for part in token.split(";")]
+        if not parts or parts[0].lower() != "gzip":
+            continue
+        for param in parts[1:]:
+            if param.lower().startswith("q="):
+                try:
+                    return float(param[2:]) > 0
+                except ValueError:
+                    return False
+        return True
+    return False
 
 
 def _decode_json_payload(raw_body):
@@ -711,34 +750,52 @@ class AppHandler(BaseHTTPRequestHandler):
         self.send_header("Expires", "0")
 
     def _resolve(self):
+        """The body to send, its content type, and a key that changes when the file changes."""
         if self.path in ("/", "/index.html"):
-            return APP_HTML.encode("utf-8"), "text/html; charset=utf-8"
+            return APP_HTML.encode("utf-8"), "text/html; charset=utf-8", ("index.html", len(APP_HTML))
         if self.path in STATIC_ROUTES:
             filename, content_type = STATIC_ROUTES[self.path]
-            return _read_static(filename).encode("utf-8"), content_type
-        return None, None
+            try:
+                stat = os.stat(os.path.join(STATIC_DIR, filename))
+                cache_key = (filename, stat.st_mtime_ns, stat.st_size)
+            except OSError:
+                cache_key = None
+            return _read_static(filename).encode("utf-8"), content_type, cache_key
+        return None, None, None
+
+    def _prepare_static_response(self):
+        body, content_type, cache_key = self._resolve()
+        if body is None:
+            return None, None, None
+        encoding = None
+        if cache_key is not None and len(body) >= GZIP_MIN_BYTES and _accepts_gzip(self.headers):
+            body = _gzip_body(cache_key, body)
+            encoding = "gzip"
+        return body, content_type, encoding
+
+    def _send_static_headers(self, body, content_type, encoding):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Vary", "Accept-Encoding")
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+        self._send_no_cache_headers()
+        self.end_headers()
 
     def do_HEAD(self):
-        body, content_type = self._resolve()
+        body, content_type, encoding = self._prepare_static_response()
         if body is None:
             self.send_error(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self._send_no_cache_headers()
-        self.end_headers()
+        self._send_static_headers(body, content_type, encoding)
 
     def do_GET(self):
-        body, content_type = self._resolve()
+        body, content_type, encoding = self._prepare_static_response()
         if body is None:
             self.send_error(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self._send_no_cache_headers()
-        self.end_headers()
+        self._send_static_headers(body, content_type, encoding)
         self.wfile.write(body)
 
     def do_POST(self):
