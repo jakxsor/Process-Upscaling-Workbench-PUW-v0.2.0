@@ -13,6 +13,10 @@
       justify-content: flex-end;
     }
 
+    .flowsheet-zoom-readout {
+      cursor: pointer;
+    }
+
     .flowsheet-toolbar .mini-button.primary {
       color: #fff;
       background: var(--blue);

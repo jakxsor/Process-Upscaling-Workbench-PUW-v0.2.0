@@ -188,7 +188,83 @@
           : "Download an editable PowerPoint slide made from native shapes, lines, and text boxes";
       }
       if (!result.empty) wireFlowsheetInteractions(host);
+      applyFlowsheetZoom();
       if (!result.empty && !state.selectedFlowsheetGroupId) requestAnimationFrame(() => host.scrollTo({ left: 0, top: 0 }));
+    }
+
+    // Zoom is independent of the Fit/Actual Size toggle: it resizes the rendered SVG in place
+    // (width in px, height auto so the viewBox keeps the aspect ratio) rather than the CSS
+    // width:100% used by fit-mode, so the two never fight over the element's inline style.
+    function flowsheetZoomScale(svg) {
+      const natural = Number(svg?.getAttribute("width")) || 1;
+      const rendered = svg?.getBoundingClientRect().width || natural;
+      return rendered / natural;
+    }
+
+    function flowsheetZoomAnchorPoint(host, svg, anchor) {
+      const rect = host.getBoundingClientRect();
+      const viewX = anchor && typeof anchor === "object" ? clamp(anchor.clientX - rect.left, 0, host.clientWidth) : host.clientWidth / 2;
+      const viewY = anchor && typeof anchor === "object" ? clamp(anchor.clientY - rect.top, 0, host.clientHeight) : host.clientHeight / 2;
+      const scale = flowsheetZoomScale(svg) || 1;
+      return {
+        viewX,
+        viewY,
+        naturalX: (host.scrollLeft + viewX) / scale,
+        naturalY: (host.scrollTop + viewY) / scale
+      };
+    }
+
+    function setFlowsheetZoom(nextZoom, anchor = "center") {
+      const host = $("flowsheetHost");
+      const svg = host?.querySelector("svg.flowsheet-svg");
+      const clamped = Math.max(0.3, Math.min(3, nextZoom));
+      if (Math.abs(state.flowsheetZoom - clamped) < 0.001) return;
+      const anchorPoint = svg && host ? flowsheetZoomAnchorPoint(host, svg, anchor) : null;
+      state.flowsheetZoom = clamped;
+      state.flowsheetFit = false;
+      applyFlowsheetZoom();
+      renderFlowsheetModeButtons();
+      if (anchorPoint) {
+        host.scrollTo({
+          left: Math.max(0, anchorPoint.naturalX * state.flowsheetZoom - anchorPoint.viewX),
+          top: Math.max(0, anchorPoint.naturalY * state.flowsheetZoom - anchorPoint.viewY)
+        });
+      }
+    }
+
+    function resetFlowsheetZoom() {
+      state.flowsheetZoom = 1;
+      state.flowsheetFit = false;
+      applyFlowsheetZoom();
+      renderFlowsheetModeButtons();
+    }
+
+    function applyFlowsheetZoom() {
+      const readout = $("flowsheetZoomReadout");
+      if (readout) readout.textContent = `${Math.round(state.flowsheetZoom * 100)}%`;
+      const host = $("flowsheetHost");
+      if (!host) return;
+      host.classList.toggle("fit-mode", state.flowsheetFit);
+      const svg = host.querySelector("svg.flowsheet-svg");
+      if (!svg) return;
+      if (state.flowsheetFit) {
+        svg.style.width = "";
+        svg.style.height = "";
+        return;
+      }
+      const naturalWidth = Number(svg.getAttribute("width")) || svg.getBoundingClientRect().width;
+      svg.style.width = `${naturalWidth * state.flowsheetZoom}px`;
+      svg.style.height = "";
+    }
+
+    function handleFlowsheetWheel(event) {
+      const host = $("flowsheetHost");
+      if (!host || !host.contains(event.target)) return;
+      if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
+      event.preventDefault();
+      const delta = Math.max(-140, Math.min(140, event.deltaY));
+      const factor = Math.exp(-delta * 0.012);
+      setFlowsheetZoom(state.flowsheetZoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 
     function wireFlowsheetInteractions(host) {
@@ -260,6 +336,7 @@
     function openFlowsheetModal() {
       $("flowsheetModal").hidden = false;
       state.flowsheetFit = true;
+      state.flowsheetZoom = 1;
       renderFlowsheetModal();
     }
 

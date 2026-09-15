@@ -438,6 +438,7 @@
       flowsheetViewPreset: "audit",
       selectedFlowsheetGroupId: "",
       flowsheetFit: true,
+      flowsheetZoom: 1,
       // Recycle arrows and waste/vent stubs used to always be drawn; defaulting this off hid the
       // streams most relevant to a waste/safety review behind a checkbox nobody knew to look for.
       flowsheetShowAuxiliaryArrows: true,
@@ -16867,9 +16868,14 @@
     });
     $("fitFlowsheetView").addEventListener("click", () => {
       state.flowsheetFit = !state.flowsheetFit;
+      state.flowsheetZoom = 1;
       closeFlowsheetOptionsMenu();
       renderFlowsheetModal();
     });
+    $("flowsheetZoomOut")?.addEventListener("click", () => setFlowsheetZoom(state.flowsheetZoom / 1.25));
+    $("flowsheetZoomIn")?.addEventListener("click", () => setFlowsheetZoom(state.flowsheetZoom * 1.25));
+    $("flowsheetZoomReadout")?.addEventListener("click", resetFlowsheetZoom);
+    $("flowsheetHost")?.addEventListener("wheel", handleFlowsheetWheel, { passive: false });
     $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
     $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
     // "?" buttons: the long explanations for an area, readable in a modal instead of hover.

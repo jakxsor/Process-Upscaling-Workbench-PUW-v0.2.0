@@ -543,6 +543,11 @@ APP_HTML = r"""<!doctype html>
               <button id="downloadFlowsheet" class="mini-button" role="menuitem">Export SVG</button>
             </div>
           </div>
+          <div class="workflow-zoom-row flowsheet-zoom-row" title="Zoom the flowsheet drawing">
+            <button id="flowsheetZoomOut" title="Zoom out" aria-label="Zoom out">-</button>
+            <span id="flowsheetZoomReadout" class="zoom-readout flowsheet-zoom-readout" title="Reset zoom to 100%">100%</span>
+            <button id="flowsheetZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+          </div>
           <button id="closeFlowsheetModal" class="flowsheet-close-button" title="Close" aria-label="Close">✕</button>
         </div>
       </div>
