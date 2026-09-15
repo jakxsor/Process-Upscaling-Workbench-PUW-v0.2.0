@@ -137,6 +137,20 @@ const bioWashRow = bioTableRows.find(row => row.from === "G5" && row.to === "G6"
 assert(bioWashRow && bioWashRow.provenance === "estimated", "The washed-ester row includes an estimated loss and should say so");
 assert(bioReactor.balance.provenance === "calculated", "The reactor balance provenance should be calculated");
 
+// Uncertainty by provenance: 2 / 5 / 20 / 30 percent combined in quadrature; an imbalance
+// smaller than the combined uncertainty of both sides is reported as such.
+assert.strictEqual(streamUncertaintyPercent("reported"), 2);
+assert.strictEqual(streamUncertaintyPercent("estimated"), 20);
+assert(Number.isNaN(streamUncertaintyPercent("missing")), "A missing value has no uncertainty");
+assert(Math.abs(combinedUncertaintyKg([{ kg: 1, status: "reported" }, { kg: 1, status: "estimated" }]) - Math.sqrt(0.02 ** 2 + 0.2 ** 2)) < 1e-9, "Uncertainties combine in quadrature");
+assert(Number.isFinite(bioReactorRow.uncertaintyKg) && bioReactorRow.uncertaintyKg > 0 && bioReactorRow.uncertaintyKg < 0.1, "The reactor outlet row should carry a combined uncertainty, got " + bioReactorRow.uncertaintyKg);
+const offInputs = [createStream("input", { name: "a", quantity: "1", unit: "kg", status: "estimated" })];
+const offOutlets = [createStream("output", { name: "a", quantity: "1.1", unit: "kg", status: "estimated" })];
+const offBalance = flowsheetUnitBalance(offInputs, offOutlets);
+assert(offBalance.status === "off" && offBalance.withinUncertainty === true, "A 10% imbalance between two estimated streams is off but within their combined uncertainty: " + JSON.stringify(offBalance));
+const tightBalance = flowsheetUnitBalance([createStream("input", { name: "a", quantity: "1", unit: "kg", status: "reported" })], [createStream("output", { name: "a", quantity: "1.1", unit: "kg", status: "reported" })]);
+assert(tightBalance.status === "off" && tightBalance.withinUncertainty === false, "The same imbalance between two reported streams is a real finding");
+
 console.log("Flowsheet view regression check passed.");
 `;
 

@@ -318,6 +318,9 @@ def _draw_stream_table(writer: _ShapeWriter, flowsheet: dict[str, Any]) -> None:
             # Same significant-figure rule as the drawing: reported 4, calculated 3, else 2.
             digits = {"reported": 4, "calculated": 3}.get(str(row.get("provenance") or ""), 2)
             mass = f"{total_kg:.{digits}g} kg" if total_kg < 100 else f"{total_kg:.0f} kg"
+            uncertainty_kg = row.get("uncertaintyKg")
+            if isinstance(uncertainty_kg, (int, float)) and uncertainty_kg == uncertainty_kg and total_kg > 0:
+                mass += f" ±{uncertainty_kg / total_kg * 100:.2g}%"
             if unknown:
                 mass += f" (+{unknown} n.q.)"
         else:

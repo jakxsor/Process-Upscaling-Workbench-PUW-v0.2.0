@@ -227,8 +227,10 @@
         if (Number.isFinite(kg)) acc.kg += kg; else acc.unknown += 1;
         return acc;
       }, { kg: 0, unknown: 0 });
-      // A total is as good as its weakest contributor.
+      // A total is as good as its weakest contributor; its uncertainty combines the streams'
+      // provenance-based uncertainties in quadrature.
       total.provenance = weakestProvenance(list.map(flowsheetStreamProvenance));
+      total.uncertaintyKg = combinedUncertaintyKg(list.map(stream => ({ kg: flowsheetStreamKg(stream).kg, status: flowsheetStreamProvenance(stream) })));
       return total;
     }
 
@@ -298,12 +300,20 @@
       const deltaKg = outlets.kg - inputs.kg;
       const deltaPercent = reference > 0 ? (deltaKg / reference) * 100 : NaN;
       const unknown = inputs.unknown + outlets.unknown;
+      // An imbalance smaller than the combined declared uncertainty of both sides is not a
+      // finding: it is the data's own noise, and the drawing says so next to the percentage.
+      const combinedUncertaintyKg = Number.isFinite(inputs.uncertaintyKg) && Number.isFinite(outlets.uncertaintyKg)
+        ? Math.hypot(inputs.uncertaintyKg, outlets.uncertaintyKg)
+        : NaN;
       return {
         inKg: inputs.kg,
         outKg: outlets.kg,
         deltaKg,
         deltaPercent,
         unknown,
+        inUncertaintyKg: inputs.uncertaintyKg,
+        outUncertaintyKg: outlets.uncertaintyKg,
+        withinUncertainty: Number.isFinite(combinedUncertaintyKg) && Math.abs(deltaKg) <= combinedUncertaintyKg,
         provenance: weakestProvenance([inputs.provenance, outlets.provenance]),
         status: !(inputs.kg > 0 || outlets.kg > 0) ? "no data" : unknown ? "open" : Math.abs(deltaPercent) > 2 ? "off" : "closed"
       };
@@ -594,7 +604,7 @@
           ? `balance closed (${flowsheetKgText(balance.inKg, balance.provenance)} in / ${flowsheetKgText(balance.outKg, balance.provenance)} out)`
           : balance.status === "open"
             ? `balance open, ${balance.unknown} n.q.`
-            : `balance off ${balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(balance.deltaPercent)}%`
+            : `balance off ${balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(balance.deltaPercent)}%${balance.withinUncertainty ? " (within the declared uncertainty)" : ""}`
         : "";
       return [
         box.equipmentSizeLine,
@@ -1486,6 +1496,7 @@
           totalKg: streams.length && totals.kg > 0 ? totals.kg : NaN,
           unknown: totals.unknown,
           provenance: totals.provenance,
+          uncertaintyKg: totals.uncertaintyKg,
           count: streams.length,
           composition,
           phase: phases.join("/")
@@ -1516,7 +1527,7 @@
       const body = rows.map((row, index) => {
         const y = headerY + 17 + index * rowH;
         const mass = Number.isFinite(row.totalKg)
-          ? `${flowsheetKgText(row.totalKg, row.provenance)} kg${row.unknown ? ` (+${row.unknown} n.q.)` : ""}`
+          ? `${flowsheetKgText(row.totalKg, row.provenance)} kg${uncertaintyPercentText(row.totalKg, row.uncertaintyKg) ? ` ${uncertaintyPercentText(row.totalKg, row.uncertaintyKg)}` : ""}${row.unknown ? ` (+${row.unknown} n.q.)` : ""}`
           : row.count ? `n.q. (${row.count} stream${row.count === 1 ? "" : "s"})` : "no declared streams";
         return [
           index % 2 ? `<rect x="${x0 - 4}" y="${y - 11}" width="${width - 64}" height="${rowH}" fill="#f4f7f9"></rect>` : "",

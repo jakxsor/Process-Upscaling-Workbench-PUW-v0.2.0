@@ -74,6 +74,7 @@
           fate: stream.fate,
           destinationGroup: stream.destinationGroup || "",
           status: stream.status,
+          uncertaintyPercent: typeof streamUncertaintyPercent === "function" ? streamUncertaintyPercent(stream.status) : NaN,
           note: stream.note || "",
           lcaRole: lcaRoleForStream(stream, producedKeys)
         };
@@ -197,6 +198,7 @@
         candidateQueries: entry.candidateQueries,
         destinationGroup: entry.destinationGroup,
         status: entry.status,
+        uncertaintyPercent: Number.isFinite(entry.uncertaintyPercent) ? entry.uncertaintyPercent : null,
         note: entry.note
       };
     }

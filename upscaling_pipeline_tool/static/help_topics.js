@@ -36,6 +36,8 @@
         { title: "What a stream carries", body: "Name, quantity and unit, phase, provenance status (reported, calculated, estimated, assumed, missing), timing (initial charge, later addition, in-process intermediate, final output) and fate (fresh input, intermediate, product, recycled input, recovered solvent, wastewater, solid waste, purge, loss, vent). Fate and destination drive the recycle and waste arrows and the inventory export." },
         { title: "Recovery and purge fractions", body: "Recovery percent is the fraction of a stream actually recovered or recycled; purge percent is the fraction of a loop purged at this point. Both feed the recycle and fate summary on the Scale-Up tab, which computes recovered, purged and lost mass." },
         { title: "Volumes and density", body: "A quantity in litres weighs nothing in mass balances and on the flowsheet unless a density is declared, on the stream or on a same-named stream anywhere in the project. Streams without a usable mass are counted and labelled n.q." }
+        ,
+        { title: "Uncertainty by provenance", body: "Every quantity carries a screening-default uncertainty from its status: reported ±2 %, calculated ±5 %, estimated ±20 %, assumed ±30 %. Totals combine them in quadrature, the stream table and the scaled rows print the result, a unit balance that is off by less than the combined uncertainty of its two sides says so, and the LCI export carries the percentage per exchange." }
       ]
     },
     reaction: {

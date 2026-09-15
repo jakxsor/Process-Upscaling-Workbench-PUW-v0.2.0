@@ -4626,6 +4626,36 @@
       return String(Number(number.toFixed(decimals)));
     }
 
+    // Screening-default relative uncertainty by provenance, in the spirit of the LCA pedigree
+    // matrix: a reported value is taken as measured (2 %), a calculated one carries the
+    // stoichiometry and the inputs it rests on (5 %), an estimate is an engineering typical
+    // (20 %), an assumption a guess (30 %). A missing value has no uncertainty because it has no
+    // value. Sums combine in quadrature, as independent contributions, so a total of many
+    // reported streams stays tight and one estimated stream widens it.
+    const provenanceUncertaintyPercent = { reported: 2, calculated: 5, estimated: 20, assumed: 30 };
+
+    function streamUncertaintyPercent(status) {
+      const key = provenanceKey(status);
+      return Object.prototype.hasOwnProperty.call(provenanceUncertaintyPercent, key) ? provenanceUncertaintyPercent[key] : NaN;
+    }
+
+    function combinedUncertaintyKg(items) {
+      let sumOfSquares = 0;
+      let any = false;
+      (items || []).forEach(item => {
+        const percent = streamUncertaintyPercent(item.status);
+        if (!Number.isFinite(item.kg) || !Number.isFinite(percent)) return;
+        any = true;
+        sumOfSquares += (item.kg * percent / 100) ** 2;
+      });
+      return any ? Math.sqrt(sumOfSquares) : NaN;
+    }
+
+    function uncertaintyPercentText(valueKg, uncertaintyKg) {
+      if (!Number.isFinite(valueKg) || !Number.isFinite(uncertaintyKg) || valueKg <= 0) return "";
+      return `±${significantText(uncertaintyKg / valueKg * 100, 2)}%`;
+    }
+
     function quantityTextByProvenance(value, status, unit = "") {
       const text = significantText(value, provenanceDigits(status));
       return text ? `${text}${unit ? ` ${unit}` : ""}` : "";
@@ -7558,7 +7588,8 @@
     }
 
     function scaledFlowRowHtml(row) {
-      const scaled = row.scaledQuantity ? `${row.scaledQuantity} ${row.scaledUnit}` : "not scaled";
+      const uncertainty = streamUncertaintyPercent(row.status);
+      const scaled = row.scaledQuantity ? `${row.scaledQuantity} ${row.scaledUnit}${Number.isFinite(uncertainty) ? ` ±${uncertainty}%` : ""}` : "not scaled";
       return `
         <div class="scaled-flow-row">
           <strong>${escapeHtml(row.name || "untitled stream")}</strong>

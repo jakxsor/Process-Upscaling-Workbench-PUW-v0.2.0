@@ -189,7 +189,7 @@ def _exchange_rows(exchanges: list[dict[str, Any]]) -> list[list[Any]]:
         "process_id", "process_name", "block_id", "exchange_id", "direction", "lca_role",
         "raw_name", "canonical_name", "amount", "unit", "kg", "basis", "amount_status",
         "phase", "fate", "destination_group", "status", "openlca_flow_type",
-        "provider_needed", "candidate_queries", "note",
+        "provider_needed", "candidate_queries", "note", "uncertainty_percent",
     ]]
     for exchange in exchanges:
         rows.append([
@@ -214,6 +214,7 @@ def _exchange_rows(exchanges: list[dict[str, Any]]) -> list[list[Any]]:
             _get(exchange, "openLcaHint.providerNeeded"),
             _join(exchange.get("candidateQueries")),
             exchange.get("note", ""),
+            exchange.get("uncertaintyPercent", ""),
         ])
     return rows
 

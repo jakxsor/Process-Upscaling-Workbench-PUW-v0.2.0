@@ -99,7 +99,7 @@
           <span><strong>${selected.balance
             ? selected.balance.status === "closed" ? "closed"
               : selected.balance.status === "open" ? `${selected.balance.unknown} n.q.`
-              : selected.balance.status === "off" ? `${selected.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(selected.balance.deltaPercent)}%`
+              : selected.balance.status === "off" ? `${selected.balance.deltaPercent > 0 ? "+" : ""}${flowsheetKgText(selected.balance.deltaPercent)}%${selected.balance.withinUncertainty ? " (within the declared uncertainty)" : ""}`
               : "no data"
             : "-"}</strong> balance</span>
           <span><strong>${selected.stage + 1}</strong> stage</span>
