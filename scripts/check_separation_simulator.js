@@ -88,13 +88,78 @@ assert(["benzophenone", "2-ethylhexyl cyanoacetate"].includes(octoConversion.sto
 assert(Math.abs(octoConversion.reactantRows.find(row => row.stream.name === "benzophenone").leftoverKg - 0.002533) < 0.00001, "Octocrylene conversion should compute benzophenone residual from the endpoint-proxy conversion basis");
 assert.strictEqual(octoConversion.massClosure.status, "closed", "Octocrylene reactive inputs must close against product, reaction water, and unreacted reagents");
 assert.strictEqual(octoConversion.yieldStatus, "calculated", "The endpoint-proxy result must not be presented as a reported yield");
+// The SI names these auxiliaries without a quantity. They are entered as engineering estimates
+// and must say so: status "estimated" with the method on the note, never "reported".
 const catalystFeed = state.blocks.find(block => block.id === "B1").streams.find(stream => stream.name === "ammonium acetate");
-assert.strictEqual(catalystFeed.quantity, "", "Unreported catalyst loading must stay blank");
-assert.strictEqual(catalystFeed.status, "missing", "Unreported catalyst loading must be visibly marked missing");
+assert.strictEqual(catalystFeed.quantity, "0.043", "Catalyst loading is 20 mol% NH4OAc on 2.780 mol cyanoacetate = 0.043 kg per kg product");
+assert.strictEqual(catalystFeed.status, "estimated", "The unreported catalyst loading must be labelled as an estimate");
+assert(catalystFeed.note.includes("mol%"), "The catalyst note must name the loading basis");
+
+// Citations: an unreported quantity carries the published source it was derived from, separately
+// from its prose note, so the figure can be checked without reading the code.
+const allStreams = state.blocks.flatMap(block => block.streams.map(stream => ({ block: block.id, ...stream })));
+const sourceText = stream => String(stream.source || "");
+const citedWith = text => allStreams.filter(stream => sourceText(stream).includes(text));
+
+assert(sourceText(catalystFeed).includes("Org. React.") && sourceText(catalystFeed).includes("2010/0048937"), "The catalyst source must cite both the generic Knoevenagel review and the octocrylene process patent that contradicts the loading");
+assert(sourceText(catalystFeed).includes("0.7-1.2 mol per mol") && sourceText(catalystFeed).includes("likely low"), "The catalyst source must state the contested loading and that the entered value is probably low");
+
+[
+  ["63.1257(d)(2)(i)(B)", "the filled-vessel purging equation for a swept reactor vent"],
+  ["63.1257(d)(2)(i)(E)", "the vacuum-system equation for the evaporator exhaust"],
+  ["63.1257(d)(2)(i)(G)", "the air-drying equation for sieve regeneration"]
+].forEach(([equation, label]) => {
+  assert(citedWith(equation).length > 0, "Some stream must cite " + label + " (" + equation + ")");
+});
+
+const emitted = allStreams.find(stream => stream.fate === "vent" && stream.role === "waste" && !stream.destinationGroup);
+assert(sourceText(emitted).includes("2010/75/EU"), "The emission to air must cite the regulatory ceiling it is checked against");
+assert(sourceText(emitted).includes("doi:10.1065"), "The emission to air must cite the ecoinvent screening default it is compared with");
+
+const recycleRow = allStreams.find(stream => stream.fate === "recycled input");
+assert(sourceText(recycleRow).includes("BF02978569"), "The 98% solvent recovery must cite the published fine-chemical defaults");
+assert(sourceText(recycleRow).includes("optimistic bound"), "The 98% recovery source must say it is more optimistic than the published best case");
+
+// Every estimate is traceable on hover: a row where the number enters the process carries its own
+// source, and a pass-through copy of it resolves that same source instead of duplicating it.
+const estimated = state.blocks.flatMap(block => block.streams
+  .filter(stream => stream.status === "estimated")
+  .map(stream => ({ block: block.id, stream })));
+const uncitedOrigins = estimated
+  .filter(entry => entry.stream.role === "input" && entry.stream.fate === "fresh input" && !sourceText(entry.stream).trim())
+  .map(entry => entry.block + "/" + entry.stream.name);
+assert.deepStrictEqual(uncitedOrigins, [], "Every estimated fresh charge must cite a source where it enters the process");
+const unresolved = estimated
+  .filter(entry => !streamDisplaySource(entry.stream).text)
+  .map(entry => entry.block + "/" + entry.stream.role + "/" + entry.stream.name);
+assert.deepStrictEqual(unresolved, [], "Every estimated row must show a source on hover, its own or its origin's");
+
+const carriedCatalyst = state.blocks.find(block => block.id === "B3").streams.find(stream => stream.name === "ammonium acetate");
+const carriedSource = streamDisplaySource(carriedCatalyst);
+assert(!sourceText(carriedCatalyst).trim(), "A pass-through catalyst row should not duplicate the citation in its data");
+assert(carriedSource.text.includes("2010/0048937") && carriedSource.inheritedFrom.includes("B1"), "A pass-through catalyst row must show the reactor charge's citation on hover, got " + JSON.stringify(carriedSource.inheritedFrom));
+
+// A row fed by several cited origins (the combined vent gas) must still fit the fixed-height hover
+// tip: each origin is cut to its leading citation and the reader is pointed to the full rows.
+const combinedVent = state.blocks.find(block => block.id === "B10").streams.find(stream => stream.role === "input" && stream.name === "cyclohexane");
+const combinedSource = streamDisplaySource(combinedVent);
+assert(combinedSource.inheritedFrom.length > 1, "The combined vent row should draw on more than one cited origin, got " + JSON.stringify(combinedSource.inheritedFrom));
+assert(combinedSource.text.length < 900, "A multi-origin citation must stay short enough for the hover tip, got " + combinedSource.text.length + " characters");
+assert(combinedSource.text.includes("63.1257") && combinedSource.text.includes("Full reasoning on the rows at"), "The trimmed multi-origin citation must keep each leading citation and point to the full rows");
 const ethylAcetateFeed = state.blocks.find(block => block.id === "B5").streams.find(stream => stream.name === "ethyl acetate");
-assert.strictEqual(ethylAcetateFeed.status, "missing", "Unreported ethyl acetate extraction amount must stay missing");
+assert.strictEqual(ethylAcetateFeed.status, "estimated", "The unreported ethyl acetate volume must be labelled as an estimate");
+assert(/azeotrope/.test(ethylAcetateFeed.note), "The ethyl acetate note must flag the cyclohexane azeotrope that makes it a scale-up decision");
 const brineFeed = state.blocks.find(block => block.id === "B6").streams.find(stream => stream.name === "saturated sodium chloride brine");
-assert.strictEqual(brineFeed.status, "missing", "Unreported brine amount must stay missing");
+assert.strictEqual(brineFeed.status, "estimated", "The unreported brine volume must be labelled as an estimate");
+// The one gap left open on purpose: the still residue follows from the distillation yield the
+// authors hold, and entering it would move the 1 kg product basis.
+const stillResidue = state.blocks.find(block => block.id === "B9").streams.find(stream => stream.name === "uncharacterized organic residue");
+assert.strictEqual(stillResidue.status, "missing", "The distillation residue stays missing until the authors supply the distillation yield");
+["G1", "G4", "G5", "G7", "G8", "G9"].forEach(id => {
+  const schedule = state.groups[id].schedule;
+  assert(Number.isFinite(Number(schedule.durationH)) && Number(schedule.durationH) > 0, id + " carries an estimated duration");
+  assert(/^Estimated, not reported/.test(schedule.notes), id + " duration must be labelled as an estimate in its notes");
+});
 const recoveryBlock = state.blocks.find(block => block.id === "B11");
 const recoveryFeedL = Number(recoveryBlock.streams.find(stream => stream.role === "input").quantity);
 const recoveredL = Number(recoveryBlock.streams.find(stream => stream.fate === "recovered solvent").quantity);

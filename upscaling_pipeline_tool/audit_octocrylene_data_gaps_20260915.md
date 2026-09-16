@@ -7,7 +7,53 @@ fully quantified counter-example: every technique below is applied there.
 
 Shareable page: https://claude.ai/code/artifact/c94900b3-9c74-4950-8f1f-0ed3f7c75481
 
-## Verdict
+## Applied (2026-09-16)
+
+The table below was entered into `loadBaseExampleProject` with the proposed values, each
+row carrying status "estimated" and the method on its note; the derived numbers live in
+`octocryleneExampleBasis` (examples.js) so they are computed, not typed.
+
+| Item | Entered | Rows |
+| --- | --- | --- |
+| 1 NH4OAc | 0.043 kg (20 mol% on 2.780 mol cyanoacetate), leaves in the water wash | 11 |
+| 2 Ethyl acetate | 1.0 L (0.902 kg) placeholder, routed U5 -> U8 and purged there as the azeotrope cut; the note asks the authors whether to drop it at scale | 10 (B11 in/out added) |
+| 3 Brine | 1.0 L = 1.20 kg | 3 |
+| 4 Cyclohexane vents | reactor 0.0008 kg (VLE, N2 sweep), evaporator 0.0001 kg (allowance), U7 in 0.0009, recovered 0.0008 to U8, emitted 0.00009 at 90% capture | 5 |
+| 5 Dean-Stark purge | 0.00001 kg | 1 |
+| 6 Sieve regeneration water | 0.040 kg, with a matching water input on B7 so the dryer balance closes | 3 (B7 in added) |
+| 7 Distillation residue | left blank on purpose: it needs the authors' distillation yield and moves the product basis | 1 |
+| 8 Wastewater | 3.33 kg, calculated as the sum of the aqueous inputs | 1 |
+
+Durations: G1 1 h, G4 2 h, G5 8 h, G7 20 h, G8 6 h, G9 1 h, each note starting "Estimated,
+not reported" with the throughput basis. G7 and G9 use manual predecessors (G1 and G4):
+in automatic text-order mode every overlap task branches off G5, which sequenced the 20 h
+abatement after the evaporator, stretched the makespan to 53.5 h and tied the reactor as
+bottleneck. Result: makespan 39.5 h, plant cycle 20 h, G2 the critical bottleneck (12 h gap),
+250 batches/yr overlapped, 127 conservative.
+
+Properties: octocrylene from SCCS/1627/21 section 3.1.8 (mp -10 degC, bp 218 degC at
+1.5 mmHg, decomposes before boiling, vapour pressure 0 Pa at 25 degC, density 1.051);
+2-ethylhexyl cyanoacetate from supplier data (150 degC at 11 mmHg; 241 degC at 760 mmHg and
+0.036 mmHg at 25 degC, predicted); ammonium acetate vapour pressure 0.00014 mmHg from
+PubChem/HSDB. PubChem PUG-View returns MW only for the two esters, so the "left to PubChem
+autofill" route in the old fixture comment cannot fill them. Wikipedia's 14 degC melting
+point for octocrylene is the outlier and was not used.
+
+Verification: 109 stream rows, 55 calculated, 20 reported, 33 estimated, 1 missing (item 7).
+Unit balances G1-G5 and G7-G9 closed within 1.1% (G7's 1.1% is rounding of 0.0008 + 0.00009
+against 0.0009); G6 reads "open" because of the residue row. The LCI now carries an emission
+to air (0.00009 kg cyclohexane per kg product). Validation suite green including the browser
+smoke check; the three regression assertions that encoded "must stay missing" now assert
+"estimated with the method on the note", and the one deliberate blank is asserted too.
+
+Two things learned for the backlog. The heuristic screen is keyword-driven: a note saying
+"vacuum-pump exhaust" triggered the two pump rules (H37, H39) and "non-condensable" triggers
+H11, so wording in notes changes the shortlist; the trigger/criteria fields from the schema
+gap in `audit_ui_review_20260912.md` would fix this properly. And the flowsheet balance counts
+any row with fate "vent" as an outlet, so the vent gas entering U7 must carry fate
+"intermediate" or the unit doubles its outputs.
+
+## Verdict (2026-09-15, before the values were entered)
 
 The octocrylene case is complete in structure (12 blocks, 9 units, 37 phenomena, every
 stream with role, phase, fate and provenance) and incomplete in numbers. On the 1 kg

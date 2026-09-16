@@ -2854,6 +2854,27 @@
       overflow-wrap: anywhere;
     }
 
+    /* The published source behind an unreported quantity. Clamped to two lines so a long citation
+       does not push the card open; the full text is on the hover tip. */
+    .mfa-label-source {
+      color: var(--ink-3, #6b7b88);
+      font-size: 10.5px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+      border-left: 2px solid var(--blue, #1671c2);
+      padding-left: 6px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      cursor: help;
+    }
+
+    .pill.cited {
+      cursor: help;
+    }
+
     .mfa-label-actions {
       display: flex;
       justify-content: flex-end;

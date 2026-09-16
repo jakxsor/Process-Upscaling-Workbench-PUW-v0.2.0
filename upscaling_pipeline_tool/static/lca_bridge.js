@@ -76,6 +76,7 @@
           status: stream.status,
           uncertaintyPercent: typeof streamUncertaintyPercent === "function" ? streamUncertaintyPercent(stream.status) : NaN,
           note: stream.note || "",
+          source: stream.source || "",
           lcaRole: lcaRoleForStream(stream, producedKeys)
         };
         return {

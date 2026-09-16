@@ -75,7 +75,7 @@ syncSeparationSimulatorSubstances(g2);
 const scale = scaleModel();
 const benchmarkGantt = taskScheduleModel();
 const throughput = throughputDiagnosticsModel(scale, benchmarkGantt);
-assert(benchmarkGantt.missingDurationCount > 0, "Octocrylene example should expose operation durations that the SI does not quantify instead of fabricating a complete 28 h decomposition");
+assert.strictEqual(benchmarkGantt.missingDurationCount, 0, "Every octocrylene task carries a duration: the six the SI does not quantify are labelled engineering estimates (equipment throughputs), not blanks");
 assert(Math.abs(benchmarkGantt.plantCycleTimeH - 20) < 0.01, "Octocrylene example should retain the 20 h kinetics-bound plant cycle");
 assert(Math.abs(conversionNumber(scale.schedule.effectiveBatchesPerYear) - 250) < 0.01, "Octocrylene calendar and OEE should reconcile to approximately 250 batches/year");
 assert(Math.abs(conversionNumber(scale.target.kgPerBatch) - 3000) < 0.01, "The 750 t/year target should reconcile with the 3000 kg manuscript batch");
@@ -94,7 +94,7 @@ assert(completeGanttHtml.includes("Add Density Basis"), "Volumetric reactor Gant
 assert(completeGanttHtml.includes("Conservative batches/year") && completeGanttHtml.includes("complete dependency path"), "Gantt summary should distinguish conservative makespan throughput from plant cycle");
 assert(completeGanttHtml.includes("gantt-timeline-legend") && completeGanttHtml.includes("feed preparation and dosing"), "Gantt timeline should expose its legend and task names");
 assert(completeGanttHtml.includes("data-toggle-gantt-decision") && completeGanttHtml.includes("Review options"), "Bottleneck remediation should stay available in a compact expandable control");
-assert(completeGanttHtml.includes("Fill Example Durations"), "An evidence-incomplete SI schedule should keep the optional example-duration action visible");
+assert(!completeGanttHtml.includes("Fill Example Durations"), "With every octocrylene duration declared (SI values or labelled estimates), the generic example-duration filler must not be offered");
 assert(renderScaleBasisPanel.toString().includes("scale-equipment-basis") && renderScaleBasisPanel.toString().includes("Annual capacity"), "Scale-up should separate reactor fill from calendar inputs and disclose their calculation impact");
 assert(!candidateFitMetaHtml(unitOperationCandidatesForGroup(g2)[0]).includes("score"), "Unit-operation evidence must not expose an invented numeric score");
 openDensityBasisEditor("G2");

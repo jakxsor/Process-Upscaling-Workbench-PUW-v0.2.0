@@ -10,6 +10,35 @@
     const mass = (mol, mw) => String(Number((mol * mw / 1000).toPrecision(4)));
     const cyclohexaneChargeL = 2.5;
     const solventRecoveryTarget = 0.98;
+    const reactionWaterKg = mass(reactedMol, 18.015);
+    const washWaterL = 2.0;
+    // Auxiliaries the SI names but does not quantify. Each is an engineering estimate with the
+    // method recorded on its stream note (see audit_octocrylene_data_gaps_20260915.md); they are
+    // entered so the unit balances close and the vents and wastewater carry a number, and they
+    // stay labelled "estimated" until the authors replace them from the notebook.
+    // NH4OAc: 20 mol% on the cyanoacetate, the textbook Knoevenagel loading (range 10-50 mol%).
+    const catalystLoadingMolPercent = 20;
+    const catalystKg = String(Number((chargedMol * catalystLoadingMolPercent / 100 * 77.08 / 1000).toPrecision(2)));
+    // Ethyl acetate extraction: one volume of the reaction mixture is laboratory practice; kept as a
+    // placeholder because the SI requires the extraction (at plant scale it is redundant and forms an
+    // azeotrope with cyclohexane, so it is flagged rather than dropped).
+    const ethylAcetateL = 1.0;
+    // Brine wash: one volume equal to the water wash; saturated NaCl 26.4 wt%, 1200 kg/m3 at 25 degC.
+    const brineL = 1.0;
+    const brineKg = brineL * 1.2;
+    // Cyclohexane vent losses from vapour-liquid equilibrium: 0.5 m3/h N2 sweep for 20 h at a 10 degC
+    // condenser outlet (Pvap 6.3 kPa, y = 0.062) gives 2.4 kg per 3000 kg batch for the reactor;
+    // the evaporator vacuum-pump exhaust is an order-of-magnitude allowance. 90% capture in U7.
+    const reactorVentCyclohexaneKg = 0.0008;
+    const evaporatorVentCyclohexaneKg = 0.0001;
+    const ventCaptureFraction = 0.9;
+    const ventInKg = reactorVentCyclohexaneKg + evaporatorVentCyclohexaneKg;
+    // Cyclohexane dissolved in the Dean-Stark water (55 mg/L at 25 degC in 0.050 kg water): 3 mg.
+    const deanStarkPurgeCyclohexaneKg = 0.00001;
+    // Water removed by the 4A bed: dissolved (3.3 wt% in EtOAc, 0.01 wt% in cyclohexane) plus
+    // 0.1-0.5 wt% entrained after the decanter, minus the 500 ppm left in the product.
+    const sieveRegenerationWaterKg = 0.040;
+    const wastewaterKg = Number(reactionWaterKg) + washWaterL * 0.997 + Number(catalystKg) + brineKg + sieveRegenerationWaterKg;
     return Object.freeze({
       productKg: String(productKg),
       productMw: String(productMw),
@@ -18,12 +47,26 @@
       cyanoacetateKg: mass(chargedMol, 197.28),
       unreactedBenzophenoneKg: mass(chargedMol - reactedMol, 182.22),
       unreactedCyanoacetateKg: mass(chargedMol - reactedMol, 197.28),
-      reactionWaterKg: mass(reactedMol, 18.015),
-      washWaterL: "2.0",
+      reactionWaterKg,
+      washWaterL: washWaterL.toFixed(1),
       cyclohexaneChargeL: String(cyclohexaneChargeL),
       cyclohexaneRecoveredL: (cyclohexaneChargeL * solventRecoveryTarget).toFixed(2),
       cyclohexaneMakeupL: (cyclohexaneChargeL * (1 - solventRecoveryTarget)).toFixed(2),
-      solventRecoveryPercent: String(solventRecoveryTarget * 100)
+      solventRecoveryPercent: String(solventRecoveryTarget * 100),
+      catalystLoadingMolPercent: String(catalystLoadingMolPercent),
+      catalystKg,
+      ethylAcetateL: ethylAcetateL.toFixed(1),
+      brineL: brineL.toFixed(1),
+      brineKg: brineKg.toFixed(2),
+      reactorVentCyclohexaneKg: String(reactorVentCyclohexaneKg),
+      evaporatorVentCyclohexaneKg: String(evaporatorVentCyclohexaneKg),
+      ventInKg: String(Number(ventInKg.toPrecision(1))),
+      ventRecoveredKg: String(Number((ventInKg * ventCaptureFraction).toPrecision(1))),
+      ventEmittedKg: String(Number((ventInKg * (1 - ventCaptureFraction)).toPrecision(1))),
+      ventCapturePercent: String(ventCaptureFraction * 100),
+      deanStarkPurgeCyclohexaneKg: String(deanStarkPurgeCyclohexaneKg),
+      sieveRegenerationWaterKg: sieveRegenerationWaterKg.toFixed(3),
+      wastewaterKg: String(Number(wastewaterKg.toPrecision(3)))
     });
   })();
 
@@ -72,7 +115,26 @@
     .join("\n\n");
   const biodieselReactionOnlyText = [biodieselExampleSteps.B1, biodieselExampleSteps.B2r].join("\n\n");
 
+  // Published sources behind the quantities that the protocols do not report. Kept in one place so
+  // a row cites the same wording wherever it is rendered and a correction lands once. Two families:
+  // the regulatory/engineering methods that CALCULATE a loss, and the LCI conventions that say what
+  // to ASSUME when it cannot be calculated. Each string is what the user sees on hover.
+  const citations = Object.freeze({
+    cfrPurge: "40 CFR 63.1257(d)(2)(i)(B), Eq. 12 (filled-vessel purging); derivation in US EPA, Control of VOC Emissions from Batch Processes, EPA-453/R-93-017 (1994), s. 3.1.2.2. EPA guidance: assume the vent is fully saturated for an agitated vessel.",
+    cfrVacuum: "40 CFR 63.1257(d)(2)(i)(E), Eq. 33 (vacuum systems); air in-leakage correlations and the VOC load in EPA-453/R-93-017 (1994), s. 3.1.8.1, Eq. 3-25 to 3-32, tracing to Ryans & Croll, Chem. Eng. 88:78 (1981).",
+    cfrDrying: "40 CFR 63.1257(d)(2)(i)(G), Eq. 35 (air drying); EPA-453/R-93-017 (1994), s. 3.1.1.",
+    eiip16: "US EPA, Methods for Estimating Air Emissions from Chemical Manufacturing Facilities, EIIP Vol. II ch. 16 (Aug 2007): consolidated implementation of the batch emission models.",
+    ecoinventGapFill: "Hischier, Hellweg, Capello & Primas, Int. J. Life Cycle Assess. 10(1):59-67 (2005), doi:10.1065/lca2004.10.181.7. The standing ecoinvent gap-filling rule: where emissions are unreported, assume 0.2% of input mass to air and the remainder to water.",
+    geislerDefaults: "Geisler, Hofstetter & Hungerbuhler, Int. J. Life Cycle Assess. 9(2):101-113 (2004), doi:10.1007/BF02978569, Table 2. Fine-chemical batch defaults chosen to bracket 90% of real cases: solvent charge 0.2-4 kg/kg product, solvent recycle factor 0.95 best case to 0 worst case, air emission factor 1e-7 to 1e-3 of process mass.",
+    iedSolvent: "Directive 2010/75/EU (Industrial Emissions Directive), Annex VII Part 2 row 20: fugitive solvent emissions from pharmaceutical manufacture are capped at 5% of solvent input for new installations and 15% for existing ones. Annex VII Part 7 defines the O1-O9 solvent-management-plan compartments.",
+    octocrylenePatent: "US 2010/0048937 A1 (WO 2008/089920 A1, EP 2125707 B1), Process for the manufacture of substituted 2-cyano cinnamic esters. Claims a C3-C6 monocarboxylic acid plus an ammonium compound, ammonium:ketone 0.7-1.2 mol/mol, water removed azeotropically with cyclohexane or heptane.",
+    sccsOctocrylene: "SCCS/1627/21, Final Opinion on Octocrylene, s. 3.1.8: mp -10 degC, bp 218 degC at 1.5 mmHg with decomposition above 300 degC, vapour pressure 0 Pa at 25 degC, density 1.051 g/cm3.",
+    cyclohexaneWater: "IUPAC-NIST Solubility Data Series, cyclohexane + water; Gregory, Christian & Affsprung, J. Phys. Chem. 71:2283-9 (1967): water in cyclohexane 0.0069 wt% at 25 degC.",
+    knoevenagel: "Jones, The Knoevenagel Condensation, Org. React. 15:204-599 (1967), doi:10.1002/0471264180.or015.02."
+  });
+
   root.ProcessUpscalingExamples = Object.freeze({
+    citations,
     octocryleneExampleBasis,
     octocryleneExampleSteps,
     sampleText,

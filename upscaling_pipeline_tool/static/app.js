@@ -16,6 +16,7 @@
     }
 
     const {
+      citations,
       octocryleneExampleBasis,
       octocryleneExampleSteps,
       sampleText,
@@ -1098,6 +1099,7 @@
         makeupRequired: values.makeupRequired || "",
         accumulationRisk: values.accumulationRisk || "",
         note: values.note || "",
+        source: values.source || "",
         pubchemQuery: values.pubchemQuery || values.compoundName || "",
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, values[field] || values.chemicalProperties?.[field] || ""])),
         editing: Boolean(values.editing)
@@ -1109,16 +1111,18 @@
       const chemical = {
         // Densities (kg/m3, 20-25 degC) let the flowsheet weigh the volume-declared charges; Tb/Tm
         // in K and Pvap in Pa at 25 degC are handbook values for the well-characterised
-        // components so the Lutze screening has evidence to work with. Values for the case-specific
-        // esters are left to PubChem autofill or the authors.
-        benzophenone: { name: "benzophenone", phase: "S", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", tb: "578.6", tm: "321.4", pvap: "0.13", density: "1110" },
-        cyanoacetate: { name: "2-ethylhexyl cyanoacetate", phase: "L", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", density: "985" },
-        catalyst: { name: "ammonium acetate", phase: "S", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", tm: "387", density: "1170" },
-        cyclohexane: { name: "cyclohexane", phase: "L", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", tm: "279.6", pvap: "13000", density: "779" },
-        octocrylene: { name: "octocrylene", phase: "L", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: basis.productMw, density: "1050" },
-        water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997" },
-        brine: { name: "saturated sodium chloride brine", phase: "L", density: "1200" },
-        ethylAcetate: { name: "ethyl acetate", phase: "L", pubchemQuery: "ethyl acetate", pubchemCid: "8857", mw: "88.11", tb: "350.2", tm: "189.6", pvap: "12400", density: "902" }
+        // components so the Lutze screening has evidence to work with. PubChem's PUG-View carries
+        // no thermal data for the two case-specific esters (checked 2026-09-16: MW only), so their
+        // values come from supplier and registration data and are labelled "estimated".
+        benzophenone: { name: "benzophenone", phase: "S", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", tb: "578.6", tm: "321.4", pvap: "0.13", density: "1110", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        cyanoacetate: { name: "2-ethylhexyl cyanoacetate", phase: "L", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", tb: "515", pvap: "4.8", density: "985", propertyStatus: "estimated", propertySource: "Supplier data: 150 degC at 11 mmHg (Sigma-Aldrich SDS), 241 degC at 760 mmHg and 0.036 mmHg at 25 degC (ChemicalBook, predicted); no NIST entry", pvapTemperature: "298.15", pvapTemperatureUnit: "K", note: "Liquid at 25 degC; no pour point reported, Tm left blank. Tb and Pvap are supplier/predicted values, consistent with a Clausius-Clapeyron extrapolation of the reduced-pressure point (548 +/- 25 K)." },
+        catalyst: { name: "ammonium acetate", phase: "S", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", tm: "387", pvap: "0.019", density: "1170", propertyStatus: "database", propertySource: "PubChem PUG-View (HSDB): mp 114 degC, vapour pressure 0.00014 mmHg", pvapTemperature: "298.15", pvapTemperatureUnit: "K", note: "Decomposes at about 114 degC; there is no boiling point, so Tb is left blank and the low vapour pressure keeps volatility rules from proposing to distil it. Water solubility about 1480 g/L, so the whole charge leaves in the aqueous wash." },
+        cyclohexane: { name: "cyclohexane", phase: "L", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", tm: "279.6", pvap: "13000", density: "779", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        octocrylene: { name: "octocrylene", phase: "L", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: basis.productMw, tb: "700", tm: "263", pvap: "0.000001", density: "1051", propertyStatus: "estimated", propertySource: "SCCS/1627/21 Final Opinion on Octocrylene, section 3.1.8: mp -10 degC, bp 218 degC at 1.5 mmHg (decomposes before boiling, >300 degC), vapour pressure 0 Pa at 25 degC, density 1.051 g/cm3; Tb at 1 atm extrapolated", pvapTemperature: "298.15", pvapTemperatureUnit: "K", thermalSensitivity: "high", note: "No crystallisation above -10 degC (263 K), so cyclohexane cannot be removed by crystallisation. The 1 atm boiling point does not exist (decomposition above 300 degC): 700 +/- 40 K is a Clausius-Clapeyron extrapolation of the 218 degC / 1.5 mmHg point, entered only so the volatility ratios evaluate. Vapour pressure below detection, entered as 1e-6 Pa (negligible)." },
+        water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        brine: { name: "saturated sodium chloride brine", phase: "L", density: "1200", propertyStatus: "database", propertySource: "CRC Handbook: saturated NaCl 26.4 wt% at 25 degC, 1200 kg/m3", note: "Mixture: treated by the screening as water with dissolved salt; Tb/Tm left blank." },
+        ethylAcetate: { name: "ethyl acetate", phase: "L", pubchemQuery: "ethyl acetate", pubchemCid: "8857", mw: "88.11", tb: "350.2", tm: "189.6", pvap: "12400", density: "902", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        wastewater: { name: "wastewater", phase: "L", density: "1000", propertyStatus: "assumption", propertySource: "Aggregate aqueous stream; density of water assumed so the row converts to kg", note: "Mixture: composition is carried by the input rows of U9; Tb/Tm left blank." }
       };
       const chemicalRole = {
         benzophenone: "reactant",
@@ -1163,8 +1167,9 @@
           timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "1"
         }, context),
         processComponent(role, "catalyst", {
-          quantity: "", unit: "kg", status: "missing",
-          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst"
+          quantity: basis.catalystKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst",
+          note: `NH4OAc at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate (textbook Knoevenagel loading); the SI names the catalyst without a quantity.`
         }, context),
         processComponent(role, "cyclohexane", {
           quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
@@ -1189,15 +1194,17 @@
           timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
         }, context),
         processComponent(role, "catalyst", {
-          quantity: "", unit: "kg", status: "missing",
-          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst"
+          quantity: basis.catalystKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst",
+          note: `NH4OAc at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate, carried with the reactor contents until the aqueous wash.`
         }, context)
       ];
       const organicInventory = (role, context) => [
         ...postReactionInventory(role, context).filter(stream => stream.name !== chemical.catalyst.name),
         processComponent(role, "ethylAcetate", {
-          quantity: "", unit: "L", status: "missing",
-          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+          quantity: basis.ethylAcetateL, unit: "L", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent",
+          note: "One volume of extraction solvent (laboratory practice; the SI gives no amount), carried with the organic phase until the evaporator."
         }, context)
       ];
       const internalInventory = streams => streams.map(stream => ({ ...stream, internalTransfer: true }));
@@ -1249,13 +1256,14 @@
             note: "Back-calculated on the same 1:1 molar and 99.5% endpoint-proxy basis as benzophenone."
           }),
           component("input", "catalyst", {
-            quantity: "",
+            quantity: basis.catalystKg,
             unit: "kg",
-            status: "missing",
+            status: "estimated",
+            source: `${citations.knoevenagel} Loading contested by the process literature: ${citations.octocrylenePatent} uses ammonium acetate at 0.7-1.2 mol per mol of ketone, near-stoichiometric rather than catalytic, and every published octocrylene route also charges a carboxylic acid co-catalyst (acetic or propionic) at roughly 1 kg per kg of product, which this inventory does not carry. The 20 mol% here is the generic Knoevenagel loading and is likely low by 4-6x; confirm against the notebook before use.`,
             timing: "initial charge",
             fate: "fresh input",
             reactionRole: "catalyst",
-            note: "NH4OAc is named in the SI, but its quantity is not reported."
+            note: `NH4OAc is named in the SI without a quantity. Entered at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate (2.780 mol charged), the textbook loading for Knoevenagel condensations of ketones (Jones, Org. React. 15, 1967, 204; Tietze and Beifuss, Comprehensive Organic Synthesis vol. 2, 1991); range 0.021-0.107 kg for 10-50 mol%. Replace with the notebook charge.`
           }),
           component("input", "cyclohexane", {
             quantity: basis.cyclohexaneRecoveredL,
@@ -1266,7 +1274,8 @@
             reactionRole: "solvent",
             loopId: "CYHX",
             scalingMode: "recycle loop",
-            note: "Steady-state target case: 98% of the reported 2.5 L/kg total charge is supplied by recycle."
+            note: "Steady-state target case: 98% of the reported 2.5 L/kg total charge is supplied by recycle.",
+            source: `${citations.geislerDefaults} The 98% recovery assumed here is better than the 95% best case in those defaults, so it is the optimistic bound rather than a typical value; it also governs about fifty times more mass than the vent rows. Upper bound on total loss: ${citations.iedSolvent}`
           }),
           component("input", "cyclohexane", {
             quantity: basis.cyclohexaneMakeupL,
@@ -1275,7 +1284,8 @@
             timing: "make-up",
             fate: "fresh input",
             reactionRole: "solvent",
-            note: "Maximum make-up implied by the 98% recovery target; actual solvent losses require measured recovery data."
+            note: "Maximum make-up implied by the 98% recovery target; actual solvent losses require measured recovery data.",
+            source: `${citations.geislerDefaults} Fresh solvent is charge x (1 - recycle factor). At 2% this is below the 5% implied by the published best case, and far below the regulatory ceiling: ${citations.iedSolvent}`
           }),
           ...reactionChargeInventory("output", "after charging and mixing; catalyst quantity remains unknown")
         ], {
@@ -1321,13 +1331,13 @@
             note: "Gross solvent inventory on the reported 2.5 L/kg product basis; the Dean-Stark solvent is returned to the reactor."
           }),
           component("output", "catalyst", {
-            quantity: "",
+            quantity: basis.catalystKg,
             unit: "kg",
-            status: "missing",
+            status: "estimated",
             timing: "in-process intermediate",
             fate: "intermediate",
             internalTransfer: true,
-            note: "The SI states that NH4OAc leaves with the first aqueous wash; its mass remains unknown."
+            note: "The SI states that NH4OAc leaves with the first aqueous wash; the mass is the estimated 20 mol% charge, carried unchanged (catalytic, not consumed)."
           }),
           component("waste", "water", {
             id: "B3-CB-byproduct-1",
@@ -1363,14 +1373,16 @@
             note: "Generated on the same 99.5% screening-conversion and 1:1 stoichiometric basis."
           }),
           component("waste", "cyclohexane", {
-            quantity: "", unit: "L", phase: "L", status: "missing",
+            quantity: basis.deanStarkPurgeCyclohexaneKg, unit: "kg", phase: "L", status: "estimated",
             timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8",
-            note: "Cyclohexane in the U2 liquid purge routed to U8; quantity not reported."
+            note: "Cyclohexane dissolved in the 0.050 kg of Dean-Stark water drawn off the trap and routed to U8: solubility 55 mg/L at 25 degC gives 3 mg, entered as 0.00001 kg so the balance closes instead of showing an unknown.",
+            source: `${citations.cyclohexaneWater} That series is the authority for this binary; the 55 mg/L used here is the cyclohexane-in-water branch and is not yet verified against the printed table.`
           }),
           component("waste", "cyclohexane", {
-            quantity: "", unit: "L", phase: "V", status: "missing",
+            quantity: basis.reactorVentCyclohexaneKg, unit: "kg", phase: "V", status: "estimated",
             timing: "vent/emission", fate: "vent", destinationGroup: "G7",
-            note: "Cyclohexane in the U2 reactor vent; quantity not reported."
+            note: "Reactor vent loss from vapour-liquid equilibrium: 0.5 m3/h N2 sweep for 20 h = 10 Nm3 at a 10 degC condenser outlet (Pvap 6.3 kPa, NIST Antoine; y = 0.062) gives 2.4 kg per 3000 kg batch. Record the actual sweep rate and condenser temperature.",
+            source: `${citations.cfrPurge} Implementation reference: ${citations.eiip16} Cross-check: ${citations.geislerDefaults} At 0.041% of the cyclohexane charge this sits inside that air-emission bracket and two orders of magnitude under the regulatory ceiling.`
           })
         ], {
           reaction_time: "18-24",
@@ -1399,13 +1411,14 @@
         makeBlock("B5", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
           ...postReactionInventory("input", "cooled reactor contents entering extraction and water wash"),
           component("input", "ethylAcetate", {
-            quantity: "",
+            quantity: basis.ethylAcetateL,
             unit: "L",
-            status: "missing",
+            status: "estimated",
             timing: "later addition",
             fate: "fresh input",
             reactionRole: "solvent",
-            note: "The public protocol requires ethyl acetate extraction for the cyclohexane route, but no quantity is reported."
+            note: "The SI requires an ethyl acetate extraction but gives no volume; one volume of the reaction mixture (1.0 L, 0.902 kg) is laboratory practice. At plant scale the extraction is redundant (cyclohexane already is the organic phase) and EtOAc forms a minimum-boiling azeotrope with cyclohexane (about 72 degC, 56 wt% EtOAc), so U8 cannot return pure cyclohexane once it is in the loop: confirm with the authors whether to drop it at scale.",
+            source: `No published figure: the extraction volume is not reported and one volume of the reaction mixture is laboratory convention, not a sourced value. Plausibility bracket: ${citations.geislerDefaults} At 0.90 kg per kg product this sits inside that solvent-charge range. The octocrylene process patent uses no extraction solvent at all: ${citations.octocrylenePatent}`
           }),
           component("input", "water", {
             quantity: basis.washWaterL,
@@ -1427,32 +1440,33 @@
             note: "Carrier water is reported; dissolved impurity loading is not quantified."
           }),
           component("waste", "catalyst", {
-            quantity: "",
+            quantity: basis.catalystKg,
             unit: "kg",
-            status: "missing",
+            status: "estimated",
             timing: "waste purge",
             fate: "wastewater",
             destinationGroup: "G9",
-            note: "The SI assigns NH4OAc to this stream but does not report its mass."
+            note: "The SI assigns NH4OAc to this stream; the whole estimated charge dissolves in the 2 L wash (solubility about 1480 g/L)."
           })
         ], {
-          phase_ratio: "2 L wash water/kg product; ethyl acetate amount missing",
+          phase_ratio: "2 L wash water/kg product; ethyl acetate 1 volume (estimated)",
           transfer_endpoint: "organic layer clear"
         }),
 
         makeBlock("B6", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
           ...internalInventory(organicInventory("input", "organic components entering the brine wash")),
-          component("input", "brine", { quantity: "", unit: "L", status: "missing", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", note: "Brine is required by the SI; dosage is not reported." }),
+          component("input", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", source: "No published figure for the volume: one volume equal to the water wash is laboratory convention. The composition is sourced: saturated NaCl is 26.4 wt% at 25 degC with density 1200 kg/m3 (CRC Handbook of Chemistry and Physics, aqueous solubility and density tables).", note: "Brine is required by the SI without a dosage; one volume equal to the water wash is laboratory practice. Saturated NaCl at 25 degC is 26.4 wt% at 1200 kg/m3: 1.0 L = 1.20 kg (0.317 kg NaCl + 0.883 kg water). At scale a coalescer or a second water wash usually replaces the brine wash." }),
           ...organicInventory("output", "organic components retained after the brine wash"),
-          component("waste", "brine", { quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Spent saturated sodium chloride brine; the route to U9 is reported, but water and salt quantities are not." })
+          component("waste", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Spent saturated sodium chloride brine to U9, same volume as charged; water carried into the organic phase is not subtracted at this precision." })
         ], {
           transfer_endpoint: "no emulsion; aqueous phase neutral"
         }),
 
         makeBlock("B7", "G4", "solid-liquid drying", ["PC(LS)", "PS(LS)"], [
           ...organicInventory("input", "organic components entering the 4A molecular-sieve bed"),
+          component("input", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "", source: `${citations.cyclohexaneWater} Measured water in cyclohexane is 0.0069 wt% at 25 degC, against the 0.01 wt% assumed here, so this row is slightly conservative. Regeneration discharge follows ${citations.cfrDrying}`, note: "Water carried in the organic phase from the washes: dissolved (3.3 wt% in ethyl acetate, 0.01 wt% in cyclohexane at 20 degC) plus 0.1-0.5 wt% entrained after the decanter. A Karl Fischer titration before the bed replaces the estimate." }),
           ...organicInventory("output", "same organic components after drying to the Karl-Fischer endpoint"),
-          component("waste", "water", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Water removed during molecular-sieve regeneration; the <500 ppm endpoint is reported, but inlet water loading and regeneration discharge are not." })
+          component("waste", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", source: `${citations.cfrDrying} Implementation reference: ${citations.eiip16}`, note: "Water removed by the bed and discharged at regeneration: 0.030 kg dissolved + 0.012 kg entrained - 0.002 kg left in the product at the <500 ppm endpoint (0.008 kg if ethyl acetate is dropped at scale)." })
         ], {
           transfer_endpoint: "Karl-Fischer water <500 ppm",
           contact_device: "regenerable fixed bed of 4A molecular sieves"
@@ -1464,8 +1478,8 @@
           component("output", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "benzophenone", note: "Residual reagent retained with the non-volatile fraction." }),
           component("output", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual reagent retained with the non-volatile fraction." }),
           component("output", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Condensed cyclohexane sent to solvent recovery; gross basis before applying the U8 recovery target." }),
-          component("output", "ethylAcetate", { quantity: "", unit: "L", status: "missing", timing: "in-process intermediate", fate: "intermediate", note: "Ethyl acetate condensate; the SI does not define its amount or destination." }),
-          component("waste", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", destinationGroup: "G7", note: "Cyclohexane in the evaporator vent; the route to U7 is represented without inventing a vent fraction." })
+          component("output", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Ethyl acetate condensate, same volume as charged; the SI gives no destination, so it is routed to U8 with the cyclohexane as a mixed solvent, where the azeotrope has to be purged." }),
+          component("waste", "cyclohexane", { quantity: basis.evaporatorVentCyclohexaneKg, unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", destinationGroup: "G7", source: `${citations.cfrVacuum} The air in-leakage correlations there replace the order-of-magnitude allowance used for this row: leakage follows from the vessel volume and the operating pressure, so this number can be calculated rather than assumed once those are declared.`, note: "Non-condensable exhaust of the vacuum system after the process condenser (100-200 mbar): an order-of-magnitude allowance, not a VLE calculation. Replace with the air in-leakage rate of the vacuum system and the condenser outlet temperature." })
         ], {
           target_temperature: "40-50",
           target_pressure: "100-200",
@@ -1481,9 +1495,9 @@
           component("input", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
           component("input", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
           component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "reported", timing: "final output", fate: "product", note: "Defined functional unit: 1 kg purified product at >=98% purity. This is a basis definition, not a reported isolation yield." }),
-          component("waste", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "benzophenone", note: "Residual benzophenone separated from the product cut; recovery versus disposal is not specified." }),
-          component("waste", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "unreacted reagent", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual 2-ethylhexyl cyanoacetate tracked separately rather than hidden in an aggregate residue." }),
-          unknown("waste", "uncharacterized organic residue", { phase: "L", timing: "waste purge", fate: "purge", note: "Composition unknown: the SI reports a low-volume heavy fraction but gives no quantity or chemical identity." })
+          component("waste", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "benzophenone", note: "Residual benzophenone separated from the product cut. The SI does not say whether it is recovered; at 0.25 wt% of the product recovery is not economic, so it leaves with the still residue to waste treatment, tracked as its own row." }),
+          component("waste", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual 2-ethylhexyl cyanoacetate, same fate as the residual benzophenone: leaves with the still residue to waste treatment rather than being hidden in the aggregate residue row." }),
+          unknown("waste", "uncharacterized organic residue", { phase: "L", timing: "waste purge", fate: "purge", note: "The SI reports a heavy fraction with neither quantity nor composition. It is the crude minus the distillate, so it follows from the distillation yield, which the authors hold; Knoevenagel heavies (self-condensation and Michael adducts) are typically 2-5 wt% of the crude. Left blank on purpose: entering it moves the 1 kg product basis (reagent charges scale by 1/yield), which is the authors' decision. GC-MS of the still bottoms gives the composition." })
         ], {
           target_temperature: "190-210",
           target_pressure: "2",
@@ -1495,17 +1509,19 @@
         }),
 
         makeBlock("B10", "G7", "vent gas treatment", ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"], [
-          component("input", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", note: "Cyclohexane in the combined U2/U5 vents; flow not quantified in the SI." }),
-          component("output", "cyclohexane", { quantity: "", unit: "L", phase: "L", status: "missing", timing: "in-process intermediate", fate: "recovered solvent", destinationGroup: "G8", note: "Condensed cyclohexane; no capture efficiency is reported." }),
-          component("waste", "cyclohexane", { quantity: "", unit: "L", phase: "V", status: "missing", timing: "vent/emission", fate: "vent", note: "Uncaptured cyclohexane emission; no numerical emission factor is available." })
+          component("input", "cyclohexane", { quantity: basis.ventInKg, unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "intermediate", note: "Combined U2 reactor and U5 evaporator vent gas entering the abatement unit (sum of the two estimated vent rows); the SI routes them to U7 without a flow." }),
+          component("output", "cyclohexane", { quantity: basis.ventRecoveredKg, unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", destinationGroup: "G8", source: `${citations.cfrPurge} Capture efficiency is a declared control-device performance, not a calculated split; it is the one number in this unit that has to come from the vendor or a measurement.`, note: `Condensed and desorbed cyclohexane returned to U8 at ${basis.ventCapturePercent}% capture (cold condenser plus activated carbon, typical); the SI reports no capture efficiency.` }),
+          component("waste", "cyclohexane", { quantity: basis.ventEmittedKg, unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", source: `${citations.iedSolvent} Screening default if the calculation is not available: ${citations.ecoinventGapFill} That default would give roughly five times this figure, so the calculated value is the tighter of the two.`, note: `Cyclohexane emitted to air after abatement at ${basis.ventCapturePercent}% capture; far below the 0.05 L/kg loss allowance already in the case. This row feeds the LCI emission to air.` })
         ], {
           contact_device: "condenser plus activated-carbon polishing"
         }, {}, "scale-up addition"),
 
         makeBlock("B11", "G8", "solvent recovery distillation", ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], [
-          component("input", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Reported 2.5 L/kg gross charge used as the closed target-case recovery basis; unquantified side feeds remain separate." }),
+          component("input", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Reported 2.5 L/kg gross charge used as the closed target-case recovery basis. The two estimated side feeds (U7 recovered vent cyclohexane and the Dean-Stark purge, together below 0.1% of this feed) are part of the same charge and are not added a second time." }),
+          component("input", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Ethyl acetate condensate from U5 (estimated one volume). It forms a minimum-boiling azeotrope with cyclohexane (about 72 degC, 56 wt% EtOAc), so it cannot be returned as pure cyclohexane." }),
           component("output", "cyclohexane", { quantity: basis.cyclohexaneRecoveredL, unit: "L", status: "calculated", timing: "recycle", fate: "recovered solvent", recoveryPercent: basis.solventRecoveryPercent, scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "Purified recycle; minimum quantity calculated from the SI target of at least 98% recovery." }),
-          component("waste", "cyclohexane", { quantity: basis.cyclohexaneMakeupL, unit: "L", status: "calculated", timing: "waste purge", fate: "loss", note: "Maximum unrecovered cyclohexane share implied by the 98% target; it is not a measured loss." })
+          component("waste", "cyclohexane", { quantity: basis.cyclohexaneMakeupL, unit: "L", status: "calculated", timing: "waste purge", fate: "loss", note: "Maximum unrecovered cyclohexane share implied by the 98% target; it is not a measured loss." }),
+          component("waste", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "waste purge", fate: "purge", note: "Azeotrope purge: the ethyl acetate leaves the column as a light cut with some cyclohexane rather than being recovered. Dropping the extraction at scale removes this stream." })
         ], {
           separation_efficiency: basis.solventRecoveryPercent,
           transfer_endpoint: "cyclohexane recovery >=98%"
@@ -1516,10 +1532,10 @@
         makeBlock("B12", "G9", "wastewater treatment", ["M(L)"], [
           component("input", "water", { quantity: basis.reactionWaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater", note: "Stoichiometric reaction water." }),
           component("input", "water", { quantity: basis.washWaterL, unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", note: "Aqueous wash carrier." }),
-          component("input", "catalyst", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", note: "Ammonium acetate transferred to the aqueous wash; amount not reported." }),
-          component("input", "brine", { quantity: "", unit: "L", status: "missing", timing: "waste purge", fate: "wastewater", note: "Spent saturated sodium chloride brine; amount not reported." }),
-          component("input", "water", { quantity: "", unit: "kg", status: "missing", timing: "waste purge", fate: "wastewater", note: "Molecular-sieve regeneration water; amount not reported." }),
-          unknown("output", "wastewater", { phase: "L", timing: "waste purge", fate: "wastewater", note: "Aggregate treatment-boundary flow: composition is represented by the input rows; final quantity and treatment reagents are not reported." })
+          component("input", "catalyst", { quantity: basis.catalystKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Ammonium acetate dissolved in the aqueous wash (estimated 20 mol% charge)." }),
+          component("input", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Spent saturated sodium chloride brine (estimated one volume, 1.20 kg)." }),
+          component("input", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Molecular-sieve regeneration water (estimated from the water carried in the organic phase)." }),
+          component("output", "wastewater", { quantity: basis.wastewaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater", note: "Sum of the aqueous inputs: reaction water + wash water + NH4OAc + brine + regeneration water. Composition is carried by the input rows; treatment reagents and the final discharge are not reported." })
         ], {
           agitation_note: "neutralization and biological-treatment interface; design data missing"
         }, {}, "scale-up addition")
@@ -1548,20 +1564,20 @@
           unit: "kg",
           role: "byproduct"
         }],
-        lastGeneratedSummary: "SI-reconciled basis: 1:1 Knoevenagel stoichiometry; 99.5% is an explicit screening proxy for the benzophenone <0.5% endpoint, not a reported yield. Water and residual reagents are calculated; unreported auxiliaries remain missing."
+        lastGeneratedSummary: "SI-reconciled basis: 1:1 Knoevenagel stoichiometry; 99.5% is an explicit screening proxy for the benzophenone <0.5% endpoint, not a reported yield. Water and residual reagents are calculated; the catalyst, extraction solvent, brine, vent and regeneration-water quantities the SI does not report are engineering estimates labelled as such. The distillation residue stays blank until the authors supply the distillation yield."
       };
 
       const schedule = (values = {}) => ({ ...scheduleDefaults(), ...values });
       state.groups = {
-        G1: { id: "G1", task: "feed preparation and dosing", selectedUnit: "Feed tank and dosing skid", selectionBasis: "SI U1: separate benzophenone, 2-EH cyanoacetate, and cyclohexane feeds plus NH4OAc solid feeder", schedule: schedule({ durationH: "", scaleSensitivity: "roughly constant", notes: "Duration is not reported. The 98% target recycle returns to this stage." }), properties: {}, propertiesEditing: false, x: 560, y: 90 },
+        G1: { id: "G1", task: "feed preparation and dosing", selectedUnit: "Feed tank and dosing skid", selectionBasis: "SI U1: separate benzophenone, 2-EH cyanoacetate, and cyclohexane feeds plus NH4OAc solid feeder", schedule: schedule({ durationH: "1", scaleSensitivity: "roughly constant", notes: "Estimated, not reported: one hour is the usual allowance for a solids charge (about 1.5 t benzophenone, 1.6 t cyanoacetate) and a 7.5 m3 solvent transfer on the 3000 kg batch. The 98% target recycle returns to this stage." }), properties: {}, propertiesEditing: false, x: 560, y: 90 },
         G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "SI U2/T1: B2 heat-up, B3 liquid-phase reaction/Dean-Stark removal, and B4 cooling share one reactor", schedule: schedule({ durationH: "20", capacityAmount: "5", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", notes: "The SI states an approximately 20 h U2 bottleneck and a 5 m3 reactor. Its separate 3000 kg batch claim is capacity-inconsistent with 2.5 L/kg cyclohexane: solvent alone is 7.5 m3 before reactants and freeboard." }), properties: {}, propertiesEditing: false, x: 1120, y: 90 },
-        G3: { id: "G3", task: "ethyl acetate extraction, aqueous wash, and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "SI protocol and U3: ethyl acetate extraction is named in the cyclohexane route; water/brine contacting is implemented as a mixer-settler train", schedule: schedule({ durationH: "2-3", scaleSensitivity: "increases with scale", notes: "SI range. Ethyl acetate and brine quantities remain missing." }), properties: {}, propertiesEditing: false, x: 1680, y: 90 },
-        G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "SI U4: regenerable fixed-bed 4A molecular sieves replace single-use laboratory drying salts", schedule: schedule({ durationH: "", scaleSensitivity: "equipment dependent", notes: "Duration, inlet water loading, and regeneration demand are not reported." }), properties: {}, propertiesEditing: false, x: 2240, y: 90 },
-        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "", scaleSensitivity: "equipment dependent", notes: "Processing duration is not reported." }), properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "Cyclohexane boiling point stated in SI heuristic closure." } }, propertiesEditing: false, x: 2800, y: 90 },
+        G3: { id: "G3", task: "ethyl acetate extraction, aqueous wash, and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "SI protocol and U3: ethyl acetate extraction is named in the cyclohexane route; water/brine contacting is implemented as a mixer-settler train", schedule: schedule({ durationH: "2-3", scaleSensitivity: "increases with scale", notes: "SI range. Ethyl acetate and brine volumes are laboratory-practice estimates (one volume each), not reported." }), properties: {}, propertiesEditing: false, x: 1680, y: 90 },
+        G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "SI U4: regenerable fixed-bed 4A molecular sieves replace single-use laboratory drying salts", schedule: schedule({ durationH: "2", scaleSensitivity: "increases with scale", notes: "Estimated, not reported: fixed-bed contact time for about 10 m3 of organic phase per batch (2.9 m3 product + 7.5 m3 cyclohexane) through a 2-3 m3 sieve bed at a liquid hourly space velocity of 2 per hour. Inlet water loading and regeneration demand are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 2240, y: 90 },
+        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "Cyclohexane boiling point stated in SI heuristic closure." } }, propertiesEditing: false, x: 2800, y: 90 },
         G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "SI U6: short-path molecular distillation for a high-boiling, thermally sensitive product", schedule: schedule({ durationH: "3-5", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "SI range and pre-emptive duplication; residence in the evaporator is separately stated as <1 min." }), properties: {}, propertiesEditing: false, x: 3360, y: 90 },
-        G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "SI U7: cold-trap condenser plus activated-carbon polishing for U2/U5 VOC vents", schedule: schedule({ durationH: "", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Vent flow and capture efficiency are not reported." }), properties: {}, propertiesEditing: false, x: 1680, y: 520 },
-        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "SI U8: recover cyclohexane from U2/U5 and return it to U1", schedule: schedule({ durationH: "", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Recovery target >=98%; column duty, stages, reflux, and duration are not reported." }), properties: {}, propertiesEditing: false, x: 2800, y: 520 },
-        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "SI U9: reaction water plus aqueous/brine discharges to neutralization and biological WWT", schedule: schedule({ durationH: "", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Treatment residence time, reagents, and final discharge are not reported." }), properties: {}, propertiesEditing: false, x: 1120, y: 520 }
+        G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "SI U7: cold-trap condenser plus activated-carbon polishing for U2/U5 VOC vents", schedule: schedule({ durationH: "20", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G1"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: a continuous service that runs for as long as the reactor vents (20 h). Scheduled from the end of feed preparation so that it runs alongside the reaction rather than after the evaporator, which the automatic text-order dependency would assume; it does not add to the plant cycle. Vent flow and capture efficiency are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 1680, y: 520 },
+        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "SI U8: recover cyclohexane from U2/U5 and return it to U1", schedule: schedule({ durationH: "6", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane per batch at a column throughput of about 1 t/h. Recovery target >=98%; column duty, stages and reflux are not reported." }), properties: {}, propertiesEditing: false, x: 2800, y: 520 },
+        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "SI U9: reaction water plus aqueous/brine discharges to neutralization and biological WWT", schedule: schedule({ durationH: "1", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G4"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: nominal transfer to the treatment plant, scheduled after the last aqueous discharge (the sieve regeneration in G4). Treatment residence time, reagents, and final discharge are not reported." }), properties: {}, propertiesEditing: false, x: 1120, y: 520 }
       };
       state.links = [
         { from: "G1", to: "G2" },
@@ -2124,6 +2140,7 @@
         makeupRequired: String(stream?.makeupRequired || ""),
         accumulationRisk: String(stream?.accumulationRisk || ""),
         note: String(stream?.note || ""),
+        source: String(stream?.source || ""),
         pubchemQuery: String(stream?.pubchemQuery || stream?.compoundName || ""),
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, String(stream?.[field] || stream?.chemicalProperties?.[field] || "")])),
         thermalSensitivity: separationThermalOptions.includes(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
@@ -14747,6 +14764,10 @@
             <span class="stream-field-label">Data status</span>
             <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
           </label>
+          <label class="stream-field span-2">
+            <span class="stream-field-label">Quantity source</span>
+            <input data-stream-field="source" data-stream-id="${sid}" value="${escapeAttr(stream.source)}" placeholder="standard, regulation, paper or DOI behind this number">
+          </label>
           <details class="stream-advanced stream-chemical span-2" ${hasChemical ? "open" : ""}>
             <summary>
               <span>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</span>
@@ -15264,6 +15285,43 @@
       return !String(stream.quantity || "").trim() || !hasMassUnit;
     }
 
+    // A pass-through row repeats a quantity that is cited where it originates (ammonium acetate
+    // carried from the reactor to the wash). Show the origin's citation instead of copying it into
+    // every row, so a correction still lands in one place. Rows of the same substance and phase are
+    // matched first; a substance cited for several reasons (a combined vent) shows each of them.
+    function streamDisplaySource(stream) {
+      const own = String(stream?.source || "").trim();
+      if (own) return { text: own, inheritedFrom: [] };
+      const key = String(stream?.name || "").trim().toLowerCase();
+      if (!key) return { text: "", inheritedFrom: [] };
+      const collect = samePhaseOnly => {
+        const found = new Map();
+        state.blocks.forEach(block => (block.streams || []).forEach(other => {
+          const text = String(other.source || "").trim();
+          if (!text || String(other.name || "").trim().toLowerCase() !== key) return;
+          if (samePhaseOnly && (other.phase || "unknown") !== (stream.phase || "unknown")) return;
+          if (!found.has(text)) found.set(text, new Set());
+          found.get(text).add(block.id);
+        }));
+        return found;
+      };
+      const samePhase = collect(true);
+      const matches = samePhase.size ? samePhase : collect(false);
+      const entries = [...matches.entries()].slice(0, 3);
+      const inheritedFrom = [...new Set(entries.flatMap(([, ids]) => [...ids]))];
+      // One inherited source is shown whole. Several are each cut to their leading citation: the
+      // shared hover tip has a fixed height, and three full citations overflow it and get clipped.
+      // The complete reasoning stays on the rows where each quantity originates.
+      if (entries.length > 1) {
+        const head = text => text.length <= 190 ? text : `${text.slice(0, 190).replace(/\s+\S*$/, "")}...`;
+        return {
+          text: `${entries.map(([text]) => head(text)).join("\n\n")}\n\nFull reasoning on the rows at ${inheritedFrom.join(", ")}.`,
+          inheritedFrom
+        };
+      }
+      return { text: entries.map(([text]) => text).join("\n\n"), inheritedFrom };
+    }
+
     function streamLabelHtml(stream, block = null) {
       const title = stream.name.trim() || "Untitled stream";
       const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
@@ -15272,11 +15330,13 @@
       const reactionRoleBadge = stream.role === "input"
         ? `<span class="pill blue" title="Reaction role used by conversion balance">${escapeHtml(streamReactionRoleLabel(streamReactionRole(stream)))}</span>`
         : "";
+      const cited = streamDisplaySource(stream);
+      const citedFrom = cited.inheritedFrom.length ? ` (cited at ${cited.inheritedFrom.join(", ")})` : "";
       return `
         <article class="mfa-label-card role-${escapeAttr(streamTone(stream))}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
           <div class="mfa-label-top">
             <strong>${escapeHtml(title)}</strong>
-            <span class="pill ${stream.status === "missing" ? "warn" : "blue"}">${escapeHtml(stream.status)}</span>
+            <span class="pill ${stream.status === "missing" ? "warn" : "blue"}${cited.text ? " tip cited" : ""}"${cited.text ? ` data-tip="${escapeAttr(`${stream.status} quantity${citedFrom}\n\nSource: ${cited.text}`)}"` : ""}>${escapeHtml(stream.status)}${cited.text ? " &#9432;" : ""}</span>
           </div>
           <div class="mfa-label-meta">
             <span>${escapeHtml(amount)}</span>
@@ -15289,6 +15349,7 @@
           ${stream.recoveryPercent || stream.purgePercent || stream.loopId ? `<div class="mfa-label-meta">${stream.recoveryPercent ? `<span>recovery ${escapeHtml(stream.recoveryPercent)}%</span>` : ""}${stream.purgePercent ? `<span>purge ${escapeHtml(stream.purgePercent)}%</span>` : ""}${stream.loopId ? `<span>loop ${escapeHtml(stream.loopId)}</span>` : ""}</div>` : ""}
           ${propertyBadges}
           ${stream.note.trim() ? `<div class="mfa-label-note">${escapeHtml(stream.note)}</div>` : ""}
+          ${cited.text ? `<div class="mfa-label-source tip" data-tip="${escapeAttr(`Source for this quantity${citedFrom}\n\n${cited.text}`)}">${cited.inheritedFrom.length ? `Source${escapeHtml(citedFrom)}: ` : "Source: "}${escapeHtml(cited.text)}</div>` : ""}
           ${canCopyToOutput ? `<div class="mfa-label-actions"><button type="button" class="mini-button" data-copy-input-stream-to-output="${escapeAttr(stream.id)}">Use as output</button></div>` : ""}
         </article>
       `;
