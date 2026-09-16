@@ -5565,6 +5565,45 @@
       font-size: 15px;
     }
 
+    .sep-mode-switch {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid #cfdce4;
+      border-radius: 8px;
+      background: #edf2f5;
+    }
+
+    .sep-mode-switch button {
+      display: grid;
+      gap: 2px;
+      min-height: 48px;
+      padding: 7px 10px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+    }
+
+    .sep-mode-switch button.active {
+      border-color: #b7cad6;
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(24, 43, 55, 0.1);
+    }
+
+    .sep-mode-switch strong {
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .sep-mode-switch span {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
     .sep-sim-status {
       display: grid;
       gap: 2px;
@@ -6608,17 +6647,40 @@
     }
 
     .lutze-launch-button {
+      display: grid;
+      align-content: center;
+      gap: 2px;
       width: 100%;
-      min-height: 36px;
-      justify-content: center;
-      font-size: 13px;
+      min-height: 58px;
+      padding: 8px 10px;
+      justify-items: start;
+      text-align: left;
+      font-size: 12px;
+      line-height: 1.15;
     }
 
-    /* Pathway screening and the full KB3.1 sandbox open the same modal in two
-       different modes; keep their launchers side by side, primary one first. */
+    .lutze-launch-button span {
+      color: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .lutze-launch-button strong {
+      font-size: 13px;
+      line-height: 1.15;
+    }
+
+    .lutze-launch-button small {
+      color: inherit;
+      font-size: 10px;
+      opacity: 0.78;
+    }
+
+    /* Basic is the normal decision path; Advanced is the wider diagnostic sandbox. */
     .separation-launch-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
       gap: 6px;
     }
 
@@ -7322,6 +7384,9 @@
       .sep-balance-source,
       .sep-residual-box { align-items: flex-start; flex-direction: column; }
       .sep-sim-topline .mfa-summary-strip { width: 100%; justify-content: flex-start; }
+      .sep-mode-switch {
+        grid-template-columns: 1fr;
+      }
       .sep-sim-tabs {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));

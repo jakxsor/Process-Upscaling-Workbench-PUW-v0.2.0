@@ -67,7 +67,7 @@
     lutze: {
       title: "Lutze/Garg separation screening",
       items: [
-        { title: "Two entry points", body: "Open Lutze/Garg Separation Screening runs the evidence-based pathway screening: reaction, mixture, pathway, scale-up. Open Separation Simulator is the wider KB3.1 sandbox on the same group: reaction balance, substance list, binary screening, workup plan, pathway sandbox and suggestions." },
+        { title: "Basic and Advanced", body: "Basic opens the guided Lutze/Garg pathway screening: mixture, objective and pathway application. Advanced opens the wider KB3.1 sandbox on the same group: reaction balance, component list, pair screening, workup plan, pathway sandbox and suggestions." },
         { title: "Route-ready and threshold-only", body: "Route-ready means the knowledge-base threshold and the minimum phase and evidence gate both passed; it is still not equipment validation. Threshold-only review means the property ratio passed but evidence is incomplete. The thermal count only counts operation names associated with thermal separation; it does not compute temperatures or degradation risk." },
         { title: "When the screening is blocked", body: "A blocked screening names the missing properties (boiling point, vapour pressure, melting point) and the substances that lack them. Use Autofill properties in Mixture, or enter values under Advanced properties, then screen again." }
       ]

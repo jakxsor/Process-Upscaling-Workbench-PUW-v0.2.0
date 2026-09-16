@@ -8718,19 +8718,21 @@
       });
     }
 
-    // Two entry points into the same modal. The Lutze button opens it in "pathway"
-    // mode (2 tabs); "full" mode adds reaction balance, binary screening, workup plan
-    // and suggestions. Full mode had no launcher anywhere, so those four tabs were
-    // unreachable even though openSeparationSimulator was written and working.
+    // Two entry points into the same modal. Basic keeps the guided Lutze/Garg
+    // pathway flow in front; Advanced exposes the diagnostic KB3.1 sandbox tabs.
     function lutzeReactionSeparationLaunchHtml(group) {
       return `
         <div class="separation-launch-row">
           <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">
-            Open Lutze/Garg Separation Screening
+            <span>Basic</span>
+            <strong>Lutze/Garg screening</strong>
+            <small>Guided mixture and pathway</small>
           </button>
           <button class="lutze-launch-button tip" data-open-separation-simulator="${escapeAttr(group.id)}"
-            data-tip="Wider KB3.1 sandbox: balance, substances, binary screening, workup and pathway">
-            Open Separation Simulator
+            data-tip="Advanced KB3.1 sandbox: balance, components, pair screening, workup and suggestions">
+            <span>Advanced</span>
+            <strong>Separation sandbox</strong>
+            <small>Balance, pairs, workup</small>
           </button>
         </div>
       `;
@@ -10721,6 +10723,21 @@
       state.activeSeparationSimulatorMode = "full";
     }
 
+    function separationSimulatorModeSwitchHtml(groupId, mode) {
+      return `
+        <div class="sep-mode-switch" role="tablist" aria-label="Separation screening depth">
+          <button role="tab" aria-selected="${mode === "pathway"}" class="${mode === "pathway" ? "active" : ""}" data-sep-sim-mode="pathway" data-sep-group="${escapeAttr(groupId)}">
+            <strong>Basic</strong>
+            <span>Lutze/Garg pathway screening</span>
+          </button>
+          <button role="tab" aria-selected="${mode === "full"}" class="${mode === "full" ? "active" : ""}" data-sep-sim-mode="full" data-sep-group="${escapeAttr(groupId)}">
+            <strong>Advanced</strong>
+            <span>KB3.1 diagnostics and sandbox tabs</span>
+          </button>
+        </div>
+      `;
+    }
+
     function renderSeparationSimulatorModal() {
       const modal = $("separationSimulatorModal");
       const body = $("separationSimulatorBody");
@@ -10738,20 +10755,20 @@
       const pathway = pathwayMode ? separationPathwayModel(group, model) : null;
       const title = $("separationSimulatorTitle");
       const eyebrow = $("separationSimulatorEyebrow");
-      if (title) title.textContent = pathwayMode ? "Lutze/Garg Separation Screening" : "Separation Simulator";
-      if (eyebrow) eyebrow.textContent = pathwayMode ? "Evidence-based pathway screening" : "Optional KB3.1 sandbox";
+      if (title) title.textContent = pathwayMode ? "Basic Lutze/Garg Screening" : "Advanced Separation Sandbox";
+      if (eyebrow) eyebrow.textContent = pathwayMode ? "Guided pathway mode" : "Optional KB3.1 diagnostic mode";
       const tabs = pathwayMode
         ? [
           ["substances", "Mixture & objective"],
           ["pathway", "Pathways"]
         ]
         : [
-          ["balance", "1. Reaction Balance"],
-          ["substances", "2. Substances"],
-          ["binary", "3. Binary Screening"],
-          ["workup", "4. Workup Plan"],
-          ["pathway", "5. Pathway Sandbox"],
-          ["suggestions", "6. Suggestions"]
+          ["balance", "Balance"],
+          ["substances", "Components"],
+          ["binary", "Pair screening"],
+          ["workup", "Workup"],
+          ["pathway", "Pathway"],
+          ["suggestions", "Suggestions"]
         ];
       body.innerHTML = `
         <div class="sep-sim-topline">
@@ -10769,6 +10786,7 @@
             </div>
           `}
         </div>
+        ${separationSimulatorModeSwitchHtml(group.id, pathwayMode ? "pathway" : "full")}
         ${pathwayMode ? "" : `
           <div class="sep-sim-status ${escapeAttr(readiness.status)}">
             <strong>${escapeHtml(readiness.title)}</strong>
@@ -13033,6 +13051,16 @@
     }
 
     function bindSeparationSimulatorControls(root, groupId) {
+      root.querySelectorAll("[data-sep-sim-mode]").forEach(button => {
+        button.addEventListener("click", () => {
+          const mode = button.dataset.sepSimMode === "full" ? "full" : "pathway";
+          const simulator = ensureGroup(button.dataset.sepGroup || groupId).separationSimulator;
+          state.activeSeparationSimulatorMode = mode;
+          if (mode === "pathway" && !["substances", "pathway"].includes(simulator.tab)) simulator.tab = "pathway";
+          if (mode === "full" && !simulator.tab) simulator.tab = "balance";
+          renderSeparationSimulatorModal();
+        });
+      });
       root.querySelectorAll("[data-sep-sim-tab]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(groupId).separationSimulator.tab = button.dataset.sepSimTab;

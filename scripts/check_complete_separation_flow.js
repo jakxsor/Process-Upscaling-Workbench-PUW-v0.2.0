@@ -124,8 +124,8 @@ assert(g2Root.innerHTML.includes("R(L)") && g2Root.innerHTML.includes("PS(LL)"),
 assert(groupUnitSuggestionGateHtml(g2, { board: true }).includes('data-suggest-unit-operation="G2"'), "Task board card should expose the compact unit-operation action");
 assert(groupUnitSuggestionGateHtml(g2, { board: true }).includes("Assign Unit Operation") || groupUnitSuggestionGateHtml(g2, { board: true }).includes("Switch Unit Operation"), "Unit-operation action should be a direct task-level button");
 assert(!g2Root.innerHTML.includes("Review Lutze Again"), "Unit-operation gate should not duplicate the Lutze review action");
-assert(g2Root.innerHTML.includes("Lutze/Garg Separation Screening"), "G2 drawer should render the focused Lutze/Garg screening entry point");
-assert(g2Root.innerHTML.includes("Open Lutze/Garg Separation Screening"), "G2 drawer should offer one focused pathway-screening button");
+assert(g2Root.innerHTML.includes("Lutze/Garg screening"), "G2 drawer should render the focused Lutze/Garg screening entry point");
+assert(g2Root.innerHTML.includes("Basic") && g2Root.innerHTML.includes("Advanced"), "G2 drawer should make the Basic/Advanced separation hierarchy explicit");
 assert(!g2Root.innerHTML.includes("route moves") && !g2Root.innerHTML.includes("binary pairs"), "G2 drawer launcher should not duplicate Lutze details");
 assert(!g2Root.innerHTML.includes("Separation Alternatives"), "G2 drawer should not expose separation alternatives directly");
 assert(g2Root.innerHTML.includes("Outlets"), "Group drawer should expose the unified outlets MFA section");
@@ -182,7 +182,7 @@ state.boardCompact = false;
 
 ensureGroup("G2").separationSupportExpanded = true;
 renderGroupAggregateStepInspector(g2Root, g2);
-assert(g2Root.innerHTML.includes("Open Lutze/Garg Separation Screening"), "G2 drawer should keep the focused pathway-screening button");
+assert(g2Root.innerHTML.includes("Lutze/Garg screening"), "G2 drawer should keep the focused pathway-screening button");
 assert(g2Root.innerHTML.includes("Optional Property-Based Separation Screen"), "G2 drawer should render the property screen");
 assert(g2Root.innerHTML.includes('data-predictor-mode="G2"'), "G2 property screen should expose the predictor mode control");
 assert(g2Root.innerHTML.includes('data-save-properties="G2"') || g2Root.innerHTML.includes('data-edit-properties="G2"'), "G2 drawer should expose property editing controls");
@@ -191,7 +191,7 @@ assert(g2Root.innerHTML.includes('data-property-field="value"'), "G2 property ed
 const g3Root = fakeElement();
 renderGroupAggregateStepInspector(g3Root, g3);
 assert(!g3Root.innerHTML.includes("Post-Reaction Separation Support"), "G3 drawer should not render separation support");
-assert(g3Root.innerHTML.includes("Lutze/Garg Separation Screening"), "G3 separation task should offer the screening without a reaction of its own");
+assert(g3Root.innerHTML.includes("Lutze/Garg screening"), "G3 separation task should offer the screening without a reaction of its own");
 
 const simulator = ensureGroup("G2").separationSimulator;
 const propertySet = {
@@ -676,7 +676,7 @@ setConversionProductQuantity(inferredTheoreticalBlock, "20");
 assert.strictEqual(inferredTheoreticalBlock.conversionDetail.productAmountMode, "theoretical", "Editing an inferred theoretical product should persist the inferred mode");
 assert.strictEqual(inferredTheoreticalBlock.conversionDetail.productBasisQuantity, "20", "Editing an inferred theoretical product should update the theoretical basis, not the produced amount");
 assert(Math.abs(conversionCalculationModel(inferredTheoreticalBlock).productMade - 18) < 0.0001, "Edited theoretical basis should recalculate produced product");
-assert(blockLutzeReactionSeparationLaunchHtml(loadedReactionBlock).includes("Open Lutze/Garg Separation Screening"), "Grouped reaction task block should expose the screening launcher");
+assert(blockLutzeReactionSeparationLaunchHtml(loadedReactionBlock).includes("Lutze/Garg screening"), "Grouped reaction task block should expose the screening launcher");
 const draftInputStream = createStream("input", { id: "B1-SD", name: "", editing: true });
 assert(!streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes('data-suggestion-name="benzyl alcohol"'), "Input editor should not suggest materials already present as inputs in this step");
 assert(streamRowHtml(draftInputStream, "reactant", "input", loadedReactionBlock).includes("Chemical properties for Lutze / sizing"), "Stream editor should expose optional chemical properties for Lutze and sizing");

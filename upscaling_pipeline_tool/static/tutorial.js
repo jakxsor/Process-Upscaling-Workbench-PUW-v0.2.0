@@ -682,7 +682,7 @@ const tutorialSteps = [
   {
     target: "[data-open-lutze-reaction-separation]",
     title: "Part 3 · 1. Lutze Support",
-    body: "When a reaction leaves product mixed with residual reagents or recoverable components, open Lutze/Garg Separation Screening before changing the main graph.",
+    body: "When a reaction leaves product mixed with residual reagents or recoverable components, open the Basic Lutze/Garg screening before changing the main graph.",
     details: ["The workspace keeps conversion, selectivity, yield, phases, binary evidence, and properties distinct.", "The main flowchart changes only after a complete pathway is reviewed and applied."],
     action: tutorialShowLutzeLaunch,
     cta: "Open Lutze",
