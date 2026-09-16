@@ -850,13 +850,20 @@ assert(pathwayInsertedGroup.selectionBasis.includes("Separation step 1") && path
 assert(pathwayInsertedGroup.blocks.some(block => block.text.includes("to separate acetic anhydride from") && block.text.includes("benzyl acetate")), "Applied pathway block should state what is separated and retained after branch replacement");
 const firstPathwayBlock = pathwayInsertedGroup.blocks[0];
 const firstPathwayInputs = firstPathwayBlock.streams.filter(stream => stream.role === "input");
-const firstPathwayOutputs = firstPathwayBlock.streams.filter(stream => stream.role === "output");
+// A separated fraction whose substance fate is "waste" leaves as a waste row, not an output, so the
+// flowsheet draws it as a boundary outlet and the LCI bridge classifies it; every other component
+// stays an individual output. Together they still carry every active component of the split.
+const firstPathwayOutputs = firstPathwayBlock.streams.filter(stream => stream.role === "output" || stream.role === "waste");
 const expectedFirstComponents = pathwayModel.substances.map(item => item.name).sort();
 assert.deepStrictEqual(firstPathwayInputs.map(stream => stream.name).sort(), expectedFirstComponents, "Applied pathway feed should carry every active component as an individual input stream");
-assert.deepStrictEqual(firstPathwayOutputs.map(stream => stream.name).sort(), expectedFirstComponents, "Applied pathway split should keep separated and retained components as individual output streams");
+assert.deepStrictEqual(firstPathwayOutputs.map(stream => stream.name).sort(), expectedFirstComponents, "Applied pathway split should keep separated and retained components as individual outlet streams");
+firstPathwayBlock.streams.filter(stream => stream.role === "waste").forEach(stream => {
+  assert(["purge", "wastewater", "solid waste", "vent"].includes(stream.fate), "A separated waste fraction must carry a stream waste fate the flowsheet and LCI understand, got " + stream.fate);
+});
+assert(!firstPathwayBlock.streams.some(stream => ["waste", "recover", "recycle", "keep with mixture"].includes(stream.fate)), "Sandbox substance fates must be translated to stream fates on apply");
 assert(!firstPathwayBlock.streams.some(stream => /mixture/i.test(stream.name)), "Applied pathway block should not create a synthetic summed-mixture material");
 assert(Math.abs(firstPathwayInputs.reduce((sum, stream) => sum + conversionNumber(stream.quantity), 0) - firstPathwayOutputs.reduce((sum, stream) => sum + conversionNumber(stream.quantity), 0)) < 0.0001, "Component-level pathway streams should preserve the proposed total quantity across the split");
-const separatedAceticAnhydride = firstPathwayBlock.streams.find(stream => stream.role === "output" && stream.name.includes("acetic anhydride"));
+const separatedAceticAnhydride = firstPathwayBlock.streams.find(stream => (stream.role === "output" || stream.role === "waste") && stream.name.includes("acetic anhydride"));
 assert.strictEqual(separatedAceticAnhydride.mw, "102.09", "Applied Lutze pathway output should preserve pure-component MW");
 assert.strictEqual(separatedAceticAnhydride.pubchemCid, "7918", "Applied Lutze pathway output should preserve PubChem identity");
 assert(state.links.some(link => link.from === "G1" && link.to === "G3"), "Applied pathway should connect source group to first separator");

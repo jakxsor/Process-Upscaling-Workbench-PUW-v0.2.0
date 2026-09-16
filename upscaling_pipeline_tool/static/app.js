@@ -12342,11 +12342,25 @@
     function routeComponentStream(role, item, id, options = {}) {
       const branch = options.branch || "feed";
       const routePhase = item.phase && item.phase !== "unknown" ? item.phase : options.phase;
+      // The sandbox's substance fates ("waste", "recover", "recycle", "keep with mixture") are not
+      // stream fates; createStream used to fall back to "intermediate" for them, so a separated
+      // waste fraction never became a waste row. Map them, and give a waste fraction the waste role
+      // so the flowsheet draws it as a boundary outlet and the LCI bridge classifies it.
+      const substanceFate = item.fate && item.fate !== "unknown" ? String(item.fate).toLowerCase() : "";
+      const aqueous = /water|brine|aqueous|wastewater/i.test(String(item.name || ""));
+      const mappedFate = substanceFate === "waste"
+        ? (routePhase === "V" ? "vent" : routePhase === "S" ? "solid waste" : aqueous ? "wastewater" : "purge")
+        : substanceFate === "recover" || substanceFate === "recycle"
+          ? (item.role === "solvent" ? "recovered solvent" : "intermediate")
+          : substanceFate === "keep with mixture"
+            ? "intermediate"
+            : substanceFate;
       const fate = role === "input"
         ? "intermediate"
-        : item.fate && item.fate !== "unknown"
-          ? item.fate
+        : mappedFate
+          ? mappedFate
           : branch === "retained" && item.role === "product" ? "product" : "intermediate";
+      if (role === "output" && ["vent", "solid waste", "wastewater", "purge"].includes(fate)) role = "waste";
       const sourceTrace = item.source ? ` Original evidence: ${item.source}.` : "";
       const branchText = branch === "separated"
         ? "separated branch"

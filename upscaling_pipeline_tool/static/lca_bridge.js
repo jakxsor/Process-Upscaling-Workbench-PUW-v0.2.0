@@ -131,13 +131,16 @@
 
     function lcaRoleForStream(stream, producedKeys) {
       const fate = String(stream.fate || "").toLowerCase();
-      const role = stream.role;
+      let role = stream.role;
       const producedInternally = producedKeys.has(lcaNameKey(stream.name));
       if (role === "input") {
         if (["recycled input", "recovered solvent"].includes(fate)) return "internal_recycle_input";
         if (fate === "intermediate" || producedInternally) return "internal_input";
         return "technosphere_input";
       }
+      // A waste fate decides before the role does: an output row that leaves as vent, wastewater,
+      // solid waste or purge is a discharge, the same way the flowsheet draws it.
+      if (role === "output" && ["vent", "wastewater", "solid waste", "purge", "loss"].includes(fate)) role = "waste";
       if (role === "output") {
         if (fate === "product") return "reference_product";
         if (["recovered solvent", "recycled input", "recover", "recycle"].includes(fate)) return "internal_recycle_output";
