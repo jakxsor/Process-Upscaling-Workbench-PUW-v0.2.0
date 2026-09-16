@@ -444,6 +444,29 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         if kind in ("waste", "vent", "recovery"):
             _draw_link_label(writer, points, _link_label(link, kind), color)
 
+    # Off-page connectors: a unit's open wastes and vents grouped by boundary class, drawn as a short
+    # stub ending in a flag with the stream tag, so the export shows where every discharge goes.
+    for group in groups:
+        for outlet in group.get("boundaryOutlets") or []:
+            if not isinstance(outlet, dict):
+                continue
+            kind = _clean(outlet.get("kind"), "waste")
+            color = "657480" if kind == "vent" else "965D00"
+            raw_points = outlet.get("points")
+            points = [(_float(p.get("x")), _float(p.get("y"))) for p in raw_points if isinstance(p, dict)] if isinstance(raw_points, list) else []
+            if len(points) < 2:
+                gx, gy, gw, gh = (_float(group.get(key)) for key in ("x", "y", "w", "h"))
+                points = [(gx + gw * 0.76, gy + gh), (gx + gw * 0.76, gy + gh + 58)]
+            _draw_polyline(writer, points, color=color, width=2.0, arrow=False, dash=kind == "vent")
+            end_x, end_y = points[-1]
+            writer.rect(end_x - 9, end_y, 18, 14, fill="EEF2F4" if kind == "vent" else "FDF6EA", line=color, name=f"{_clean(group.get('id'))} boundary {_clean(outlet.get('id'))}")
+            names = ", ".join(_clean(s.get("name")) for s in (outlet.get("streams") or []) if isinstance(s, dict) and _clean(s.get("name")))
+            kg = _float(outlet.get("kg"), 0)
+            text = f"{_clean(outlet.get('tag'))} {_clean(outlet.get('short'), 'to boundary')}: {names}".strip()
+            if kg > 0:
+                text += f" ({kg:.3g} kg)"
+            writer.label(end_x + 14, end_y - 2, 150, _clip_words(text, 34), color=color, name="Boundary outlet")
+
     for link in flowsheet.get("recycleLinks") or []:
         if not isinstance(link, dict):
             continue
@@ -490,6 +513,16 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         writer.textbox(_float(product_box.get("x")) + 12, _float(product_box.get("y")) + 20, _float(product_box.get("w")) - 24, 28, product_label, size=13, color="172027", bold=True)
         if product_qty:
             writer.textbox(_float(product_box.get("x")) + 12, _float(product_box.get("y")) + 50, _float(product_box.get("w")) - 24, 18, f"{product_qty} {product_unit}".strip(), size=9.5, color="25834A", bold=True)
+
+    discharge_box = flowsheet.get("dischargeBox")
+    if isinstance(discharge_box, dict):
+        writer.rect(discharge_box.get("x"), discharge_box.get("y"), discharge_box.get("w"), discharge_box.get("h"), fill="FDF6EA", line="965D00", radius=True, name="Discharges")
+        writer.textbox(_float(discharge_box.get("x")) + 10, _float(discharge_box.get("y")) + 10, _float(discharge_box.get("w")) - 20, 18, "DISCHARGES", size=10, color="965D00", bold=True)
+        for index, row in enumerate([item for item in discharge_box.get("rows") or [] if isinstance(item, dict)][:3]):
+            row_y = _float(discharge_box.get("y")) + 32 + index * 22
+            kg = _float(row.get("kg"), 0)
+            text = f"{_clean(row.get('label'))}: {kg:.3g} kg" if kg > 0 else _clean(row.get("label"))
+            writer.label(_float(discharge_box.get("x")) + 10, row_y, _float(discharge_box.get("w")) - 20, _clip_words(text, 30), color="172027", name="Discharge row")
 
     for group in groups:
         fill, line = category_styles.get(_clean(group.get("category")), ("F5F9FF", "1671C2"))

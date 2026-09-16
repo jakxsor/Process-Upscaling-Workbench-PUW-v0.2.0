@@ -387,6 +387,7 @@
         feedBox: model.feedBox,
         feedStreams: model.feedStreams || [],
         productBox: model.productBox,
+        dischargeBox: state.flowsheetShowAuxiliaryArrows === false ? null : model.dischargeBox || null,
         streamTable: rendered.streamTable || [],
         tableTop: rendered.tableTop,
         legendY: rendered.legendY,
@@ -413,7 +414,18 @@
           outputStreams: group.outputStreams,
           wasteStreams: group.wasteStreams,
           ventStreams: group.ventStreams,
-          recycleStreams: group.recycleStreams
+          recycleStreams: group.recycleStreams,
+          boundaryOutlets: state.flowsheetShowAuxiliaryArrows === false ? [] : (group.boundaryOutlets || []).map(outlet => ({
+            id: outlet.id,
+            short: outlet.short,
+            label: outlet.label,
+            kind: outlet.kind,
+            tag: outlet.tag,
+            kg: outlet.kg,
+            unknown: outlet.unknown,
+            streams: outlet.streams,
+            points: geometry[`${group.id}->${outlet.id}:boundary`] || null
+          }))
         })),
         forwardLinks: model.forwardLinks.map(withGeometry),
         auxiliaryLinks: state.flowsheetShowAuxiliaryArrows === false ? [] : model.auxiliaryLinks.map(withGeometry),

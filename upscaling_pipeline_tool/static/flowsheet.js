@@ -139,7 +139,43 @@
       return `<rect x="${x + w * 0.08}" y="${y + h * 0.16}" width="${w * 0.84}" height="${h * 0.64}" rx="6" fill="${shellFill}" stroke="${stroke}" stroke-width="1.8"></rect>`;
     }
 
-    const flowsheetWasteFates = ["wastewater", "solid waste", "purge", "loss"];
+    const flowsheetWasteFates = ["wastewater", "solid waste", "purge", "loss", "unreacted reagent"];
+
+    // Where an outlet goes once it leaves the plant. Every waste or vent stream that has no
+    // destination unit ends at one of these three boundaries, so a unit shows at most three
+    // off-page connectors however many waste rows it carries, and the discharge box can total them.
+    const flowsheetBoundaryClasses = {
+      wastewater: { id: "wastewater", short: "to WWT", label: "to wastewater treatment", kind: "waste" },
+      waste: { id: "waste", short: "to waste", label: "to waste treatment", kind: "waste" },
+      air: { id: "air", short: "to air", label: "to air", kind: "vent" }
+    };
+    const flowsheetBoundaryOrder = ["wastewater", "waste", "air"];
+
+    function flowsheetBoundaryClass(stream) {
+      const fate = String(stream?.fate || "").toLowerCase();
+      if (fate === "vent") return flowsheetBoundaryClasses.air;
+      if (fate === "wastewater") return flowsheetBoundaryClasses.wastewater;
+      return flowsheetBoundaryClasses.waste;
+    }
+
+    // Groups a unit's open outlets (waste or vent role/fate, no destination unit) by boundary class.
+    // Input rows are never outlets even when their fate reads "wastewater" (a treatment unit's feeds).
+    function flowsheetBoundaryOutlets(streams) {
+      const byClass = new Map();
+      (streams || []).forEach(stream => {
+        if (!String(stream?.name || "").trim() || stream.role === "input") return;
+        if (String(stream.destinationGroup || "").trim()) return;
+        const cls = flowsheetBoundaryClass(stream);
+        if (!byClass.has(cls.id)) byClass.set(cls.id, { ...cls, streams: [] });
+        const entry = byClass.get(cls.id);
+        if (!entry.streams.includes(stream)) entry.streams.push(stream);
+      });
+      return flowsheetBoundaryOrder.filter(id => byClass.has(id)).map(id => {
+        const entry = byClass.get(id);
+        const totals = flowsheetStreamsKgTotal(entry.streams);
+        return { ...entry, kg: totals.kg, unknown: totals.unknown, provenance: totals.provenance, uncertaintyKg: totals.uncertaintyKg };
+      });
+    }
 
     // Quantities on the drawing follow the selected basis: the declared lab batch, the scaled
     // industrial batch from the scale-up model, or per kg of product.
@@ -338,7 +374,8 @@
         ...ventStreams.filter(stream => stream.role !== "output" && stream.role !== "waste")
       ];
       const balance = flowsheetUnitBalance(inputStreams, outlets);
-      return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, allStreams: streams, totalOutputKg, balance };
+      const boundaryOutlets = flowsheetBoundaryOutlets([...wasteStreams, ...ventStreams]);
+      return { isProduct, wasteStreams, ventStreams, recycleStreams, outputStreams, inputStreams, allStreams: streams, totalOutputKg, balance, boundaryOutlets };
     }
 
     function flowsheetDirectStreamsAtBasis(group, toId) {
@@ -850,6 +887,7 @@
           isProduct: raw.isProduct,
           wasteStreams: raw.wasteStreams,
           ventStreams: raw.ventStreams,
+          boundaryOutlets: raw.boundaryOutlets,
           recycleStreams: raw.recycleStreams,
           outputStreams: raw.outputStreams,
           inputStreams: raw.inputStreams,
@@ -889,6 +927,13 @@
         link.massKg = routed.length ? totals.kg : NaN;
         link.unknownCount = totals.unknown;
       });
+      // Boundary outlets take the next stream numbers, so every discharge is a tagged row in the
+      // stream table like the arrows are.
+      groups.forEach(group => (group.boundaryOutlets || []).forEach(outlet => {
+        streamNumber += 1;
+        outlet.streamNumber = streamNumber;
+        outlet.tag = `S${streamNumber}`;
+      }));
       const maxOutputKg = Math.max(0, ...groups.map(item => item.totalOutputKg || 0));
       const missingSubstances = new Set();
       groups.forEach(item => (item.allStreams || []).forEach(stream => {
@@ -900,7 +945,7 @@
       const firstInputs = groups.length ? groups[0].inputStreams : [];
       const freshInputs = firstInputs.filter(stream => stream.fate === "fresh input");
       const feedStreams = freshInputs.length ? freshInputs : firstInputs.filter(stream => stream.fate !== "vent");
-      const maxWasteVent = Math.max(0, ...groups.map(item => Math.max(item.wasteStreams.length, item.ventStreams.length)));
+      const maxWasteVent = Math.max(0, ...groups.map(item => (item.boundaryOutlets || []).length));
       const stubLaneH = 34;
       const wasteAreaH = maxWasteVent ? 22 + maxWasteVent * stubLaneH : 0;
       const maxBoxBottom = groups.length ? Math.max(...groups.map(item => item.y + item.h + 104)) : originY + boxH;
@@ -927,11 +972,32 @@
         w: 190,
         h: 92
       } : null;
-      const maxDiagramRight = Math.max(maxBoxRight, productBox ? productBox.x + productBox.w : 0);
+      // The discharge box closes the boundary the way the feed box opens it: one row per boundary
+      // class with the total over every unit's off-page connectors of that class.
+      const dischargeRows = flowsheetBoundaryOrder.map(id => {
+        const units = groups.filter(group => (group.boundaryOutlets || []).some(outlet => outlet.id === id));
+        if (!units.length) return null;
+        const streams = units.flatMap(group => group.boundaryOutlets.filter(outlet => outlet.id === id).flatMap(outlet => outlet.streams));
+        const totals = flowsheetStreamsKgTotal(streams);
+        return { ...flowsheetBoundaryClasses[id], count: streams.length, kg: totals.kg, unknown: totals.unknown, provenance: totals.provenance, units: units.map(group => group.id) };
+      }).filter(Boolean);
+      const dischargeBox = groups.length && dischargeRows.length ? {
+        id: "discharges",
+        x: productBox ? productBox.x : maxBoxRight + 70,
+        y: productBox ? productBox.y + productBox.h + 36 : groups[0].y + 42,
+        w: 190,
+        h: 34 + dischargeRows.length * 22,
+        rows: dischargeRows
+      } : null;
+      const maxDiagramRight = Math.max(maxBoxRight, productBox ? productBox.x + productBox.w : 0, dischargeBox ? dischargeBox.x + dischargeBox.w : 0);
       const width = Math.max(1880, maxDiagramRight + 120);
-      const height = Math.max(660, recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 74 : maxBoxBottom + wasteAreaH + 118);
+      const height = Math.max(
+        660,
+        dischargeBox ? dischargeBox.y + dischargeBox.h + 60 : 0,
+        recycleLaneCount ? recycleLaneBaseY + recycleLaneCount * 34 + 74 : maxBoxBottom + wasteAreaH + 118
+      );
       return {
-        groups, byId, forwardLinks, auxiliaryLinks, recycleLinks, feedBox, productBox,
+        groups, byId, forwardLinks, auxiliaryLinks, recycleLinks, feedBox, productBox, dischargeBox,
         productGroupId: productGroup?.id || "", width, height, boxW, boxH, wasteAreaH, recycleLaneBaseY, maxOutputKg,
         feedStreams, missingQuantityCount, basis: flowsheetBasisKey(), basisLabel: flowsheetBasisLabel()
       };
@@ -1316,31 +1382,55 @@
         `;
       })() : "";
 
+      const dischargeMarkup = model.dischargeBox && model.groups.length && showAuxiliaryArrows ? (() => {
+        const box = model.dischargeBox;
+        const rows = box.rows.map((row, i) => {
+          const mass = row.kg > 0 ? `${flowsheetKgText(row.kg, row.provenance)} kg` : row.unknown ? `${row.unknown} n.q.` : "";
+          const text = `${row.label}${mass ? `: ${mass}` : ""}`;
+          const full = `${text} (${row.count} stream${row.count === 1 ? "" : "s"} from ${row.units.join(", ")})`;
+          return `<text x="${box.x + 10}" y="${box.y + 44 + i * 22}" font-size="9.6" font-weight="700" fill="#172027"><title>${escapeHtml(full)}</title>${escapeHtml(flowsheetClipText(text, 32, 10))}</text>`;
+        }).join("");
+        return `
+          <g class="flowsheet-discharge-node">
+            <rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="4" fill="#fdf6ea" stroke="#965d00" stroke-width="1.6"></rect>
+            <text x="${box.x + 10}" y="${box.y + 22}" font-size="11" font-weight="800" fill="#965d00">DISCHARGES</text>
+            ${rows}
+          </g>
+        `;
+      })() : "";
+
       const firstGroupId = model.groups[0]?.id;
       const boxes = model.groups.map(box => {
         const style = flowsheetCategoryStyle[box.category];
         const center = flowsheetBoxCenter(box);
-        const allLocalWasteVentStreams = [
-          ...box.wasteStreams.map(s => ({ ...s, kind: "waste" })),
-          ...box.ventStreams.map(s => ({ ...s, kind: "vent" }))
-        ].filter(stream => !String(stream.destinationGroup || "").trim());
-        const localWasteVentStreams = allLocalWasteVentStreams.slice(0, 2);
-        const hiddenLocalStreamCount = Math.max(0, allLocalWasteVentStreams.length - localWasteVentStreams.length);
-        const wasteVentHtml = (showAuxiliaryArrows ? localWasteVentStreams : [])
-          .map((stream, i) => {
-            const color = stream.kind === "waste" ? { line: "#965d00", marker: "url(#fsArrowOrange)" } : { line: "#657480", marker: "url(#fsArrowGrey)" };
+        // Open outlets leave through off-page connectors, one per boundary class (at most three),
+        // instead of one stub per stream: the drawing stays readable, nothing dangles, and the
+        // connector's tag matches its row in the stream table.
+        const wasteVentHtml = (showAuxiliaryArrows ? box.boundaryOutlets || [] : [])
+          .map((outlet, i) => {
+            const style = flowsheetAuxStyle(outlet.kind);
             const leftSide = i % 2 === 1;
             const stubX = box.x + box.w * (leftSide ? 0.24 : 0.76);
-            const stubY = box.y + box.h + 62 + Math.floor(i / 2) * 42;
-            const labelX = stubX + (leftSide ? -18 : 18);
+            const stubY = box.y + box.h + 58 + Math.floor(i / 2) * 44;
+            geometry[`${box.id}->${outlet.id}:boundary`] = [{ x: stubX, y: box.y + box.h }, { x: stubX, y: stubY }];
+            const names = outlet.streams.map(stream => stream.name).join(", ");
+            const mass = outlet.kg > 0 ? `${flowsheetKgText(outlet.kg, outlet.provenance)} kg` : "";
+            const tagText = outlet.tag ? `${outlet.tag} ` : "";
+            const label = `${tagText}${outlet.short}: ${names}${mass ? ` (${mass})` : ""}${outlet.unknown ? ` +${outlet.unknown} n.q.` : ""}`;
+            const tooltip = [
+              `${box.id} ${outlet.label}`,
+              ...outlet.streams.map(stream => `- ${stream.name}: ${stream.quantity || "?"} ${stream.unit || ""}`.trim())
+            ].join("\n");
+            const compact = `${tagText}${outlet.short}: ${flowsheetClipText(names, 18, 8) || "outlet"}`;
+            const labelX = stubX + (leftSide ? -16 : 16);
             const labelAnchor = leftSide ? "end" : "start";
-            const label = `${stream.kind}: ${stream.name}`;
-            const compact = `${stream.kind}: ${flowsheetClipText(stream.name, 20, 8) || "outlet"}`;
+            const flag = `M ${stubX - 9} ${stubY} H ${stubX + 9} V ${stubY + 9} L ${stubX} ${stubY + 16} L ${stubX - 9} ${stubY + 9} Z`;
             return `
-              <path d="M ${stubX} ${box.y + box.h} L ${stubX} ${stubY}" stroke="${color.line}" stroke-width="2" stroke-dasharray="${stream.kind === "vent" ? "4 4" : "none"}" fill="none" marker-end="${color.marker}"></path>
-              <text x="${labelX}" y="${stubY + 4}" font-size="8.8" font-weight="700" fill="${color.line}" text-anchor="${labelAnchor}"><title>${escapeHtml(label)}</title>${escapeHtml(compact)}</text>
+              <path d="M ${stubX} ${box.y + box.h} L ${stubX} ${stubY - 1}" stroke="${style.color}" stroke-width="2" stroke-dasharray="${style.dash || "none"}" fill="none"></path>
+              <path class="tip" data-tip="${escapeAttr(tooltip)}" d="${flag}" fill="${outlet.kind === "vent" ? "#eef2f4" : "#fdf6ea"}" stroke="${style.color}" stroke-width="1.4"></path>
+              <text x="${labelX}" y="${stubY + 11}" font-size="8.8" font-weight="700" fill="${style.color}" text-anchor="${labelAnchor}"><title>${escapeHtml(label)}</title>${escapeHtml(compact)}</text>
             `;
-          }).join("") + (showAuxiliaryArrows && hiddenLocalStreamCount ? `<text x="${box.x + box.w / 2}" y="${box.y + box.h + 112}" font-size="8.8" font-weight="800" fill="#657480" text-anchor="middle">+${hiddenLocalStreamCount} local outlet${hiddenLocalStreamCount === 1 ? "" : "s"} in tooltip</text>` : "");
+          }).join("");
         // G1 already gets a dedicated feed box/arrows (feedBoxMarkup below) for its inputs. Every
         // other unit's fresh reagent/utility charges (e.g. cooling water into a mid-train exchanger)
         // previously had no arrow anywhere on the diagram, even though they exist in the MFA data -
@@ -1435,12 +1525,17 @@
           ${recyclePaths}
           ${boxes}
           ${productMarkup}
+          ${dischargeMarkup}
           ${tableMarkup}
           <g transform="translate(36, ${drawingHeight - 70})">
             ${legendLineItems.map((item, i) => `
               <line x1="${i * 130}" y1="0" x2="${i * 130 + 26}" y2="0" stroke="${item.color}" stroke-width="2.4" stroke-dasharray="${item.dash}"></line>
               <text x="${i * 130 + 32}" y="4" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
             `).join("")}
+            <g transform="translate(${legendLineItems.length * 130}, 0)">
+              <path d="M 0 -7 H 16 V 1 L 8 8 L 0 1 Z" fill="#fdf6ea" stroke="#965d00" stroke-width="1.2"></path>
+              <text x="22" y="4" font-size="11" fill="#172027">Boundary outlet</text>
+            </g>
             ${legendCategoryItems.map((item, i) => `
               <rect x="${i * 102}" y="18" width="14" height="14" rx="2" fill="${item.fill}" stroke="${item.stroke}"></rect>
               <text x="${i * 102 + 20}" y="30" font-size="11" fill="#172027">${escapeHtml(item.label)}</text>
@@ -1505,6 +1600,12 @@
       model.forwardLinks.forEach(link => describe(link, "process"));
       model.auxiliaryLinks.forEach(link => describe(link, link.kind || "service"));
       model.recycleLinks.forEach(link => describe(link, "recycle"));
+      model.groups.forEach(group => (group.boundaryOutlets || []).forEach(outlet => describe({
+        tag: outlet.tag,
+        from: group.id,
+        to: outlet.id === "wastewater" ? "WWT" : outlet.id,
+        directStreams: outlet.streams
+      }, "discharge")));
       return rows;
     }
 

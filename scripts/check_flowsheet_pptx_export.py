@@ -23,6 +23,13 @@ payload = {
         "productGroupId": "G2",
         "feedBox": {"x": 30, "y": 120, "w": 150, "h": 120},
         "productBox": {"x": 820, "y": 140, "w": 140, "h": 90},
+        "dischargeBox": {
+            "x": 820,
+            "y": 266,
+            "w": 190,
+            "h": 56,
+            "rows": [{"id": "wastewater", "label": "to wastewater treatment", "kind": "waste", "kg": 1.5, "unknown": 0, "count": 1, "units": ["G1"]}],
+        },
         "groups": [
             {
                 "id": "G1",
@@ -38,6 +45,19 @@ payload = {
                 "totalOutputKg": 10,
                 "inputStreams": [{"name": "ethyl acetate solvent", "quantity": "12", "unit": "kg"}],
                 "outputStreams": [{"name": "reaction slurry intermediate", "quantity": "8", "unit": "kg"}],
+                "boundaryOutlets": [
+                    {
+                        "id": "wastewater",
+                        "short": "to WWT",
+                        "label": "to wastewater treatment",
+                        "kind": "waste",
+                        "tag": "S9",
+                        "kg": 1.5,
+                        "unknown": 0,
+                        "streams": [{"name": "spent wash water", "quantity": "1.5", "unit": "kg"}],
+                        "points": [{"x": 364, "y": 280}, {"x": 364, "y": 338}],
+                    }
+                ],
             },
             {
                 "id": "G2",
@@ -83,5 +103,7 @@ assert "Process" in slide and "Recycle" in slide and "Vent/VOC" in slide, "Legen
 assert "Reactor" in slide and "Separation" in slide, "Legend should include unit categories"
 assert '<a:tailEnd type="triangle"/>' in slide, "Connector arrowheads should point at the line endpoint"
 assert "reaction..." in slide or "reaction slurry" in slide, "Process stream label should be included as editable text"
+assert "S9 to WWT" in slide, "Boundary outlets should be exported as tagged off-page connectors"
+assert "DISCHARGES" in slide and "wastewater treatment" in slide, "The discharge box should be exported with its per-boundary totals"
 
 print("Flowsheet PowerPoint export regression check passed.")
