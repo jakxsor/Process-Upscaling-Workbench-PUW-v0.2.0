@@ -55,6 +55,11 @@ and low-confidence scale-up risks.
 - Define a scale-up basis: target product, production target, yield, recovery,
   design margin, OEE, operating schedule, and parallel units.
 - Scale MFA quantities to batch, hourly, and annual views.
+- Close the plant boundary on the flowsheet: every waste or vent stream without a
+  destination unit leaves through an off-page connector (to wastewater
+  treatment, to waste treatment, to air), one per unit and boundary, numbered in
+  the stream table and totalled in a discharge box next to the product; the
+  PowerPoint export carries them.
 - Build a schematic Gantt chart and identify bottlenecks.
 - Show a Gantt evidence layer with operation class, expected scale behaviour,
   missing data, schedule margin, and compact references.
@@ -175,6 +180,27 @@ Optional editable install for development:
 python3 -m pip install -e .
 process-upscaling-workbench --no-browser
 ```
+
+## Deploy on Render
+
+The repository includes a `render.yaml` Blueprint for deploying the workbench as
+a Render web service.
+
+1. Push the repository to GitHub or another Git provider connected to Render.
+2. In Render, choose **New > Blueprint** and select this repository.
+3. Render will use:
+
+```text
+buildCommand: pip install -r upscaling_pipeline_tool/requirements.txt
+startCommand: python3 -m upscaling_pipeline_tool.app --host 0.0.0.0
+```
+
+The app reads Render's `PORT` environment variable automatically. The Blueprint
+uses the Frankfurt region and the free web-service plan by default.
+
+The app works without secrets. To enable server-side AI review, add
+`OPENAI_API_KEY` as a Render environment variable in the service settings. Do not
+commit API keys to the repository.
 
 ## Windows Instructions
 
@@ -338,11 +364,22 @@ It demonstrates:
 - heuristic review;
 - scale-up/Gantt bottleneck screening.
 
-Reported values, deterministic calculations, and missing data are labelled
-separately. The benzophenone <0.5% endpoint is used only as an explicit 99.5%
-screening-conversion proxy to demonstrate residual-stream generation; it is not
-presented as a reported yield. Unreported catalyst, extraction-solvent, brine,
-vent, drying-regeneration, and heavy-residue quantities remain blank.
+Reported values, deterministic calculations, estimates, and missing data are
+labelled separately. The benzophenone <0.5% endpoint is used only as an explicit
+99.5% screening-conversion proxy to demonstrate residual-stream generation; it is
+not presented as a reported yield. The quantities the SI names but does not
+report (catalyst loading, extraction-solvent and brine volumes, vent losses,
+drying-regeneration water, the six unit durations outside the reactor, wash and
+distillation) are entered as engineering estimates, each with its method and
+source on the stream or task note (textbook catalyst loading, laboratory wash
+practice, vapour-liquid equilibrium for the vents, equipment throughputs for the
+durations), so that every unit balance closes and the LCI carries an emission to
+air. They stay labelled "estimated" until replaced from the authors' notebook.
+The one deliberate blank is the distillation residue: its quantity follows from
+the distillation yield, which the authors hold, and entering it moves the 1 kg
+product basis. Thermal properties of the two case-specific esters come from the
+SCCS opinion on octocrylene (SCCS/1627/21) and supplier data for 2-ethylhexyl
+cyanoacetate, since PubChem carries none for either.
 
 A second, fully quantified case is the base-catalysed transesterification of a
 vegetable oil (triolein basis) to biodiesel: 6:1 methanol-to-oil molar ratio,

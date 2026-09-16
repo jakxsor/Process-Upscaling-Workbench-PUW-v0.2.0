@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 import threading
@@ -28,8 +29,8 @@ def find_free_port(host: str, preferred: int) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Launch the Process Upscaling Workbench and open it in a browser.")
-    parser.add_argument("--host", default="127.0.0.1", help="Host interface for the local server.")
-    parser.add_argument("--port", type=int, default=8787, help="Preferred local server port.")
+    parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"), help="Host interface for the local server.")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8787")), help="Preferred local server port.")
     parser.add_argument("--no-browser", action="store_true", help="Start the server without opening a browser tab.")
     return parser.parse_args()
 

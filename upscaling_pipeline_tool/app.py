@@ -622,8 +622,8 @@ APP_HTML = r"""<!doctype html>
     <section class="modal-panel separation-simulator-panel" role="dialog" aria-modal="true" aria-labelledby="separationSimulatorTitle">
       <div class="modal-head">
         <div>
-          <div id="separationSimulatorEyebrow" class="label">Optional KB3.1 sandbox</div>
-          <h2 id="separationSimulatorTitle">Separation Simulator</h2>
+          <div id="separationSimulatorEyebrow" class="label">Optional KB3.1 diagnostic mode</div>
+          <h2 id="separationSimulatorTitle">Advanced Separation Sandbox</h2>
         </div>
         <button class="help-button" data-help-topic="lutze" title="Help for the separation screening" aria-label="Help for the separation screening">?</button>
         <button id="closeSeparationSimulator" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
@@ -1046,8 +1046,8 @@ class AppHandler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the Process Upscaling Workbench.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8787")))
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), AppHandler)
