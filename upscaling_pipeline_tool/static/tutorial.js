@@ -860,7 +860,8 @@ async function openTutorial(index = 0) {
       // The old dialog only said the project would be replaced, which read as destructive and
       // kept anyone with real work from ever opening the tutorial. The work was always kept in
       // Undo; now it is also saved as a named snapshot in the File menu, and the dialog says so.
-      const canSnapshot = typeof saveLocalProjectSnapshot === "function";
+      const canSnapshot = typeof saveLocalProjectSnapshot === "function"
+        && (typeof projectHasAutosaveWorthyUserWork !== "function" || projectHasAutosaveWorthyUserWork());
       const message = canSnapshot
         ? "The tutorial loads its own short example in place of the current project. Your current work is saved first as a snapshot in this browser (File menu) and can also be brought back with Undo. Continue?"
         : "This tutorial will replace the current project with a short guided example. Continue?";
@@ -868,7 +869,9 @@ async function openTutorial(index = 0) {
       if (canSnapshot) saveLocalProjectSnapshot("Before tutorial (auto-saved)");
       pushUndo();
     }
+    state.tutorialSessionActive = true;
     if (!canReuseCurrentTutorialProject || startIndex === 0) tutorialResetProject();
+    if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
     state.tutorialIndex = startIndex;
     window.setTimeout(() => {
       Promise.resolve()
@@ -899,6 +902,8 @@ function closeTutorial(options = {}) {
   closeSeparationSimulator();
   if (tutorialSettleFrame) cancelAnimationFrame(tutorialSettleFrame);
   tutorialSettleFrame = null;
+  state.tutorialSessionActive = false;
+  if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
 }
 
 async function renderTutorialStep() {

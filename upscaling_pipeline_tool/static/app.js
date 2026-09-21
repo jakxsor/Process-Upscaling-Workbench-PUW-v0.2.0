@@ -480,6 +480,7 @@
     }
 
     function pushUndo() {
+      if (typeof markProjectAutosaveAsUserWork === "function") markProjectAutosaveAsUserWork();
       undoStack.push(undoSnapshot());
       if (undoStack.length > 50) undoStack.shift();
       updateUndoButton();
@@ -1638,6 +1639,7 @@
       state.activeInspectorTab = "inspect";
       state.showAllTriggeredHeuristics = false;
       renderAll();
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
       requestAnimationFrame(() => fitBoard());
     }
     function loadTripleReactantExampleProject() {
@@ -1805,6 +1807,7 @@
       state.showAllTriggeredHeuristics = false;
       loadTripleReactantSeparationDemo("G1");
       renderAll();
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
       requestAnimationFrame(() => {
         fitBoard();
       });
@@ -2062,6 +2065,7 @@
       state.showAllTriggeredHeuristics = false;
       loadBiodieselSeparationDemo("G2");
       renderAll();
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
       requestAnimationFrame(() => fitBoard());
     }
 

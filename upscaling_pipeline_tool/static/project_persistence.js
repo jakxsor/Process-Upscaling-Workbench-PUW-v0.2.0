@@ -14,6 +14,19 @@
     const currentStateSchemaVersion = "workbench-state-v1";
     let projectAutosaveTimer = null;
     let projectPersistencePaused = false;
+    let projectAutosaveContainsUserWork = false;
+
+    function markProjectAutosaveAsExampleOnly() {
+      projectAutosaveContainsUserWork = false;
+    }
+
+    function markProjectAutosaveAsUserWork() {
+      projectAutosaveContainsUserWork = true;
+    }
+
+    function projectHasAutosaveWorthyUserWork() {
+      return projectAutosaveContainsUserWork;
+    }
 
     function projectWorkTitle(project) {
       const basisName = String(project?.scaleUp?.basis?.targetProduct || project?.projectState?.scaleBasis?.targetProduct || "").trim();
@@ -50,11 +63,16 @@
 
     function writeProjectAutosaveNow() {
       if (projectPersistencePaused) return;
+      if (!projectAutosaveContainsUserWork) {
+        renderSavedWorkMenu();
+        return;
+      }
       try {
         const project = buildProjectExport();
         localStorage.setItem(projectAutosaveKey, JSON.stringify({
           savedAt: new Date().toISOString(),
           title: projectWorkTitle(project),
+          restoreOnBoot: true,
           project
         }));
         renderSavedWorkMenu();
@@ -84,6 +102,7 @@
         id: `snapshot-${Date.now()}`,
         title: String(title || "").trim() || projectWorkTitle(project),
         savedAt: new Date().toISOString(),
+        restoreOnBoot: true,
         project
       });
       try {
@@ -316,6 +335,7 @@
       } finally {
         projectPersistencePaused = false;
       }
+      markProjectAutosaveAsUserWork();
       renderAll();
       writeProjectAutosaveNow();
     }
@@ -354,7 +374,7 @@
 
     async function maybeRestoreAutosavedProject() {
       const entry = readProjectAutosave();
-      if (!entry?.project || !projectHasWork(entry.project)) return false;
+      if (!entry?.project || entry.restoreOnBoot !== true || !projectHasWork(entry.project)) return false;
       const savedAt = entry.savedAt ? new Date(entry.savedAt).toLocaleString() : "unknown time";
       const ok = await confirmModal(`Restore autosaved work "${entry.title || "Untitled project"}" from ${savedAt}? Choose Cancel to load the example project instead.`);
       if (!ok) return false;

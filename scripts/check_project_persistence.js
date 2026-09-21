@@ -79,6 +79,12 @@ assert(exported.projectState, "Project export should contain a projectState snap
 assert(exported.projectState.blocks.length > 0, "Snapshot should preserve blocks");
 assert(Object.keys(exported.projectState.groups).length > 0, "Snapshot should preserve groups");
 
+writeProjectAutosaveNow();
+assert.strictEqual(localStorage.getItem(projectAutosaveKey), null, "Opening a bundled example must not create an autosave");
+pushUndo();
+writeProjectAutosaveNow();
+assert.strictEqual(JSON.parse(localStorage.getItem(projectAutosaveKey)).restoreOnBoot, true, "Autosave should become restorable after real user work");
+
 const futureExport = JSON.parse(JSON.stringify(exported));
 futureExport.projectState.schemaVersion = "workbench-state-v999";
 assert.throws(() => validateProjectImport(futureExport), /Unsupported workbench state schema/, "Unknown future state schemas must be rejected instead of loaded silently");
