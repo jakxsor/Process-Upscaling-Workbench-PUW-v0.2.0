@@ -347,8 +347,8 @@
     if (actionableCount) {
       return {
         status: routeReadyCount ? "ready" : "partial",
-        title: routeReadyCount ? "Route-ready KB3.1 screens available" : "Threshold-only candidates need review",
-        message: `${actionableCount} gated KB3.1 route${actionableCount === 1 ? "" : "s"} passed phase/phenomena checks. Review evidence and missing data before applying a candidate.`,
+        title: routeReadyCount ? "Screened routes ready to review" : "Threshold-only candidates need review",
+        message: `${actionableCount} route${actionableCount === 1 ? "" : "s"} passed the phase and phenomena checks. Review evidence and missing data before applying a candidate.`,
         quantifiedCount,
         propertyCount,
         actionableCount,

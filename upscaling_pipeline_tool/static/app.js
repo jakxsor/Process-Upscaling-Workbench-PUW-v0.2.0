@@ -36,6 +36,7 @@
     const {
       phenomenaOptions,
       phenomenonGlossary,
+      phenomenonShortNames,
       behaviorPresets,
       unitCatalog
     } = globalThis.ProcessUpscalingCatalogs || {};
@@ -2770,22 +2771,35 @@
       return phenomenonGlossary[code] || "Phenomenological descriptor used to compare blocks with possible unit-operation alternatives.";
     }
 
+    function phenomenonName(code) {
+      return phenomenonShortNames?.[code] || "";
+    }
+
+    // Plain name first, code second and smaller: "Heating ES(H)". A code without a name shows as
+    // the code alone, so an unknown descriptor still renders.
+    function phenomenonLabelHtml(code) {
+      const name = phenomenonName(code);
+      return name
+        ? `${escapeHtml(name)} <span class="phen-abbr">${escapeHtml(code)}</span>`
+        : escapeHtml(code);
+    }
+
     function phenomenonPill(code) {
-      return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
+      return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${phenomenonLabelHtml(code)}</span>`;
     }
 
     function phenomenonConflictPill(code, block) {
-      return `<span class="pill warn tip phen-conflict" data-tip="${escapeAttr(phenomenonConflictTip(code, block))}">${escapeHtml(code)} !</span>`;
+      return `<span class="pill warn tip phen-conflict" data-tip="${escapeAttr(phenomenonConflictTip(code, block))}">${phenomenonLabelHtml(code)} !</span>`;
     }
 
     // Same code as plain text with the glossary on hover: a list of phenomena is information,
     // not a row of state badges.
     function phenomenonCode(code) {
-      return `<span class="phen-code" title="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
+      return `<span class="phen-code" title="${escapeAttr(`${phenomenonName(code) ? `${phenomenonName(code)}. ` : ""}${phenomenonTip(code)}`)}">${escapeHtml(code)}</span>`;
     }
 
     function phenomenonOptionButton(code, active, disabled, conflictTip = "") {
-      return `<button class="phen-option tip ${active ? "active" : ""} ${conflictTip ? "phen-conflict" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(conflictTip || phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}${conflictTip ? " !" : ""}</button>`;
+      return `<button class="phen-option tip ${active ? "active" : ""} ${conflictTip ? "phen-conflict" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(conflictTip || phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${phenomenonLabelHtml(code)}${conflictTip ? " !" : ""}</button>`;
     }
 
     async function loadTextView() {
@@ -10782,7 +10796,7 @@
           </button>
           <button role="tab" aria-selected="${mode === "full"}" class="${mode === "full" ? "active" : ""}" data-sep-sim-mode="full" data-sep-group="${escapeAttr(groupId)}">
             <strong>Advanced</strong>
-            <span>KB3.1 diagnostics and sandbox tabs</span>
+            <span>Diagnostic tabs: balance, substances, pairs, workup</span>
           </button>
         </div>
       `;
@@ -10806,7 +10820,7 @@
       const title = $("separationSimulatorTitle");
       const eyebrow = $("separationSimulatorEyebrow");
       if (title) title.textContent = pathwayMode ? "Basic Lutze/Garg Screening" : "Advanced Separation Sandbox";
-      if (eyebrow) eyebrow.textContent = pathwayMode ? "Guided pathway mode" : "Optional KB3.1 diagnostic mode";
+      if (eyebrow) eyebrow.textContent = pathwayMode ? "Guided pathway mode" : "Diagnostic mode";
       const tabs = pathwayMode
         ? [
           ["substances", "Mixture & objective"],
@@ -10832,7 +10846,7 @@
                 <span class="pill ${readiness.quantifiedCount === model.substances.length && model.substances.length ? "green" : "warn"}">${readiness.quantifiedCount}/${model.substances.length} quantified</span>
                 <span class="pill blue">${model.pairs.length} pairs</span>
                 <span class="pill ${readiness.actionableCount ? "green" : "warn"}">${readiness.actionableCount} actionable</span>
-                <span class="pill">A1.1 + KB3.1</span>
+                <span class="pill" title="Screened by binary pair comparison (paper method A1.1) and property triggers (KB3.1)">pairs + properties</span>
             </div>
           `}
         </div>
@@ -10907,18 +10921,12 @@
             </div>
             <span class="pill ${guardStatus === "active" ? "green" : "warn"}">${guardStatus === "active" ? `${gated.length} eligible for screening` : "not ready"}</span>
           </div>
-          <div class="paper-compliance-guard">
-            <span title="Only phase/phenomena-compatible KB3.1 routes can be tried.">gated routes only</span>
-            <span title="The main flowsheet changes only after Apply Pathway.">manual apply</span>
-            <span title="Editing a previous branch discards only downstream draft steps.">editable draft</span>
-            <span title="Current priority is not an Enthalpy Index or process-simulation result.">screening priority, not EI</span>
-          </div>
           <div class="paper-compliance-items">
-            ${item("A1.1 binary matrix", hasPairs ? "done" : "waiting", hasPairs ? `${model.pairs.length} binary pair comparisons generated.` : "At least two substances are needed.")}
-            ${item("KB3.1 PBB screen", kb31.length ? "partial" : "waiting", kb31.length ? `${kb31.length} PBB trigger(s) found from available properties.` : "No KB3.1 trigger yet.")}
-            ${item("Feasibility gate", gated.length ? "done" : "waiting", gated.length ? `${gated.length} route(s) passed phase/phenomena checks.` : "No route has passed the gate yet.")}
-            ${item("KB3.2 unit translation", translated.length ? "partial" : "waiting", translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No translated unit candidates yet.")}
-            ${item("EI ranking", "requires balance data", "Enthalpy Index ranking requires mass and energy balance data.")}
+            ${item("Pair comparison", hasPairs ? "done" : "waiting", `${hasPairs ? `${model.pairs.length} binary pair comparisons generated.` : "At least two substances are needed."} Paper method A1.1, binary matrix.`)}
+            ${item("Property triggers", kb31.length ? "partial" : "waiting", `${kb31.length ? `${kb31.length} separation trigger(s) found from the available properties.` : "No property trigger yet."} Paper method KB3.1, phenomena-based building-block screen.`)}
+            ${item("Phase check", gated.length ? "done" : "waiting", `${gated.length ? `${gated.length} route(s) passed the phase and phenomena checks.` : "No route has passed the phase check yet."} Only compatible routes can be tried; the main flowsheet changes only when a pathway is applied.`)}
+            ${item("Unit candidates", translated.length ? "partial" : "waiting", `${translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No unit candidates yet."} Paper method KB3.2, unit-operation translation.`)}
+            ${item("Energy ranking", "needs balance data", "Ranking by Enthalpy Index needs mass and energy balance data; until then the order is a screening priority, not an energy result.")}
           </div>
         </div>
       `;

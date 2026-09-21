@@ -49,6 +49,48 @@
     "SD": "Stream dividing. Splitting a stream into two or more branches without changing temperature, pressure, or composition."
   };
 
+  // The plain name shown before a phenomenon code. The code stays visible, smaller, because the
+  // paper and the heuristic rules speak in codes; but a reader who has not read the paper should
+  // never have to decode "2phM(LS)" to know a block mixes a solid into a liquid.
+  const phenomenonShortNames = {
+    "M(L)": "Liquid mixing",
+    "M(V)": "Vapor mixing",
+    "M(S)": "Solids handling",
+    "2phM(VL)": "Vapor-liquid mixing",
+    "2phM(LS)": "Solid-liquid mixing",
+    "2phM(LL)": "Liquid-liquid mixing",
+    "2phM(VS)": "Vapor-solid mixing",
+    "R(L)": "Liquid-phase reaction",
+    "R(V)": "Vapor-phase reaction",
+    "R(S)": "Solid-phase reaction",
+    "ES(H)": "Heating",
+    "ES(C)": "Cooling",
+    "ES(P)": "Pressurizing",
+    "ES(E)": "Expansion",
+    "ES(D)": "Direct energy input",
+    "PT(VL)": "Vapor-liquid transfer",
+    "PT(LL)": "Liquid-liquid transfer",
+    "PT(VS)": "Vapor-solid transfer",
+    "PT(LS)": "Liquid-solid transfer",
+    "PT(MVL)": "Membrane vapor-liquid",
+    "PT(MLL)": "Membrane liquid-liquid",
+    "PT(MVV)": "Membrane vapor-vapor",
+    "PCh(V->L)": "Condensation",
+    "PCh(L->V)": "Evaporation",
+    "PCh(L->S)": "Solidification",
+    "PCh(S->L)": "Melting",
+    "PC(VL)": "Vapor-liquid contact",
+    "PC(LL)": "Liquid-liquid contact",
+    "PC(VS)": "Vapor-solid contact",
+    "PC(LS)": "Liquid-solid contact",
+    "PS(LL)": "Liquid-liquid separation",
+    "PS(LS)": "Solid-liquid separation",
+    "PS(VL)": "Vapor-liquid separation",
+    "PS(VS)": "Vapor-solid separation",
+    "PS(VV)": "Vapor-vapor separation",
+    "SD": "Stream split"
+  };
+
   const behaviorPresets = {
     "unassigned": { task: "unassigned", phenomena: [], description: "Temporary state when the block purpose is not clear yet; no phenomena are assigned." },
     "charge and mix": { task: "reaction preparation", phenomena: ["M(L)", "2phM(LS)"], description: "Use for charging, dissolving, pre-mixing, or dosing feeds before the main transformation." },
@@ -106,6 +148,7 @@
   root.ProcessUpscalingCatalogs = Object.freeze({
     phenomenaOptions: Object.freeze([...phenomenaOptions]),
     phenomenonGlossary: Object.freeze({ ...phenomenonGlossary }),
+    phenomenonShortNames: Object.freeze({ ...phenomenonShortNames }),
     behaviorPresets: Object.freeze({ ...behaviorPresets }),
     unitCatalog: Object.freeze(unitCatalog.map(unit => Object.freeze({ ...unit })))
   });

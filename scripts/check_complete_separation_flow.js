@@ -307,10 +307,11 @@ assert(tripleManualHtml.includes("Choose the next separation") && tripleManualHt
 assert.strictEqual((tripleManualHtml.match(/class="pathway-option-card/g) || []).length, 3, "Manual pathway mode should initially show only the top three next steps");
 assert(tripleManualHtml.includes("Show 7 more candidates") && tripleManualHtml.includes("Evidence details"), "Manual pathway mode should preserve lower-priority routes and detailed evidence behind progressive disclosure");
 ensureGroup("G2").separationSimulator.pathway.viewMode = "guided";
-assert(paperComplianceBadgeHtml(tripleModel).includes("EI ranking"), "Simulator should expose the paper-compliance badge and EI limitation");
+assert(paperComplianceBadgeHtml(tripleModel).includes("Energy ranking") && paperComplianceBadgeHtml(tripleModel).includes("Enthalpy Index"), "Simulator should expose the paper-compliance badge with the energy ranking named in plain words and the paper term in its detail");
 assert(paperComplianceBadgeHtml(tripleModel).includes("Method Coverage"), "Simulator should expose method coverage");
-assert(paperComplianceBadgeHtml(tripleModel).includes("manual apply"), "Method guard should state that flowsheet application is manual");
-assert(paperComplianceBadgeHtml(tripleModel).includes("screening priority, not EI"), "Method coverage should avoid presenting screening priority as EI ranking");
+assert(paperComplianceBadgeHtml(tripleModel).includes("changes only when a pathway is applied"), "Method coverage should state that the flowsheet changes only when a pathway is applied");
+assert(paperComplianceBadgeHtml(tripleModel).includes("screening priority, not an energy result"), "Method coverage should avoid presenting screening priority as an energy ranking");
+assert(!/A1\.1 binary matrix|KB3\.1 PBB screen|KB3\.2 unit translation/.test(paperComplianceBadgeHtml(tripleModel).replace(/title="[^"]*"/g, "")), "Paper section codes belong in the chip tooltips, not in the visible labels");
 assert(triplePath.nextOptions.every(option => option.variant.unitCandidates.length), "Selectable pathway options should carry KB3.2 unit-operation candidates");
 
 loadTripleReactantExampleProject();

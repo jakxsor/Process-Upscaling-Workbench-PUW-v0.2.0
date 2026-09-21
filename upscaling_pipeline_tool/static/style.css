@@ -559,6 +559,16 @@
     .pill.warn { background: var(--orange-soft); color: var(--orange); }
     .pill.danger { background: var(--red-soft); color: var(--red); }
 
+    /* The phenomenon code after its plain name: present for anyone matching against the paper,
+       quiet for everyone else. */
+    .phen-abbr {
+      font-size: 0.82em;
+      font-weight: 600;
+      opacity: 0.72;
+      letter-spacing: 0.01em;
+      margin-left: 2px;
+    }
+
     .tip {
       position: relative;
     }
