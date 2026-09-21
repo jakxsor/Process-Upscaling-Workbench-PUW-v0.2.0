@@ -1,0 +1,73 @@
+# Changelog
+
+Dates are the release date. This project follows semantic versioning loosely:
+while the version stays below 1.0 the saved-project format may still change.
+
+## 0.2.0 - unreleased
+
+First tagged and archived release, prepared to accompany the methodology paper.
+Everything below is relative to the untagged 0.1.0 working state.
+
+### The worked example is now numerically complete
+
+- The quantities the octocrylene supporting information names but does not
+  report are entered as engineering estimates: catalyst charge, extraction
+  solvent, brine, reactor and evaporator vent losses, the Dean-Stark purge,
+  molecular-sieve regeneration water, the aggregated wastewater, and the six
+  unit durations outside the reactor. Eight of the nine unit balances close.
+  The distillation residue is deliberately left blank, because it follows from
+  a distillation yield the authors have not reported.
+- Each estimate carries the published source it was derived from, shown on
+  hover over its status and under its note, editable, exported with the project
+  and written as a column in the life cycle inventory workbook. Sources include
+  the batch process vent equations of 40 CFR 63.1257 with their derivation in
+  EPA-453/R-93-017, the ecoinvent gap-filling rule of Hischier et al. 2005, the
+  fine-chemical defaults of Geisler et al. 2004, the fugitive solvent ceiling of
+  Directive 2010/75/EU, and the octocrylene process patent.
+- Where the literature disagrees with a value, the source says so rather than
+  the value changing silently. Two such disagreements are recorded: the catalyst
+  loading, and a solvent recovery more optimistic than the published best case.
+
+### Flowsheet
+
+- The plant boundary closes. A waste or vent stream with no destination unit
+  leaves through an off-page connector grouped by destination, numbered in the
+  stream table and totalled in a discharge box beside the product.
+- Zoom controls, with the mouse wheel and with buttons.
+- PowerPoint export keeps equipment shapes instead of drawing plain rectangles.
+  Each unit is one group carrying its symbol as a vector picture with a bitmap
+  fallback, and each stream is one group carrying its arrow and label. Text is
+  sized in drawing units, so labels no longer overflow on a large flowsheet.
+
+### Separation screening
+
+- Two entry points, Basic for the guided pathway screening and Advanced for the
+  diagnostic sandbox, with a mode switch inside the modal.
+- Applying a pathway now translates the sandbox's substance fates into stream
+  fates, so a separated waste fraction becomes a waste row that the flowsheet
+  draws as a discharge and the inventory classifies, instead of a silent
+  intermediate.
+
+### Data quality
+
+- Uncertainty follows provenance and propagates into totals, balances, scaled
+  rows and the inventory export.
+- Figures are shown with the precision their provenance supports.
+- One substance table per project: a property is entered once and conflicts
+  between streams are reported.
+- Declared duration ranges stay ranges, and the makespan and plant cycle are
+  reported as minimum, middle and maximum.
+
+### Known gaps
+
+- The heuristic rules match on keywords in free text, so wording in a note can
+  change which rules fire. A declared trigger and criteria field is the fix.
+- No measured batch-condenser vent dataset exists in the open literature, so
+  vent losses can be calculated by a prescribed method but never validated
+  against measurement.
+
+## 0.1.0
+
+Initial working state, never tagged: protocol text to blocks, task groups,
+material flow accounting, unit-operation candidates, heuristic checks, scale-up
+basis, Gantt bottleneck review, and the first exports.

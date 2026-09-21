@@ -26,6 +26,32 @@ stated 5 m³ reactor before reactants and freeboard are considered.
 
 If you use this tool in your work, please cite the paper above.
 
+## Releasing and citing a version
+
+The software is archived on Zenodo, which mints a DOI for each GitHub release
+and a concept DOI that always resolves to the newest one. Cite the concept DOI
+in the paper, so the citation keeps working after later releases.
+
+Zenodo only archives releases created after the repository is enabled, so the
+first two steps happen once and in this order.
+
+1. On zenodo.org, sign in with GitHub, open Settings then GitHub, and switch
+   this repository on.
+2. Merge the release branch into `main`, since the release should be tagged on
+   the default branch.
+3. Check that `.zenodo.json`, `CITATION.cff` and `pyproject.toml` all carry the
+   version about to be released, and that `CHANGELOG.md` describes it.
+4. Tag and publish a GitHub release, for example `v0.2.0`. Zenodo archives the
+   tagged tree and mints the DOI within a few minutes.
+5. Put the DOI back into the repository: an `identifiers` entry in
+   `CITATION.cff`, a `related_identifiers` entry in `.zenodo.json` pointing at
+   the paper with relation `isSupplementTo`, and the badge at the top of this
+   file. Commit that on `main`; it applies to the next release.
+
+`.zenodo.json` carries the archive's metadata. Author names there follow
+`CITATION.cff`; add ORCIDs and affiliations before the first release, since
+Zenodo shows them on the record and they cannot be changed silently afterwards.
+
 The tool is designed to support a phenomena-based upscaling framework. It helps
 the user move from free text to blocks, phenomena, task groups, unit-operation
 alternatives, material-flow assumptions, heuristic checks, preliminary scale-up,
