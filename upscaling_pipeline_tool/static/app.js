@@ -6607,8 +6607,8 @@
             <label>${fieldLabel("Reactor working fill, %", "Fraction of reactor volume available for the process charge. This changes reactor size, not annual operating hours.")}<input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70"></label>
             <div class="${reactorCapacityConflict ? "capacity-conflict" : ""}">
               <span class="label">Required reactor</span>
-              <strong>${escapeHtml(sizing.reactorVolumeM3 ? `${sizing.reactorVolumeM3} m3` : "waiting for charge basis")}</strong>
-              <small>${reactorCapacityConflict ? `exceeds declared ${formatNumber(declaredReactorM3)} m3 capacity` : "scaled liquid charge / working fill"}</small>
+              <strong>${escapeHtml(sizing.reactorVolumeM3 ? `${formatDisplayNumber(sizing.reactorVolumeM3)} m3` : "waiting for charge basis")}</strong>
+              <small>${reactorCapacityConflict ? `exceeds declared ${formatDisplayNumber(declaredReactorM3)} m3 capacity` : "scaled liquid charge / working fill"}</small>
             </div>
           </div>
           <div class="scale-derived-strip">
@@ -6903,7 +6903,7 @@
         ["Annual batches", model.schedule.effectiveBatchesPerYear ? `${formatDisplayNumber(model.schedule.effectiveBatchesPerYear)}${model.schedule.effectiveBatchesPerYearRange ? ` (${model.schedule.effectiveBatchesPerYearRange} across declared ranges)` : ""}` : "missing"],
         ["Scale factor", model.factors.productFactor || "missing"],
         ["Batch makespan", model.schedule.batchMakespanH ? `${model.schedule.batchMakespanH} h${model.schedule.batchMakespanRangeH ? ` (${model.schedule.batchMakespanRangeH} declared)` : ""}` : "missing"],
-        ["Required reactor", model.reactorSizing?.reactorVolumeM3 ? `${model.reactorSizing.reactorVolumeM3} m3` : "incomplete"]
+        ["Required reactor", model.reactorSizing?.reactorVolumeM3 ? `${formatDisplayNumber(model.reactorSizing.reactorVolumeM3)} m3` : "incomplete"]
       ];
       const rowGroups = scaledRowsByRole(model);
       return `
@@ -6951,7 +6951,7 @@
             "Equipment sizing result",
             reactorSizingHtml(model.reactorSizing),
             model.reactorSizing?.ready && model.reactorSizing.reactorVolumeM3
-              ? `${model.reactorSizing.reactorVolumeM3} m3 required`
+              ? `${formatDisplayNumber(model.reactorSizing.reactorVolumeM3)} m3 required`
               : "data incomplete",
             false
           )}
@@ -7064,7 +7064,7 @@
         ["Solvent volume", sizing.solventVolumeM3 ? `${sizing.solventVolumeM3} m3` : "missing"],
         ["Total charge", sizing.totalChargeM3 ? `${sizing.totalChargeM3} m3` : "missing"],
         ["Working fill", sizing.workingFillPercent ? `${sizing.workingFillPercent}%` : "missing"],
-        ["Required reactor volume", sizing.reactorVolumeM3 ? `${sizing.reactorVolumeM3} m3` : "missing"],
+        ["Required reactor volume", sizing.reactorVolumeM3 ? `${formatDisplayNumber(sizing.reactorVolumeM3)} m3` : "missing"],
         ["Condensation water", sizing.generatedWaterKg ? `${sizing.generatedWaterKg} kg/batch` : "missing"]
       ];
       return `
@@ -7638,7 +7638,7 @@
     function energyBridgeRowHtml(item) {
       const mass = item.massBasis.value ? `${item.massBasis.value} ${item.massBasis.unit}` : "mass missing";
       const cpHint = item.missing.includes("Cp")
-        ? `<span class="muted small">Cp goes in Phenomena/Group > Properties Refinement > Heat capacity Cp.</span>`
+        ? `<span class="muted small">Cp goes in Phenomena > Properties Refinement > Heat capacity Cp.</span>`
         : "";
       return `
         <div class="scaled-flow-row">
@@ -16715,7 +16715,7 @@
       const collapsed = $("appMain").classList.contains("inspector-collapsed");
       const button = $("toggleInspector");
       button.textContent = collapsed ? "‹" : "›";
-      button.setAttribute("aria-label", collapsed ? "Show Phenomena/Group panel" : "Hide Phenomena/Group panel");
+      button.setAttribute("aria-label", collapsed ? "Show Phenomena panel" : "Hide Phenomena panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
     }
 
@@ -16967,15 +16967,19 @@
     };
     $("tutorialPrev").addEventListener("click", () => {
       const current = state.tutorialIndex;
-      goToTutorialStep(Math.max(0, current - 1), current);
+      goToTutorialStep(tutorialPrevIndex(current), current);
     });
     $("tutorialNext").addEventListener("click", () => {
-      if (state.tutorialIndex >= tutorialSteps.length - 1) {
+      if (tutorialIsLastIndex(state.tutorialIndex)) {
         closeTutorial();
         return;
       }
       const current = state.tutorialIndex;
-      goToTutorialStep(current + 1, current);
+      goToTutorialStep(tutorialNextIndex(current), current);
+    });
+    $("tutorialMode")?.addEventListener("click", () => {
+      state.tutorialFull = !state.tutorialFull;
+      goToTutorialStep(state.tutorialIndex, state.tutorialIndex);
     });
     $("tutorialOverlay").addEventListener("click", event => {
       if (event.target === $("tutorialOverlay")) closeTutorial();

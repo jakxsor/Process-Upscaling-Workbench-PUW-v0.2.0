@@ -198,7 +198,15 @@ async function flushTutorialStart() {
   await openTutorial(0);
   await flushTutorialStart();
   assert.strictEqual(tutorialSteps.length, 34, "Tutorial should include block creation, G1 unit assignment, reaction residuals, Lutze, heuristics, and scale-up");
-  assert.strictEqual($("tutorialProgress").textContent, "1 / 34", "Tutorial progress should match the new step count");
+  // The tour opens short by default, one step per part of the method; the full route is one click away.
+  assert.strictEqual($("tutorialProgress").textContent, "1 / 8 · short tour", "The tutorial should open as the short tour");
+  assert.strictEqual(tutorialNextIndex(0), 3, "The short tour should skip from Build From Text to Create Block");
+  state.tutorialFull = true;
+  await renderTutorialStep();
+  assert.strictEqual($("tutorialProgress").textContent, "1 / 34", "The full tour should count every step");
+  assert.strictEqual(tutorialNextIndex(0), 1, "The full tour should visit every step in order");
+  state.tutorialFull = false;
+  await renderTutorialStep();
   assert.strictEqual($("tutorialArrow").hidden, false, "Tutorial should show an arrow toward the active control");
 
   state.blocks = [{ id: "B99", groupId: null, start: 0, end: 4, source: "protocol", text: "old", behavior: "unassigned", phenomena: [], streams: [] }];

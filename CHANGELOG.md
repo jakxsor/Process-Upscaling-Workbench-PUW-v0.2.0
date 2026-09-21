@@ -58,6 +58,32 @@ Everything below is relative to the untagged 0.1.0 working state.
 - Declared duration ranges stay ranges, and the makespan and plant cycle are
   reported as minimum, middle and maximum.
 
+### Easier to follow
+
+Changes from a UI study of every main screen, measured on the live app.
+
+- The stepper row carries the three findings a scale-up reader opens the tool
+  for: reactor fit, cycle time with its bottleneck, and what the inventory
+  still lacks. Each is a link to where it is settled.
+- Steps are numbered once, in the stepper. The right-hand tab badges and the
+  numbers inside the panel flags are gone.
+- Below 55% zoom the board is a map: each group card shows only its id, unit
+  and task at a size that stays legible whatever the zoom. The nine-unit
+  example used to fit at 35% with unit names at 4 px.
+- The protocol textarea folds once blocks exist, since the annotated view is
+  then the working copy of the same text.
+- Phenomena read as plain words first, code second: "Heating ES(H)". The
+  separation screening names its method chips by what they check and moves
+  the paper's section codes into their tooltips.
+- The board toolbar keeps help, connections and a View menu; compact and
+  auto-arrange moved into the menu.
+- The tutorial opens as a short tour of eight steps, one per part of the
+  method, with the full 34-step tour one click away.
+- The required reactor volume is shown at the precision the scale basis
+  declares, like every other scaled figure, instead of to five digits.
+- Clearing a project now also clears its provenance bar and inventory
+  readiness, which stayed painted from the previous project.
+
 ### Known gaps
 
 - The heuristic rules match on keywords in free text, so wording in a note can

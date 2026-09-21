@@ -227,8 +227,6 @@ APP_HTML = r"""<!doctype html>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button class="help-button" data-help-topic="board" title="Help for the board" aria-label="Help for the board">?</button>
-          <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
-          <button id="autoLayout" title="Arrange groups left to right along the declared links; content is unchanged">Layout</button>
           <div class="header-dropdown">
             <button id="connectionsToggle" aria-haspopup="true" aria-expanded="false" title="Auto-connect groups, or review/remove individual arrows">Connections ▾</button>
             <div id="connectionsMenu" class="header-dropdown-menu connections-dropdown-menu" hidden role="menu">
@@ -240,6 +238,9 @@ APP_HTML = r"""<!doctype html>
           <details class="header-dropdown board-view-dropdown">
             <summary title="Center, fit, reset, or zoom the process board">View</summary>
             <div class="header-dropdown-menu board-view-menu">
+              <button id="toggleCompact" title="Switch group boxes between full detail and compact icon + label view">Compact</button>
+              <button id="autoLayout" title="Arrange groups left to right along the declared links; content is unchanged">Auto-arrange</button>
+              <div class="menu-divider" role="separator"></div>
               <button id="boardCenter" title="Scroll to and zoom in on the currently selected block or group">Center selection</button>
               <button id="zoomFit" title="Zoom out just enough to fit every block and group on screen">Fit board</button>
               <button id="resetView" title="Scroll back to the top-left corner and reset zoom to the default level">Reset view</button>
@@ -269,7 +270,7 @@ APP_HTML = r"""<!doctype html>
         <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">&#8250;</button>
         <button class="help-button" data-help-topic="inspector" title="Help for this panel" aria-label="Help for the right-hand panel">?</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: description and phenomena of the selected block"><span class="panel-tab-label">Phenomena/Group</span></button>
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: description and phenomena of the selected block"><span class="panel-tab-label">Phenomena</span></button>
           <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-label">Heuristics</span></button>
           <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-label">Scale-Up</span></button>
         </div>
@@ -463,6 +464,7 @@ APP_HTML = r"""<!doctype html>
         <button id="tutorialNext" class="primary">Next</button>
         <button id="tutorialSkip" class="mini-button">Close</button>
       </div>
+      <button id="tutorialMode" class="tutorial-mode-switch" type="button">Full tour</button>
     </section>
   </div>
 

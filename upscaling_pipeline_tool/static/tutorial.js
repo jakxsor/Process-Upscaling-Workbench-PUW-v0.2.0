@@ -512,6 +512,7 @@ function tutorialRecoveryBlock() {
 const tutorialSteps = [
   {
     target: "#sourceInput",
+    quick: true,
     title: "Part 1 · 1. Build From Text",
     body: "Start by pasting or writing the lab protocol. The tool never replaces your judgement: it only helps turn written operations into editable process blocks.",
     details: ["This example uses one short protocol so the full path is visible.", "Every automatic extraction should be checked before it becomes a task."],
@@ -537,6 +538,7 @@ const tutorialSteps = [
   },
   {
     target: "#createBlockSide",
+    quick: true,
     title: "Part 1 · 4. Create Block",
     body: "Click Create Block to turn the selection into a block. You can do the same thing with right click on the selected text and Create Block From Selection.",
     details: ["The block keeps a link back to this exact text range.", "This is the point where text becomes structured process evidence."],
@@ -560,6 +562,7 @@ const tutorialSteps = [
   },
   {
     target: "[data-assign-task]",
+    quick: true,
     title: "Part 1 · 7. Convert To Task",
     body: "When you are confident the block and phenomena are correct, convert it to a task. A task is the unit the network, MFA, scale-up, and flowchart views can reason over.",
     details: ["Use one block per task for simple cases.", "Combine multiple blocks only when they really belong to the same process operation."],
@@ -612,6 +615,7 @@ const tutorialSteps = [
   },
   {
     target: ".board-unit-picker",
+    quick: true,
     title: "Part 2 · 5. Choose Reactor",
     body: "The options are ranked from the task type, streams, phases, phenomena, and conditions. For this liquid reaction, a batch or semi-batch reactor is a credible first equipment class.",
     details: ["This is still editable: it records the selected unit, not a final design.", "The same control later becomes Switch Unit Operation if you want to revise the choice."],
@@ -681,6 +685,7 @@ const tutorialSteps = [
   },
   {
     target: "[data-open-lutze-reaction-separation]",
+    quick: true,
     title: "Part 3 · 1. Lutze Support",
     body: "When a reaction leaves product mixed with residual reagents or recoverable components, open the Basic Lutze/Garg screening before changing the main graph.",
     details: ["The workspace keeps conversion, selectivity, yield, phases, binary evidence, and properties distinct.", "The main flowchart changes only after a complete pathway is reviewed and applied."],
@@ -764,6 +769,7 @@ const tutorialSteps = [
   },
   {
     target: "#scaleQuickPanel",
+    quick: true,
     title: "Part 4 · 3. Scale-Up Target",
     body: "Scale-up starts with a target product and production basis. The example uses benzyl acetate so the material rows, product basis, schedule, and bottleneck checks line up.",
     details: ["Changing the target recalculates flows from the lab basis.", "Use batch, daily, or annual basis depending on what your study reports."],
@@ -779,6 +785,7 @@ const tutorialSteps = [
   },
   {
     target: "#openFlowsheet",
+    quick: true,
     title: "Part 4 · 5. Flowsheet View",
     body: "Flowsheet View draws the process as a PFD from the tasks, streams and arrows: numbered streams, a mass balance per unit, a stream table and a title block, on the lab, scaled or per-kg basis.",
     details: ["Units can be dragged and relabelled; the PowerPoint export reproduces the drawing.", "An open balance or a stream without a usable mass is written on the drawing, never hidden."],
@@ -788,12 +795,44 @@ const tutorialSteps = [
   },
   {
     target: "#workMenuToggle",
+    quick: true,
     title: "Tutorial Complete",
     body: "You now have the full loop: text to block, block to task, material basis, recovery task, unit options, Lutze pathway, heuristic review, scale-up, flowsheet, and export-ready state.",
     details: ["Save the project JSON when you want to reload the editable work later.", "Load example offers three worked cases: octocrylene (the manuscript route), the biodiesel case with every quantity sourced, and the biodiesel reaction alone to build its train with Lutze.", "Use the LCI/openLCA/PowerPoint exports only after checking assumptions and unresolved warnings."],
     action: async () => { await tutorialPrepareScaleUp(); if (typeof closeFlowsheetModal === "function") closeFlowsheetModal(); }
   }
 ];
+
+// Two routes through the same steps. The short tour visits the steps marked quick, one per
+// part of the method, so a first visit takes minutes; the full tour visits every step. Both use
+// absolute indexes into tutorialSteps, so resume, spotlight and actions are unchanged.
+function tutorialRouteIndexes() {
+  const all = tutorialSteps.map((step, index) => index);
+  if (state.tutorialFull) return all;
+  const quick = all.filter(index => tutorialSteps[index].quick);
+  return quick.length ? quick : all;
+}
+
+function tutorialNextIndex(current) {
+  const route = tutorialRouteIndexes();
+  return route.find(index => index > current) ?? current;
+}
+
+function tutorialPrevIndex(current) {
+  const route = tutorialRouteIndexes();
+  return [...route].reverse().find(index => index < current) ?? current;
+}
+
+function tutorialIsLastIndex(current) {
+  const route = tutorialRouteIndexes();
+  return current >= route[route.length - 1];
+}
+
+function tutorialPositionText(current) {
+  const route = tutorialRouteIndexes();
+  const position = route.indexOf(current);
+  return `${position >= 0 ? position + 1 : Math.min(route.length, route.filter(index => index <= current).length)} / ${route.length}`;
+}
 
 async function openTutorial(index = 0) {
   try {
@@ -994,12 +1033,14 @@ function positionTutorialStep(step) {
   spotlight.style.width = `${Math.min(window.innerWidth - 16, rect.width + pad * 2)}px`;
   spotlight.style.height = `${Math.min(window.innerHeight - 16, rect.height + pad * 2)}px`;
 
-  $("tutorialProgress").textContent = `${state.tutorialIndex + 1} / ${tutorialSteps.length}`;
+  $("tutorialProgress").textContent = `${tutorialPositionText(state.tutorialIndex)}${state.tutorialFull ? "" : " · short tour"}`;
+  const modeButton = $("tutorialMode");
+  if (modeButton) modeButton.textContent = state.tutorialFull ? `Short tour (${tutorialSteps.filter(item => item.quick).length} steps)` : `Full tour (${tutorialSteps.length} steps)`;
   $("tutorialTitle").textContent = step.title;
   $("tutorialBody").textContent = step.body;
   $("tutorialDetail").innerHTML = (step.details || []).map(item => `<span>${escapeHtml(item)}</span>`).join("");
   $("tutorialPrev").disabled = state.tutorialIndex === 0;
-  $("tutorialNext").textContent = state.tutorialIndex === tutorialSteps.length - 1 ? "Finish" : "Next";
+  $("tutorialNext").textContent = tutorialIsLastIndex(state.tutorialIndex) ? "Finish" : "Next";
 
   const actionButton = $("tutorialDo");
   actionButton.hidden = !step.cta;
