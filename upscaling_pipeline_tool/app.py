@@ -111,9 +111,12 @@ APP_HTML = r"""<!doctype html>
 </head>
 <body>
   <header>
-    <div>
-      <h1>Process Upscaling Workbench</h1>
-      <div class="subtitle">From laboratory protocol to a structured industrial flowsheet.</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">PUW</span>
+      <div>
+        <h1>Process Upscaling Workbench</h1>
+        <div class="subtitle">From laboratory protocol to a structured industrial flowsheet.</div>
+      </div>
     </div>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>

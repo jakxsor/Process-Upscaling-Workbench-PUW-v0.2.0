@@ -67,6 +67,30 @@
       font-size: 12px;
     }
 
+    /* The one branding element in the whole header: a small fixed mark so the tool is
+       recognisable at a glance (a screenshot, a second monitor) without competing with the
+       full name, which stays the primary, readable title next to it. */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
     button, input, select, textarea {
       font: inherit;
     }
