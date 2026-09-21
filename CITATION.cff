@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite the repository and the associated methodology paper."
 title: "Process Upscaling Workbench"
 type: software
-repository-code: "https://github.com/jakxsor/upscaling-pipeline-tool"
+repository-code: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0"
 license: MIT
 version: "0.2.0"
 # Zenodo mints a DOI when a GitHub release is published; add it here as

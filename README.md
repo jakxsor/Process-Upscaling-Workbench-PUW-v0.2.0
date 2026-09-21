@@ -1,6 +1,6 @@
 # Process Upscaling Workbench
 
-[![Validation](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml/badge.svg)](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml)
+[![Validation](https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0/actions/workflows/validation.yml/badge.svg)](https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0/actions/workflows/validation.yml)
 
 A local browser-based implementation of a phenomena-based scale-up workflow for
 translating laboratory synthesis protocols into structured process blocks, task
