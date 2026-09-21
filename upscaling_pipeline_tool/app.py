@@ -681,48 +681,20 @@ APP_HTML = r"""<!doctype html>
             </section>
 
             <details class="external-analysis-details">
-              <summary>Optional second opinion from an external model (OpenAI-compatible API)</summary>
+              <summary>Second opinion from an external model (OpenAI-compatible API) — coming soon</summary>
             <section class="modal-section external-analysis-section">
               <div>
                 <div class="label">External Process Analysis</div>
-                <div class="muted small">Expected output: commentary, problems, missing data, cited heuristic rules, and next actions.</div>
+                <div class="muted small">Commentary, problems, missing data, cited heuristic rules and next actions from an external model, as a second opinion alongside the deterministic report above.</div>
               </div>
-              <div class="external-settings-grid">
-                <label>
-                  <div class="label">API key override</div>
-                  <input id="aiApiKey" type="password" placeholder="temporary key only">
-                </label>
-                <label>
-                  <div class="label">Model</div>
-                  <input id="aiModel" type="text" list="aiModelOptions" placeholder="blank = server OPENAI_MODEL or default">
-                  <datalist id="aiModelOptions">
-                    <option value="gpt-5-mini">
-                    <option value="gpt-5">
-                    <option value="gpt-4.1-mini">
-                    <option value="gpt-4.1">
-                    <option value="o3">
-                  </datalist>
-                </label>
-                <label>
-                  <div class="label">Report style</div>
-                  <select id="aiReportStyle">
-                    <option value="commentary_summary">Commentary + action summary</option>
-                    <option value="strict_table">Strict problem table</option>
-                    <option value="short_triage">Short triage only</option>
-                  </select>
-                </label>
-                <label>
-                  <div class="label">Advanced endpoint</div>
-                  <input id="aiEndpoint" type="text" value="https://api.openai.com/v1/responses">
-                </label>
-                <label class="external-toggle-row">
-                  <input id="aiUseWebReferences" type="checkbox" checked>
-                  <span>Use web references when supported</span>
-                </label>
-              </div>
-              <div class="muted small">Leave the endpoint unchanged unless you intentionally want another OpenAI-compatible route. Any temporary key entered above is sent to that endpoint. Blank key uses server OPENAI_API_KEY. Web references are used only for review evidence; proposed changes are not applied automatically.</div>
-              <button id="runExternalAiRefine" class="primary">Run External Process Check</button>
-              <div id="externalAiResult" class="external-ai-result mfa-empty">No external analysis run yet.</div>
+              <div class="coming-soon-notice">This feature is being reworked before its first public use and is disabled for now. The deterministic Local Process Report above is unaffected and already reflects every declared block, stream and rule.</div>
+              <button id="runExternalAiRefine" class="primary" disabled title="Coming soon">Coming soon</button>
+              <div id="externalAiResult" class="external-ai-result mfa-empty" hidden></div>
+              <input id="aiApiKey" type="hidden">
+              <input id="aiModel" type="hidden">
+              <select id="aiReportStyle" hidden><option value="commentary_summary" selected></option></select>
+              <input id="aiEndpoint" type="hidden" value="https://api.openai.com/v1/responses">
+              <input id="aiUseWebReferences" type="hidden">
             </section>
             </details>
           </div>
