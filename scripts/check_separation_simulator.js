@@ -151,10 +151,14 @@ assert.strictEqual(ethylAcetateFeed.status, "estimated", "The unreported ethyl a
 assert(/azeotrope/.test(ethylAcetateFeed.note), "The ethyl acetate note must flag the cyclohexane azeotrope that makes it a scale-up decision");
 const brineFeed = state.blocks.find(block => block.id === "B6").streams.find(stream => stream.name === "saturated sodium chloride brine");
 assert.strictEqual(brineFeed.status, "estimated", "The unreported brine volume must be labelled as an estimate");
-// The one gap left open on purpose: the still residue follows from the distillation yield the
-// authors hold, and entering it would move the 1 kg product basis.
-const stillResidue = state.blocks.find(block => block.id === "B9").streams.find(stream => stream.name === "uncharacterized organic residue");
-assert.strictEqual(stillResidue.status, "missing", "The distillation residue stays missing until the authors supply the distillation yield");
+// The distillation residue: entered at 3% of the crude (Knoevenagel heavies), the authors'
+// chosen mid-point of the 2-5% typical range, so the ninth and last unit balance closes.
+const stillResidue = state.blocks.find(block => block.id === "B9").streams.find(stream => stream.name === "Knoevenagel heavies (still-bottoms residue)" && stream.role === "waste");
+assert(stillResidue, "The distillation residue stream must exist on the still-bottoms waste row");
+assert.strictEqual(stillResidue.status, "estimated", "The distillation residue must be labelled as an estimate now that it carries a value");
+assert(Number(stillResidue.quantity) > 0, "The distillation residue must carry a positive quantity");
+assert(/3%/.test(stillResidue.note) && /Knoevenagel/.test(stillResidue.note), "The residue note must name its basis (3% of the crude) and its origin (Knoevenagel heavies)");
+assert(stillResidue.source.includes("2-5 wt%"), "The residue source must cite the typical range its value was chosen from");
 ["G1", "G4", "G5", "G7", "G8", "G9"].forEach(id => {
   const schedule = state.groups[id].schedule;
   assert(Number.isFinite(Number(schedule.durationH)) && Number(schedule.durationH) > 0, id + " carries an estimated duration");

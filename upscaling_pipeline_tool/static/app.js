@@ -1124,7 +1124,8 @@
         water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
         brine: { name: "saturated sodium chloride brine", phase: "L", density: "1200", propertyStatus: "database", propertySource: "CRC Handbook: saturated NaCl 26.4 wt% at 25 degC, 1200 kg/m3", note: "Mixture: treated by the screening as water with dissolved salt; Tb/Tm left blank." },
         ethylAcetate: { name: "ethyl acetate", phase: "L", pubchemQuery: "ethyl acetate", pubchemCid: "8857", mw: "88.11", tb: "350.2", tm: "189.6", pvap: "12400", density: "902", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
-        wastewater: { name: "wastewater", phase: "L", density: "1000", propertyStatus: "assumption", propertySource: "Aggregate aqueous stream; density of water assumed so the row converts to kg", note: "Mixture: composition is carried by the input rows of U9; Tb/Tm left blank." }
+        wastewater: { name: "wastewater", phase: "L", density: "1000", propertyStatus: "assumption", propertySource: "Aggregate aqueous stream; density of water assumed so the row converts to kg", note: "Mixture: composition is carried by the input rows of U9; Tb/Tm left blank." },
+        residue: { name: "Knoevenagel heavies (still-bottoms residue)", phase: "L", density: "1100", propertyStatus: "assumption", propertySource: citations.knoevenagelHeavies, note: "Uncharacterised mixture of self-condensation and Michael-addition byproducts; density assumed close to the reaction mixture so the row converts to kg. Tb/Tm left blank; GC-MS of the still bottoms would give the real composition." }
       };
       const chemicalRole = {
         benzophenone: "reactant",
@@ -1134,24 +1135,13 @@
         octocrylene: "product",
         water: "auxiliary",
         brine: "auxiliary",
-        ethylAcetate: "solvent"
+        ethylAcetate: "solvent",
+        residue: "byproduct"
       };
       const component = (role, key, values = {}) => ({
         role,
         ...chemical[key],
         substanceRole: values.substanceRole || chemicalRole[key] || "",
-        scalingMode: "per kg product",
-        ...values
-      });
-      const unknown = (role, name, values = {}) => ({
-        role,
-        name,
-        quantity: "",
-        unit: values.unit || "kg",
-        phase: values.phase || "unknown",
-        status: "missing",
-        timing: values.timing || defaultStreamTiming(role),
-        fate: values.fate || defaultStreamFate(role, values.timing || defaultStreamTiming(role)),
         scalingMode: "per kg product",
         ...values
       });
@@ -1190,6 +1180,12 @@
         processComponent(role, "cyanoacetate", {
           quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated",
           timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate"
+        }, context),
+        processComponent(role, "residue", {
+          quantity: basis.distillationResidueKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate",
+          source: citations.knoevenagelHeavies,
+          note: `Formed alongside the product at ${basis.distillationResiduePercent}% of the crude; carried with the non-volatile fraction to the final distillation, where it becomes the still-bottoms residue.`
         }, context),
         processComponent(role, "cyclohexane", {
           quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
@@ -1496,10 +1492,11 @@
           component("input", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", note: "Product component entering final short-path distillation." }),
           component("input", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
           component("input", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
+          component("input", "residue", { quantity: basis.distillationResidueKg, unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", source: citations.knoevenagelHeavies, note: `Carried from the reactor with the non-volatile fraction; ${basis.distillationResiduePercent}% of the crude.` }),
           component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "reported", timing: "final output", fate: "product", note: "Defined functional unit: 1 kg purified product at >=98% purity. This is a basis definition, not a reported isolation yield." }),
           component("waste", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "benzophenone", note: "Residual benzophenone separated from the product cut. The SI does not say whether it is recovered; at 0.25 wt% of the product recovery is not economic, so it leaves with the still residue to waste treatment, tracked as its own row." }),
           component("waste", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual 2-ethylhexyl cyanoacetate, same fate as the residual benzophenone: leaves with the still residue to waste treatment rather than being hidden in the aggregate residue row." }),
-          unknown("waste", "uncharacterized organic residue", { phase: "L", timing: "waste purge", fate: "purge", note: "The SI reports a heavy fraction with neither quantity nor composition. It is the crude minus the distillate, so it follows from the distillation yield, which the authors hold; Knoevenagel heavies (self-condensation and Michael adducts) are typically 2-5 wt% of the crude. Left blank on purpose: entering it moves the 1 kg product basis (reagent charges scale by 1/yield), which is the authors' decision. GC-MS of the still bottoms gives the composition." })
+          component("waste", "residue", { quantity: basis.distillationResidueKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "purge", source: citations.knoevenagelHeavies, note: `The SI reports this heavy fraction with neither quantity nor composition; entered at ${basis.distillationResiduePercent}% of the crude (self-condensation and Michael adducts of the Knoevenagel reaction, mid-point of the 2-5 wt% typical for this chemistry). Composition unconfirmed: GC-MS of the still bottoms would give the real breakdown; the SI's authors should confirm the yield this implies.` })
         ], {
           target_temperature: "190-210",
           target_pressure: "2",
@@ -1566,7 +1563,7 @@
           unit: "kg",
           role: "byproduct"
         }],
-        lastGeneratedSummary: "SI-reconciled basis: 1:1 Knoevenagel stoichiometry; 99.5% is an explicit screening proxy for the benzophenone <0.5% endpoint, not a reported yield. Water and residual reagents are calculated; the catalyst, extraction solvent, brine, vent and regeneration-water quantities the SI does not report are engineering estimates labelled as such. The distillation residue stays blank until the authors supply the distillation yield."
+        lastGeneratedSummary: "SI-reconciled basis: 1:1 Knoevenagel stoichiometry; 99.5% is an explicit screening proxy for the benzophenone <0.5% endpoint, not a reported yield. Water and residual reagents are calculated; the catalyst, extraction solvent, brine, vent, regeneration-water and distillation-residue quantities the SI does not report are engineering estimates labelled as such."
       };
 
       const schedule = (values = {}) => ({ ...scheduleDefaults(), ...values });

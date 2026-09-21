@@ -13,10 +13,14 @@ Everything below is relative to the untagged 0.1.0 working state.
 - The quantities the octocrylene supporting information names but does not
   report are entered as engineering estimates: catalyst charge, extraction
   solvent, brine, reactor and evaporator vent losses, the Dean-Stark purge,
-  molecular-sieve regeneration water, the aggregated wastewater, and the six
-  unit durations outside the reactor. Eight of the nine unit balances close.
-  The distillation residue is deliberately left blank, because it follows from
-  a distillation yield the authors have not reported.
+  molecular-sieve regeneration water, the aggregated wastewater, the
+  distillation residue, and the six unit durations outside the reactor. All
+  nine unit balances close.
+- The distillation residue (Knoevenagel heavies: self-condensation and
+  Michael adducts) is entered at 3% of the crude, the mid-point of the 2-5 wt%
+  typical for this chemistry and the authors' chosen value; it is formed in
+  the reactor and carried unchanged through extraction, drying and
+  evaporation, closing the last open unit balance (G6).
 - Each estimate carries the published source it was derived from, shown on
   hover over its status and under its note, editable, exported with the project
   and written as a column in the life cycle inventory workbook. Sources include

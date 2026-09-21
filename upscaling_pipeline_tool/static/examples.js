@@ -39,14 +39,25 @@
     // 0.1-0.5 wt% entrained after the decanter, minus the 500 ppm left in the product.
     const sieveRegenerationWaterKg = 0.040;
     const wastewaterKg = Number(reactionWaterKg) + washWaterL * 0.997 + Number(catalystKg) + brineKg + sieveRegenerationWaterKg;
+    // Distillation residue: the SI reports a still-bottoms heavy fraction (self-condensation and
+    // Michael adducts of the Knoevenagel reaction) with neither quantity nor composition. Entered
+    // at 3 wt% of the crude (mid-point of the 2-5 wt% typical for this chemistry, chosen by the
+    // authors), where "crude" is approximated as the product plus the unreacted reagents it forms
+    // alongside, since the residue itself is a second-order correction to that mass. Formed in the
+    // reactor and carried unchanged through extraction, drying and evaporation like the other
+    // non-volatile components, so it closes the ninth and last open unit balance (G6).
+    const unreactedBenzophenoneKg = mass(chargedMol - reactedMol, 182.22);
+    const unreactedCyanoacetateKg = mass(chargedMol - reactedMol, 197.28);
+    const distillationResiduePercent = 3;
+    const distillationResidueKg = (productKg + Number(unreactedBenzophenoneKg) + Number(unreactedCyanoacetateKg)) * distillationResiduePercent / 100;
     return Object.freeze({
       productKg: String(productKg),
       productMw: String(productMw),
       endpointConversionPercent: String(endpointConversionPercent),
       benzophenoneKg: mass(chargedMol, 182.22),
       cyanoacetateKg: mass(chargedMol, 197.28),
-      unreactedBenzophenoneKg: mass(chargedMol - reactedMol, 182.22),
-      unreactedCyanoacetateKg: mass(chargedMol - reactedMol, 197.28),
+      unreactedBenzophenoneKg,
+      unreactedCyanoacetateKg,
       reactionWaterKg,
       washWaterL: washWaterL.toFixed(1),
       cyclohexaneChargeL: String(cyclohexaneChargeL),
@@ -66,7 +77,9 @@
       ventCapturePercent: String(ventCaptureFraction * 100),
       deanStarkPurgeCyclohexaneKg: String(deanStarkPurgeCyclohexaneKg),
       sieveRegenerationWaterKg: sieveRegenerationWaterKg.toFixed(3),
-      wastewaterKg: String(Number(wastewaterKg.toPrecision(3)))
+      wastewaterKg: String(Number(wastewaterKg.toPrecision(3))),
+      distillationResiduePercent: String(distillationResiduePercent),
+      distillationResidueKg: String(Number(distillationResidueKg.toPrecision(2)))
     });
   })();
 
@@ -130,7 +143,8 @@
     octocrylenePatent: "US 2010/0048937 A1 (WO 2008/089920 A1, EP 2125707 B1), Process for the manufacture of substituted 2-cyano cinnamic esters. Claims a C3-C6 monocarboxylic acid plus an ammonium compound, ammonium:ketone 0.7-1.2 mol/mol, water removed azeotropically with cyclohexane or heptane.",
     sccsOctocrylene: "SCCS/1627/21, Final Opinion on Octocrylene, s. 3.1.8: mp -10 degC, bp 218 degC at 1.5 mmHg with decomposition above 300 degC, vapour pressure 0 Pa at 25 degC, density 1.051 g/cm3.",
     cyclohexaneWater: "IUPAC-NIST Solubility Data Series, cyclohexane + water; Gregory, Christian & Affsprung, J. Phys. Chem. 71:2283-9 (1967): water in cyclohexane 0.0069 wt% at 25 degC.",
-    knoevenagel: "Jones, The Knoevenagel Condensation, Org. React. 15:204-599 (1967), doi:10.1002/0471264180.or015.02."
+    knoevenagel: "Jones, The Knoevenagel Condensation, Org. React. 15:204-599 (1967), doi:10.1002/0471264180.or015.02.",
+    knoevenagelHeavies: "Jones, The Knoevenagel Condensation, Org. React. 15:204-599 (1967), doi:10.1002/0471264180.or015.02: self-condensation and Michael-addition side reactions of the active-methylene component are the typical source of high-boiling heavies in this chemistry. No plant-specific figure exists for octocrylene; 3 wt% of the crude is the mid-point of the 2-5 wt% commonly seen for Knoevenagel condensations and is an engineering estimate, not a measured value."
   });
 
   root.ProcessUpscalingExamples = Object.freeze({

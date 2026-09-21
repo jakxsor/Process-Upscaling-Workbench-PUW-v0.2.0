@@ -39,10 +39,10 @@ PubChem/HSDB. PubChem PUG-View returns MW only for the two esters, so the "left 
 autofill" route in the old fixture comment cannot fill them. Wikipedia's 14 degC melting
 point for octocrylene is the outlier and was not used.
 
-Verification: 109 stream rows, 55 calculated, 20 reported, 33 estimated, 1 missing (item 7).
-Unit balances G1-G5 and G7-G9 closed within 1.1% (G7's 1.1% is rounding of 0.0008 + 0.00009
-against 0.0009); G6 reads "open" because of the residue row. The LCI now carries an emission
-to air (0.00009 kg cyclohexane per kg product). Validation suite green including the browser
+Verification (2026-09-16): 109 stream rows, 55 calculated, 20 reported, 33 estimated, 1 missing
+(item 7). Unit balances G1-G5 and G7-G9 closed within 1.1% (G7's 1.1% is rounding of 0.0008 +
+0.00009 against 0.0009); G6 reads "open" because of the residue row. The LCI now carries an
+emission to air (0.00009 kg cyclohexane per kg product). Validation suite green including the browser
 smoke check; the three regression assertions that encoded "must stay missing" now assert
 "estimated with the method on the note", and the one deliberate blank is asserted too.
 
@@ -52,6 +52,35 @@ H11, so wording in notes changes the shortlist; the trigger/criteria fields from
 gap in `audit_ui_review_20260912.md` would fix this properly. And the flowsheet balance counts
 any row with fate "vent" as an outlet, so the vent gas entering U7 must carry fate
 "intermediate" or the unit doubles its outputs.
+
+## Item 7 closed (2026-09-21): the distillation residue
+
+The last open item was a decision, not an engineering gap: what distillation yield to assume.
+The authors set it at 3 wt% residue on the crude, the mid-point of the 2-5 wt% typical for
+Knoevenagel condensations (self-condensation and Michael adducts of the active-methylene
+reagent). Entered as `distillationResidueKg` in `octocryleneExampleBasis`, computed from the
+product mass plus the two unreacted-reagent residuals already in the case (0.03 kg on this
+basis), so the number is derived, not typed twice.
+
+The residue is minted where it physically forms, in the reactor's `postReactionInventory`
+alongside the product and the unreacted reagents, and is carried unchanged through extraction,
+drying and evaporation like those other non-volatile components, arriving at G6's still bottoms.
+This closes G6, the last of the nine unit balances, without touching the reactor's stoichiometry
+(reactedMol/chargedMol) or the 1 kg product basis anywhere else in the case: the residue is an
+additional minor byproduct stream, not a redistribution of octocrylene mass.
+
+Verification (2026-09-21): all nine unit balances read `status: "closed"` with `unknown: 0`,
+checked directly against `buildFlowsheetModel()`. Stream-status mix: 109 rows unchanged in
+count; the residue row moved from `missing` to `estimated`, and the now-unused `unknown()`
+placeholder helper was removed as dead code. Browser smoke check reports 3 inventory issues,
+down from 4. Regression assertions in `check_separation_simulator.js` were updated from
+"stays missing" to check the value, its 3% basis, and its citation.
+
+The co-catalyst question from the same review round (every published octocrylene process
+patent uses a carboxylic acid co-catalyst at roughly 1 kg per kg product; this case's SI does
+not) was resolved separately: the authors confirmed the SI does not report one, so the case
+stays faithful to the source and carries an explicit note on the catalyst row flagging the
+discrepancy with the literature, rather than adding an unreported reagent.
 
 ## Verdict (2026-09-15, before the values were entered)
 
