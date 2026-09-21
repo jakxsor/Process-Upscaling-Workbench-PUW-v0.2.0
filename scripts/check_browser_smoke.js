@@ -139,6 +139,37 @@ const measureBoard = () => {
       assert(units > 9, `Flowsheet should draw labelled units, found ${units} text nodes`);
       await page.keyboard.press("Escape");
 
+      // The three findings sit in the stepper row and each one leads somewhere.
+      const chips = await page.$$eval(".decision-chip", nodes => nodes.map(node => ({ id: node.dataset.decision, tone: node.className.replace("decision-chip", "").trim(), text: node.textContent.replace(/\s+/g, " ").trim() })));
+      assert.deepStrictEqual(chips.map(chip => chip.id), ["capacity", "bottleneck", "gaps"], `The decision strip should show reactor, cycle and data, got ${JSON.stringify(chips)}`);
+      assert(chips[0].tone === "conflict" && /m³ needed/.test(chips[0].text), `The example's reactor conflict should be the first finding, got ${JSON.stringify(chips[0])}`);
+      assert(/G2 sets 20 h/.test(chips[1].text), `The example's bottleneck should be named with its cycle time, got ${JSON.stringify(chips[1])}`);
+      await page.click('.decision-chip[data-decision="bottleneck"]');
+      await page.waitForTimeout(400);
+      assert.strictEqual(await page.$eval("#ganttModal", el => el.hidden), false, "The cycle finding should open the schedule");
+      await page.click("#closeGanttModal");
+      await page.click('.decision-chip[data-decision="gaps"]');
+      await page.waitForTimeout(400);
+      assert.strictEqual(await page.$eval("#dataQualityDetails", el => el.hidden), false, "The data finding should open the data quality detail");
+
+      // Clearing the project must clear every card, not only the ones the empty state repaints.
+      await page.click("#clearProject");
+      await page.waitForTimeout(300);
+      await page.click("#confirmModalOk");
+      await page.waitForTimeout(500);
+      const afterClear = await page.evaluate(() => ({
+        blocks: state.blocks.length,
+        provenance: document.getElementById("dataProvenanceSummary").textContent.trim(),
+        inventory: document.getElementById("lcaReadinessSummary").textContent.trim(),
+        detailsHidden: getComputedStyle(document.getElementById("dataQualityDetails")).display === "none",
+        chips: document.querySelectorAll(".decision-chip").length
+      }));
+      assert.strictEqual(afterClear.blocks, 0, "Clear should empty the project");
+      assert.strictEqual(afterClear.provenance, "No streams yet.", `Provenance must reset on clear, got: ${afterClear.provenance}`);
+      assert.strictEqual(afterClear.inventory, "No streams yet.", `Inventory readiness must reset on clear, got: ${afterClear.inventory}`);
+      assert(afterClear.detailsHidden, "The data quality detail must be hidden on an empty project");
+      assert.strictEqual(afterClear.chips, 0, "An empty project shows the first-step hint, not findings");
+
       assert.deepStrictEqual(runtimeErrors, [], `Runtime errors during the smoke run: ${runtimeErrors.join(" | ")}`);
       console.log(`Browser smoke check passed (${board.groups} groups loaded at ${Math.round(board.zoom * 100)}% zoom; ${lci}).`);
     });

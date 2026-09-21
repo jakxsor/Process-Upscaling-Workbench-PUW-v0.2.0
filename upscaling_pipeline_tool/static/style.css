@@ -388,6 +388,18 @@
       display: none;
     }
 
+    /* An open step carries a status dot, not a second copy of the number in the stepper. */
+    .step-flag-num:empty {
+      width: 8px;
+      height: 8px;
+      margin: 0 4px 0 6px;
+      background: #b8c6d1;
+    }
+
+    .step-flag.partial .step-flag-num:empty {
+      background: #b7791f;
+    }
+
     .step-flag.done {
       border-color: #b7e0d4;
       background: var(--accent-soft);
@@ -763,6 +775,70 @@
     .group-flow.connect-dragging {
       cursor: crosshair;
     }
+
+    /* Map level of detail. Below the zoom set in applyZoomToBoard a card shows only its id, unit and
+       task, sized against --zoom so they read at about 12 px on screen whatever the zoom. */
+    .group-lod { display: none; }
+
+    .board-canvas.lod-far .group-box > :not(.group-lod) { display: none; }
+
+    .board-canvas.lod-far .group-box > .group-lod {
+      display: grid;
+      gap: calc(3px / var(--zoom, 1));
+      padding: calc(4px / var(--zoom, 1)) 0;
+      line-height: 1.12;
+      overflow: hidden;
+      overflow-wrap: break-word;
+      hyphens: auto;
+      -webkit-hyphens: auto;
+    }
+
+    .board-canvas.lod-far .group-lod-id {
+      font-size: calc(9.5px / var(--zoom, 1));
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    .board-canvas.lod-far .group-lod-unit {
+      font-size: calc(12px / var(--zoom, 1));
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .board-canvas.lod-far .group-lod-task {
+      font-size: calc(10.5px / var(--zoom, 1));
+      color: var(--ink-3);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .source-text-details > summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-3);
+      list-style: none;
+      padding: 4px 0;
+    }
+
+    .source-text-details > summary::before {
+      content: "▸";
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .source-text-details[open] > summary::before {
+      content: "▾";
+    }
+
+    .source-text-details > summary::-webkit-details-marker { display: none; }
 
     .group-box.active {
       border-color: var(--accent);
@@ -1609,6 +1685,15 @@
       width: 100%;
       margin-bottom: 0;
       min-width: 0;
+      /* Three tabs share the row equally and never wrap; a long label is clipped, not stacked. */
+      flex-wrap: nowrap;
+    }
+
+    #inspectorPanel .panel-head .panel-tab {
+      flex: 1 1 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .panel-tab {
@@ -7687,6 +7772,70 @@
       color: var(--ink);
     }
 
+    /* The three scale-up findings, always in the same place once a project has blocks. Tone is
+       state (conflict / pending / ok), not decoration: a red chip is a decision still owed. */
+    .decision-strip {
+      margin-left: auto;
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .decision-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+      min-height: 28px;
+      padding: 3px 10px;
+      border: 1px solid var(--line);
+      border-left-width: 3px;
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      max-width: 300px;
+      min-width: 0;
+    }
+
+    .decision-chip:hover,
+    .decision-chip:focus-visible {
+      background: var(--panel-2, #f4f7f9);
+      outline: none;
+      box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+
+    .decision-chip-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      line-height: 1.1;
+    }
+
+    .decision-chip-value {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .decision-chip.conflict { border-left-color: var(--red); }
+    .decision-chip.conflict .decision-chip-value { color: var(--red); }
+    .decision-chip.pending { border-left-color: var(--orange); }
+    .decision-chip.pending .decision-chip-value { color: var(--orange); }
+    .decision-chip.ok { border-left-color: var(--green); }
+    .decision-chip.ok .decision-chip-value { color: var(--green); }
+    .decision-chip.muted { border-left-color: var(--line); }
+    .decision-chip.muted .decision-chip-value { color: var(--muted); font-weight: 500; }
+
     /* Clicking a step in the stepper can scroll the board instead of switching a
        tab, which is easy to miss; this outlines the region you were sent to. */
     .workflow-step-target {
@@ -7702,6 +7851,8 @@
 
     @media (max-width: 1240px) {
       .workflow-stepper-hint { margin-left: 0; flex-basis: 100%; }
+      .decision-strip { margin-left: 0; flex-basis: 100%; }
+      .decision-chip { flex: 1 1 0; max-width: none; }
     }
 
     @media (max-width: 600px) {
@@ -7761,6 +7912,7 @@
     }
 
     .data-quality-details { display: grid; gap: 10px; }
+    .data-quality-details[hidden] { display: none; }
 
     .readiness-summary.critical { color: var(--red); }
     .readiness-summary.important { color: var(--orange); }

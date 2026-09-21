@@ -203,9 +203,14 @@ APP_HTML = r"""<!doctype html>
       </div>
       <div class="panel-body stack">
         <div id="sourceProtocolTab" class="source-tab-view stack">
-          <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
+          <details id="sourceTextDetails" class="source-text-details" open>
+            <summary><span>Source text</span><span id="sourceTextSummary" class="muted small"></span></summary>
+            <textarea id="sourceInput" spellcheck="false" placeholder="Paste or edit the protocol text here, then load it into the annotated text view."></textarea>
+            <div class="row">
+              <button id="loadTextSide" class="primary">Load Protocol</button>
+            </div>
+          </details>
           <div class="row">
-            <button id="loadTextSide" class="primary">Load Protocol</button>
             <button id="createBlockSide">Create Block</button>
             <button id="clearProject">Clear Blocks</button>
           </div>
@@ -264,9 +269,9 @@ APP_HTML = r"""<!doctype html>
         <button id="toggleInspector" class="eye-button" title="Show/hide Phenomena/Group panel">&#8250;</button>
         <button class="help-button" data-help-topic="inspector" title="Help for this panel" aria-label="Help for the right-hand panel">?</button>
         <div class="panel-tabs" role="tablist" aria-label="Workflow categories">
-          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: description and phenomena of the selected block"><span class="panel-tab-step">1-2</span><span class="panel-tab-label">Phenomena/Group</span></button>
-          <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-step">5</span><span class="panel-tab-label">Heuristics</span></button>
-          <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-step">6</span><span class="panel-tab-label">Scale-Up</span></button>
+          <button class="panel-tab active" data-inspector-tab="inspect" role="tab" title="Steps 1-2: description and phenomena of the selected block"><span class="panel-tab-label">Phenomena/Group</span></button>
+          <button class="panel-tab" data-inspector-tab="heuristics" role="tab" title="Step 5: Heuristic rules application"><span class="panel-tab-label">Heuristics</span></button>
+          <button class="panel-tab" data-inspector-tab="scale" role="tab" title="Step 6: Preliminary scheduling"><span class="panel-tab-label">Scale-Up</span></button>
         </div>
       </div>
       <div class="panel-body stack">

@@ -863,6 +863,9 @@ async function renderTutorialStep() {
   const step = tutorialSteps[state.tutorialIndex] || tutorialSteps[0];
   await Promise.resolve(step.action?.());
   const target = document.querySelector(step.target);
+  // A target inside a folded section (the source text once blocks exist) has no box to spotlight.
+  const fold = target?.closest?.("details");
+  if (fold && !fold.open) fold.open = true;
   // Scroll to what the step is about: the anchor when there is one, else the target.
   tutorialScrollTargetIntoView(tutorialAnchorElement(step) || target);
   positionTutorialStep(step);

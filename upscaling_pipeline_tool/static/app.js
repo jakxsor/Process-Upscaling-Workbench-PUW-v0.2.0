@@ -514,6 +514,18 @@
       if (button) button.disabled = !undoStack.length;
     }
 
+    // What a group card shows on the zoomed-out board: id, unit and task, nothing else.
+    function groupLodLabelHtml(group) {
+      const unit = String(group.selectedUnit || "").trim() || "no unit selected";
+      return `
+        <div class="group-lod" aria-hidden="true">
+          <span class="group-lod-id">${escapeHtml(group.id)}</span>
+          <strong class="group-lod-unit">${escapeHtml(unit)}</strong>
+          <span class="group-lod-task">${escapeHtml(group.task || "")}</span>
+        </div>
+      `;
+    }
+
     function nodeWidth(blockCount, kind = "group") {
       const count = Math.max(1, blockCount);
       if (state.boardCompact && kind !== "draft") return 240;
@@ -2968,7 +2980,26 @@
       }
     }
 
+    // The textarea and the annotated view show the same text. Once blocks exist the annotated view
+    // is the working copy, so the textarea folds away; it reopens when the project is cleared. A
+    // fold the user changed by hand is left alone until the block count crosses zero again.
+    function syncSourceTextFold() {
+      const details = $("sourceTextDetails");
+      if (!details) return;
+      const hasBlocks = state.blocks.length > 0;
+      if (hasBlocks !== Boolean(state.sourceTextFolded)) {
+        details.open = !hasBlocks;
+        state.sourceTextFolded = hasBlocks;
+      }
+      const summary = $("sourceTextSummary");
+      if (summary) {
+        const words = String(state.text || "").trim().split(/\s+/).filter(Boolean).length;
+        summary.textContent = details.open ? "" : words ? `${words} words loaded` : "";
+      }
+    }
+
     function renderAnnotatedText() {
+      syncSourceTextFold();
       const root = $("annotatedText");
       if (!state.text) {
         root.innerHTML = `<span class="muted">Load text to start annotating blocks.</span>`;
@@ -3147,6 +3178,7 @@
           return `
             <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
               <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
+              ${groupLodLabelHtml(group)}
               <div class="group-head">
                 <div class="row">
                   ${unitCategoryBadgeHtml(group)}
@@ -3168,6 +3200,7 @@
         return `
           <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
             <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
+            ${groupLodLabelHtml(group)}
             <div class="group-head">
               <div class="row">
                 ${unitCategoryBadgeHtml(group, "detailed")}
@@ -3187,7 +3220,7 @@
       root.classList.toggle("has-group-drawer", boardClearance > 0);
       root.innerHTML = `
         <div class="board-space" style="width:${displayBoard.width * state.zoom}px; height:${displayBoard.height * state.zoom}px">
-          <div class="board-canvas" style="width:${displayBoard.width}px; height:${displayBoard.height}px; transform:scale(${state.zoom})">
+          <div class="board-canvas${state.zoom < boardLodZoom ? " lod-far" : ""}" style="width:${displayBoard.width}px; height:${displayBoard.height}px; transform:scale(${state.zoom}); --zoom:${state.zoom}">
             ${renderLinksSvg(displayBoard)}
             ${draftHtml}
             ${groupHtml}
@@ -16549,12 +16582,19 @@
       }
     }
 
+    // Below this zoom a full group card is unreadable (a 430 px card is 150 px wide at 35%), so
+    // the board switches to a map: each card shows only its id and unit at a size that stays
+    // legible on screen. Every card is drawn at either level; nothing is re-rendered on zoom.
+    const boardLodZoom = 0.55;
+
     function applyZoomToBoard() {
       $("zoomReadout").textContent = `${Math.round(state.zoom * 100)}%`;
       const flow = $("groupFlow");
       const space = flow.querySelector(".board-space");
       const canvas = flow.querySelector(".board-canvas");
       if (!space || !canvas) return;
+      canvas.style.setProperty("--zoom", String(state.zoom));
+      canvas.classList.toggle("lod-far", state.zoom < boardLodZoom);
       const board = boardWithDrawerClearance(boardBounds());
       space.style.width = `${board.width * state.zoom}px`;
       space.style.height = `${board.height * state.zoom}px`;
@@ -16864,6 +16904,11 @@
       renderDataReadiness();
     });
     $("workflowStepper").addEventListener("click", event => {
+      const decision = event.target.closest("[data-decision]");
+      if (decision) {
+        goToDecision(decision.dataset.decision);
+        return;
+      }
       const button = event.target.closest("[data-workflow-step]");
       if (!button) return;
       const step = workflowSteps.find(item => item.id === Number(button.dataset.workflowStep));

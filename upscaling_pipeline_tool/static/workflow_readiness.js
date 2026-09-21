@@ -226,8 +226,10 @@
         const step = workflowSteps.find(item => item.id === id);
         flag.classList.toggle("done", info.status === "done");
         flag.classList.toggle("partial", info.status === "partial");
+        // The stepper is the one place that numbers the steps. Here the marker only says whether
+        // this panel's step is done, so a reader is not counting in two places.
         const marker = flag.querySelector(".step-flag-num");
-        if (marker) marker.textContent = info.status === "done" ? "✓" : String(id);
+        if (marker) marker.textContent = info.status === "done" ? "✓" : "";
         const note = flag.querySelector(".step-flag-note");
         if (note) note.textContent = info.short || "";
         if (step) flag.setAttribute("aria-label", `Step ${id}, ${step.paperName}: ${info.hint || ""}`);
@@ -250,14 +252,113 @@
           </button>
         `;
       }).join(`<span class="workflow-step-arrow">→</span>`);
-      const firstOpen = workflowSteps.find(step => (statuses[step.id] || {}).status !== "done");
-      const hintTarget = firstOpen || workflowSteps[workflowSteps.length - 1];
-      const hintInfo = statuses[hintTarget.id] || { hint: "" };
+      // Before any block exists the row coaches the first move. Once the project has blocks, the
+      // same space holds the three findings a scale-up reader opens the tool for, each one a link
+      // to where it is settled; the per-step hint stays on the step button's tooltip.
+      if (!state.blocks.length) {
+        const firstOpen = workflowSteps.find(step => (statuses[step.id] || {}).status !== "done");
+        const hintTarget = firstOpen || workflowSteps[workflowSteps.length - 1];
+        const hintInfo = statuses[hintTarget.id] || { hint: "" };
+        root.insertAdjacentHTML("beforeend", `
+          <span class="workflow-stepper-hint">
+            <strong>Step ${hintTarget.id}. ${escapeHtml(hintTarget.paperName)}:</strong> ${escapeHtml(hintInfo.hint || "")}
+          </span>
+        `);
+        return;
+      }
+      const card = decisionCardModel();
       root.insertAdjacentHTML("beforeend", `
-        <span class="workflow-stepper-hint">
-          <strong>Step ${hintTarget.id}. ${escapeHtml(hintTarget.paperName)}:</strong> ${escapeHtml(hintInfo.hint || "")}
-        </span>
+        <div class="decision-strip" role="group" aria-label="Scale-up findings">
+          ${card.map(item => `
+            <button class="decision-chip ${item.tone}" data-decision="${escapeAttr(item.id)}" title="${escapeAttr(item.detail)}">
+              <span class="decision-chip-label">${escapeHtml(item.label)}</span>
+              <span class="decision-chip-value">${escapeHtml(item.value)}</span>
+            </button>
+          `).join("")}
+        </div>
       `);
+    }
+
+    // The three findings that decide whether a lab route scales: does the reactor fit, what sets
+    // the cycle time, and how much of the inventory is still missing. Each is computed from the
+    // models the panels already use, so the strip can never disagree with the panel it links to.
+    function decisionCardModel() {
+      const items = [];
+      const number = value => (typeof formatDisplayNumber === "function" ? formatDisplayNumber(value) : String(value));
+
+      const scale = scaleModel();
+      const sizing = scale.reactorSizing || {};
+      const requiredM3 = parseStreamQuantity(sizing.reactorVolumeM3);
+      const reactorId = reactorSizingGroupId(scale.basis, inferReferenceStream(scale.basis));
+      const reactor = reactorId && state.groups[reactorId] ? ensureGroup(reactorId) : null;
+      const declaredM3 = reactor ? volumeToM3(reactor.schedule?.capacityAmount, reactor.schedule?.capacityUnit) : NaN;
+      if (Number.isFinite(requiredM3) && requiredM3 > 0 && Number.isFinite(declaredM3) && declaredM3 > 0) {
+        const conflict = requiredM3 > declaredM3;
+        items.push({
+          id: "capacity",
+          tone: conflict ? "conflict" : "ok",
+          label: "Reactor",
+          value: conflict
+            ? `${number(requiredM3)} m³ needed, ${number(declaredM3)} m³ declared`
+            : `${number(requiredM3)} m³ fits ${number(declaredM3)} m³`,
+          detail: conflict
+            ? `${reactorId} needs ${number(requiredM3)} m³ at the target rate but is declared at ${number(declaredM3)} m³: split the batch, add a train, or enlarge the vessel. Opens the scale-up panel.`
+            : `${reactorId} needs ${number(requiredM3)} m³ at the target rate, within its declared ${number(declaredM3)} m³. Opens the scale-up panel.`
+        });
+      } else if (Number.isFinite(requiredM3) && requiredM3 > 0) {
+        items.push({ id: "capacity", tone: "pending", label: "Reactor", value: `${number(requiredM3)} m³ needed, no capacity declared`, detail: `Declare ${reactorId || "the reactor"}'s capacity in its schedule to check the fit. Opens the scale-up panel.` });
+      } else {
+        items.push({ id: "capacity", tone: "muted", label: "Reactor", value: "needs a production target", detail: "Set the target product and rate in the scale-up panel to size the reactor." });
+      }
+
+      const gantt = taskScheduleModel();
+      const cycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
+      if (gantt.bottleneck) {
+        const gap = Number.isFinite(gantt.bottleneckGapH) ? `, ${number(gantt.bottleneckGapH)} h ahead of the next task` : "";
+        items.push({ id: "bottleneck", tone: "conflict", label: "Cycle", value: `${gantt.bottleneck.groupId} sets ${number(cycle)} h`, detail: `${gantt.bottleneck.groupId} is the longest task on the critical path${gap}; every batch waits for it. Opens the schedule.` });
+      } else if (gantt.missingDurationCount) {
+        items.push({ id: "bottleneck", tone: "pending", label: "Cycle", value: `${gantt.missingDurationCount} task${gantt.missingDurationCount === 1 ? "" : "s"} without a duration`, detail: "The cycle time and its bottleneck need a duration on every task. Opens the schedule." });
+      } else if (Number.isFinite(cycle)) {
+        items.push({ id: "bottleneck", tone: "ok", label: "Cycle", value: `${number(cycle)} h, no single bottleneck`, detail: "No task on the critical path is clearly longer than the next. Opens the schedule." });
+      } else {
+        items.push({ id: "bottleneck", tone: "muted", label: "Cycle", value: "no durations yet", detail: "Add task durations to compute the cycle time. Opens the schedule." });
+      }
+
+      const readiness = dataReadinessModel();
+      const provenance = dataProvenanceModel();
+      const missingStreams = provenance.counts.missing || 0;
+      const parts = [];
+      if (readiness.missingCritical) parts.push(`${readiness.missingCritical} critical`);
+      if (readiness.missingImportant) parts.push(`${readiness.missingImportant} important`);
+      if (missingStreams) parts.push(`${missingStreams} stream${missingStreams === 1 ? "" : "s"} unquantified`);
+      const gapTone = readiness.missingCritical ? "conflict" : readiness.missingImportant || missingStreams ? "pending" : "ok";
+      items.push({
+        id: "gaps",
+        tone: provenance.total ? gapTone : "muted",
+        label: "Data",
+        value: !provenance.total ? "no streams yet" : parts.length ? `${parts.join(", ")} missing` : "required values present",
+        detail: !provenance.total
+          ? "Declare material streams on the blocks to see what the inventory still lacks."
+          : `${provenance.total} stream rows: ${["reported", "calculated", "estimated"].map(status => `${provenance.counts[status] || 0} ${status}`).join(", ")}${readiness.confirmCount ? `; ${readiness.confirmCount} item${readiness.confirmCount === 1 ? "" : "s"} to confirm by hand` : ""}. Opens the data quality detail.`
+      });
+      return items;
+    }
+
+    function goToDecision(id) {
+      if (id === "capacity") {
+        goToWorkflowStep(workflowSteps.find(step => step.id === 6));
+        return;
+      }
+      if (id === "bottleneck") {
+        openGanttModal();
+        return;
+      }
+      state.activeInspectorTab = "inspect";
+      state.showDataReadiness = true;
+      state.showLcaReadiness = true;
+      renderAll();
+      flashWorkflowTarget("dataQualityDetails");
+      $("dataQualityDetails")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
 
     function dataReadinessModel() {
@@ -387,6 +488,9 @@
         panel.hidden = true;
         if (details) details.hidden = true;
         if (toggle) toggle.hidden = true;
+        // The detail cards keep whatever the previous project painted unless they are reset here.
+        renderDataProvenance();
+        renderLcaReadiness();
         return;
       }
       if (toggle) toggle.hidden = false;
