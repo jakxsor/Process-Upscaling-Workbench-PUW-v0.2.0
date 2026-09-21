@@ -415,6 +415,19 @@
           wasteStreams: group.wasteStreams,
           ventStreams: group.ventStreams,
           recycleStreams: group.recycleStreams,
+          isProduct: Boolean(group.isProduct),
+          layout: group.exportLayout ? {
+            accent: group.exportLayout.accent,
+            tagTop: group.exportLayout.tagTop,
+            tagHeight: group.exportLayout.tagHeight,
+            unitLines: group.exportLayout.unitLines,
+            footerLine: group.exportLayout.footerLine,
+            taskLine: group.exportLayout.taskLine,
+            taskY: group.exportLayout.taskY,
+            productY: group.exportLayout.productY
+          } : null,
+          // The PNG is added asynchronously by attachFlowsheetSymbolImages before upload.
+          symbol: group.exportLayout ? { ...group.exportLayout.symbolFrame, svg: flowsheetStandaloneSymbolSvg(group), png: "" } : null,
           boundaryOutlets: state.flowsheetShowAuxiliaryArrows === false ? [] : (group.boundaryOutlets || []).map(outlet => ({
             id: outlet.id,
             short: outlet.short,
@@ -433,6 +446,29 @@
       };
     }
 
+    // Rasterises each unit symbol at 4x so the slide stays sharp when printed. The SVG travels too:
+    // current PowerPoint shows the vector and can convert it to editable shapes, older viewers fall
+    // back to the PNG. A symbol that fails to decode is simply left out of the slide.
+    async function attachFlowsheetSymbolImages(flowsheet, scale = 4) {
+      for (const group of flowsheet.groups) {
+        const symbol = group.symbol;
+        if (!symbol?.svg) continue;
+        try {
+          const image = new Image();
+          image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(symbol.svg)}`;
+          await image.decode();
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.ceil(symbol.w * scale);
+          canvas.height = Math.ceil(symbol.h * scale);
+          canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+          symbol.png = canvas.toDataURL("image/png");
+        } catch (err) {
+          group.symbol = null;
+        }
+      }
+      return flowsheet;
+    }
+
     async function downloadFlowsheetPptx() {
       const button = $("downloadFlowsheetPptx");
       const originalLabel = button?.textContent || "";
@@ -441,6 +477,7 @@
       try {
         const flowsheet = buildFlowsheetPowerPointExport();
         if (!flowsheet.groups.length) throw new Error("Create at least one task group before exporting PowerPoint.");
+        await attachFlowsheetSymbolImages(flowsheet);
         const response = await fetch("/api/flowsheet-pptx", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

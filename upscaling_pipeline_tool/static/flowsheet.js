@@ -139,6 +139,21 @@
       return `<rect x="${x + w * 0.08}" y="${y + h * 0.16}" width="${w * 0.84}" height="${h * 0.64}" rx="6" fill="${shellFill}" stroke="${stroke}" stroke-width="1.8"></rect>`;
     }
 
+    // Some symbols draw past their nominal frame (nozzles, column heads), so an exported symbol image
+    // carries this margin on every side. It matches the unit card's own inset, so the exported picture
+    // lines up with the card instead of overhanging it.
+    const flowsheetSymbolPad = 10;
+
+    // A unit's equipment symbol alone, as a self-contained SVG in drawing coordinates. PowerPoint has
+    // no primitive for a jacketed reactor or a tray column, so the export places this as a picture.
+    function flowsheetStandaloneSymbolSvg(box) {
+      const layout = box?.exportLayout;
+      if (!layout) return "";
+      const frame = layout.symbolFrame;
+      const markup = flowsheetShapeMarkup(box.subcategory, box.x, frame.y + flowsheetSymbolPad, box.w, frame.h - flowsheetSymbolPad * 2, layout.accent);
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.w}" height="${frame.h}" viewBox="${frame.x} ${frame.y} ${frame.w} ${frame.h}" font-family="Arial, Helvetica, sans-serif">${markup}</svg>`;
+    }
+
     const flowsheetWasteFates = ["wastewater", "solid waste", "purge", "loss", "unreacted reagent"];
 
     // Where an outlet goes once it leaves the plant. Every waste or vent stream that has no
@@ -1466,6 +1481,18 @@
         const unitLines = wrapSvgText(box.selectedUnit, showUnitDetails ? 24 : 28);
         const taskLine = flowsheetClipText(box.task, 38, 12);
         const selected = state.selectedFlowsheetGroupId === box.id;
+        // The PowerPoint export rebuilds this card from the same geometry instead of guessing it.
+        box.exportLayout = {
+          symbolFrame: { x: box.x - flowsheetSymbolPad, y: symbolY - flowsheetSymbolPad, w: box.w + flowsheetSymbolPad * 2, h: symbolH + flowsheetSymbolPad * 2 },
+          accent: strokeColor,
+          tagTop: tagY - 12,
+          tagHeight,
+          unitLines: unitLines.slice(0, showUnitDetails ? 1 : 2),
+          footerLine: !showUnitDetails ? footerLine : "",
+          taskLine,
+          taskY: box.y + box.h + (showUnitDetails ? 18 : 34),
+          productY: box.y + box.h + (showUnitDetails ? 34 : 50)
+        };
         return `
           <g class="flowsheet-unit ${selected ? "selected" : ""}" data-flowsheet-group="${escapeAttr(box.id)}">
             ${box.concurrent ? `<rect x="${box.x - 24}" y="${box.y - 24}" width="${box.w + 20}" height="${box.h + 20}" rx="7" fill="#eef2f4" stroke="#9aa7b0" stroke-width="1" opacity="0.55"></rect>` : ""}

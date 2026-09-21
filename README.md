@@ -60,6 +60,13 @@ and low-confidence scale-up risks.
   treatment, to waste treatment, to air), one per unit and boundary, numbered in
   the stream table and totalled in a discharge box next to the product; the
   PowerPoint export carries them.
+- Export the flowsheet to PowerPoint as editable objects, not a picture of a
+  drawing. Each unit is one group holding its equipment symbol, tag, load and
+  task, so it moves as a piece; each stream is one group holding its arrow and
+  label. The equipment symbol is the one picture, placed behind the unit's text
+  as a vector with a PNG fallback, because a jacketed reactor or a tray column
+  has no PowerPoint primitive. Text is sized in drawing units, so labels keep
+  their proportions on a large flowsheet instead of overflowing their shapes.
 - Build a schematic Gantt chart and identify bottlenecks.
 - Show a Gantt evidence layer with operation class, expected scale behaviour,
   missing data, schedule margin, and compact references.

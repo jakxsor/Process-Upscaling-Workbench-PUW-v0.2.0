@@ -1,27 +1,63 @@
 """Native PowerPoint export for the editable flowsheet view.
 
-The generated deck intentionally uses ordinary PowerPoint shapes, connector
-segments, and text boxes instead of embedding the SVG as an image. That keeps
-the slide editable after export.
+Everything a user edits (frames, labels, arrows, the stream table) is an ordinary
+PowerPoint shape, connector or text box. Equipment symbols are the exception: a
+jacketed reactor or a tray column has no PowerPoint primitive, so each symbol is
+placed as a picture behind its unit's text, carrying the vector SVG with a PNG
+fallback. Each unit, stream and box is one named group, so it moves as one piece.
 """
 
 from __future__ import annotations
 
+import base64
 import io
 import re
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
-from pptx.enum.text import MSO_ANCHOR
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+from pptx.opc.package import Part
+from pptx.opc.packuri import PackURI
 from pptx.oxml import parse_xml
 from pptx.oxml.ns import nsdecls
 from pptx.util import Emu, Pt
 
 
 EMU_PER_INCH = 914400
+SVG_BLIP_EXTENSION = "{96DAC541-7B7A-43D3-8B79-37D633B846F1}"
+SVG_MAIN_NS = "http://schemas.microsoft.com/office/drawing/2016/SVG/main"
+MAX_SYMBOL_PNG_BYTES = 3 * 1024 * 1024
+MAX_SYMBOL_SVG_BYTES = 200 * 1024
+UNSAFE_SVG = re.compile(r"<script|foreignobject|javascript:|href\s*=|\son[a-z]+\s*=", re.IGNORECASE)
+
+
+def _symbol_png(symbol: dict[str, Any]) -> bytes | None:
+    """The PNG bytes of an exported symbol, or None when the payload is not a PNG data URL."""
+    value = symbol.get("png")
+    prefix = "data:image/png;base64,"
+    if not isinstance(value, str) or not value.startswith(prefix):
+        return None
+    try:
+        data = base64.b64decode(value[len(prefix):], validate=True)
+    except ValueError:
+        return None
+    if len(data) > MAX_SYMBOL_PNG_BYTES or not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    return data
+
+
+def _symbol_svg(symbol: dict[str, Any]) -> bytes | None:
+    """The symbol's SVG when it is a self-contained drawing: no scripts, handlers or references."""
+    value = symbol.get("svg")
+    if not isinstance(value, str) or not value.lstrip().startswith("<svg") or UNSAFE_SVG.search(value):
+        return None
+    data = value.encode("utf-8")
+    return data if len(data) <= MAX_SYMBOL_SVG_BYTES else None
 
 
 def _clean(value: Any, default: str = "") -> str:
@@ -106,6 +142,7 @@ def _category_label(category: Any) -> str:
 class _ShapeWriter:
     def __init__(self, slide: Any, scale: float, x_offset: float, y_offset: float) -> None:
         self.slide = slide
+        self.shapes = slide.shapes
         self.scale = scale
         self.x_offset = x_offset
         self.y_offset = y_offset
@@ -124,7 +161,7 @@ class _ShapeWriter:
 
     def rect(self, x: Any, y: Any, w: Any, h: Any, *, fill: str, line: str, radius: bool = False, name: str = "Shape") -> None:
         kind = MSO_SHAPE.ROUNDED_RECTANGLE if radius else MSO_SHAPE.RECTANGLE
-        shape = self.slide.shapes.add_shape(
+        shape = self.shapes.add_shape(
             kind, Emu(self.map_x(x)), Emu(self.map_y(y)), Emu(self.map_len(w)), Emu(self.map_len(h))
         )
         shape.name = _clean(name, "Shape")
@@ -133,9 +170,13 @@ class _ShapeWriter:
         shape.line.color.rgb = RGBColor.from_string(_color(line))
         shape.line.width = Pt(1)
 
-    def textbox(self, x: Any, y: Any, w: Any, h: Any, text: str, *, size: float = 10, color: str = "172027", bold: bool = False, name: str = "Text", max_lines: int = 4) -> None:
-        lines = _wrap(text, max(10, int(_float(w) / max(size * 0.45, 4))), max_lines)
-        shape = self.slide.shapes.add_textbox(
+    def font_pt(self, size_px: float) -> float:
+        """A font size given in drawing pixels, scaled with the geometry so text keeps its proportions."""
+        return max(4.5, _float(size_px) * self.scale / 12700)
+
+    def textbox(self, x: Any, y: Any, w: Any, h: Any, text: str, *, size: float = 12, color: str = "172027", bold: bool = False, name: str = "Text", max_lines: int = 4, align: str = "left") -> None:
+        lines = _wrap(text, max(6, int(_float(w) / max(_float(size) * 0.56, 3))), max_lines)
+        shape = self.shapes.add_textbox(
             Emu(self.map_x(x)), Emu(self.map_y(y)), Emu(self.map_len(w)), Emu(self.map_len(h))
         )
         shape.name = _clean(name, "Text")
@@ -149,7 +190,8 @@ class _ShapeWriter:
             paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
             paragraph.text = line_text
             paragraph.font.name = "Aptos"
-            paragraph.font.size = Pt(size)
+            paragraph.font.size = Pt(self.font_pt(size))
+            paragraph.alignment = {"center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}.get(align, PP_ALIGN.LEFT)
             paragraph.font.bold = bold
             paragraph.font.color.rgb = RGBColor.from_string(_color(color))
             paragraph.space_before = paragraph.space_after = Pt(0)
@@ -158,12 +200,12 @@ class _ShapeWriter:
         if not _clean(text):
             return
         self.rect(x, y, w, 18, fill="FFFFFF", line="D6E0E5", radius=True, name=f"{name} background")
-        self.textbox(_float(x) + 6, _float(y) + 3, max(1, _float(w) - 12), 12, text, size=8.3, color=color, bold=True, name=name, max_lines=1)
+        self.textbox(_float(x) + 6, _float(y) + 3, max(1, _float(w) - 12), 12, text, size=9.3, color=color, bold=True, name=name, max_lines=1)
 
     def line(self, x1: Any, y1: Any, x2: Any, y2: Any, *, color: str = "172027", width: float = 2.2, arrow: bool = False, dash: bool = False) -> None:
         x1e, y1e = self.map_x(x1), self.map_y(y1)
         x2e, y2e = self.map_x(x2), self.map_y(y2)
-        connector = self.slide.shapes.add_connector(
+        connector = self.shapes.add_connector(
             MSO_CONNECTOR.STRAIGHT, Emu(x1e), Emu(y1e), Emu(x2e), Emu(y2e)
         )
         connector.name = "Connector"
@@ -175,6 +217,38 @@ class _ShapeWriter:
             connector.line._get_or_add_ln().append(
                 parse_xml(f'<a:tailEnd {nsdecls("a")} type="triangle"/>')
             )
+
+    @contextmanager
+    def group(self, name: str) -> Iterator[Any]:
+        """Draw into one named PowerPoint group; a group that receives no shape is removed."""
+        group = self.shapes.add_group_shape()
+        group.name = _clean(name, "Group")[:120]
+        outer = self.shapes
+        self.shapes = group.shapes
+        try:
+            yield group
+        finally:
+            self.shapes = outer
+            if not len(group.shapes):
+                group._element.getparent().remove(group._element)
+
+    def picture(self, x: Any, y: Any, w: Any, h: Any, png: bytes, *, svg: bytes | None = None, name: str = "Picture") -> None:
+        picture = self.shapes.add_picture(
+            io.BytesIO(png), Emu(self.map_x(x)), Emu(self.map_y(y)), Emu(self.map_len(w)), Emu(self.map_len(h))
+        )
+        picture.name = _clean(name, "Picture")
+        if not svg:
+            return
+        # Office 2016+ reads the SVG through this blip extension and keeps the PNG as the fallback
+        # for viewers without SVG support.
+        slide_part = self.slide.part
+        partname = PackURI(slide_part.package.next_partname("/ppt/media/image%d.svg"))
+        svg_part = Part(partname, "image/svg+xml", slide_part.package, svg)
+        rel_id = slide_part.relate_to(svg_part, RT.IMAGE)
+        picture._element.blipFill.blip.append(parse_xml(
+            f'<a:extLst {nsdecls("a", "r")}><a:ext uri="{SVG_BLIP_EXTENSION}">'
+            f'<asvg:svgBlip xmlns:asvg="{SVG_MAIN_NS}" r:embed="{rel_id}"/></a:ext></a:extLst>'
+        ))
 
 
 def _wrap(text: Any, width: int, max_lines: int = 2) -> list[str]:
@@ -344,40 +418,113 @@ def _draw_title_block(writer: _ShapeWriter, flowsheet: dict[str, Any], diagram_w
         return
     x = max(620, diagram_w - 470)
     y = diagram_h - 92
-    writer.rect(x, y, 440, 56, fill="FFFFFF", line="172027", name="Title block")
-    writer.textbox(x + 8, y + 4, 110, 18, "DRAWING", size=8, bold=True)
-    missing = int(_float(block.get("missing"), 0))
-    writer.textbox(x + 120, y + 4, 310, 18, f"{_clean(block.get('drawing'), 'PFD-01')} - {_clean(block.get('date'))} - rev. {_clean(block.get('revision'), 'draft')}", size=8)
-    writer.textbox(x + 8, y + 30, 110, 18, "BASIS", size=8, bold=True)
-    basis = _clean(block.get("basis"), "lab batch")
-    writer.textbox(x + 120, y + 30, 310, 18, f"{basis}{f' - {missing} n.q.' if missing else ''}", size=8)
+    with writer.group("Title block"):
+        writer.rect(x, y, 440, 56, fill="FFFFFF", line="172027", name="Title block frame")
+        writer.textbox(x + 10, y + 7, 110, 16, "DRAWING", size=10, bold=True)
+        missing = int(_float(block.get("missing"), 0))
+        writer.textbox(x + 130, y + 7, 300, 16, f"{_clean(block.get('drawing'), 'PFD-01')} - {_clean(block.get('date'))} - rev. {_clean(block.get('revision'), 'draft')}", size=10)
+        writer.textbox(x + 10, y + 34, 110, 16, "BASIS", size=10, bold=True)
+        basis = _clean(block.get("basis"), "lab batch")
+        writer.textbox(x + 130, y + 34, 300, 16, f"{basis}{f' - {missing} n.q.' if missing else ''}", size=10)
 
 
 def _draw_legend(writer: _ShapeWriter, diagram_w: float, diagram_h: float, category_styles: dict[str, tuple[str, str]], legend_y: float | None = None) -> None:
     x = 36
     y = max(96, diagram_h - 78) if legend_y is None else legend_y
-    writer.rect(x - 10, y - 18, min(790, diagram_w - 52), 58, fill="FFFFFF", line="D6E0E5", radius=True, name="Legend Panel")
-    writer.textbox(x, y - 12, 72, 14, "Legend", size=9.5, color="657480", bold=True, name="Legend title")
+    with writer.group("Legend"):
+        writer.rect(x - 10, y - 18, min(790, diagram_w - 52), 58, fill="FFFFFF", line="D6E0E5", radius=True, name="Legend Panel")
+        writer.textbox(x, y - 13, 72, 14, "Legend", size=11, color="657480", bold=True, name="Legend title")
+        line_items = [
+            ("Process", "172027", False),
+            ("Recycle", "25834A", True),
+            ("Waste", "965D00", False),
+            ("Vent/VOC", "657480", True),
+        ]
+        cursor_x = x + 78
+        for label, color, dash in line_items:
+            writer.line(cursor_x, y - 4, cursor_x + 28, y - 4, color=color, width=2.2, arrow=True, dash=dash)
+            writer.textbox(cursor_x + 36, y - 11, 74, 14, label, size=11, color=color, bold=True, name=f"Legend {label}")
+            cursor_x += 114
+        cursor_x = x + 78
+        for category in ["reactor", "separation", "utility", "storage", "waste"]:
+            fill, line = category_styles[category]
+            writer.rect(cursor_x, y + 17, 13, 10, fill=fill, line=line, radius=True, name=f"Legend {_category_label(category)} swatch")
+            writer.textbox(cursor_x + 18, y + 14, 80, 14, _category_label(category), size=11, color="40515D", bold=True, name=f"Legend {_category_label(category)}")
+            cursor_x += 104
 
-    line_items = [
-        ("Process", "172027", False),
-        ("Recycle", "25834A", True),
-        ("Waste", "965D00", False),
-        ("Vent/VOC", "657480", True),
-    ]
-    cursor_x = x + 78
-    for label, color, dash in line_items:
-        writer.line(cursor_x, y - 4, cursor_x + 28, y - 4, color=color, width=2.2, arrow=True, dash=dash)
-        writer.textbox(cursor_x + 36, y - 11, 70, 14, label, size=8.2, color=color, bold=True, name=f"Legend {label}")
-        cursor_x += 114
 
-    category_items = ["reactor", "separation", "utility", "storage", "waste"]
-    cursor_x = x + 78
-    for category in category_items:
-        fill, line = category_styles[category]
-        writer.rect(cursor_x, y + 17, 13, 10, fill=fill, line=line, radius=True, name=f"Legend {_category_label(category)} swatch")
-        writer.textbox(cursor_x + 18, y + 15, 72, 14, _category_label(category), size=8.0, color="40515D", bold=True, name=f"Legend {_category_label(category)}")
-        cursor_x += 104
+def _link_group_name(link: dict[str, Any], kind: str) -> str:
+    tag = _clean(link.get("tag"))
+    return f"{tag + ' ' if tag else ''}{_clean(link.get('from'))} to {_clean(link.get('to'))} ({kind})"
+
+
+def _draw_boundary_outlets(writer: _ShapeWriter, group: dict[str, Any]) -> None:
+    """Off-page connectors for a unit's open wastes and vents, one per destination class."""
+    for outlet in group.get("boundaryOutlets") or []:
+        if not isinstance(outlet, dict):
+            continue
+        kind = _clean(outlet.get("kind"), "waste")
+        color = "657480" if kind == "vent" else "965D00"
+        raw_points = outlet.get("points")
+        points = [(_float(p.get("x")), _float(p.get("y"))) for p in raw_points if isinstance(p, dict)] if isinstance(raw_points, list) else []
+        if len(points) < 2:
+            gx, gy, gw, gh = (_float(group.get(key)) for key in ("x", "y", "w", "h"))
+            points = [(gx + gw * 0.76, gy + gh), (gx + gw * 0.76, gy + gh + 58)]
+        _draw_polyline(writer, points, color=color, width=2.0, arrow=False, dash=kind == "vent")
+        end_x, end_y = points[-1]
+        writer.rect(end_x - 9, end_y, 18, 14, fill="EEF2F4" if kind == "vent" else "FDF6EA", line=color, name=f"{_clean(group.get('id'))} boundary {_clean(outlet.get('id'))}")
+        names = ", ".join(_clean(s.get("name")) for s in (outlet.get("streams") or []) if isinstance(s, dict) and _clean(s.get("name")))
+        kg = _float(outlet.get("kg"), 0)
+        text = f"{_clean(outlet.get('tag'))} {_clean(outlet.get('short'), 'to boundary')}: {names}".strip()
+        if kg > 0:
+            text += f" ({kg:.3g} kg)"
+        writer.label(end_x + 14, end_y - 2, 170, _clip_words(text, 34), color=color, name="Boundary outlet")
+
+
+def _draw_unit(writer: _ShapeWriter, group: dict[str, Any], category_styles: dict[str, tuple[str, str]]) -> None:
+    """One unit as one group: frame, equipment symbol picture behind the text, tag, notes and outlets."""
+    fill, line = category_styles.get(_clean(group.get("category")), ("F5F9FF", "1671C2"))
+    x, y, w, h = _float(group.get("x")), _float(group.get("y")), _float(group.get("w")), _float(group.get("h"))
+    unit_id = _clean(group.get("id"))
+    unit_number = int(_float(group.get("unitNumber"), 0))
+    layout = group.get("layout") if isinstance(group.get("layout"), dict) else {}
+    accent = _color(_clean(layout.get("accent"), line)).upper()
+    symbol = group.get("symbol") if isinstance(group.get("symbol"), dict) else {}
+    png = _symbol_png(symbol) if symbol else None
+    title = f"U{unit_number or ''} {unit_id}".strip()
+    with writer.group(f"{title} {_clean(group.get('selectedUnit'), 'unit')}"):
+        if group.get("concurrent"):
+            writer.rect(x - 24, y - 24, w + 20, h + 20, fill="EEF2F4", line="9AA7B0", radius=True, name=f"{unit_id} concurrent lane")
+        writer.rect(x - 10, y - 10, w + 20, h + 20, fill="FFFFFF", line="D6E0E5", radius=True, name=f"{unit_id} frame")
+        writer.rect(x - 10, y - 10, 4, h + 20, fill=accent, line=accent, name=f"{unit_id} category stripe")
+        if png:
+            writer.picture(symbol.get("x"), symbol.get("y"), symbol.get("w"), symbol.get("h"), png, svg=_symbol_svg(symbol), name=f"{unit_id} equipment symbol")
+        else:
+            writer.textbox(x + 20, y + 40, w - 40, 30, _category_label(group.get("category")), size=15, color=accent, bold=True, name=f"{unit_id} category", align="center")
+        tag_top = _float(layout.get("tagTop"), y + h * 0.7)
+        tag_h = max(30, _float(layout.get("tagHeight"), h * 0.26))
+        writer.rect(x + 16, tag_top, w - 32, tag_h, fill=fill, line=accent, name=f"{unit_id} tag")
+        writer.textbox(x + 16, tag_top + 2, w - 32, 16, title, size=12, color=accent, bold=True, name=f"{unit_id} number", align="center")
+        unit_lines = [_clean(item) for item in layout.get("unitLines") or [] if _clean(item)] or [_clip_words(_clean(group.get("selectedUnit"), "unassigned unit"), 36)]
+        writer.textbox(x + 20, tag_top + 18, w - 40, max(14, tag_h - 18), " ".join(unit_lines), size=11.5, bold=True, name=f"{unit_id} unit", max_lines=2, align="center")
+        footer = _clean(layout.get("footerLine"))
+        if footer:
+            writer.textbox(x - 10, y + h + 7, w + 20, 14, _clip_words(footer, 46), size=10.5, color=accent, bold=True, name=f"{unit_id} load", max_lines=1, align="center")
+        task = _clean(layout.get("taskLine")) or _clip_words(_clean(group.get("task")), 42)
+        if task:
+            writer.textbox(x - 10, _float(layout.get("taskY"), y + h + 34) - 11, w + 20, 14, task, size=10.2, color="657480", name=f"{unit_id} task", max_lines=1, align="center")
+        if group.get("concurrent"):
+            writer.textbox(x + w - 100, y - 6, 92, 14, "concurrent", size=9.5, color="6C7680", bold=True, name=f"{unit_id} concurrent", max_lines=1, align="right")
+        if group.get("isProduct"):
+            writer.textbox(x - 10, _float(layout.get("productY"), y + h + 50) - 11, w + 20, 14, "final product", size=11, color="286D3F", bold=True, name=f"{unit_id} product", max_lines=1, align="center")
+        balance = group.get("balance") if isinstance(group.get("balance"), dict) else {}
+        if balance.get("status") == "off":
+            delta = _float(balance.get("deltaPercent"), 0)
+            writer.textbox(x + w - 90, y + h - 6, 86, 14, f"balance {delta:+.1f}%", size=10, color="A23B3B", bold=True, name=f"{unit_id} balance flag", max_lines=1, align="right")
+        detail_lines = [_clean(item) for item in (group.get("detailLines") or []) if _clean(item)]
+        for index, item in enumerate(detail_lines[:2]):
+            writer.textbox(x + 14, y + h + 22 + index * 13, w - 8, 13, _clip_words(item, 44), size=9, color="40515D", max_lines=1, name=f"{unit_id} detail")
+        _draw_boundary_outlets(writer, group)
 
 
 def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
@@ -410,8 +557,9 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
     }
 
     writer.rect(0, 0, diagram_w, diagram_h, fill="FFFFFF", line="172027", name="Drawing Border")
-    writer.textbox(30, 28, 620, 32, _clean(flowsheet.get("title"), "Generated Process Flowsheet"), size=18, bold=True)
-    writer.textbox(30, 62, 980, 28, _clean(flowsheet.get("basis"), "Editable PowerPoint export from declared process links."), size=10.5, color="657480")
+    with writer.group("Title"):
+        writer.textbox(36, 30, 900, 26, _clean(flowsheet.get("title"), "Generated Process Flowsheet"), size=18, bold=True, name="Title", max_lines=1)
+        writer.textbox(36, 76, 1400, 16, _clean(flowsheet.get("basis"), "Editable PowerPoint export from declared process links."), size=11, color="40515D", bold=True, name="Basis", max_lines=2)
 
     by_id = {_clean(group.get("id")): group for group in groups}
     max_kg = max(0.01, *[_float(group.get("totalOutputKg")) for group in groups])
@@ -428,8 +576,9 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
             continue
         points = _link_points(link, src, dst)
         known_mass = _float(link.get("massKg"), 0) > 0 or _link_mass_kg(link) > 0
-        _draw_polyline(writer, points, color="172027" if known_mass else "8A949A", width=stroke_width(link), arrow=True, dash=not known_mass)
-        _draw_link_label(writer, points, _link_label(link, "process"), "172027" if known_mass else "6C7680")
+        with writer.group(_link_group_name(link, "process")):
+            _draw_polyline(writer, points, color="172027" if known_mass else "8A949A", width=stroke_width(link), arrow=True, dash=not known_mass)
+            _draw_link_label(writer, points, _link_label(link, "process"), "172027" if known_mass else "6C7680")
 
     for link in flowsheet.get("auxiliaryLinks") or []:
         if not isinstance(link, dict):
@@ -440,32 +589,10 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         kind = _clean(link.get("kind"), "waste")
         color = "657480" if kind == "vent" else "25834A" if kind == "recovery" else "965D00"
         points = _link_points(link, src, dst)
-        _draw_polyline(writer, points, color=color, width=2.0, arrow=True, dash=kind in ("vent", "recovery"))
-        if kind in ("waste", "vent", "recovery"):
-            _draw_link_label(writer, points, _link_label(link, kind), color)
-
-    # Off-page connectors: a unit's open wastes and vents grouped by boundary class, drawn as a short
-    # stub ending in a flag with the stream tag, so the export shows where every discharge goes.
-    for group in groups:
-        for outlet in group.get("boundaryOutlets") or []:
-            if not isinstance(outlet, dict):
-                continue
-            kind = _clean(outlet.get("kind"), "waste")
-            color = "657480" if kind == "vent" else "965D00"
-            raw_points = outlet.get("points")
-            points = [(_float(p.get("x")), _float(p.get("y"))) for p in raw_points if isinstance(p, dict)] if isinstance(raw_points, list) else []
-            if len(points) < 2:
-                gx, gy, gw, gh = (_float(group.get(key)) for key in ("x", "y", "w", "h"))
-                points = [(gx + gw * 0.76, gy + gh), (gx + gw * 0.76, gy + gh + 58)]
-            _draw_polyline(writer, points, color=color, width=2.0, arrow=False, dash=kind == "vent")
-            end_x, end_y = points[-1]
-            writer.rect(end_x - 9, end_y, 18, 14, fill="EEF2F4" if kind == "vent" else "FDF6EA", line=color, name=f"{_clean(group.get('id'))} boundary {_clean(outlet.get('id'))}")
-            names = ", ".join(_clean(s.get("name")) for s in (outlet.get("streams") or []) if isinstance(s, dict) and _clean(s.get("name")))
-            kg = _float(outlet.get("kg"), 0)
-            text = f"{_clean(outlet.get('tag'))} {_clean(outlet.get('short'), 'to boundary')}: {names}".strip()
-            if kg > 0:
-                text += f" ({kg:.3g} kg)"
-            writer.label(end_x + 14, end_y - 2, 150, _clip_words(text, 34), color=color, name="Boundary outlet")
+        with writer.group(_link_group_name(link, kind)):
+            _draw_polyline(writer, points, color=color, width=2.0, arrow=True, dash=kind in ("vent", "recovery"))
+            if kind in ("waste", "vent", "recovery"):
+                _draw_link_label(writer, points, _link_label(link, kind), color)
 
     for link in flowsheet.get("recycleLinks") or []:
         if not isinstance(link, dict):
@@ -479,68 +606,58 @@ def render_flowsheet_pptx(payload: dict[str, Any]) -> bytes:
         fallback = [s, (s[0], lane), (e[0], lane), e]
         raw_points = _link_points(link, src, dst)
         points = raw_points if isinstance(link.get("points"), list) and len(raw_points) >= 2 else fallback
-        _draw_polyline(writer, points, color="25834A", width=2.3, arrow=True, dash=True)
-        _draw_link_label(writer, points, _link_label(link, "recycle") if link.get("label") else f"recycle {_clean(link.get('from'))} to {_clean(link.get('to'))}", "25834A")
+        with writer.group(_link_group_name(link, "recycle")):
+            _draw_polyline(writer, points, color="25834A", width=2.3, arrow=True, dash=True)
+            _draw_link_label(writer, points, _link_label(link, "recycle") if link.get("label") else f"recycle {_clean(link.get('from'))} to {_clean(link.get('to'))}", "25834A")
 
     feed_box = flowsheet.get("feedBox")
     if isinstance(feed_box, dict):
-        writer.rect(feed_box.get("x"), feed_box.get("y"), feed_box.get("w"), feed_box.get("h"), fill="E9F7ED", line="25834A", radius=True, name="Feed")
-        writer.textbox(_float(feed_box.get("x")) + 10, _float(feed_box.get("y")) + 14, _float(feed_box.get("w")) - 20, 22, "FEED / STORAGE", size=10, color="25834A", bold=True)
-        exported_feeds = flowsheet.get("feedStreams")
-        feed_source = exported_feeds if isinstance(exported_feeds, list) and exported_feeds else (groups[0].get("inputStreams") if groups else [])
-        feed_streams = [item for item in feed_source or [] if isinstance(item, dict)]
-        for index, stream in enumerate(feed_streams[:3]):
-            row_y = _float(feed_box.get("y")) + 40 + index * 22
-            writer.label(
-                _float(feed_box.get("x")) + 12,
-                row_y - 7,
-                _float(feed_box.get("w")) - 24,
-                _clip_words(_stream_label(stream), 26) or "feed",
-                color="172027",
-                name="Feed stream",
-            )
+        fx, fy, fw, fh = (_float(feed_box.get(key)) for key in ("x", "y", "w", "h"))
+        with writer.group("Feed / storage"):
+            writer.rect(fx, fy, fw, fh, fill="E9F7ED", line="25834A", radius=True, name="Feed")
+            writer.textbox(fx + 10, fy + 8, fw - 20, 16, "FEED / STORAGE", size=11, color="25834A", bold=True, name="Feed title", max_lines=1)
+            exported_feeds = flowsheet.get("feedStreams")
+            feed_source = exported_feeds if isinstance(exported_feeds, list) and exported_feeds else (groups[0].get("inputStreams") if groups else [])
+            feed_streams = [item for item in feed_source or [] if isinstance(item, dict)]
+            for index, stream in enumerate(feed_streams[:4]):
+                writer.label(fx + 10, fy + 28 + index * 30, fw - 20, _clip_words(_stream_label(stream), 26) or "feed", color="172027", name="Feed stream")
+            first = groups[0]
+            target_x = _float(first.get("x")) - 10
+            target_y = _float(first.get("y")) + 62
+            writer.line(fx + fw, fy + fh / 2, target_x, target_y, color="657480", width=1.6, arrow=True)
 
     product_box = flowsheet.get("productBox")
     if isinstance(product_box, dict):
-        writer.rect(product_box.get("x"), product_box.get("y"), product_box.get("w"), product_box.get("h"), fill="E9F7ED", line="25834A", radius=True, name="Product")
-        product_group_id = _clean(flowsheet.get("productGroupId"))
-        product_group = by_id.get(product_group_id) or groups[-1]
+        px, py, pw, ph = (_float(product_box.get(key)) for key in ("x", "y", "w", "h"))
+        product_group = by_id.get(_clean(flowsheet.get("productGroupId"))) or groups[-1]
         product_streams = [item for item in product_group.get("outputStreams") or [] if isinstance(item, dict)]
         product_stream = next((stream for stream in product_streams if _clean(stream.get("fate")) == "product"), product_streams[0] if product_streams else None)
-        product_label = _clip_words(_clean(product_stream.get("name") if product_stream else "", "PRODUCT").upper(), 22) if product_stream else "PRODUCT"
+        product_label = _clip_words(_clean(product_stream.get("name") if product_stream else "", "Product"), 22) if product_stream else "Product"
         product_qty = _clean(product_stream.get("quantity") if product_stream else "")
         product_unit = _clean(product_stream.get("unit") if product_stream else "")
-        writer.textbox(_float(product_box.get("x")) + 12, _float(product_box.get("y")) + 20, _float(product_box.get("w")) - 24, 28, product_label, size=13, color="172027", bold=True)
-        if product_qty:
-            writer.textbox(_float(product_box.get("x")) + 12, _float(product_box.get("y")) + 50, _float(product_box.get("w")) - 24, 18, f"{product_qty} {product_unit}".strip(), size=9.5, color="25834A", bold=True)
+        with writer.group("Product"):
+            start = (_float(product_group.get("x")) + _float(product_group.get("w")) + 10, _float(product_group.get("y")) + 62)
+            end = (px, py + ph / 2)
+            mid_x = (start[0] + end[0]) / 2
+            _draw_polyline(writer, [start, (mid_x, start[1]), (mid_x, end[1]), end], color="172027", width=2.7, arrow=True)
+            writer.rect(px, py, pw, ph, fill="E9F7ED", line="25834A", radius=True, name="Product frame")
+            writer.textbox(px + 8, py + 20, pw - 16, 22, product_label, size=15, bold=True, name="Product name", max_lines=1, align="center")
+            if product_qty:
+                writer.textbox(px + 8, py + 46, pw - 16, 16, f"{product_qty} {product_unit}".strip(), size=11, color="25834A", bold=True, name="Product quantity", max_lines=1, align="center")
 
     discharge_box = flowsheet.get("dischargeBox")
     if isinstance(discharge_box, dict):
-        writer.rect(discharge_box.get("x"), discharge_box.get("y"), discharge_box.get("w"), discharge_box.get("h"), fill="FDF6EA", line="965D00", radius=True, name="Discharges")
-        writer.textbox(_float(discharge_box.get("x")) + 10, _float(discharge_box.get("y")) + 10, _float(discharge_box.get("w")) - 20, 18, "DISCHARGES", size=10, color="965D00", bold=True)
-        for index, row in enumerate([item for item in discharge_box.get("rows") or [] if isinstance(item, dict)][:3]):
-            row_y = _float(discharge_box.get("y")) + 32 + index * 22
-            kg = _float(row.get("kg"), 0)
-            text = f"{_clean(row.get('label'))}: {kg:.3g} kg" if kg > 0 else _clean(row.get("label"))
-            writer.label(_float(discharge_box.get("x")) + 10, row_y, _float(discharge_box.get("w")) - 20, _clip_words(text, 30), color="172027", name="Discharge row")
+        dx, dy, dw, dh = (_float(discharge_box.get(key)) for key in ("x", "y", "w", "h"))
+        with writer.group("Discharges"):
+            writer.rect(dx, dy, dw, dh, fill="FDF6EA", line="965D00", radius=True, name="Discharges frame")
+            writer.textbox(dx + 10, dy + 8, dw - 20, 16, "DISCHARGES", size=11, color="965D00", bold=True, name="Discharges title", max_lines=1)
+            for index, row in enumerate([item for item in discharge_box.get("rows") or [] if isinstance(item, dict)][:3]):
+                kg = _float(row.get("kg"), 0)
+                text = f"{_clean(row.get('label'))}: {kg:.3g} kg" if kg > 0 else _clean(row.get("label"))
+                writer.textbox(dx + 10, dy + 30 + index * 22, dw - 20, 16, _clip_words(text, 34), size=9.6, bold=True, name="Discharge row", max_lines=1)
 
     for group in groups:
-        fill, line = category_styles.get(_clean(group.get("category")), ("F5F9FF", "1671C2"))
-        x, y, w, h = _float(group.get("x")), _float(group.get("y")), _float(group.get("w")), _float(group.get("h"))
-        if group.get("concurrent"):
-            writer.rect(x - 16, y - 16, w + 16, h + 16, fill="EEF2F4", line="9AA7B0", radius=True, name=f"{_clean(group.get('id'))} concurrent lane")
-        writer.rect(x - 8, y - 8, w + 16, h + 16, fill="FFFFFF", line="D6E0E5", radius=True, name=f"{_clean(group.get('id'))} outer")
-        writer.rect(x - 8, y - 8, 5, h + 16, fill=line, line=line, radius=True, name=f"{_clean(group.get('id'))} category stripe")
-        writer.rect(x + 14, y + h * 0.52, w - 28, h * 0.40, fill=fill, line=line, radius=True, name=f"{_clean(group.get('id'))} label")
-        writer.textbox(x + 22, y + 22, w - 44, 34, _category_label(group.get("category")), size=11.5, color=line, bold=True)
-        writer.textbox(x + 20, y + h * 0.55, w - 40, 18, f"U{int(_float(group.get('unitNumber'), 0)) or ''} {_clean(group.get('id'))}".strip(), size=10.5, color=line, bold=True)
-        writer.textbox(x + 20, y + h * 0.66, w - 40, 26, _clip_words(_clean(group.get("selectedUnit"), "unassigned unit"), 36), size=9.0, color="172027", bold=True)
-        task = _clip_words(_clean(group.get("task")), 42)
-        if task:
-            writer.textbox(x + 20, y + h * 0.82, w - 40, 18, task, size=7.8, color="657480")
-        detail_lines = [_clean(line) for line in (group.get("detailLines") or []) if _clean(line)]
-        for index, line in enumerate(detail_lines[:2]):
-            writer.textbox(x + 14, y + h + 22 + index * 13, w - 8, 13, _clip_words(line, 44), size=7.2, color="40515D", max_lines=1)
+        _draw_unit(writer, group, category_styles)
 
     _draw_stream_table(writer, flowsheet)
     _draw_title_block(writer, flowsheet, diagram_w, diagram_h)
