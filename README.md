@@ -1,4 +1,4 @@
-# Process Upscaling Workbench
+# Process Upscaling Workbench (PUW) Tool
 
 [![Validation](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml/badge.svg)](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml)
 
