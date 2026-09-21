@@ -3,7 +3,7 @@
 [![Validation](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml/badge.svg)](https://github.com/jakxsor/upscaling-pipeline-tool/actions/workflows/validation.yml)
 
 A local browser-based implementation of a phenomena-based scale-up workflow for
-translating laboratory synthesis protocols into traceable process blocks, task
+translating laboratory synthesis protocols into structured process blocks, task
 groups, material-flow assumptions, unit-operation candidates, and preliminary
 scale-up checks.
 
@@ -96,8 +96,6 @@ and low-confidence scale-up risks.
 - Build a schematic Gantt chart and identify bottlenecks.
 - Show a Gantt evidence layer with operation class, expected scale behaviour,
   missing data, schedule margin, and compact references.
-- Optionally run an external OpenAI-compatible process review using a temporary
-  API key or server-side `OPENAI_API_KEY`.
 
 ## Reliability Level
 
@@ -116,20 +114,18 @@ The current version is not intended to:
 - automatically convert lab durations into validated industrial durations;
 - infer physical properties or kinetic data without user-provided evidence;
 - claim a fully optimized separation train from limited property data;
-- apply proposed AI changes automatically.
 
 ## Methodological Scope
 
 The software is intended as a paper-companion and screening implementation. It
 keeps assumptions visible and separates entered, calculated, estimated, and
-assumed values. The output should be interpreted as a traceable scale-up
+assumed values. The output should be interpreted as a transparent scale-up
 proposal, not as validated process design.
 
 The unit-operation suggestion layer is deterministic. It uses the task class,
 MFA role/phase context, operating conditions, and optional Lutze-style
 separation evidence when available. Suggestions are gated until the task has
-enough material streams, phase labels, and conditions to make the choice
-auditable.
+enough material streams, phase labels, and conditions to support the choice.
 
 In Stoichiometric Balance mode, the selected product amount is calculated from
 the limiting-reagent extent and product coefficient, then multiplied by the
@@ -231,10 +227,6 @@ startCommand: python3 -m upscaling_pipeline_tool.app --host 0.0.0.0
 The app reads Render's `PORT` environment variable automatically. The Blueprint
 uses the Frankfurt region and the free web-service plan by default.
 
-The app works without secrets. To enable server-side AI review, add
-`OPENAI_API_KEY` as a Render environment variable in the service settings. Do not
-commit API keys to the repository.
-
 ## Windows Instructions
 
 1. Install Python from:
@@ -279,29 +271,6 @@ py start.py
 ```text
 http://127.0.0.1:8787
 ```
-
-## Optional AI Review
-
-The app works without an API key.
-
-For the external process review, either paste a temporary key in the popup or
-start the server with an environment variable.
-
-macOS/Linux:
-
-```bash
-export OPENAI_API_KEY="your_key_here"
-python3 run_upscaling_tool.py --port 8787
-```
-
-Windows PowerShell:
-
-```powershell
-$env:OPENAI_API_KEY="your_key_here"
-python run_upscaling_tool.py --port 8787
-```
-
-Do not commit API keys to the repository.
 
 ## Workflow
 

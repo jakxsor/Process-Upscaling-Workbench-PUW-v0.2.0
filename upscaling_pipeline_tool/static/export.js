@@ -32,7 +32,7 @@
         scaleBasis: cloneProjectValue(state.scaleBasis, {}),
         heuristicDecisions: cloneProjectValue(state.heuristicDecisions, {}),
         ruleChecks: cloneProjectValue(state.ruleChecks, []),
-        aiRefine: cloneProjectValue(state.aiRefine, null),
+        processCheck: cloneProjectValue(state.processCheck, null),
         processRuleOptions: cloneProjectValue(state.processRuleOptions, {}),
         board: {
           boardCompact: Boolean(state.boardCompact),
@@ -40,7 +40,7 @@
           zoom: Number.isFinite(state.zoom) ? state.zoom : 0.78
         },
         flowsheet: {
-          viewPreset: state.flowsheetViewPreset || "audit",
+          viewPreset: state.flowsheetViewPreset || "detailed",
           selectedGroupId: state.selectedFlowsheetGroupId || "",
           fit: state.flowsheetFit !== false,
           showAuxiliaryArrows: state.flowsheetShowAuxiliaryArrows !== false,
@@ -131,7 +131,7 @@
         energyBridge,
         lcaBridge,
         ruleChecks: state.ruleChecks,
-        aiRefine: state.aiRefine,
+        processCheck: state.processCheck,
         dataReadiness: dataReadinessModel(),
         heuristicDecisions: state.heuristicDecisions,
         blocks,
@@ -145,7 +145,7 @@
 
     // Writes the export JSON immediately, bypassing the debounce below. Use this (not renderExport)
     // anywhere the fresh JSON is read back synchronously right after, e.g. before sending it to the
-    // external AI review endpoint — a debounced write there would send stale project data.
+    // synchronous export paths rely on this immediate write; a debounced write would use stale project data.
     function writeExportNow() {
       if (renderExportTimer) {
         clearTimeout(renderExportTimer);
@@ -156,7 +156,7 @@
 
     // The visible JSON preview card was removed from the UI (it was the only way to get data
     // out - select-all-copy from a giant text blob), but #jsonOut itself stays in the DOM
-    // (hidden) since other code reads it back (see the AI Refine flow above). The header
+    // (hidden) since other code reads it back (see the Process Check flow above). The header
     // "Export JSON" button now triggers an actual file download instead.
     function downloadProjectJson() {
       writeExportNow();

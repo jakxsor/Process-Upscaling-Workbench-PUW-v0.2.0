@@ -13,7 +13,7 @@
     const reactionWaterKg = mass(reactedMol, 18.015);
     const washWaterL = 2.0;
     // Auxiliaries the SI names but does not quantify. Each is an engineering estimate with the
-    // method recorded on its stream note (see audit_octocrylene_data_gaps_20260915.md); they are
+    // method recorded on its stream note; they are
     // entered so the unit balances close and the vents and wastewater carry a number, and they
     // stay labelled "estimated" until the authors replace them from the notebook.
     // NH4OAc: 20 mol% on the cyanoacetate, the textbook Knoevenagel loading (range 10-50 mol%).

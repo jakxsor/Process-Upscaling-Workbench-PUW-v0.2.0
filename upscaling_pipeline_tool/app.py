@@ -5,10 +5,8 @@ import argparse
 import gzip
 import json
 import os
-import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib import error, request
 
 if __package__:
     from .pubchem_lookup import lookup_pubchem
@@ -45,47 +43,6 @@ def _export_renderer(kind):
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MAX_REQUEST_BYTES = 12 * 1024 * 1024
-
-
-def _compact_project_for_review(project):
-    """Keep every decision-relevant field without cutting serialized JSON mid-object."""
-    serialized = json.dumps(project, separators=(",", ":"))
-    protocol_text = str(project.get("text", ""))
-    if len(serialized) <= 180_000:
-        return project, {
-            "compacted": False,
-            "sourceCharacters": len(serialized),
-            "textTruncated": False,
-        }
-
-    scale = project.get("scaleUp") if isinstance(project.get("scaleUp"), dict) else {}
-    compact = {
-        "_reviewPayload": {
-            "compacted": True,
-            "sourceCharacters": len(serialized),
-            "textTruncated": len(protocol_text) > 30_000,
-            "scope": "Decision-relevant fields retained; derived previews and duplicate export views omitted.",
-        },
-        "exportSchemaVersion": project.get("exportSchemaVersion"),
-        "text": protocol_text[:30_000],
-        "blocks": [
-            {key: block.get(key) for key in ("id", "groupId", "source", "text", "behavior", "phenomena", "streams", "conditions", "conditionUnits", "endpoint", "notes", "status")}
-            for block in project.get("blocks", []) if isinstance(block, dict)
-        ],
-        "groups": [
-            {key: group.get(key) for key in ("groupId", "task", "blocks", "phenomena", "selectedUnit", "selectionBasis", "schedule", "properties", "conditionAggregation", "mfaAggregation")}
-            for group in project.get("groups", []) if isinstance(group, dict)
-        ],
-        "links": project.get("links", []),
-        "scaleUp": {key: scale.get(key) for key in ("basis", "reference", "target", "schedule", "reactorSizing", "assessment", "heuristicReview", "ganttSchedule", "throughputDiagnostics")},
-        "recycleSummary": project.get("recycleSummary"),
-        "energyBridge": project.get("energyBridge"),
-        "ruleChecks": project.get("ruleChecks", []),
-        "dataReadiness": project.get("dataReadiness"),
-        "heuristicDecisions": project.get("heuristicDecisions", {}),
-        "lcaReadiness": (project.get("lcaBridge") or {}).get("readiness") if isinstance(project.get("lcaBridge"), dict) else None,
-    }
-    return compact, compact["_reviewPayload"]
 
 
 def _read_static(filename):
@@ -156,7 +113,7 @@ APP_HTML = r"""<!doctype html>
   <header>
     <div>
       <h1>Process Upscaling Workbench</h1>
-      <div class="subtitle">From laboratory protocol to an auditable industrial flowsheet.</div>
+      <div class="subtitle">From laboratory protocol to a structured industrial flowsheet.</div>
     </div>
     <div class="row">
       <button id="undoAction" title="Undo last change (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
@@ -168,7 +125,7 @@ APP_HTML = r"""<!doctype html>
           <button id="importJsonProject" role="menuitem" title="Load a previously exported upscaling-project.json file">Import JSON</button>
           <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
           <button id="exportJson" class="export-json-button" role="menuitem" title="Download the full project data as a JSON file">&#8595; Export JSON</button>
-          <button id="exportLciExcel" class="export-json-button" role="menuitem" title="Download an ordered LCI workbook for audit and openLCA mapping">&#8595; LCI Excel</button>
+          <button id="exportLciExcel" class="export-json-button" role="menuitem" title="Download an ordered LCI workbook for review and openLCA mapping">&#8595; LCI Excel</button>
           <div id="savedWorkStatus" class="muted small"></div>
           <div id="savedProjectList" class="saved-project-list"></div>
         </div>
@@ -356,7 +313,7 @@ APP_HTML = r"""<!doctype html>
                 <div class="label">Heuristic Rules</div>
                 <div class="muted small">Pre-scale screening before numerical scale-up.</div>
               </div>
-              <button id="refineProjectAi" class="primary">Apply Rules</button>
+              <button id="openProcessCheck" class="primary">Apply Rules</button>
               <span class="muted small">process checker; external API optional</span>
             </div>
           </section>
@@ -569,7 +526,7 @@ APP_HTML = r"""<!doctype html>
         <div class="flowsheet-layer-controls" aria-label="Flowsheet view layers">
           <span>View</span>
           <button id="flowsheetCleanPreset" class="mini-button" title="Clean presentation view: main units and process arrows only">Clean</button>
-          <button id="flowsheetAuditPreset" class="mini-button primary" title="Audit view: labels, recycle/waste/vent arrows, and unit details">Audit</button>
+          <button id="flowsheetDetailedPreset" class="mini-button primary" title="Detailed view: labels, recycle/waste/vent arrows, and unit details">Detailed</button>
           <label class="flowsheet-basis-control" title="Quantities shown: lab batch, scaled batch, or per kg product">
             <span>Basis</span>
             <select id="flowsheetBasisSelect">
@@ -645,15 +602,15 @@ APP_HTML = r"""<!doctype html>
     </section>
   </div>
 
-  <div id="aiRefineModal" class="modal-backdrop" hidden>
-    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="aiRefineTitle">
+  <div id="processCheckModal" class="modal-backdrop" hidden>
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="processCheckTitle">
       <div class="modal-head">
         <div>
           <div class="label">Heuristic Rule Application</div>
-          <h2 id="aiRefineTitle">Heuristic Rule Check</h2>
+          <h2 id="processCheckTitle">Heuristic Rule Check</h2>
         </div>
         <button class="help-button" data-help-topic="heuristics" title="Help for the rule check" aria-label="Help for the rule check">?</button>
-        <button id="closeAiRefineModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
+        <button id="closeProcessCheckModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="modal-columns">
@@ -675,28 +632,10 @@ APP_HTML = r"""<!doctype html>
             </section>
 
             <section class="modal-section">
-              <div class="label">Local Process Report</div>
+              <div class="label">Process Check Results</div>
               <div class="muted small">Deterministic checks from the current board data.</div>
-              <div id="aiRefineLocalResult" class="rule-results"></div>
+              <div id="processCheckLocalResult" class="rule-results"></div>
             </section>
-
-            <details class="external-analysis-details">
-              <summary>Second opinion from an external model (OpenAI-compatible API) — coming soon</summary>
-            <section class="modal-section external-analysis-section">
-              <div>
-                <div class="label">External Process Analysis</div>
-                <div class="muted small">Commentary, problems, missing data, cited heuristic rules and next actions from an external model, as a second opinion alongside the deterministic report above.</div>
-              </div>
-              <div class="coming-soon-notice">This feature is being reworked before its first public use and is disabled for now. The deterministic Local Process Report above is unaffected and already reflects every declared block, stream and rule.</div>
-              <button id="runExternalAiRefine" class="primary" disabled title="Coming soon">Coming soon</button>
-              <div id="externalAiResult" class="external-ai-result mfa-empty" hidden></div>
-              <input id="aiApiKey" type="hidden">
-              <input id="aiModel" type="hidden">
-              <select id="aiReportStyle" hidden><option value="commentary_summary" selected></option></select>
-              <input id="aiEndpoint" type="hidden" value="https://api.openai.com/v1/responses">
-              <input id="aiUseWebReferences" type="hidden">
-            </section>
-            </details>
           </div>
         </div>
       </div>
@@ -800,7 +739,7 @@ class AppHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        if self.path not in ("/api/refine", "/api/flowsheet-pptx", "/api/lci-xlsx", "/api/pubchem"):
+        if self.path not in ("/api/flowsheet-pptx", "/api/lci-xlsx", "/api/pubchem"):
             self.send_error(404)
             return
         try:
@@ -848,8 +787,6 @@ class AppHandler(BaseHTTPRequestHandler):
                     "lci-workbook.xlsx",
                 )
                 return
-            else:
-                result = self._run_external_refine(payload)
             self._send_json(200, result)
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": str(exc)})
@@ -874,156 +811,6 @@ class AppHandler(BaseHTTPRequestHandler):
 
     def _lookup_pubchem(self, payload):
         return lookup_pubchem(payload)
-
-    def _run_external_refine(self, payload):
-        api_key = str(payload.get("apiKey", "")).strip() or os.environ.get("OPENAI_API_KEY", "").strip()
-        endpoint = str(payload.get("endpoint", "https://api.openai.com/v1/responses")).strip()
-        default_model = os.environ.get("OPENAI_MODEL", "").strip() or "gpt-5-mini"
-        model = str(payload.get("model", "")).strip() or default_model
-        project = payload.get("project", {})
-        review_project, review_payload_info = _compact_project_for_review(project)
-        options = payload.get("options", {})
-        report_style = str(payload.get("reportStyle", "commentary_summary")).strip() or "commentary_summary"
-        use_web = bool(payload.get("useWebReferences", True))
-        if not api_key:
-            return {"ok": False, "error": "API key missing. Set OPENAI_API_KEY before starting the server or enter a temporary key in the popup."}
-        if not endpoint.startswith("https://"):
-            return {"ok": False, "error": "Only https API endpoints are allowed."}
-        system = (
-            "You are a chemical process synthesis and scale-up reviewer. Apply the heuristic rules to the actual "
-            "process that the user built: source blocks, grouped tasks, arrows/sequence, phenomena, phases, MFA streams, "
-            "conditions, selected unit alternatives, recycle/purge data, scale-up basis, and Gantt schedule. "
-            "Do not modify the process, do not refine or rewrite the rule library, and do not list all rules. "
-            "Return only relevant inconsistencies, missing evidence, incompatibilities, and proposed process changes. "
-            "Treat this as pre-scale screening, not a validated design. If web search is available, use it only as "
-            "supporting reference evidence for general process-synthesis, safety, scale-up, separation, or unit-operation "
-            "judgment; cite source titles or URLs compactly in the report."
-        )
-        user = (
-            "Selected checking scopes:\n"
-            + json.dumps(options, indent=2)
-            + f"\n\nRequested report style: {report_style}\n\n"
-            + f"Use web references if available: {use_web}\n\n"
-            + "Apply the heuristic rules to this project JSON. Compare rules against the constructed process, "
-            "especially sequence/thermal reversals, phase-unit mismatches, missing MFA quantities or phases, "
-            "condition conflicts inside groups, recycle/purge closure, scale-up basis, and bottleneck logic. "
-            "Use the process rule checks already present in project.ruleChecks as first evidence, then add only extra "
-            "issues supported by project blocks/groups/links/scaleUp. Cite heuristic IDs when available from "
-            "project.scaleUp.heuristicReview.triggered or rule-check titles; if no exact ID applies, write 'rule logic: "
-            "general process heuristic' instead of inventing an ID. Do not list inactive rules. Do not change the JSON "
-            "or claim that any proposed change has been applied.\n\n"
-            "You must produce a written final report. Do not return only reasoning/tool calls.\n\n"
-            "Return Markdown with these exact sections:\n"
-            "1. Process commentary - 5 to 8 concise lines explaining what the built process currently looks like.\n"
-            "2. Main problems - a valid Markdown table with exactly these columns: Severity | Target | Evidence | Rule or doubt | Why it matters | Suggested change. Keep every row on one line so the UI can parse it.\n"
-            "3. Missing data before scale-up - bullets grouped as MFA, phases/properties, conditions, recycle/purge, schedule.\n"
-            "4. Web/reference notes - only include sources actually used; otherwise say no web reference used.\n"
-            "5. Rules involved - cite only heuristic IDs or local rule-check titles that are relevant to this process.\n"
-            "6. Proposed process changes, not applied - concrete options the user could manually implement.\n"
-            "7. Immediate next actions - maximum 5 actions in practical order.\n\n"
-            + json.dumps(review_project, separators=(",", ":"))
-        )
-        if endpoint.endswith("/chat/completions"):
-            body = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            }
-        else:
-            body = {
-                "model": model,
-                "instructions": system,
-                "input": user,
-            }
-            if use_web:
-                body["tools"] = [{"type": "web_search_preview", "search_context_size": "low"}]
-        req = request.Request(
-            endpoint,
-            data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        try:
-            data = self._post_api_json(req, timeout=180)
-        except error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            return {"ok": False, "error": f"API HTTP {exc.code}: {detail[:1000]}"}
-        except (TimeoutError, socket.timeout) as exc:
-            if use_web and not endpoint.endswith("/chat/completions"):
-                fallback = {key: value for key, value in body.items() if key != "tools"}
-                fallback_user = (
-                    user
-                    + "\n\nThe first attempt with web references timed out. Produce the same review without live web references, "
-                    "and clearly write in section 4 that no web reference was used because the web-enabled request timed out."
-                )
-                fallback["input"] = fallback_user
-                fallback_req = request.Request(
-                    endpoint,
-                    data=json.dumps(fallback).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    method="POST",
-                )
-                try:
-                    data = self._post_api_json(fallback_req, timeout=180)
-                except error.HTTPError as fallback_exc:
-                    detail = fallback_exc.read().decode("utf-8", errors="replace")
-                    return {"ok": False, "error": f"API HTTP {fallback_exc.code} after web-timeout fallback: {detail[:1000]}"}
-                except (TimeoutError, socket.timeout) as fallback_exc:
-                    return {"ok": False, "error": "External analysis timed out after 180 seconds, including the no-web fallback. Try gpt-4.1-mini, reduce report style to Short triage, or disable web references.", "details": {"timeout_seconds": 180, "web_references": True}}
-            else:
-                return {"ok": False, "error": "External analysis timed out after 180 seconds. Try gpt-4.1-mini, reduce report style to Short triage, or disable web references.", "details": {"timeout_seconds": 180, "web_references": use_web}}
-        except error.URLError as exc:
-            return {"ok": False, "error": f"API connection failed: {exc.reason}"}
-        text = self._extract_api_text(data)
-        if not text:
-            compact = {
-                "id": data.get("id"),
-                "status": data.get("status"),
-                "model": data.get("model"),
-                "output_types": [item.get("type") for item in data.get("output", []) if isinstance(item, dict)],
-            }
-            return {
-                "ok": False,
-                "error": "The API request completed but returned no written text. Try Run External Process Check again, or use a non-reasoning model such as gpt-4.1-mini for this report.",
-                "details": compact,
-            }
-        return {"ok": True, "text": text, "model": model, "reviewPayload": review_payload_info}
-
-    def _post_api_json(self, req, timeout):
-        with request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-
-    def _extract_api_text(self, data):
-        text = data.get("output_text")
-        if isinstance(text, str) and text.strip():
-            return text.strip()
-        if data.get("choices"):
-            content = data["choices"][0].get("message", {}).get("content", "")
-            if isinstance(content, str) and content.strip():
-                return content.strip()
-        parts = []
-        for item in data.get("output", []) or []:
-            if not isinstance(item, dict):
-                continue
-            content = item.get("content")
-            if isinstance(content, str) and content.strip():
-                parts.append(content.strip())
-            elif isinstance(content, list):
-                for chunk in content:
-                    if not isinstance(chunk, dict):
-                        continue
-                    chunk_text = chunk.get("text") or chunk.get("content")
-                    if isinstance(chunk_text, str) and chunk_text.strip():
-                        parts.append(chunk_text.strip())
-        return "\n\n".join(parts).strip()
 
     def log_message(self, format, *args):
         print("%s - %s" % (self.address_string(), format % args))

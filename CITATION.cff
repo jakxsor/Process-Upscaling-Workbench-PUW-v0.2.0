@@ -20,7 +20,7 @@ authors:
     given-names: "M."
 abstract: >-
   Local browser-based implementation of a phenomena-based scale-up workflow for
-  translating laboratory synthesis protocols into traceable process blocks,
+  translating laboratory synthesis protocols into structured process blocks,
   task groups, material-flow assumptions, unit-operation candidates, optional
   post-reaction separation screening, and preliminary scale-up checks.
 preferred-citation:

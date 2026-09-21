@@ -18,7 +18,7 @@
       title: "Blocks, tasks and network (steps 3 and 4)",
       items: [
         { title: "Forming a task group", body: "Shift-click two or more draft blocks, then right-click and choose Group Into New Task. Blocks stay separate and keep their own text, streams and conditions; the group only bundles them under one unit operation. Assign To Selected Task adds blocks to an existing group; Remove From Task Group returns a block to the draft state without changing it." },
-        { title: "Assigning a unit operation", body: "Proposals appear on each group box under Assign Unit Operation once the task has a name, material streams with phase labels and at least one operating condition. They are ranked by task class, phenomena overlap, feed-phase compatibility and conditions; the Lutze/Garg screening can refine the choice afterwards. The gate exists so equipment is not chosen before the material and phase basis is auditable." },
+        { title: "Assigning a unit operation", body: "Proposals appear on each group box under Assign Unit Operation once the task has a name, material streams with phase labels and at least one operating condition. They are ranked by task class, phenomena overlap, feed-phase compatibility and conditions; the Lutze/Garg screening can refine the choice afterwards. The gate exists so equipment is not chosen before the material and phase basis supports the decision." },
         { title: "Connecting groups", body: "Drag between group handles to declare a process link, or use Connections > Auto-Connect to link groups in text order and add recycle arrows from declared stream destinations. Layout rearranges groups left to right along the declared links, in the same order as the Flowsheet View, without changing any content." },
         { title: "Splitting into parallel units", body: "Split Into Parallel Units creates N groups, each handling 1/N of the material flow between the same predecessor and successor. Declared durations are kept until you enter resized estimates; a kinetics-bound step keeps its full time per batch and only gains throughput." }
       ]
@@ -52,7 +52,7 @@
       title: "Heuristic rules (step 5)",
       items: [
         { title: "How rules are triggered", body: "The 53 screening rules are matched from the phenomena, phases, fates, conditions, properties and source text of the built process. A triggered rule never changes the flowsheet: it proposes, explains and waits for your accept, reject or override, which is recorded with a note and a timestamp." },
-        { title: "Local check and external review", body: "Apply Rules runs the deterministic local check on the current board data. The external OpenAI-compatible review is optional, folded under the report, and needs a key; its output is commentary, never an automatic change." }
+        { title: "Process checks", body: "Apply Rules runs deterministic checks on the current board data and reports relevant inconsistencies, missing evidence, and next actions. It never changes the process automatically." }
       ]
     },
     scale: {

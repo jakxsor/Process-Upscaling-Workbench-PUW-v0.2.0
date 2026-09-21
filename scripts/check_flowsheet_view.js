@@ -14,7 +14,7 @@ const flowsheetUiSource = fs.readFileSync("upscaling_pipeline_tool/static/flowsh
 assert(flowsheetSource.includes("translate(36, ${drawingHeight - 70})"), "Flowsheet legend should sit higher than the bottom border");
 assert(appHtml.includes("flowsheet.css") && appHtml.includes("flowsheet_ui.js"), "Flowsheet view should load split CSS and UI modules");
 assert(appHtml.includes("flowsheet-layer-controls"), "Flowsheet layer toggles should live in the compact layer-control row");
-assert(appHtml.includes("flowsheetCleanPreset") && appHtml.includes("flowsheetAuditPreset"), "Flowsheet view should expose Clean/Audit presets");
+assert(appHtml.includes("flowsheetCleanPreset") && appHtml.includes("flowsheetDetailedPreset"), "Flowsheet view should expose Clean/Detailed presets");
 assert(appHtml.includes("flowsheetDetailsPanel"), "Flowsheet view should include the click-through details panel");
 assert(!appHtml.includes("flowsheetTechnicalMode") && !appHtml.includes("Technical PFD"), "Technical PFD should not be exposed in the flowsheet options");
 assert(!appHtml.includes("resetFlowsheetLayout") && !appHtml.includes("Reset Layout"), "Reset Layout should not be exposed in the flowsheet options");

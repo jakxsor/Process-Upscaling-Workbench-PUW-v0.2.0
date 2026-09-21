@@ -391,7 +391,7 @@
         confidence: "rough"
       },
       ruleChecks: [],
-      aiRefine: null,
+      processCheck: null,
       heuristicDecisions: {},
       showDataReadiness: false,
       showConnections: false,
@@ -437,7 +437,7 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetViewPreset: "audit",
+      flowsheetViewPreset: "detailed",
       selectedFlowsheetGroupId: "",
       flowsheetFit: true,
       flowsheetZoom: 1,
@@ -506,7 +506,7 @@
       state.selectedGroupId = null;
       state.selectedIds = [];
       state.connectingFrom = null;
-      state.aiRefine = null;
+      state.processCheck = null;
       const source = $("sourceInput");
       if (source) source.value = state.text;
       renderAll();
@@ -840,7 +840,7 @@
       state.focusEndpoint = groupId || block.id;
       hideTextSelectionMenu();
       hideGroupMenu();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -1621,7 +1621,7 @@
         confidence: "rough"
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       // Nothing is selected on load: the group drawer and the selected-item card stay closed until
       // the user picks something, instead of opening on G2 with its full material editor.
@@ -1790,7 +1790,7 @@
         condensationWaterMolPerMol: ""
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.selectedIds = [];
@@ -2048,7 +2048,7 @@
         confidence: "rough"
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.selectedIds = [];
@@ -2804,7 +2804,7 @@
       state.selectedIds = [];
       state.connectingFrom = null;
       state.lastSelection = null;
-      state.aiRefine = null;
+      state.processCheck = null;
       state.zoom = 0.78;
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = null;
@@ -2896,7 +2896,7 @@
         state.selectedBlockId = null;
         state.selectedGroupId = null;
         state.selectedIds = [];
-        state.aiRefine = null;
+        state.processCheck = null;
       }
       return offsets;
     }
@@ -3139,7 +3139,7 @@
       state.pendingStepStreamFocusId = stream.id;
       state.pendingStepStreamScrollRole = role;
       syncLegacyStreamLists(target);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -4318,7 +4318,7 @@
           const value = Math.max(0, conversionNumber(input.value));
           groupState.timeOffsets[input.dataset.timetableStart] = String(value);
           delete groupState.timeConcurrency[input.dataset.timetableStart];
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4333,7 +4333,7 @@
           const value = Math.max(0, conversionNumber(input.value));
           block.conditions[input.dataset.timetableCondition] = value ? String(value) : "";
           block.conditionUnits[input.dataset.timetableCondition] = "h";
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4351,7 +4351,7 @@
           } else {
             delete groupState.timeConcurrency[key];
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4363,7 +4363,7 @@
           const groupState = ensureGroup(button.dataset.timetableSequential);
           groupState.timeConcurrency = {};
           groupState.timeOffsets = {};
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -6690,7 +6690,7 @@
       root.querySelectorAll("[data-planning-scenario]").forEach(button => {
         button.addEventListener("click", () => {
           ensureScaleBasis().planningScenario = button.dataset.planningScenario;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderScaleBasisPanel();
           renderHeuristicsPanel();
           refreshReviewPanels();
@@ -6764,7 +6764,7 @@
           const ids = new Set(groupState.schedule.predecessorIds);
           if (checkbox.checked) ids.add(predecessorId); else ids.delete(predecessorId);
           groupState.schedule.predecessorIds = Array.from(ids);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderScaleBasisPanel();
         });
       });
@@ -7133,7 +7133,7 @@
     }
 
     function heuristicRulesPanelHtml(heuristics) {
-      const refine = state.aiRefine;
+      const refine = state.processCheck;
       const severityOrder = { high: 0, medium: 1, low: 2 };
       const triggeredRules = [...heuristics.triggered].sort((a, b) =>
         (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3)
@@ -7166,7 +7166,7 @@
           </div>
           ${compactDetailsHtml(
             "Process Rule Check",
-            refine ? aiRefinePanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. This uses the local checker; external AI is optional.</div>`,
+            refine ? processCheckPanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. The check uses the deterministic local rule set.</div>`,
             refine ? refine.topSeverity : "not run",
             Boolean(refine)
           )}
@@ -7211,7 +7211,7 @@
         });
       });
       root.querySelectorAll("[data-open-refine-modal]").forEach(button => {
-        button.addEventListener("click", openAiRefineModal);
+        button.addEventListener("click", openProcessCheckModal);
       });
       root.querySelectorAll("[data-toggle-heuristic-card]").forEach(head => {
         head.addEventListener("click", () => {
@@ -7266,7 +7266,7 @@
       `).join("");
     }
 
-    function aiRefinePanelHtml(refine) {
+    function processCheckPanelHtml(refine) {
       return `
         <div class="rule-card ${escapeAttr(refine.topSeverity)}" style="margin:8px 0">
           <span class="severity-pill">${escapeHtml(refine.topSeverity)}</span>
@@ -7669,14 +7669,14 @@
 
     function updateScaleField(event) {
       ensureScaleBasis();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
       renderExport();
     }
 
     function updateGroupScheduleField(event) {
       const group = ensureGroup(event.target.dataset.scheduleGroup);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       group.schedule[event.target.dataset.scheduleField] = event.target.value;
       if (event.target.dataset.scheduleField === "capacityAmount" && String(event.target.value || "").trim() && !group.schedule.capacityUnit) {
         group.schedule.capacityUnit = suggestedCapacityUnitForGroup(groupModel(group.id) || group);
@@ -7685,7 +7685,7 @@
     }
 
     function rerenderScaleAfterEdit(event) {
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (event.target.dataset.scaleField) {
         ensureScaleBasis();
         state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
@@ -7703,8 +7703,8 @@
       renderExport();
     }
 
-    function invalidateAiRefine() {
-      state.aiRefine = null;
+    function invalidateProcessCheck() {
+      state.processCheck = null;
     }
 
     async function applyScheduleExample() {
@@ -7769,17 +7769,17 @@
       renderExport();
     }
 
-    function runAiRefine(options = currentProcessRuleOptions()) {
+    function runProcessCheck(options = currentProcessRuleOptions()) {
       state.processRuleOptions = { ...state.processRuleOptions, ...options };
       const issues = buildRuleChecks();
       const heuristics = heuristicReviewModel();
       const selectedIssues = filterIssuesByRuleOptions(issues, state.processRuleOptions);
-      const conflicts = aiRefineConflicts(selectedIssues, heuristics, state.processRuleOptions);
+      const conflicts = processCheckConflicts(selectedIssues, heuristics, state.processRuleOptions);
       state.ruleChecks = selectedIssues;
-      state.aiRefine = {
+      state.processCheck = {
         mode: "Local process rule application. This applies the active heuristics to the blocks, grouped MFA, phases, conditions, arrows, scale-up basis, and Gantt data already built.",
         scope: selectedRuleScopeText(state.processRuleOptions),
-        summary: aiRefineSummary(conflicts, heuristics),
+        summary: processCheckSummary(conflicts, heuristics),
         topSeverity: conflicts[0]?.severity || "low",
         conflicts
       };
@@ -7789,25 +7789,25 @@
       renderExport();
     }
 
-    function openAiRefineModal() {
-      const modal = $("aiRefineModal");
+    function openProcessCheckModal() {
+      const modal = $("processCheckModal");
       modal.hidden = false;
       setRuleScopeControls(state.processRuleOptions);
-      runAiRefine(currentProcessRuleOptions());
-      renderAiRefineModal();
+      runProcessCheck(currentProcessRuleOptions());
+      renderProcessCheckModal();
     }
 
-    function closeAiRefineModal() {
-      $("aiRefineModal").hidden = true;
+    function closeProcessCheckModal() {
+      $("processCheckModal").hidden = true;
     }
 
-    function renderAiRefineModal() {
-      const local = $("aiRefineLocalResult");
-      const refine = state.aiRefine;
+    function renderProcessCheckModal() {
+      const local = $("processCheckLocalResult");
+      const refine = state.processCheck;
       if (!local || !refine) return;
       setRuleScopeControls(state.processRuleOptions);
       local.innerHTML = `
-        ${aiRefinePanelHtml(refine)}
+        ${processCheckPanelHtml(refine)}
         ${localProcessCommentaryHtml(refine)}
         ${refine.conflicts.length ? ruleCheckCardsHtml(refine.conflicts.map(item => ({
           severity: item.severity,
@@ -7817,149 +7817,6 @@
           action: item.action
         }))) : `<div class="mfa-empty">No conflicts from selected local process checks.</div>`}
       `;
-    }
-
-    function externalReviewHtml(text) {
-      const parsed = parseMarkdownProblemTable(text);
-      const tableHtml = parsed.length
-        ? externalProblemTableHtml(parsed, "AI Problem Table", "Parsed from the external AI report.")
-        : externalProblemTableHtml((state.aiRefine?.conflicts || []).slice(0, 10).map(processActionRowModel), "Reference Action Table", "The AI response did not contain a readable Markdown problem table, so this table mirrors the local triage while the AI text remains below.");
-      return `
-        ${tableHtml}
-        <div class="external-report-text">${escapeHtml(stripMarkdownProblemTable(text || "No text returned by external API."))}</div>
-      `;
-    }
-
-    function parseMarkdownProblemTable(text) {
-      const lines = String(text || "").split(/\r?\n/);
-      const rows = [];
-      for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i].trim();
-        if (!line.startsWith("|") || !/severity|target|evidence|suggested/i.test(line)) continue;
-        const headers = splitMarkdownTableRow(line).map(normalizeHeader);
-        const separator = lines[i + 1]?.trim() || "";
-        if (!separator.startsWith("|") || !/---/.test(separator)) continue;
-        for (let j = i + 2; j < lines.length; j += 1) {
-          const rowLine = lines[j].trim();
-          if (!rowLine.startsWith("|")) break;
-          const cells = splitMarkdownTableRow(rowLine);
-          if (cells.length < 3) continue;
-          const row = {};
-          headers.forEach((header, index) => {
-            row[header] = cells[index] || "";
-          });
-          rows.push({
-            priority: row.severity || "review",
-            point: row.target || row.problem || row.issue || "Process point",
-            evidence: row.evidence || row["why it matters"] || "",
-            area: row.target || row.area || "External review",
-            rule: row["rule or doubt"] || row.rule || row.doubt || "AI-supported process heuristic",
-            action: row["suggested change"] || row.action || row.recommendation || "Review manually."
-          });
-        }
-        break;
-      }
-      return rows.slice(0, 12);
-    }
-
-    function splitMarkdownTableRow(line) {
-      return line
-        .replace(/^\|/, "")
-        .replace(/\|$/, "")
-        .split("|")
-        .map(cell => cell.trim().replace(/<br\s*\/?>/gi, " "));
-    }
-
-    function normalizeHeader(header) {
-      return String(header || "").toLowerCase().replace(/\*\*/g, "").trim();
-    }
-
-    function externalProblemTableHtml(rows, title, note) {
-      if (!rows.length) return "";
-      return `
-        <div class="external-problem-panel">
-          <div class="process-action-head">
-            <strong>${escapeHtml(title)}</strong>
-            <span class="muted small">${rows.length} point${rows.length === 1 ? "" : "s"}</span>
-          </div>
-          <div class="muted small">${escapeHtml(note)}</div>
-          <div class="external-problem-list">
-            ${rows.map(row => `
-              <article class="external-problem-card ${escapeAttr(String(row.priority).toLowerCase())}">
-                <div class="external-problem-top">
-                  <span class="severity-pill">${escapeHtml(row.priority)}</span>
-                  <strong>${escapeHtml(row.point)}</strong>
-                </div>
-                ${row.evidence ? `<p>${escapeHtml(row.evidence)}</p>` : ""}
-                <div class="external-problem-meta">
-                  <span><b>Area</b>${escapeHtml(row.area)}</span>
-                  <span><b>Rule / doubt</b>${escapeHtml(row.rule)}</span>
-                  <span><b>Proposed change</b>${escapeHtml(row.action)}</span>
-                </div>
-              </article>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }
-
-    function stripMarkdownProblemTable(text) {
-      const lines = String(text || "").split(/\r?\n/);
-      const output = [];
-      let skipping = false;
-      for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i];
-        const trimmed = line.trim();
-        if (!skipping && trimmed.startsWith("|") && /severity|target|evidence|suggested/i.test(trimmed)) {
-          skipping = true;
-          continue;
-        }
-        if (skipping) {
-          if (trimmed.startsWith("|") || /^[-|:\s]+$/.test(trimmed)) continue;
-          skipping = false;
-        }
-        output.push(line);
-      }
-      return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-    }
-
-    function processActionRowModel(issue) {
-      return {
-        priority: issue.severity || "low",
-        point: issue.title || "Process issue",
-        evidence: issue.reason || "",
-        area: processAreaLabel(issue),
-        rule: ruleReferenceLabel(issue),
-        action: issue.action || "Review and update the corresponding process data."
-      };
-    }
-
-    function processAreaLabel(issue) {
-      const scope = issue.scope || inferIssueScope(issue.title || "", issue.target || "", issue.reason || "");
-      const labels = {
-        sequence: "Sequence / arrows",
-        mfa: "MFA streams",
-        phases: "Phases / unit choice",
-        conditions: "Conditions",
-        recycle: "Recycle / purge",
-        scale: "Scale-up / Gantt",
-        general: "Process model"
-      };
-      const target = issue.target ? ` - ${issue.target}` : "";
-      return `${labels[scope] || labels.general}${target}`;
-    }
-
-    function ruleReferenceLabel(issue) {
-      const text = `${issue.title || ""} ${issue.reason || ""}`;
-      const heuristic = text.match(/\bH\d{2}\b/);
-      if (heuristic) return heuristic[0];
-      if (/thermal reversal|temperature handoff|cool|heat/i.test(text)) return "Thermal sequence heuristic";
-      if (/phase|unit.*compatible|alternative/i.test(text)) return "Phase-unit compatibility heuristic";
-      if (/mfa|stream|quantity|material/i.test(text)) return "Material-balance heuristic";
-      if (/recycle|purge|fate|accumul/i.test(text)) return "Recycle/purge closure heuristic";
-      if (/bottleneck|duration|gantt|scale/i.test(text)) return "Scale-up scheduling heuristic";
-      if (/condition|missing|endpoint|yield|conversion/i.test(text)) return "Data-completeness heuristic";
-      return "General process heuristic";
     }
 
     function localProcessCommentaryHtml(refine) {
@@ -7984,47 +7841,6 @@
           </div>
         </div>
       `;
-    }
-
-    async function runExternalAiRefine() {
-      const result = $("externalAiResult");
-      const apiKey = $("aiApiKey").value.trim();
-      const model = $("aiModel").value.trim();
-      const endpoint = $("aiEndpoint").value.trim() || "https://api.openai.com/v1/responses";
-      const reportStyle = $("aiReportStyle")?.value || "commentary_summary";
-      const useWebReferences = $("aiUseWebReferences")?.checked !== false;
-      const options = currentProcessRuleOptions();
-      writeExportNow();
-      result.className = "external-ai-result mfa-empty";
-      const keySource = apiKey ? "temporary popup key" : "server OPENAI_API_KEY if configured";
-      result.textContent = useWebReferences
-        ? `Running external analysis with ${keySource}. Web references can take up to 3 minutes; if web search times out, the server will retry once without web references.`
-        : `Running external analysis with ${keySource}. Web references disabled.`;
-      let project = {};
-      try {
-        project = JSON.parse($("jsonOut").textContent || "{}");
-      } catch {
-        project = { text: state.text, error: "Could not parse export JSON." };
-      }
-      try {
-        const response = await fetch("/api/refine", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiKey, model, endpoint, reportStyle, useWebReferences, options, project })
-        });
-        const payload = await response.json();
-        if (!payload.ok) {
-          result.className = "external-ai-result rule-card high";
-          const details = payload.details ? `\n\nDetails: ${JSON.stringify(payload.details, null, 2)}` : "";
-          result.textContent = `${payload.error || "External API analysis failed."}${details}`;
-          return;
-        }
-        result.className = "external-ai-result rule-card low";
-        result.innerHTML = externalReviewHtml(payload.text || "No text returned by external API.");
-      } catch (error) {
-        result.className = "external-ai-result rule-card high";
-        result.textContent = `External API request failed: ${error.message}`;
-      }
     }
 
     function currentProcessRuleOptions() {
@@ -8066,7 +7882,7 @@
       });
     }
 
-    function aiRefineConflicts(issues, heuristics, options = state.processRuleOptions) {
+    function processCheckConflicts(issues, heuristics, options = state.processRuleOptions) {
       const issueConflicts = issues
         .filter(issue => ["high", "medium"].includes(issue.severity) || /conflict|missing|bottleneck|incompatible|scale-sensitive/i.test(`${issue.title} ${issue.reason}`))
         .map(issue => ({
@@ -8114,7 +7930,7 @@
       return /missing|lacks|incomplete|needs data|need data|not reported|no numeric|unspecified|needs? (more )?evidence/i.test(`${item.title || ""} ${item.reason || ""}`);
     }
 
-    function aiRefineSummary(conflicts, heuristics) {
+    function processCheckSummary(conflicts, heuristics) {
       const gaps = conflicts.filter(isDataGapIssue);
       const design = conflicts.filter(item => !isDataGapIssue(item));
       if (design.length || gaps.length) {
@@ -8163,7 +7979,7 @@
         issues.push(ruleIssue("high", "Scale basis incomplete", "A production target needs a numeric reference output or manual basis amount.", "scale-up basis", "Select a reference output block or enter a manual basis amount."));
       }
       if (!model.basis.targetProduct.trim()) {
-        issues.push(ruleIssue("medium", "Target product missing", "Scale propagation is harder to audit without naming the product stream.", "scale-up basis", "Set the target product name."));
+        issues.push(ruleIssue("medium", "Target product missing", "Scale propagation cannot be reviewed clearly without naming the product stream.", "scale-up basis", "Set the target product name."));
       }
       if (model.basis.mode !== "continuous" && model.schedule.method !== "duration_OEE_parallel_units" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
         issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires either batches/day (fallback) or a batch duration with OEE and parallel units (preferred once Gantt data exists) to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day, or add task durations so the duration-based method can take over."));
@@ -8743,7 +8559,7 @@
           const predictor = ensureGroup(select.dataset.predictorMode).propertyPredictor;
           predictor.mode = select.value;
           predictor.expanded = select.value === "minimal" || select.value === "binaryRatio" ? true : predictor.expanded;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -8764,7 +8580,7 @@
           } else {
             groupState.alternativeDecisions[name] = { decision: select.value };
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -9556,7 +9372,7 @@
         product.conversionBaseQuantity = "";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return product;
     }
 
@@ -9565,7 +9381,7 @@
       if (!product) return null;
       product.unit = rawValue || "kg";
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return product;
     }
 
@@ -9775,7 +9591,7 @@
       syncLegacyStreamLists(block);
       calc.detail.lastAppliedAt = new Date().toISOString();
       calc.detail.lastGeneratedSummary = `Saved at ${formatNumber(calc.conversionPercent)}% conversion, ${formatNumber(calc.selectivityPercent)}% selectivity, and ${formatNumber(calc.percent)}% yield: ${calc.reactantRows.filter(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0).length} residual component(s) and ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct component(s).`;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderConversionModal();
       renderStepFlowInspector();
       if (typeof flowsheetUnitCategory === "function") {
@@ -9807,7 +9623,7 @@
         const product = conversionProductStream(block);
         if (product) product.conversionBaseQuantity = "";
       }
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return detail.balanceMethod;
     }
 
@@ -9842,7 +9658,7 @@
       block.conditions.conversion_yield = String(clamped);
       block.conditionUnits.conversion_yield = "%";
       syncGroupReactionBalanceFromConversionBlock(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (target?.type === "range") renderConversionModalKeepingFocus(target);
       else if (target) renderConversionModalAfterCommit(target);
       else renderConversionModal();
@@ -9855,7 +9671,7 @@
       detail[field] = String(Math.max(0, Math.min(100, conversionNumber(rawValue))));
       detail[field === "conversionPercent" ? "conversionStatus" : "selectivityStatus"] = "reported";
       syncGroupReactionBalanceFromConversionBlock(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       target ? renderConversionModalAfterCommit(target) : renderConversionModal();
       renderStepFlowInspector();
       renderExport();
@@ -10458,7 +10274,7 @@
           detail.productBasisQuantity = conversionProductEntryQuantity(product, "theoretical", detail) || product.quantity || "";
           product.conversionBaseQuantity = detail.productBasisQuantity;
         }
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("conversionBalanceMethod")?.addEventListener("change", event => {
@@ -10487,13 +10303,13 @@
         });
         syncLegacyStreamLists(block);
         syncGroupReactionBalanceFromConversionBlock(block);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("addConversionProduct")?.addEventListener("click", () => {
         addConversionProductOutput(block);
         syncGroupReactionBalanceFromConversionBlock(block);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
         renderStepFlowInspector();
         renderExport();
@@ -10502,7 +10318,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductName);
           ensureConversionDetail(block).byproducts[i].name = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
       });
       body.querySelectorAll("[data-conversion-input-reaction-role]").forEach(select => {
@@ -10512,7 +10328,7 @@
           stream.reactionRole = event.target.value;
           stream.reactionRoleManual = true;
           if (stream.reactionRole !== "reactant") stream.stoichCoeff = "";
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
           renderExport();
         });
@@ -10522,7 +10338,7 @@
           const stream = findStreamById(event.target.dataset.conversionReagentStoich);
           if (!stream) return;
           stream.stoichCoeff = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
         input.addEventListener("change", event => {
           renderConversionModalAfterCommit(event.target);
@@ -10534,7 +10350,7 @@
           const stream = findStreamById(event.target.dataset.conversionReagentMw);
           if (!stream) return;
           stream.mw = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
         input.addEventListener("change", event => {
           renderConversionModalAfterCommit(event.target);
@@ -10570,7 +10386,7 @@
             applyPubChemLookup(stream, data);
             stream.status = stream.status === "missing" ? "estimated" : stream.status;
             syncLegacyStreamLists(block);
-            invalidateAiRefine();
+            invalidateProcessCheck();
             renderConversionModal();
             renderStepFlowInspector();
             renderExport();
@@ -10586,7 +10402,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductRole);
           ensureConversionDetail(block).byproducts[i].role = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
@@ -10610,7 +10426,7 @@
             row.stoichCoeff = "";
             row.mw = "";
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
@@ -10618,7 +10434,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductPercent);
           ensureConversionDetail(block).byproducts[i].percent = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10626,7 +10442,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductAmount);
           ensureConversionDetail(block).byproducts[i].amount = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10634,7 +10450,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductStoich);
           ensureConversionDetail(block).byproducts[i].stoichCoeff = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10642,7 +10458,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductMw);
           ensureConversionDetail(block).byproducts[i].mw = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10650,20 +10466,20 @@
         input.addEventListener("input", event => {
           const i = Number(event.target.dataset.conversionByproductUnit);
           ensureConversionDetail(block).byproducts[i].unit = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
       });
       body.querySelectorAll("[data-remove-conversion-byproduct]").forEach(button => {
         button.addEventListener("click", () => {
           const i = Number(button.dataset.removeConversionByproduct);
           ensureConversionDetail(block).byproducts.splice(i, 1);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
       $("addConversionByproduct")?.addEventListener("click", () => {
         ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", basis: "actual", amount: "", unit: fallbackUnit, role: "byproduct" });
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("conversionApplyBalance")?.addEventListener("click", () => {
@@ -11310,7 +11126,7 @@
         input.addEventListener("change", () => {
           pushUndo();
           applyProjectSubstanceProperty(input.dataset.substanceKey, input.dataset.substanceField, input.value);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -11318,7 +11134,7 @@
         button.addEventListener("click", () => {
           pushUndo();
           applyProjectSubstanceProperty(button.dataset.unifySubstance, button.dataset.unifyField, button.dataset.unifyValue);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -11356,7 +11172,7 @@
             if (substanceChemicalKey(substance) === key || canonicalChemicalKey(substance.name) === key) applyPubChemLookup(substance, data);
           });
         });
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderAll();
       } catch (error) {
         await alertModal(`PubChem lookup failed: ${error.message}`);
@@ -12059,7 +11875,7 @@
         applyChemicalKey(existing);
         if (role === "product") simulator.reactionBalance.mainProductId = existing.id;
         simulator.tab = "balance";
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderSeparationSimulatorModal();
         renderExport();
         return;
@@ -12078,7 +11894,7 @@
       simulator.substances.push(substance);
       if (role === "product") simulator.reactionBalance.mainProductId = substance.id;
       simulator.tab = "balance";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderSeparationSimulatorModal();
       renderExport();
     }
@@ -12130,7 +11946,7 @@
         target.streams.push(stream);
       });
       syncLegacyStreamLists(target);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -12546,7 +12362,7 @@
       state.focusEndpoint = newGroupId;
       state.activeInspectorTab = "scale";
       closeSeparationSimulator();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -13010,7 +12826,7 @@
       state.selectedIds = [];
       state.focusEndpoint = lastGroupId;
       closeSeparationSimulator();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -13308,7 +13124,7 @@
       if (separationSharedPropertyFields.has(field)) {
         propagateSeparationChemicalProperties(event.target.dataset.sepGroup, substance, field);
       }
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
@@ -13317,14 +13133,14 @@
       const key = event.target.dataset.sepPairKey;
       if (!groupState.separationSimulator.pairInsights[key]) groupState.separationSimulator.pairInsights[key] = {};
       groupState.separationSimulator.pairInsights[key][event.target.dataset.sepPairField] = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
     function updateReactionBalanceField(event) {
       const groupState = ensureGroup(event.target.dataset.sepGroup);
       groupState.separationSimulator.reactionBalance[event.target.dataset.reactionBalanceField] = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
@@ -13811,7 +13627,7 @@
       const prompt = propertyPromptCatalog.find(item => item.id === event.target.dataset.propertyId);
       if (!prompt) return;
       const current = normalizePropertyValue(group.properties[prompt.id], prompt);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current[event.target.dataset.propertyField] = event.target.value;
       group.properties[prompt.id] = current;
       renderExport();
@@ -13878,7 +13694,7 @@
           block.phenomena = block.phenomena.includes(phen)
             ? block.phenomena.filter(item => item !== phen)
             : [...block.phenomena, phen];
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -14395,7 +14211,7 @@
       const noteInput = [...root.querySelectorAll("[data-group-condition-note]")].find(el => el.dataset.groupConditionNote === key);
       const value = valueInput?.value.trim() || "";
       const note = noteInput?.value.trim() || "";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (value || note) {
         groupState.conditionOverrides[key] = { value, note };
       } else {
@@ -14686,7 +14502,7 @@
       const current = selectedBlock();
       if (!current) return;
       ensureBlockConditionFields(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current.conditions[event.target.dataset.conditionField] = event.target.value;
       renderExport();
     }
@@ -14695,7 +14511,7 @@
       const current = selectedBlock();
       if (!current) return;
       ensureBlockConditionFields(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current.conditionUnits[event.target.dataset.conditionUnit] = event.target.value;
       renderExport();
     }
@@ -15111,7 +14927,7 @@
       if (!stream.status || stream.status === "missing") stream.status = "estimated";
       state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15132,7 +14948,7 @@
       delete state.pubchemStreamSuggestions?.[streamId];
       state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15201,7 +15017,7 @@
         delete state.pubchemStreamSuggestions?.[streamId];
         state.pendingStepStreamFocusId = stream.id;
         syncLegacyStreamLists(current);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderStepFlowInspector();
         renderExport();
       } catch (error) {
@@ -15257,7 +15073,7 @@
         state.pendingStepStreamScrollRole = "outlet";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15300,7 +15116,7 @@
         state.pendingStepStreamScrollRole = "outlet";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15423,7 +15239,7 @@
       ensureBlockFlowFields(current);
       const stream = current.streams.find(item => item.id === event.target.dataset.streamId);
       if (!stream) return;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       stream[event.target.dataset.streamField] = event.target.value;
       if (event.target.dataset.streamField === "reactionRole") {
         // The user just picked this explicitly - stop the name-driven auto-classifier below from
@@ -15586,7 +15402,7 @@
       cleanupGroupIfEmpty(groupId);
       state.selectedIds = state.selectedIds.filter(id => id !== blockId);
       if (state.selectedBlockId === blockId) state.selectedBlockId = state.selectedIds[0] || null;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15597,7 +15413,7 @@
       const groupId = block.groupId;
       block.groupId = null;
       cleanupGroupIfEmpty(groupId);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15648,7 +15464,7 @@
       syncLegacyStreamLists(target);
       state.selectedBlockId = target.id;
       state.selectedIds = [target.id];
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15899,7 +15715,7 @@
       state.selectedIds = [];
       state.focusEndpoint = newGroupIds[0];
       state.activeInspectorTab = "scale";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -16477,7 +16293,7 @@
       block.streams = block.streams.filter(stream => stream.id !== streamId);
       syncLegacyStreamLists(block);
       hideStreamMenu();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -16929,7 +16745,7 @@
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       renderAll();
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
@@ -16996,8 +16812,8 @@
       positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]);
     });
     $("refineProject").addEventListener("click", runRuleChecks);
-    $("refineProjectAi").addEventListener("click", openAiRefineModal);
-    $("closeAiRefineModal").addEventListener("click", closeAiRefineModal);
+    $("openProcessCheck").addEventListener("click", openProcessCheckModal);
+    $("closeProcessCheckModal").addEventListener("click", closeProcessCheckModal);
     $("openFlowsheet").addEventListener("click", openFlowsheetModal);
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
     $("closeSeparationSimulator")?.addEventListener("click", closeSeparationSimulator);
@@ -17044,7 +16860,7 @@
     $("flowsheetZoomReadout")?.addEventListener("click", resetFlowsheetZoom);
     $("flowsheetHost")?.addEventListener("wheel", handleFlowsheetWheel, { passive: false });
     $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
-    $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    $("flowsheetDetailedPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("detailed"));
     // "?" buttons: the long explanations for an area, readable in a modal instead of hover.
     function openHelpModal(topicKey) {
       const registry = globalThis.ProcessUpscalingHelp || {};
@@ -17108,17 +16924,16 @@
       if (event.target === $("splitGroupModal")) closeSplitGroupModal();
     });
     $("rerunLocalRuleApplication").addEventListener("click", () => {
-      runAiRefine(currentProcessRuleOptions());
-      renderAiRefineModal();
+      runProcessCheck(currentProcessRuleOptions());
+      renderProcessCheckModal();
     });
     document.querySelectorAll("[data-rule-scope]").forEach(control => {
       control.addEventListener("change", () => {
         state.processRuleOptions = currentProcessRuleOptions();
-        runAiRefine(state.processRuleOptions);
-        renderAiRefineModal();
+        runProcessCheck(state.processRuleOptions);
+        renderProcessCheckModal();
       });
     });
-    $("runExternalAiRefine").addEventListener("click", runExternalAiRefine);
     $("resetView").addEventListener("click", () => {
       resetView();
       document.querySelector(".board-view-dropdown")?.removeAttribute("open");
@@ -17189,7 +17004,7 @@
       const block = selectedBlock();
       if (!block) return;
       block.text = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       // The board only shows an excerpt of this text; redraw it once the typing pauses.
       deferRender("groupFlow", () => withRenderPass(() => {
         renderGroupFlow();
@@ -17291,8 +17106,8 @@
           closePubChemResolveModal();
           return;
         }
-        if (!$("aiRefineModal").hidden) {
-          closeAiRefineModal();
+        if (!$("processCheckModal").hidden) {
+          closeProcessCheckModal();
           return;
         }
         if (!$("separationSimulatorModal").hidden) {

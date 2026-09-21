@@ -40,7 +40,7 @@
       `;
     }
 
-    function flowsheetAuditIssuesForBox(box) {
+    function flowsheetCheckIssuesForBox(box) {
       const streams = [
         ...(box.inputStreams || []),
         ...(box.outputStreams || []),
@@ -78,11 +78,11 @@
             <span><strong>${routeCount}</strong> process links</span>
             <span><strong>${auxCount}</strong> aux/recycle links</span>
           </div>
-          <div class="flowsheet-detail-empty">Select a unit on the diagram to inspect streams, conditions, and audit gaps.</div>
+          <div class="flowsheet-detail-empty">Select a unit on the diagram to inspect streams, conditions, and data gaps.</div>
         `;
         return;
       }
-      const issues = flowsheetAuditIssuesForBox(selected);
+      const issues = flowsheetCheckIssuesForBox(selected);
       const selectedGroup = groupModel(selected.id);
       root.innerHTML = `
         <div class="flowsheet-detail-title-row">
@@ -116,7 +116,7 @@
         ${flowsheetStreamDetailRows(selected.ventStreams, "Vents")}
         ${flowsheetStreamDetailRows(selected.recycleStreams, "Recycle")}
         <div class="flowsheet-detail-section">
-          <div class="flowsheet-detail-section-head">Audit</div>
+          <div class="flowsheet-detail-section-head">Checks</div>
           ${issues.length
             ? `<div class="flowsheet-detail-tags warn">${issues.map(issue => `<span>${escapeHtml(issue)}</span>`).join("")}</div>`
             : `<div class="flowsheet-detail-tags ok"><span>no obvious display gaps</span></div>`}
@@ -135,7 +135,7 @@
     }
 
     function applyFlowsheetViewPreset(preset) {
-      state.flowsheetViewPreset = preset === "clean" ? "clean" : "audit";
+      state.flowsheetViewPreset = preset === "clean" ? "clean" : "detailed";
       const clean = state.flowsheetViewPreset === "clean";
       state.flowsheetShowStreamLabels = !clean;
       state.flowsheetShowAuxiliaryArrows = !clean;
@@ -157,9 +157,9 @@
           : "Fit the generated flowsheet inside the modal for overview";
       }
       const cleanPreset = $("flowsheetCleanPreset");
-      const auditPreset = $("flowsheetAuditPreset");
+      const detailedPreset = $("flowsheetDetailedPreset");
       if (cleanPreset) cleanPreset.classList.toggle("primary", state.flowsheetViewPreset === "clean");
-      if (auditPreset) auditPreset.classList.toggle("primary", state.flowsheetViewPreset !== "clean");
+      if (detailedPreset) detailedPreset.classList.toggle("primary", state.flowsheetViewPreset !== "clean");
       const basisSelect = $("flowsheetBasisSelect");
       if (basisSelect) basisSelect.value = flowsheetBasisKey();
       const tableToggle = $("flowsheetStreamTableToggle");

@@ -102,7 +102,7 @@ function tutorialResetProject() {
   state.connectingFrom = null;
   state.lastSelection = null;
   state.focusEndpoint = null;
-  state.aiRefine = null;
+  state.processCheck = null;
   state.ruleChecks = [];
   // The tutorial's own example starts from the generic basis; otherwise the findings strip keeps
   // sizing a reactor for whatever project was loaded before.
@@ -526,7 +526,7 @@ const tutorialSteps = [
   {
     target: "#loadTextSide",
     title: "Part 1 · 2. Load Protocol",
-    body: "Load Protocol copies the text into the annotated area below. That is the surface where selections become traceable blocks.",
+    body: "Load Protocol copies the text into the annotated area below. That is the surface where selections become structured process blocks.",
     details: ["You can still edit the source text first.", "Loading a different text intentionally starts a fresh block set."],
     action: tutorialLoadTextView,
     cta: "Load text",
@@ -596,7 +596,7 @@ const tutorialSteps = [
     target: ".group-mfa-grid",
     anchor: ".group-mfa-grid .mfa-section-head",
     title: "Part 2 · 2. Material Basis",
-    body: "Now the task has named substances, amounts, units, phases, and reaction roles. This is the auditable MFA basis used by the rest of the tool.",
+    body: "Now the task has named substances, amounts, units, phases, and reaction roles. This is the material-flow basis used by the rest of the tool.",
     details: ["Benzyl alcohol, acetic anhydride, and triethylamine are inputs.", "Benzyl acetate is marked as the product outlet; 90 percent yield leaves residual reactants for recovery screening."],
     action: tutorialShowMaterialRows
   },
@@ -757,7 +757,7 @@ const tutorialSteps = [
     target: "#heuristicsPanel",
     title: "Part 4 · 1. Heuristic Rules",
     body: "Heuristic rules review the current graph for missing basis data, weak assumptions, scale-up risks, recycle logic, and export readiness.",
-    details: ["The first three audit-only prompts are intentionally skipped in this guided path.", "Use these findings as a structured review list before treating the model as publishable."],
+    details: ["The first three optional review prompts are intentionally skipped in this guided path.", "Use these findings as a structured checklist before treating the model as publishable."],
     action: tutorialPrepareHeuristics,
     cta: "Run checks",
     ctaAction: tutorialPrepareHeuristics
@@ -766,7 +766,7 @@ const tutorialSteps = [
     target: "#heuristicRuleCheckPanel",
     anchor: "#heuristicRuleCheckPanel .rule-card",
     title: "Part 4 · 2. Review Findings",
-    body: "The findings panel is where you decide what to accept, reject, override, or fix. Those decisions become part of the traceable work log.",
+    body: "The findings panel is where you decide what to accept, reject, override, or fix. Those decisions remain attached to the saved project.",
     details: ["A warning is not automatically a design error.", "For publication, unresolved warnings should have a note explaining the evidence or limitation."],
     action: tutorialPrepareHeuristics
   },

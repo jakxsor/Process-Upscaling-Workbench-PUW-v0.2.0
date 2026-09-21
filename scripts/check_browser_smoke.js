@@ -120,16 +120,14 @@ const measureBoard = () => {
       const lci = await page.$eval("#lcaReadinessSummary", el => el.textContent.trim());
       assert(/input/.test(lci), `Inventory readiness summary should report inputs, got: ${lci}`);
 
-      // Step 5 opens a modal whose deterministic report is filled and whose external form is folded.
+      // Step 5 opens a modal with the deterministic process-check results only.
       await page.click('[data-inspector-tab="heuristics"]');
       await page.waitForTimeout(300);
-      await page.click("#refineProjectAi");
+      await page.click("#openProcessCheck");
       await page.waitForTimeout(1500);
-      const report = await page.$eval("#aiRefineLocalResult", el => el.innerText);
+      const report = await page.$eval("#processCheckLocalResult", el => el.innerText);
       assert(/before scale-up/.test(report), "The local rule report should summarise conflicts before scale-up");
-      const externalOpen = await page.$eval(".external-analysis-details", el => el.open);
-      assert.strictEqual(externalOpen, false, "The external review should be folded by default");
-      await page.click("#closeAiRefineModal");
+      await page.click("#closeProcessCheckModal");
       await page.waitForTimeout(300);
 
       // The flowsheet opens and draws units.
