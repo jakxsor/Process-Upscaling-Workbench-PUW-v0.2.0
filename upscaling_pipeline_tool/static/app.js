@@ -16441,14 +16441,27 @@
       };
     }
 
+    // Shared by the board's wheel-zoom (below) and the flowsheet modal's (flowsheet_ui.js), which
+    // uses the identical formula. WHEEL_ZOOM_MAX_STEP bounds how far a single wheel event can move
+    // the zoom (exp(-0.16) = -14.8%, exp(0.16) = +17.4%); WHEEL_ZOOM_LINEAR_PX is the delta (in CSS
+    // pixels) at which that cap is reached, chosen so the response rate below it - a trackpad's
+    // usual few-pixel-per-event stream - matches the 0.012-per-pixel rate this cap replaced.
+    const WHEEL_ZOOM_MAX_STEP = 0.16;
+    const WHEEL_ZOOM_LINEAR_PX = WHEEL_ZOOM_MAX_STEP / 0.012;
+
     function handleGraphWheel(event) {
       const flow = $("groupFlow");
       if (!flow.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
       const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? flow.clientHeight : 1);
-      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
-      const factor = Math.exp(-normalized * 0.16);
+      // Below WHEEL_ZOOM_LINEAR_PX, respond at WHEEL_ZOOM_RATE per pixel - a trackpad's small
+      // continuous deltas, so it still feels immediate. Above it, the response saturates at the
+      // same maximum per-event step (exp(-WHEEL_ZOOM_MAX_STEP) at most one wheel event can move
+      // the zoom, instead of the old unbounded per-pixel rate letting one large mouse-wheel click
+      // or a fast trackpad fling jump the zoom by 5x in a single event.
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / WHEEL_ZOOM_LINEAR_PX, 1);
+      const factor = Math.exp(-normalized * WHEEL_ZOOM_MAX_STEP);
       setZoom(state.zoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 

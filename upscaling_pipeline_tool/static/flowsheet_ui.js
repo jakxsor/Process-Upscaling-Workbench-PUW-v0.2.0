@@ -262,9 +262,11 @@
       if (!host || !host.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
+      // WHEEL_ZOOM_MAX_STEP / WHEEL_ZOOM_LINEAR_PX are defined once in app.js and shared with the
+      // board's identical wheel-zoom handler.
       const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1);
-      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
-      const factor = Math.exp(-normalized * 0.16);
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / WHEEL_ZOOM_LINEAR_PX, 1);
+      const factor = Math.exp(-normalized * WHEEL_ZOOM_MAX_STEP);
       setFlowsheetZoom(state.flowsheetZoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 
