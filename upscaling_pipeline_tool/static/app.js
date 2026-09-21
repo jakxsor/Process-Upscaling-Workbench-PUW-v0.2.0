@@ -16934,7 +16934,28 @@
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
     $("exportLciExcel")?.addEventListener("click", downloadLciExcel);
-    $("openTutorial").addEventListener("click", () => openTutorial());
+    const closeTutorialMenu = () => {
+      $("tutorialMenu").hidden = true;
+      $("tutorialMenuToggle").setAttribute("aria-expanded", "false");
+    };
+    $("tutorialMenuToggle").addEventListener("click", () => {
+      const willOpen = $("tutorialMenu").hidden;
+      $("tutorialMenu").hidden = !willOpen;
+      $("tutorialMenuToggle").setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", event => {
+      if (!$("tutorialMenu").hidden && !event.composedPath().some(el => el.classList?.contains("tutorial-dropdown"))) closeTutorialMenu();
+    });
+    $("openQuickTutorial").addEventListener("click", () => {
+      closeTutorialMenu();
+      state.tutorialFull = false;
+      openTutorial(0);
+    });
+    $("openFullTutorial").addEventListener("click", () => {
+      closeTutorialMenu();
+      state.tutorialFull = true;
+      openTutorial(0);
+    });
     $("tutorialSkip").addEventListener("click", closeTutorial);
     // renderTutorialStep is async and awaits each step's action. Called bare, a
     // rejecting action leaves the index already advanced while the card still shows

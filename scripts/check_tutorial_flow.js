@@ -23,6 +23,7 @@ assert(tutorialSource.includes("Part 2"), "Tutorial should include the post-task
 assert(tutorialSource.includes("Part 3"), "Tutorial should include the Lutze pathway section");
 assert(tutorialSource.includes("Part 4"), "Tutorial should include the heuristic/scale-up section");
 assert(tutorialSource.includes("Flowsheet View"), "Tutorial should end with the flowsheet step");
+assert(appHtml.includes("openQuickTutorial") && appHtml.includes("openFullTutorial"), "Header should expose separate quick and full tutorial entries");
 assert(tutorialSource.includes("tutorialCardPlacement") && tutorialSource.includes("tutorialAnchorPoint"), "Tutorial should place the card beside large targets and point the arrow at an anchor");
 assert(cssSource.includes(".tutorial-anchor-ring"), "The anchor ring on large targets should be styled");
 assert(tutorialSource.includes("Add example substances"), "Tutorial should teach adding material rows after task creation");

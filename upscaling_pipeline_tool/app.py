@@ -173,7 +173,13 @@ APP_HTML = r"""<!doctype html>
           <div id="savedProjectList" class="saved-project-list"></div>
         </div>
       </div>
-      <button id="openTutorial" title="Open a short guided tour of the main workflow">Tutorial</button>
+      <div class="header-dropdown tutorial-dropdown">
+        <button id="tutorialMenuToggle" aria-haspopup="true" aria-expanded="false" title="Choose a quick or complete guided tutorial">Tutorial ▾</button>
+        <div id="tutorialMenu" class="header-dropdown-menu" hidden role="menu">
+          <button id="openQuickTutorial" role="menuitem" title="Essential workflow in a few guided steps">Quick tour</button>
+          <button id="openFullTutorial" role="menuitem" title="Complete guided workflow with every editing and review step">Full tutorial</button>
+        </div>
+      </div>
       <div class="header-dropdown">
         <button id="loadExampleToggle" aria-haspopup="true" aria-expanded="false">Load example ▾</button>
         <div id="loadExampleMenu" class="header-dropdown-menu" hidden role="menu">
