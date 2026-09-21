@@ -104,6 +104,9 @@ function tutorialResetProject() {
   state.focusEndpoint = null;
   state.aiRefine = null;
   state.ruleChecks = [];
+  // The tutorial's own example starts from the generic basis; otherwise the findings strip keeps
+  // sizing a reactor for whatever project was loaded before.
+  if (typeof scaleBasisDefaults === "function") state.scaleBasis = scaleBasisDefaults();
   state.zoom = 0.78;
   state.draftPos = { x: 24, y: 24 };
   state.boardCompact = false;

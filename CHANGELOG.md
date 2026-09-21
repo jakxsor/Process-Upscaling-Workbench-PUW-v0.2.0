@@ -67,9 +67,6 @@ Changes from a UI study of every main screen, measured on the live app.
   still lacks. Each is a link to where it is settled.
 - Steps are numbered once, in the stepper. The right-hand tab badges and the
   numbers inside the panel flags are gone.
-- Below 55% zoom the board is a map: each group card shows only its id, unit
-  and task at a size that stays legible whatever the zoom. The nine-unit
-  example used to fit at 35% with unit names at 4 px.
 - The protocol textarea folds once blocks exist, since the annotated view is
   then the working copy of the same text.
 - Phenomena read as plain words first, code second: "Heating ES(H)". The
