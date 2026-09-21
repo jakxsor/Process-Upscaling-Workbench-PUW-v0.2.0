@@ -1,3 +1,2 @@
-pyflowsheet==0.2.2
-pathfinding==1.0.1
-svgwrite>=1.4
+openpyxl==3.1.5
+python-pptx==1.0.2

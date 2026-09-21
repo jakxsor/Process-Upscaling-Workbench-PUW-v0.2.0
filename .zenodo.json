@@ -1,0 +1,27 @@
+{
+  "upload_type": "software",
+  "title": "Process Upscaling Workbench",
+  "description": "<p>Browser-based implementation of a phenomena-based scale-up workflow for prospective life cycle assessment. It translates a laboratory synthesis protocol into traceable process blocks, task groups, material-flow assumptions with declared provenance, unit-operation candidates, post-reaction separation screening after Lutze and Garg, heuristic checks, a preliminary scale-up basis, and a schematic Gantt bottleneck review. It exports a life cycle inventory workbook and an editable PowerPoint flowsheet.</p><p>Every quantity carries its status, reported, calculated, estimated or missing, and an estimate carries the published source it was derived from. This release accompanies the associated methodology paper described in the repository citation metadata.</p>",
+  "creators": [
+    { "name": "Sorani, Jacopo" },
+    { "name": "Majo, M." }
+  ],
+  "contributors": [
+    { "name": "Nowack, Bernd", "type": "Supervisor" },
+    { "name": "Hischier, Roland", "type": "Supervisor" }
+  ],
+  "license": "mit",
+  "access_right": "open",
+  "version": "0.2.0",
+  "language": "eng",
+  "keywords": [
+    "process scale-up",
+    "prospective life cycle assessment",
+    "life cycle inventory",
+    "chemical process design",
+    "material flow analysis",
+    "separation screening",
+    "process flowsheet",
+    "green chemistry"
+  ]
+}

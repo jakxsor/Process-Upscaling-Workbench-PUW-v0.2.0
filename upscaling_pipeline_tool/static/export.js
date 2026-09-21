@@ -1,14 +1,62 @@
-    // Project JSON export. Split out of app.js for navigability; loaded as a plain <script> before
-    // app.js (see app.py) so these functions share the same global scope as the rest of the app.
+    // Builds the exportable project tree (buildProjectExport) and either previews it (writeExportNow,
+    // for the AI-refine flow) or downloads it as a file (downloadProjectJson, downloadLciExcel).
+    // Save/Restore/Import/Autosave — the "Work ▾" menu and localStorage — live in
+    // project_persistence.js instead; that file's buildProjectExport() call is what this file exists
+    // to provide. Loaded as a plain <script> before project_persistence.js and app.js (see app.py) so
+    // these functions share the same global scope as the rest of the app.
     // Depends on: $, state, blocksInOrder, ensureBlockFlowFields, scaleModel, groupIdsInTextOrder,
     // groupModel, propertySeparationPredictorModel, aggregateGroupConditions, aggregateGroupStreams,
     // recycleSummary, energyBridgeModel, scaleUpAssessmentModel, heuristicReviewModel,
     // taskScheduleModel, throughputDiagnosticsModel, buildLcaBridge, workflowStepStatuses,
     // dataReadinessModel, conditionValuesForBlock, phaseLabel, propertyPromptsForGroup,
     // normalizePropertyValue, ensureGroup, separationSimulatorModel, binaryRouteVariants,
-    // reactionBalanceModel, workupPlanModel — all defined in app.js.
+    // reactionBalanceModel, workupPlanModel, escapeHtml, escapeAttr — all defined in app.js.
+    // scheduleProjectAutosave() (called from renderExport() below) is defined in project_persistence.js.
 
+    function cloneProjectValue(value, fallback = null) {
+      try {
+        return JSON.parse(JSON.stringify(value ?? fallback));
+      } catch (err) {
+        return fallback;
+      }
+    }
+
+    function buildProjectStateExport() {
+      return {
+        schemaVersion: "workbench-state-v1",
+        savedAt: new Date().toISOString(),
+        text: state.text,
+        blocks: cloneProjectValue(state.blocks, []),
+        groups: cloneProjectValue(state.groups, {}),
+        links: cloneProjectValue(state.links, []),
+        scaleBasis: cloneProjectValue(state.scaleBasis, {}),
+        heuristicDecisions: cloneProjectValue(state.heuristicDecisions, {}),
+        ruleChecks: cloneProjectValue(state.ruleChecks, []),
+        aiRefine: cloneProjectValue(state.aiRefine, null),
+        processRuleOptions: cloneProjectValue(state.processRuleOptions, {}),
+        board: {
+          boardCompact: Boolean(state.boardCompact),
+          draftPos: cloneProjectValue(state.draftPos, { x: 24, y: 24 }),
+          zoom: Number.isFinite(state.zoom) ? state.zoom : 0.78
+        },
+        flowsheet: {
+          viewPreset: state.flowsheetViewPreset || "audit",
+          selectedGroupId: state.selectedFlowsheetGroupId || "",
+          fit: state.flowsheetFit !== false,
+          showAuxiliaryArrows: state.flowsheetShowAuxiliaryArrows !== false,
+          showUnitDetails: state.flowsheetShowUnitDetails === true,
+          showStreamLabels: state.flowsheetShowStreamLabels !== false
+        }
+      };
+    }
+
+    // The export recomputes every derived model; inside one render pass they are shared, so the
+    // autosave and the JSON export stop redoing the schedule 29 times for one file.
     function buildProjectExport() {
+      return typeof withRenderPass === "function" ? withRenderPass(buildProjectExportUncached) : buildProjectExportUncached();
+    }
+
+    function buildProjectExportUncached() {
       const blocks = blocksInOrder().map(block => {
         ensureBlockFlowFields(block);
         return exportBlock(block);
@@ -58,6 +106,9 @@
       const throughputDiagnostics = throughputDiagnosticsModel(scale, ganttSchedule);
       const lcaBridge = buildLcaBridge(blocks, groups, scale, recycle, energyBridge);
       return {
+        exportSchemaVersion: "upscaling-project-v1",
+        exportedAt: new Date().toISOString(),
+        projectState: buildProjectStateExport(),
         workflow: "source text -> annotated blocks -> material inputs/outputs/waste -> behavior presets -> phenomenon groups -> task/unit alternatives -> heuristic rule application -> scale-up basis -> scaled MFA -> Gantt bottleneck check",
         text: state.text,
         workflowStepStatus: workflowStepStatuses(),
@@ -121,11 +172,51 @@
       URL.revokeObjectURL(url);
     }
 
+    async function downloadLciExcel() {
+      const button = $("exportLciExcel");
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch("/api/lci-xlsx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project: buildProjectExport() })
+        });
+        if (!response.ok) {
+          let message = `HTTP ${response.status}`;
+          try {
+            const data = await response.json();
+            if (data.error) message = data.error;
+          } catch (err) {}
+          throw new Error(message);
+        }
+        const blob = await response.blob();
+        if (!blob.size) throw new Error("Excel export returned an empty file.");
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!contentType.includes("spreadsheetml.sheet")) {
+          throw new Error("Excel export returned an unexpected file type.");
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "lci-workbook.xlsx";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        const message = `Could not export LCI Excel workbook: ${err.message || err}`;
+        await alertModal(message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
     // Debounced: called on every keystroke by the various update*Field handlers, so coalesce rapid
     // typing into a single rebuild of the full project export instead of re-serializing on each key.
     function renderExport() {
       if (renderExportTimer) clearTimeout(renderExportTimer);
       renderExportTimer = setTimeout(writeExportNow, 200);
+      if (typeof scheduleProjectAutosave === "function") scheduleProjectAutosave();
     }
 
     function exportBlock(block) {
@@ -163,6 +254,9 @@
         timing: stream.timing,
         status: stream.status,
         fate: stream.fate,
+        substanceRole: stream.substanceRole,
+        residualOf: stream.residualOf,
+        internalTransfer: Boolean(stream.internalTransfer),
         recoveryPercent: stream.recoveryPercent,
         purgePercent: stream.purgePercent,
         loopId: stream.loopId,
@@ -170,6 +264,7 @@
         makeupRequired: stream.makeupRequired,
         accumulationRisk: stream.accumulationRisk,
         note: stream.note,
+        source: stream.source,
         chemicalProperties: Object.fromEntries((globalThis.streamChemicalPropertyFields || [])
           .map(field => [field, stream[field] || ""])
           .filter(([, value]) => String(value || "").trim()))
@@ -208,20 +303,38 @@
     function exportSeparationSimulator(group) {
       const groupState = ensureGroup(group.id);
       const model = separationSimulatorModel(group);
+      const pathway = separationPathwayModel(group, model);
       return {
-        source: "Garg et al. accepted manuscript: Algorithm A1.1 + KB3.1/Table S.10, implemented as optional hypothesis screening",
+        source: "Garg et al. accepted manuscript: Algorithm A1.1 plus selected KB3.1/Table S.10 and KB3.2/Table S.11 rules",
+        methodScope: "Optional pathway screening; not a full superstructure, process simulation, economic ranking, or Enthalpy Index calculation",
         substances: model.substances,
         binaryPairs: model.pairs.map(pair => ({
           pairKey: pair.key,
           componentA: pair.a.name,
           componentB: pair.b.name,
           ratios: pair.ratios,
+          propertyChecks: pair.propertyChecks,
           insights: pair.insights,
           routeVariants: binaryRouteVariants(group.id, pair)
         })),
         suggestions: model.suggestions,
         reactionBalance: reactionBalanceModel(group, model),
         workupPlan: workupPlanModel(group, model),
+        pathway: {
+          status: pathway.status,
+          complete: pathway.complete,
+          mainProduct: pathway.mainProduct?.name || "",
+          unresolved: pathway.unresolved,
+          steps: pathway.steps,
+          alternatives: pathway.alternatives.map(item => ({
+            id: item.id,
+            label: item.label,
+            status: item.status,
+            metrics: item.metrics,
+            unresolved: item.outcome.unresolved,
+            steps: item.steps
+          }))
+        },
         notes: groupState.separationSimulator.notes || ""
       };
     }

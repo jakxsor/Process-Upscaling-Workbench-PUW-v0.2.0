@@ -199,16 +199,37 @@ def map_pubchem_fields(row, experimental):
             converted = pubchem_numeric_property(value, target)
             if converted:
                 mapped[target] = converted
+                mapped[f"{target}Raw"] = value
+                if target == "pvap":
+                    temperature = pubchem_measurement_temperature(value)
+                    if temperature:
+                        mapped["pvapTemperature"] = temperature
+                        mapped["pvapTemperatureUnit"] = "K"
                 break
     return mapped
 
 
 def pubchem_numeric_property(text, target):
-    match = re.search(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", str(text))
+    raw = re.sub(r"mm\s+hg", "mmhg", str(text), flags=re.IGNORECASE)
+    pressure_unit = ""
+    if target == "pvap":
+        match = re.search(
+            r"(?<![A-Za-z])([-+]?\d+(?:\.\d+)?)(?:\s*(?:x|×)\s*10\s*(?:\^|\*\*)?\s*(-?\d+)|\s*e\s*(-?\d+))?\s*(mmhg|torr|mpa|kpa|hpa|mbar|bar|atm|pa)\b",
+            raw,
+            re.IGNORECASE,
+        )
+        if match:
+            pressure_unit = match.group(4).lower()
+    else:
+        match = re.search(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", raw)
     if not match:
         return ""
-    value = float(match.group(0))
-    lower = str(text).lower()
+    value = float(match.group(1) if target == "pvap" else match.group(0))
+    if target == "pvap":
+        exponent = match.group(2) or match.group(3)
+        if exponent is not None:
+            value *= 10 ** int(exponent)
+    lower = raw.lower()
     if target in ("tm", "tb") and ("°c" in lower or "deg c" in lower or " c" in lower):
         return f"{value + 273.15:.2f}"
     if target in ("tm", "tb") and ("°f" in lower or "deg f" in lower or " f" in lower):
@@ -216,8 +237,36 @@ def pubchem_numeric_property(text, target):
     if target in ("tm", "tb"):
         return ""
     if target == "pvap":
-        if "mmhg" in lower:
+        if pressure_unit in ("mmhg", "torr"):
             return f"{value * 133.322:.3g}"
-        if "kpa" in lower:
+        if pressure_unit == "mpa":
+            return f"{value * 1_000_000:.3g}"
+        if pressure_unit == "kpa":
             return f"{value * 1000:.3g}"
+        if pressure_unit in ("hpa", "mbar"):
+            return f"{value * 100:.3g}"
+        if pressure_unit == "bar":
+            return f"{value * 100_000:.3g}"
+        if pressure_unit == "atm":
+            return f"{value * 101_325:.3g}"
+        if pressure_unit == "pa":
+            return str(value)
+        return ""
     return str(value)
+
+
+def pubchem_measurement_temperature(text):
+    """Return an explicitly stated measurement temperature in kelvin."""
+    lower = str(text).lower().replace("°", "")
+    match = re.search(r"(?:at|@)\s*(-?\d+(?:\.\d+)?)\s*(c|k|f)\b", lower)
+    if not match:
+        match = re.search(r"(-?\d+(?:\.\d+)?)\s*(c|k|f)\s*[:;,]", lower)
+    if not match:
+        return ""
+    value = float(match.group(1))
+    unit = match.group(2)
+    if unit == "c":
+        value += 273.15
+    elif unit == "f":
+        value = (value - 32) * 5 / 9 + 273.15
+    return f"{value:.2f}"

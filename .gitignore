@@ -1,8 +1,10 @@
 __pycache__/
 *.py[cod]
+*.egg-info/
 .env
 .DS_Store
 saved_states/
+node_modules/
 
 # Internal development notes, not part of the public paper-companion tree
 .github/copilot-instructions.md

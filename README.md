@@ -16,11 +16,41 @@ in:
 > Methodology for Chemicals and Materials in Prospective LCA." [journal,
 > publication details to be added]
 
-The built-in octocrylene example reproduces the case study in Section 3 and
-the Supplementary Information of that paper (nine unit operations, three
-recycle loops, ~15 m³ reactor, 750 t/yr target).
+The built-in octocrylene example is a source-reconciled software fixture for the
+case study in Section 3 and the Supplementary Information: nine protocol-derived
+blocks plus three explicit scale-up additions, nine task groups, a cyclohexane
+recycle target, a 20 h limiting plant cycle, and a 750 t/yr target at roughly 250
+batches/yr. It also exposes the SI's unresolved capacity conflict: 3000 kg of
+product requires 7.5 m³ of cyclohexane alone at 2.5 L/kg, which cannot fit in the
+stated 5 m³ reactor before reactants and freeboard are considered.
 
 If you use this tool in your work, please cite the paper above.
+
+## Releasing and citing a version
+
+The software is archived on Zenodo, which mints a DOI for each GitHub release
+and a concept DOI that always resolves to the newest one. Cite the concept DOI
+in the paper, so the citation keeps working after later releases.
+
+Zenodo only archives releases created after the repository is enabled, so the
+first two steps happen once and in this order.
+
+1. On zenodo.org, sign in with GitHub, open Settings then GitHub, and switch
+   this repository on.
+2. Merge the release branch into `main`, since the release should be tagged on
+   the default branch.
+3. Check that `.zenodo.json`, `CITATION.cff` and `pyproject.toml` all carry the
+   version about to be released, and that `CHANGELOG.md` describes it.
+4. Tag and publish a GitHub release, for example `v0.2.0`. Zenodo archives the
+   tagged tree and mints the DOI within a few minutes.
+5. Put the DOI back into the repository: an `identifiers` entry in
+   `CITATION.cff`, a `related_identifiers` entry in `.zenodo.json` pointing at
+   the paper with relation `isSupplementTo`, and the badge at the top of this
+   file. Commit that on `main`; it applies to the next release.
+
+`.zenodo.json` carries the archive's metadata. Author names there follow
+`CITATION.cff`; add ORCIDs and affiliations before the first release, since
+Zenodo shows them on the record and they cannot be changed silently afterwards.
 
 The tool is designed to support a phenomena-based upscaling framework. It helps
 the user move from free text to blocks, phenomena, task groups, unit-operation
@@ -39,6 +69,8 @@ and low-confidence scale-up risks.
   intermediate streams, waste, emissions, recoveries, and recycle candidates.
 - Combine blocks into task groups while preserving block-level information.
 - Aggregate group-level MFA and operating conditions.
+- Calculate reaction-stage product and residual masses from reactive-input
+  quantities, molecular weights, stoichiometric coefficients, and declared yield.
 - Use phase categories to avoid incompatible phenomenon/unit-operation choices.
 - Suggest industrial unit-operation alternatives from grouped phenomena.
 - Show heuristic-rule checks before numerical scale-up.
@@ -49,6 +81,18 @@ and low-confidence scale-up risks.
 - Define a scale-up basis: target product, production target, yield, recovery,
   design margin, OEE, operating schedule, and parallel units.
 - Scale MFA quantities to batch, hourly, and annual views.
+- Close the plant boundary on the flowsheet: every waste or vent stream without a
+  destination unit leaves through an off-page connector (to wastewater
+  treatment, to waste treatment, to air), one per unit and boundary, numbered in
+  the stream table and totalled in a discharge box next to the product; the
+  PowerPoint export carries them.
+- Export the flowsheet to PowerPoint as editable objects, not a picture of a
+  drawing. Each unit is one group holding its equipment symbol, tag, load and
+  task, so it moves as a piece; each stream is one group holding its arrow and
+  label. The equipment symbol is the one picture, placed behind the unit's text
+  as a vector with a PNG fallback, because a jacketed reactor or a tray column
+  has no PowerPoint primitive. Text is sized in drawing units, so labels keep
+  their proportions on a large flowsheet instead of overflowing their shapes.
 - Build a schematic Gantt chart and identify bottlenecks.
 - Show a Gantt evidence layer with operation class, expected scale behaviour,
   missing data, schedule margin, and compact references.
@@ -87,6 +131,13 @@ separation evidence when available. Suggestions are gated until the task has
 enough material streams, phase labels, and conditions to make the choice
 auditable.
 
+In Stoichiometric Balance mode, the selected product amount is calculated from
+the limiting-reagent extent and product coefficient, then multiplied by the
+declared yield. Conversion controls unreacted reagent quantities; selectivity is
+kept as a separate consistency assumption. Missing amounts, coefficients, MW,
+or supported units block saving rather than being silently replaced by a valid
+number. This is a reaction-stage material balance, not a kinetic model.
+
 The Lutze Reaction-Separation sandbox is optional. It compares active
 post-reaction substances pairwise and proposes draft separation moves from
 property contrasts and phase compatibility. The main flowchart is unchanged
@@ -98,16 +149,19 @@ For scheduling, the tool uses:
 
 ```text
 adjusted duration = input duration x (1 + Gantt margin %)
-effective duration = adjusted duration / parallel units
-bottleneck = task with the largest effective duration
-cycle time = sum of non-overlapping effective durations
+effective duration = adjusted duration / parallel units, except kinetics-bound stages
+kinetics-bound effective duration = adjusted duration
+batch makespan = latest finish in the explicit task-dependency graph
+plant cycle time = largest task effective duration
+bottleneck = longest zero-slack task on the dependency critical path
 ```
 
 For campaign scheduling, the UI also shows an overlapped scenario:
 
 ```text
-plant cycle time = max(task effective duration)
-overlapped batches/year = 8760 x OEE / plant cycle time
+productive hours/year = operating days x operating hours/day x OEE
+overlapped batches/year = productive hours/year x parallel trains / plant cycle time
+conservative batches/year = productive hours/year x parallel trains / batch makespan
 ```
 
 The overlapped scenario is an upper-throughput screening case. It assumes that
@@ -120,12 +174,11 @@ reports the missing data needed for quantitative correction.
 ## Requirements
 
 - Python 3.9 or newer is recommended.
-- Python packages listed in `upscaling_pipeline_tool/requirements.txt`.
+- Python packages listed in `upscaling_pipeline_tool/requirements.txt` when present.
 - A modern browser.
 
-The Flowsheet View uses the built-in editable SVG renderer. A legacy
-`pyflowsheet` endpoint is still present for experimentation, but it is not the
-main user-facing view.
+The Flowsheet View uses the built-in editable SVG renderer and editable
+PowerPoint export path.
 
 ## Quick Start
 
@@ -153,6 +206,34 @@ For headless or remote checks:
 ```bash
 python3 start.py --no-browser
 ```
+
+Optional editable install for development:
+
+```bash
+python3 -m pip install -e .
+process-upscaling-workbench --no-browser
+```
+
+## Deploy on Render
+
+The repository includes a `render.yaml` Blueprint for deploying the workbench as
+a Render web service.
+
+1. Push the repository to GitHub or another Git provider connected to Render.
+2. In Render, choose **New > Blueprint** and select this repository.
+3. Render will use:
+
+```text
+buildCommand: pip install -r upscaling_pipeline_tool/requirements.txt
+startCommand: python3 -m upscaling_pipeline_tool.app --host 0.0.0.0
+```
+
+The app reads Render's `PORT` environment variable automatically. The Blueprint
+uses the Frankfurt region and the free web-service plan by default.
+
+The app works without secrets. To enable server-side AI review, add
+`OPENAI_API_KEY` as a Render environment variable in the service settings. Do not
+commit API keys to the repository.
 
 ## Windows Instructions
 
@@ -233,7 +314,18 @@ Do not commit API keys to the repository.
 7. Define the scale-up basis and review scaled MFA results.
 8. Use the Gantt panel to inspect cycle time, bottlenecks, schedule margin, and
    missing operation-specific scale-up data.
-9. Export JSON for traceability or downstream analysis.
+9. Save snapshots from the Work menu, or export JSON as a portable reloadable
+   project backup.
+10. Export LCI Excel for review/openLCA mapping, or downstream JSON for custom
+   tooling.
+
+## Saving And Exporting
+
+The Work menu stores autosave and manual snapshots in the current browser.
+`Export JSON` downloads a portable `upscaling-project.json` file with both the
+derived analysis tables and a reloadable `projectState` section; use `Import
+JSON` to reopen that file later. `LCI Excel` is a review workbook for inventory
+mapping and is not a direct openLCA JSON-LD package.
 
 ## Validation Checks
 
@@ -242,13 +334,48 @@ paper-support workflow. They can be run from the repository root without a
 Node package install:
 
 ```bash
+python3 scripts/validate.py
+```
+
+The validation runner checks every served JavaScript file, compiles the Python
+entry points, and runs the workflow, physical-plausibility, project import,
+UI-wiring, PubChem, LCI Excel, PowerPoint export, and optional browser smoke
+regressions. It automatically prefers the local `.venv` interpreter when
+present so the export dependencies are available.
+
+The individual commands are:
+
+```bash
 node --check upscaling_pipeline_tool/static/app.js
+node --check upscaling_pipeline_tool/static/examples.js
 node --check upscaling_pipeline_tool/static/flowsheet.js
+node --check upscaling_pipeline_tool/static/flowsheet_ui.js
+node --check upscaling_pipeline_tool/static/lca_bridge.js
+node --check upscaling_pipeline_tool/static/process_catalogs.js
+node --check upscaling_pipeline_tool/static/workflow_readiness.js
 node scripts/check_complete_separation_flow.js
 node scripts/check_separation_simulator.js
 node scripts/check_property_screening.js
 node scripts/check_flowsheet_view.js
-python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pyflowsheet_renderer.py
+node scripts/check_project_persistence.js
+node scripts/check_tutorial_flow.js
+python3 scripts/check_flowsheet_pptx_export.py
+python3 scripts/check_lci_xlsx_export.py
+python3 -m py_compile start.py run_upscaling_tool.py upscaling_pipeline_tool/app.py upscaling_pipeline_tool/pptx_renderer.py upscaling_pipeline_tool/xlsx_renderer.py
+node scripts/check_browser_smoke.js
+```
+
+The last line is a browser smoke check. It drives the served application in
+headless Chromium and asserts what the static checks cannot see: the page loads
+without a runtime error, the process board opens legible with every group inside
+the panel, the rule check produces a local report, the inventory readiness card
+renders, and the flowsheet opens. It needs Playwright and a Chromium build and
+prints `SKIP` (exit 0) when either is missing:
+
+```bash
+npm install --no-save playwright@1.54.0
+npx playwright install chromium
+node scripts/check_browser_smoke.js
 ```
 
 These checks cover the built-in example, conversion balance propagation,
@@ -270,9 +397,39 @@ It demonstrates:
 - heuristic review;
 - scale-up/Gantt bottleneck screening.
 
-Pre-filled values are a mix of paper/case-study values and labelled engineering
-screening assumptions. They should be reviewed before using exported results in
-new studies.
+Reported values, deterministic calculations, estimates, and missing data are
+labelled separately. The benzophenone <0.5% endpoint is used only as an explicit
+99.5% screening-conversion proxy to demonstrate residual-stream generation; it is
+not presented as a reported yield. The quantities the SI names but does not
+report (catalyst loading, extraction-solvent and brine volumes, vent losses,
+drying-regeneration water, the six unit durations outside the reactor, wash and
+distillation) are entered as engineering estimates, each with its method and
+source on the stream or task note (textbook catalyst loading, laboratory wash
+practice, vapour-liquid equilibrium for the vents, equipment throughputs for the
+durations), so that every unit balance closes and the LCI carries an emission to
+air. They stay labelled "estimated" until replaced from the authors' notebook.
+The one deliberate blank is the distillation residue: its quantity follows from
+the distillation yield, which the authors hold, and entering it moves the 1 kg
+product basis. Thermal properties of the two case-specific esters come from the
+SCCS opinion on octocrylene (SCCS/1627/21) and supplier data for 2-ethylhexyl
+cyanoacetate, since PubChem carries none for either.
+
+A second, fully quantified case is the base-catalysed transesterification of a
+vegetable oil (triolein basis) to biodiesel: 6:1 methanol-to-oil molar ratio,
+1 wt% NaOH, 60 °C, 1 h, 97.5 % conversion (Freedman, Pryde and Mounts, JAOCS
+61, 1984, 1638; Van Gerpen, Fuel Processing Technology 86, 2005, 1097), with
+glycerol-phase decanting, methanol recovery and recycle, water washing, vacuum
+drying and polishing filtration to EN 14214. Every stream carries a mass, a
+phase, a provenance status and handbook properties (NIST WebBook, CRC,
+PubChem), so the reaction balance closes, the flowsheet balances per unit, and
+the Lutze/Garg screening has the Tb, Tm, vapour-pressure and solubility data
+it needs. Methanol phase partition and wash losses are typical engineering
+values, labelled estimated. The same menu offers the case as "screen with
+Lutze": the make-up and the reactor alone, with the quantified effluent and the
+known phase behaviour, so the downstream train is built with the Lutze/Garg
+screening. Its first recommended pathway is the plant's own pair of separations,
+methanol by volatility and the glycerol phase (catalyst included) by decanting,
+and applying it puts both units on the board for comparison with the full case.
 
 ## Data Sources
 

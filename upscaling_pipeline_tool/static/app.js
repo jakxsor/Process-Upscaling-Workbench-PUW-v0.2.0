@@ -1,4 +1,29 @@
-    const sampleText = `Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap. Heat the stirred mixture to reflux at 85 to 90 °C under nitrogen. Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap and benzophenone concentration ceases to decrease. Cool the crude reaction mixture to 25 °C. Wash the organic phase with 2.0 kg of water in the first counter-current mixer-settler stage, allowing the phases to settle after contact. Wash the organic phase with saturated brine in the second mixer-settler stage, allowing the phases to settle, then separate and discard the aqueous layers. Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent. Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse. Purify the crude octocrylene by short-path distillation at 1.5 mmHg, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal. [Industrial addition, no laboratory counterpart] Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column. [Industrial addition, no laboratory counterpart] Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage. [Industrial addition, no laboratory counterpart] Route the aqueous wash effluent, brine effluent, and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.`;
+    const missingStartupModules = [];
+    if (!globalThis.ProcessUpscalingExamples) missingStartupModules.push("examples.js");
+    if (!globalThis.ProcessUpscalingCatalogs) missingStartupModules.push("process_catalogs.js");
+    if (missingStartupModules.length) {
+      const message = `Startup modules missing: ${missingStartupModules.join(", ")}. Restart the local server and hard-refresh the browser.`;
+      if (globalThis.document?.body) {
+        globalThis.document.body.innerHTML = `
+          <main style="font-family: system-ui, sans-serif; max-width: 760px; margin: 48px auto; padding: 24px; line-height: 1.45;">
+            <h1>Process Upscaling Workbench needs a server restart</h1>
+            <p>${message}</p>
+            <p>The app code was updated while an older local server process was still running, so the page did not load every required script.</p>
+          </main>
+        `;
+      }
+      throw new Error(message);
+    }
+
+    const {
+      citations,
+      octocryleneExampleBasis,
+      octocryleneExampleSteps,
+      sampleText,
+      biodieselExampleSteps,
+      biodieselSampleText,
+      biodieselReactionOnlyText
+    } = globalThis.ProcessUpscalingExamples || {};
     // Screening heuristic, not a sourced engineering constant: a task must beat the next-longest task
     // by both an absolute margin (avoids flagging noise-level gaps on short processes, e.g. 0.1h ahead
     // of 0.05h) and a relative margin (avoids flagging trivial % differences on long processes) before
@@ -8,109 +33,13 @@
       minGapPercent: 15
     };
 
-    const phenomenaOptions = [
-      "M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LL)", "2phM(VS)", "2phM(LS)",
-      "PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)",
-      "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "PT(MVL)", "PT(MLL)", "PT(MVV)",
-      "PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)",
-      "PS(VL)", "PS(LL)", "PS(VS)", "PS(LS)", "PS(VV)",
-      "R(L)", "R(V)", "R(S)",
-      "ES(H)", "ES(C)", "ES(P)", "ES(E)", "ES(D)",
-      "SD"
-    ];
-
-    const phenomenonGlossary = {
-      "M(L)": "Mixing in liquid phase. Use this when the block requires homogenization, stirring, dilution, or controlled liquid addition.",
-      "M(V)": "Mixing or flow-pattern control within a vapor phase.",
-      "M(S)": "Solid handling or solid-phase mixing.",
-      "2phM(VL)": "Two-phase mixing, vapor-liquid. Relevant for sparging, boiling contact, stripping, or reflux contact.",
-      "2phM(LS)": "Two-phase mixing, liquid-solid. Relevant when solids, catalysts, salts, drying agents, or suspended particles contact a liquid.",
-      "2phM(LL)": "Two-phase mixing, liquid-liquid. Relevant for washing, extraction, emulsion risk, or mass transfer between immiscible liquids.",
-      "2phM(VS)": "Two-phase mixing, vapor-solid. Relevant for gas-solid contacting or solid exposure to vapor.",
-      "R(L)": "Reaction in liquid phase. Use this when chemical transformation occurs primarily in the liquid bulk.",
-      "R(V)": "Reaction in vapor phase. Use this when transformation occurs mainly through gaseous or vapor-phase species.",
-      "R(S)": "Reaction involving a solid phase or solid-state transformation.",
-      "ES(H)": "Energy supply, heating. Covers heat-up, reflux duty, evaporation duty, or maintaining a hot operating window.",
-      "ES(C)": "Energy supply, cooling. Covers cool-down, quenching, condensation duty, or removal of heat for control.",
-      "ES(P)": "Energy supply for pressurization or compression.",
-      "ES(E)": "Energy release or expansion work.",
-      "ES(D)": "Direct or special energy input such as microwave or ultrasound.",
-      "PT(VL)": "Phase transition, vapor-liquid. Relevant for boiling, evaporation, condensation, reflux, or solvent removal.",
-      "PT(LL)": "Phase transfer, liquid-liquid. Relevant when a solute moves between two liquid phases during washing or extraction.",
-      "PT(VS)": "Phase transition, vapor-solid. Relevant for sublimation, desublimation, or vapor-solid uptake.",
-      "PT(LS)": "Phase transition, liquid-solid. Relevant for crystallization, precipitation, dissolution, or solid formation from liquid.",
-      "PT(MVL)": "Membrane-mediated vapor-liquid transfer.",
-      "PT(MLL)": "Membrane-mediated liquid-liquid transfer.",
-      "PT(MVV)": "Membrane-mediated vapor-vapor transfer.",
-      "PCh(V->L)": "Whole-stream phase change from vapor to liquid, such as full condensation.",
-      "PCh(L->V)": "Whole-stream phase change from liquid to vapor, such as evaporation.",
-      "PCh(L->S)": "Whole-stream phase change from liquid to solid, such as freezing or solidification.",
-      "PCh(S->L)": "Whole-stream phase change from solid to liquid, such as melting.",
-      "PC(VL)": "Phase contact, vapor-liquid. Relevant for vapor-liquid contacting, condensation, stripping, scrubbing, or reflux.",
-      "PC(LL)": "Phase contact, liquid-liquid. Relevant when two liquid phases must contact effectively before separation.",
-      "PC(VS)": "Phase contact, vapor-solid. Relevant for gas-solid contact, adsorption, or drying contact.",
-      "PC(LS)": "Phase contact, liquid-solid. Relevant for adsorption, drying salts, catalyst contact, or solid treatment of a liquid stream.",
-      "PS(LL)": "Phase separation, liquid-liquid. Relevant for settling, decanting, interface control, or organic/aqueous split.",
-      "PS(LS)": "Phase separation, liquid-solid. Relevant for filtration, cake removal, drying-agent removal, or slurry clarification.",
-      "PS(VL)": "Phase separation, vapor-liquid. Relevant for condensers, decanters, vents, evaporation outlets, or vapor/liquid disengagement.",
-      "PS(VS)": "Phase separation, vapor-solid. Relevant for dust removal, desublimation solids, or gas-solid disengagement.",
-      "PS(VV)": "Phase separation, vapor-vapor. Relevant for vapor permeation or vapor stream split after membrane transfer.",
-      "SD": "Stream dividing. Splitting a stream into two or more branches without changing temperature, pressure, or composition."
-    };
-
-    const behaviorPresets = {
-      "unassigned": { task: "unassigned", phenomena: [], description: "Temporary state when the block purpose is not clear yet; no phenomena are assigned." },
-      "charge and mix": { task: "reaction preparation", phenomena: ["M(L)", "2phM(LS)"], description: "Use for charging, dissolving, pre-mixing, or dosing feeds before the main transformation." },
-      "heat/cool": { task: "thermal conditioning", phenomena: ["ES(H)", "ES(C)"], description: "Use when the block mainly changes or holds temperature without a standalone reaction or separation." },
-      "reaction": { task: "reaction", phenomena: ["M(L)", "R(L)", "ES(H)"], description: "Use for product-forming chemical transformation with mixing and possible heat duty." },
-      "reaction with in-situ removal": { task: "reaction", phenomena: ["M(L)", "R(L)", "ES(H)", "PT(VL)", "PS(VL)"], description: "Use when reaction and removal of a by-product/phase happen together, such as reflux or Dean-Stark water removal." },
-      "liquid-liquid wash": { task: "washing", phenomena: ["2phM(LL)", "PT(LL)", "PS(LL)"], description: "Use for liquid-liquid contacting, extraction, washing, settling, decanting, or phase split." },
-      "solid-liquid drying": { task: "drying", phenomena: ["PC(LS)", "PS(LS)"], description: "Use when a solid contacts or removes liquid/water, such as molecular sieves or drying agents." },
-      "filtration": { task: "solid-liquid separation", phenomena: ["PS(LS)"], description: "Use for separating solids from liquid by filtration, clarification, or related solid-liquid split." },
-      "solvent evaporation": { task: "solvent removal", phenomena: ["ES(H)", "PT(VL)", "PS(VL)"], description: "Use for evaporating/removing volatile solvent, especially with condenser or vacuum evidence." },
-      "distillation purification": { task: "purification", phenomena: ["ES(H)", "PT(VL)", "PS(VL)"], description: "Use for vapor-liquid purification where volatility difference drives product/impurity separation." },
-      "solvent recovery distillation": { task: "solvent recovery", phenomena: ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], description: "Use for a dedicated recovery column or solvent purification loop added during scale-up." },
-      "vent gas treatment": { task: "vent abatement", phenomena: ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"], description: "Use for condenser, adsorption, TSA, or polishing operations handling VOC vents." },
-      "vent abatement": { task: "vent abatement", phenomena: ["PC(VL)", "PS(VL)"], description: "Use for vapor capture, condensation, adsorption, or treatment of emission/vent streams." },
-      "wastewater interface": { task: "wastewater treatment", phenomena: ["PS(LL)"], description: "Use for aqueous waste routing, neutralization, or environmental boundary treatment." },
-      "wastewater treatment": { task: "wastewater treatment", phenomena: ["M(L)", "R(L)"], description: "Use for neutralization or wastewater boundary treatment added to close waste handling." }
-    };
-
-    const unitCatalog = [
-      { task: "reaction preparation", name: "Feed tank and dosing skid", feedPhases: ["L", "S", "LS"], phenomena: ["M(L)", "M(S)", "2phM(LS)"], outlet: "prepared feed", rationale: "Use for charging, pre-mixing, and controlled dosing before a reaction or downstream operation." },
-      { task: "reaction preparation", name: "Inline/static mixer", feedPhases: ["L", "LL", "VL", "LS"], phenomena: ["M(L)", "2phM(LL)", "2phM(VL)", "2phM(LS)"], outlet: "mixed feed", rationale: "Use when the main task is homogenization or contact before another unit, not chemical conversion." },
-      { task: "thermal conditioning", name: "Jacketed vessel heat/cool step", feedPhases: ["L", "S", "LS", "VL"], phenomena: ["ES(H)", "ES(C)"], outlet: "thermally conditioned stream", rationale: "Use when the operation is only heating, cooling, or holding temperature without reaction or separation duty." },
-      { task: "thermal conditioning", name: "External loop heat exchanger", feedPhases: ["L", "VL"], phenomena: ["M(L)", "ES(H)", "ES(C)"], outlet: "temperature-controlled recirculating stream", rationale: "Use when scale-up may need higher heat-transfer area than a simple jacket provides." },
-      { task: "thermal conditioning", name: "Condenser / cooler", feedPhases: ["V", "VL"], phenomena: ["ES(C)", "PCh(V->L)", "PT(VL)", "PS(VL)"], outlet: "cooled liquid or vapor-liquid outlet", rationale: "Use when cooling includes vapor condensation or reflux handling." },
-      { task: "thermal conditioning", name: "Reboiler / heater", feedPhases: ["L", "VL"], phenomena: ["ES(H)", "PCh(L->V)", "PT(VL)"], outlet: "heated liquid or vapor-liquid outlet", rationale: "Use when heating includes vapor generation, reflux, or boil-up duty." },
-      { task: "reaction", name: "Batch / semi-batch reactor", feedPhases: ["S", "V", "L", "VL", "LS", "VS"], phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(VS)", "R(L)", "R(V)", "R(S)", "ES(H)", "ES(C)"], outlet: "reaction outlet", rationale: "Industrial reactor class for batch or semi-batch transformation with optional multiphase mixing and heat removal/addition." },
-      { task: "reaction", name: "Continuous stirred-tank reactor (CSTR)", feedPhases: ["L"], phenomena: ["M(L)", "R(L)", "ES(H)", "ES(C)"], outlet: "liquid outlet", rationale: "Continuous liquid-phase reaction option when residence time and mixing are compatible." },
-      { task: "reaction", name: "Tubular reactor (PFR)", feedPhases: ["V"], phenomena: ["M(V)", "R(V)", "ES(H)", "ES(C)"], outlet: "vapor outlet", rationale: "Vapor-phase reactor class." },
-      { task: "reaction", name: "Packed-bed reactor", feedPhases: ["S", "V", "VS"], phenomena: ["M(V)", "M(S)", "2phM(VS)", "R(V)", "R(S)", "ES(H)", "ES(C)"], outlet: "reacted outlet", rationale: "Industrial reactor class for solid/vapor contacting or packed catalyst systems." },
-      { task: "wastewater treatment", name: "Wastewater treatment interface", feedPhases: ["L", "LL"], phenomena: ["M(L)", "2phM(LL)", "R(L)", "PC(LL)", "PS(LL)"], outlet: "treated aqueous discharge", rationale: "Boundary unit for neutralization, aqueous waste routing, and treatment interfaces that are not product-forming reactors." },
-      { task: "separation", name: "Partial condensation / vaporization", feedPhases: ["V", "L", "VL"], phenomena: ["M(V)", "M(L)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V or L depending on direction", rationale: "Industrial separation class for partial V/L phase change and disengagement." },
-      { task: "separation", name: "Flash vaporization", feedPhases: ["L"], phenomena: ["M(L)", "PT(VL)", "PS(VL)"], outlet: "V + residual L", rationale: "Liquid feed vaporization option." },
-      { task: "separation", name: "Distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Vapor-liquid separation by staged contact, transition, and separation." },
-      { task: "separation", name: "Extractive distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Distillation variant with added separating agent." },
-      { task: "separation", name: "Azeotropic distillation", feedPhases: ["V", "L", "VL", "LL"], phenomena: ["M(L)", "M(V)", "PC(VL)", "PT(VL)", "PS(VL)", "PC(LL)", "PS(LL)", "ES(H)", "ES(C)"], outlet: "V + L, possible LL", rationale: "Distillation variant where a liquid-liquid split can appear." },
-      { task: "separation", name: "Absorption (gas absorption)", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "PT(VL)", "PS(VL)", "PC(VL)"], outlet: "enriched liquid outlet", rationale: "Gas absorption class." },
-      { task: "separation", name: "Reboiled absorption", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "V + L", rationale: "Absorption with reboiler duty." },
-      { task: "separation", name: "Stripping", feedPhases: ["L"], phenomena: ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)"], outlet: "vapor product", rationale: "Liquid feed stripping option." },
-      { task: "separation", name: "Steam distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(C)"], outlet: "V and/or L", rationale: "Steam distillation class." },
-      { task: "separation", name: "Liquid-liquid extraction", feedPhases: ["L", "LL"], phenomena: ["M(L)", "PC(LL)", "PT(LL)", "PS(LL)"], outlet: "two liquid phases", rationale: "Liquid-liquid extraction class." },
-      { task: "separation", name: "Decanter", feedPhases: ["L", "LL"], phenomena: ["M(L)", "PC(LL)", "PS(LL)"], outlet: "two liquid outlets", rationale: "Physical liquid-liquid disengagement class." },
-      { task: "separation", name: "Evaporation", feedPhases: ["L"], phenomena: ["M(L)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "vapor + residual L", rationale: "Evaporation class." },
-      { task: "separation", name: "Crystallization", feedPhases: ["L"], phenomena: ["M(L)", "PT(LS)", "PS(LS)", "ES(C)", "ES(H)"], outlet: "solid + mother liquor", rationale: "Liquid-to-solid separation class." },
-      { task: "separation", name: "Desublimation", feedPhases: ["V"], phenomena: ["M(V)", "PT(VS)", "PS(VS)", "ES(C)"], outlet: "solid", rationale: "Vapor-to-solid separation class." },
-      { task: "separation", name: "Drying", feedPhases: ["L", "S", "LS"], phenomena: ["M(L)", "M(S)", "PC(LS)", "PT(VL)", "PS(VL)", "ES(H)"], outlet: "vapor product", rationale: "Drying class for liquid/solid systems." },
-      { task: "separation", name: "Microwave drying", feedPhases: ["S", "L", "LS"], phenomena: ["M(S)", "M(L)", "PC(LS)", "PT(VL)", "PS(VL)", "ES(D)"], outlet: "vapor product", rationale: "Drying variant with direct/special energy input." },
-      { task: "separation", name: "Dividing wall column", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Intensified distillation class." },
-      { task: "reaction + separation", name: "Reactive distillation", feedPhases: ["V", "L", "VL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Integrated reaction and vapor-liquid separation class." },
-      { task: "separation", name: "Membrane pervaporation", feedPhases: ["V", "L", "VL", "MVL"], phenomena: ["M(L)", "M(V)", "PT(MVL)", "PS(VL)"], outlet: "permeate/retentate liquid context", rationale: "Membrane-mediated vapor-liquid transfer class." },
-      { task: "separation", name: "Membrane vapor permeation", feedPhases: ["V", "MVV", "VV"], phenomena: ["M(V)", "PT(MVV)", "PS(VV)"], outlet: "vapor streams", rationale: "Membrane-mediated vapor-vapor separation class." },
-      { task: "reaction + separation", name: "Membrane (pervaporation) reactor", feedPhases: ["V", "L", "VL", "MVL"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PT(MVL)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Reaction class integrated with membrane pervaporation." },
-      { task: "reaction + separation", name: "Membrane-reactive distillation", feedPhases: ["V", "L", "VL", "LL", "MVL", "MLL", "MVV"], phenomena: ["M(L)", "M(V)", "2phM(VL)", "R(L)", "R(V)", "PC(VL)", "PT(VL)", "PS(VL)", "PT(MVL)", "PT(MVV)", "PT(MLL)", "PS(LL)", "PS(VV)", "ES(H)", "ES(C)"], outlet: "V + L", rationale: "Intensified reaction-separation class combining reactive distillation and membrane transfer." }
-    ].map((unit, index) => ({ id: `UO${index + 1}`, source: "industrial-unit-operation-catalog", ...unit }));
+    const {
+      phenomenaOptions,
+      phenomenonGlossary,
+      phenomenonShortNames,
+      behaviorPresets,
+      unitCatalog
+    } = globalThis.ProcessUpscalingCatalogs || {};
 
     const streamRoles = {
       input: { title: "Inputs", addLabel: "+ Input", placeholder: "benzophenone", empty: "No feed stream yet." },
@@ -162,61 +91,7 @@
       { value: "stoichiometric", label: "Stoichiometric balance" }
     ];
 
-    const heuristicRuleLibrary = [
-      { id: "H01", area: "reaction path", title: "Avoid hazardous route inventory", tags: ["hazard", "reaction"], severity: "medium", recommendation: "Prefer routes and operating policies that reduce toxic or hazardous storage and residence inventory." },
-      { id: "H02", area: "reaction distribution", title: "Use excess reactant selectively", tags: ["reaction", "selectivity"], severity: "low", recommendation: "Consider excess of a less critical reactant when it helps consume a valuable, toxic, or hazardous reactant." },
-      { id: "H03", area: "inerts", title: "Remove inerts when beneficial", tags: ["inert", "reaction", "separation"], severity: "low", recommendation: "Remove inerts before reaction when easy or catalyst-protective, unless they help absorb a large heat release." },
-      { id: "H04", area: "purge", title: "Provide exits for accumulating species", tags: ["purge", "recycle", "accumulation"], severity: "medium", recommendation: "Add purge or drag streams for trace inerts, impurities, or side-products that would otherwise build up." },
-      { id: "H05", area: "purge", title: "Do not purge valuable or hazardous species", tags: ["purge", "hazard", "valuable"], severity: "medium", recommendation: "Recover valuable species with separators and treat hazardous species rather than losing them in purge streams." },
-      { id: "H06", area: "reversible byproducts", title: "Recycle reversible byproducts", tags: ["reversible", "recycle", "reaction"], severity: "low", recommendation: "For reversible byproducts, prefer recycle to extinction over direct purge when chemically plausible." },
-      { id: "H07", area: "selectivity", title: "Tune operating window for selectivity", tags: ["reaction", "selectivity", "condition"], severity: "medium", recommendation: "Use temperature, pressure, and catalyst choices to favor the desired reaction path; request kinetics before locking the base case." },
-      { id: "H08", area: "reaction-separation", title: "Drive reversible reactions by removal", tags: ["reversible", "reaction", "separation", "vl", "ll"], severity: "medium", recommendation: "For reversible or equilibrium-limited reactions, consider integrated product removal such as decanting, distillation, membrane removal, or stripping." },
-      { id: "H09", area: "liquid separation", title: "Rank liquid-mixture separations", tags: ["liquid_separation", "ll", "vl"], severity: "low", recommendation: "For liquid mixtures, compare distillation, stripping, extraction, crystallization, adsorption, and related liquid-separation choices." },
-      { id: "H10", area: "vapor-liquid separation", title: "Try condensation before complex vapor separation", tags: ["vapor", "vl", "cooling"], severity: "low", recommendation: "For vapor mixtures, first assess whether cooling-water condensation can create a simpler liquid separation problem." },
-      { id: "H11", area: "vapor separation", title: "Rank vapor-mixture separations", tags: ["vapor", "gas_separation"], severity: "low", recommendation: "For vapor mixtures, compare partial condensation, absorption, adsorption, cryogenic separation, membranes, and related vapor-separation choices." },
-      { id: "H12", area: "crystallization", title: "Crystallize inorganic solutes from concentrated solutions", tags: ["crystallization", "solid_liquid"], severity: "low", recommendation: "When dissolved inorganic material dominates, check whether crystallization is the practical separation route." },
-      { id: "H13", area: "crystallization", title: "Control crystal size with supersaturation path", tags: ["crystallization", "solid_liquid", "condition"], severity: "low", recommendation: "When crystals are formed, record cooling/evaporation path, seed policy, and residence time because they control size and filtration behavior." },
-      { id: "H14", area: "melt crystallization", title: "Use melt crystallization for suitable organics", tags: ["crystallization", "organic", "solid_liquid"], severity: "low", recommendation: "For organic separations with favorable melting behavior, include melt crystallization as an alternative to distillation." },
-      { id: "H15", area: "solid-liquid separation", title: "Filter or settle solid-liquid systems", tags: ["solid_liquid", "filtration"], severity: "medium", recommendation: "For liquid-solid mixtures, check filtration, sedimentation, centrifugation, or clarification before assigning a generic separator." },
-      { id: "H16", area: "solid washing", title: "Account for cake washing", tags: ["solid_liquid", "washing"], severity: "low", recommendation: "When solids are retained, include cake washing or displacement if soluble impurities materially affect product or waste." },
-      { id: "H17", area: "drying", title: "Dry solids with moisture basis", tags: ["drying", "solid_liquid"], severity: "medium", recommendation: "For wet solids, require moisture loading, final moisture target, and drying mode before energy handoff." },
-      { id: "H18", area: "particle separation", title: "Use particle properties for solids decisions", tags: ["solid_particle", "solid_liquid"], severity: "low", recommendation: "For solids handling, request particle size, density, shape, and cake behavior before choosing equipment." },
-      { id: "H19", area: "adsorption", title: "Use adsorbents when selective uptake is dominant", tags: ["adsorption", "solid_liquid", "vapor"], severity: "low", recommendation: "When impurity removal is by selective uptake on a solid, model adsorbent capacity, regeneration, and breakthrough." },
-      { id: "H20", area: "membranes", title: "Use membranes only with compatible driving force", tags: ["membrane", "separation"], severity: "low", recommendation: "For membrane alternatives, require phase pair, selectivity, driving force, fouling risk, and retentate/permeate fate." },
-      { id: "H21", area: "exothermic reactor", title: "Manage highly exothermic reactions early", tags: ["exotherm", "reaction", "cooling"], severity: "high", recommendation: "For high heat release, consider excess reactant, inert diluent, cold shots, staged addition, or other distribution changes before finalizing the network." },
-      { id: "H22", area: "exothermic reactor", title: "Use conventional cooling for milder exotherms", tags: ["reaction", "cooling", "heat_exchange"], severity: "medium", recommendation: "For lower heat release, compare jacket, coils, external loop cooler, and intercooling." },
-      { id: "H23", area: "endothermic reactor", title: "Manage highly endothermic reactions early", tags: ["endotherm", "reaction", "heating"], severity: "medium", recommendation: "For high heat demand, consider excess reactant, inert heat carrier, hot shots, staged heating, or distribution changes." },
-      { id: "H24", area: "endothermic reactor", title: "Use conventional heating for milder endotherms", tags: ["reaction", "heating", "heat_exchange"], severity: "low", recommendation: "For lower heat demand, compare jacket, coils, external loop heater, and interheaters." },
-      { id: "H25", area: "heat exchange", title: "Prefer external heat exchange when not intrinsic", tags: ["heat_exchange", "heating", "cooling"], severity: "low", recommendation: "Unless heat exchange is intrinsic to a reactor or separator, handle process-stream heating/cooling in dedicated exchangers or utilities." },
-      { id: "H26", area: "heat exchange", title: "Check temperature approach", tags: ["heat_exchange"], severity: "low", recommendation: "Record the minimum approach temperature assumption before using heat recovery or utility duties." },
-      { id: "H27", area: "cooling utilities", title: "Use cooling water where feasible", tags: ["cooling", "condensation", "vl"], severity: "low", recommendation: "When cooling or condensation is required, test cooling-water feasibility before refrigeration or special utilities." },
-      { id: "H28", area: "boiling", title: "Boil close-boiling liquids in dedicated exchangers", tags: ["boiling", "vl", "heating"], severity: "low", recommendation: "For boiling pure or close-boiling streams, separate exchanger design and allowable flux from the main process task." },
-      { id: "H29", area: "furnace", title: "Use fired heating only when temperature demands it", tags: ["high_temperature", "heating"], severity: "medium", recommendation: "Escalate from exchangers/steam/oil to fired heating only when required temperature or duty makes it necessary." },
-      { id: "H30", area: "thermal utility", title: "Select utility level explicitly", tags: ["heating", "cooling", "utility"], severity: "low", recommendation: "Assign steam, hot oil, cooling water, chilled water, or refrigeration level rather than leaving thermal utility implicit." },
-      { id: "H31", area: "pressure drop", title: "Estimate exchanger pressure drops", tags: ["heat_exchange", "pressure"], severity: "low", recommendation: "Track pressure-drop assumptions for heat exchangers so pumping/compression duties can be estimated later." },
-      { id: "H32", area: "heat integration", title: "Check process-process heat recovery", tags: ["heat_exchange", "utility"], severity: "low", recommendation: "Where hot and cold streams coexist, flag a heat-recovery opportunity before final utility accounting." },
-      { id: "H33", area: "thermal safety", title: "Avoid excessive thermal exposure", tags: ["heat_sensitive", "heating", "vl"], severity: "medium", recommendation: "For heat-sensitive materials, prefer short residence, lower pressure, thin-film, wiped-film, or short-path alternatives where compatible." },
-      { id: "H34", area: "gas pressure", title: "Use fans for small gas pressure rise", tags: ["gas_pressure", "vapor"], severity: "low", recommendation: "For small gas pressure increases, consider a fan before blower or compressor." },
-      { id: "H35", area: "gas pressure", title: "Use blowers for moderate gas pressure rise", tags: ["gas_pressure", "vapor"], severity: "low", recommendation: "For moderate gas pressure increases, consider a blower and check gas temperature rise." },
-      { id: "H36", area: "gas compression", title: "Use staged compression for high ratios", tags: ["gas_pressure", "vapor"], severity: "medium", recommendation: "For high gas pressure ratios, consider staged compression with intercooling and knock-out handling." },
-      { id: "H37", area: "liquid pumping", title: "Choose pump class from head and flow", tags: ["liquid_pressure", "liquid"], severity: "low", recommendation: "For liquid pressure increase, use flow and head to choose centrifugal, rotary, or reciprocating pump classes." },
-      { id: "H38", area: "slurry pumping", title: "Check slurry/solids pumping separately", tags: ["solid_liquid", "liquid_pressure"], severity: "medium", recommendation: "For slurries or solids-bearing liquids, require solids loading and abrasion/cake risk before selecting pump equipment." },
-      { id: "H39", area: "pump operability", title: "Check NPSH and cavitation risk", tags: ["liquid_pressure", "vl"], severity: "low", recommendation: "For pumped liquids near boiling or under vacuum, flag NPSH, cavitation, and vapor-lock risk." },
-      { id: "H40", area: "pressure reduction", title: "Use valves for simple liquid pressure letdown", tags: ["pressure_reduction", "liquid"], severity: "low", recommendation: "For simple pressure decrease without useful work recovery, pressure-control valves may be sufficient." },
-      { id: "H41", area: "expansion", title: "Recover work when expansion is significant", tags: ["pressure_reduction", "vapor"], severity: "low", recommendation: "For large gas/vapor pressure drops, consider turbines or expanders when economics and operability justify recovery." },
-      { id: "H42", area: "flash/letdown", title: "Account for flashing during letdown", tags: ["pressure_reduction", "vl"], severity: "medium", recommendation: "When pressure reduction crosses VLE limits, include flash separation, vent, and cooling consequences." },
-      { id: "H43", area: "pump vs compression", title: "Pump liquid rather than compress vapor", tags: ["vapor", "liquid_pressure", "condensation"], severity: "medium", recommendation: "Where feasible without costly refrigeration, condense vapor, pump liquid, then revaporize rather than compress gas." },
-      { id: "H44", area: "vacuum", title: "Choose vacuum system by pressure level", tags: ["vacuum", "vl"], severity: "medium", recommendation: "For vacuum operations, record target pressure and compare steam ejectors, liquid-ring pumps, dry pumps, or staged systems." },
-      { id: "H45", area: "vacuum", title: "Condense before vacuum pumping", tags: ["vacuum", "condensation", "vl"], severity: "medium", recommendation: "Condense recoverable vapors upstream of vacuum equipment to reduce load and losses." },
-      { id: "H46", area: "vacuum", title: "Handle non-condensables explicitly", tags: ["vacuum", "vent", "vapor"], severity: "medium", recommendation: "For vacuum or inerted systems, include non-condensable load, vent treatment, and air/inert leakage assumptions." },
-      { id: "H47", area: "vacuum", title: "Avoid air ingress where hazardous", tags: ["vacuum", "hazard"], severity: "high", recommendation: "For flammable, oxidizable, or toxic systems under vacuum, check inerting, leak control, and abatement." },
-      { id: "H48", area: "solids conveying", title: "Select granular-solid conveying route", tags: ["solid_particle", "solids_handling"], severity: "low", recommendation: "For granular solids, compare pneumatic, mechanical, gravity, or screw conveying and include dust/containment needs." },
-      { id: "H49", area: "size reduction", title: "Use crushing/grinding only when needed", tags: ["solid_particle", "size_reduction"], severity: "low", recommendation: "If particle size must be reduced, specify target size and select crushing, milling, or grinding accordingly." },
-      { id: "H50", area: "size enlargement", title: "Use agglomeration when handling improves", tags: ["solid_particle", "size_enlargement"], severity: "low", recommendation: "If fine powders cause handling, dust, or filtration issues, consider granulation, pelletizing, or agglomeration." },
-      { id: "H51", area: "solid classification", title: "Separate solids by size when required", tags: ["solid_particle", "classification"], severity: "low", recommendation: "When particle-size distribution matters, include screening, classification, or elutriation." },
-      { id: "H52", area: "gas-solid separation", title: "Remove entrained solids from gas", tags: ["vapor_solid", "solid_particle"], severity: "medium", recommendation: "For gas-solid streams, include cyclones, filters, scrubbers, or electrostatic collection as appropriate." },
-      { id: "H53", area: "liquid-solid classification", title: "Use hydrocyclones or classifiers for liquid slurries", tags: ["solid_liquid", "classification"], severity: "low", recommendation: "For slurry classification or dewatering, compare hydrocyclones, centrifuges, screens, and filters." }
-    ].map(rule => ({ source: "Seider-Seader-Lewin heuristics, paraphrased for computable screening", ...rule }));
+    const heuristicRuleLibrary = globalThis.ProcessUpscalingHeuristicRules || [];
     const lutzePhaseOptions = [
       ["unknown", "phase missing"],
       ["L", "L - liquid"],
@@ -356,21 +231,21 @@
       { id: "holding_time", label: "Holding time", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
       { id: "holding_temperature", label: "Holding temperature", phenomena: ["ES(H)", "ES(C)", "PT(VL)", "R(L)", "R(V)"], placeholder: "85-90", unit: "°C", kind: "number" },
       { id: "thermal_ramp", label: "Ramp / cooling time", phenomena: ["ES(H)", "ES(C)"], placeholder: "0.5", unit: "h", kind: "number", hint: "How long it takes to ramp up to the target/heating temperature, or to cool down toward the holding/final temperature." },
-      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", disabled: true, hint: "Not wired into scaling calculations yet - placeholder for a future heating/cooling equipment model." },
+      { id: "thermal_mode", label: "Heating / cooling device", phenomena: ["ES(H)", "ES(C)"], placeholder: "jacket, coil, condenser, ice bath, heat exchanger...", hint: "Documents the thermal-control equipment or utility basis used for scale-up review." },
       { id: "initial_pressure", label: "Initial pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "1", units: ["atm", "bar", "mbar"], defaultUnit: "atm", kind: "number" },
       { id: "target_pressure", label: "Target / final pressure", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)"], placeholder: "50", units: ["mbar", "bar", "atm"], defaultUnit: "mbar", kind: "number" },
       { id: "mixing_time", label: "Mixing time", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "0.5", unit: "h", kind: "number" },
       { id: "agitation_speed", label: "Agitation speed", phenomena: ["M(L)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)"], placeholder: "300", unit: "rpm", kind: "number", hint: "Literature ranges: lab stirred vessels ~200-1000 rpm; pilot/industrial tanks ~30-150 rpm (large impellers keep similar tip speed at much lower rpm); high-shear/rotor-stator ~1000-3000 rpm; anchor/helical ribbon on viscous fluids ~5-50 rpm." },
-      { id: "contact_time", label: "Phase contact time", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "0.25", unit: "h", kind: "number" },
+      { id: "contact_time", label: "Phase contact time", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "0.25", unit: "h", kind: "number" },
       { id: "contact_device", label: "Contact device / geometry", phenomena: ["PC(VL)", "PC(LL)", "PC(VS)", "PC(LS)", "2phM(VL)", "2phM(LL)", "2phM(LS)", "2phM(VS)"], placeholder: "impeller, packed bed, static mixer, spray..." },
       { id: "agitation_note", label: "Agitation / mass-transfer note", phenomena: ["M(L)", "M(V)", "M(S)", "2phM(VL)", "2phM(LS)", "2phM(LL)", "2phM(VS)", "PC(LL)", "PC(LS)", "PC(VL)", "PC(VS)"], placeholder: "avoid emulsion, suspend solids, improve contact..." },
       { id: "reaction_time", label: "Reaction time", phenomena: ["R(L)", "R(V)"], placeholder: "2", unit: "h", kind: "number" },
-      { id: "conversion_yield", label: "Conversion / yield", phenomena: ["R(L)", "R(V)"], placeholder: "95", unit: "%", kind: "conversion" },
+      { id: "conversion_yield", label: "Reaction yield", phenomena: ["R(L)", "R(V)"], placeholder: "95", unit: "%", kind: "conversion" },
       { id: "phase_ratio", label: "Phase ratio", phenomena: ["PT(LL)", "PS(LL)", "2phM(LL)", "PC(LL)"], placeholder: "organic:aqueous ratio, wash volume..." },
       { id: "transfer_endpoint", label: "Transfer / equilibrium endpoint", phenomena: ["PT(VL)", "PT(LL)", "PT(VS)", "PT(LS)", "PT(MVL)", "PT(MLL)", "PT(MVV)"], placeholder: "equilibrium reached, water removed, crystals formed..." },
-      { id: "phase_change_time", label: "Phase-change time", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)", "PT(VL)", "PT(LS)", "PT(VS)"], placeholder: "1", unit: "h", kind: "number" },
-      { id: "phase_change_fraction", label: "Phase-change fraction", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)", "PT(VL)", "PT(LS)", "PT(VS)"], placeholder: "80", unit: "%", kind: "number" },
-      { id: "settling_time", label: "Settling / split time", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "0.5", unit: "h", kind: "number" },
+      { id: "phase_change_time", label: "Phase-change time", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)"], placeholder: "1", unit: "h", kind: "number" },
+      { id: "phase_change_fraction", label: "Phase-change fraction", phenomena: ["PCh(V->L)", "PCh(L->V)", "PCh(L->S)", "PCh(S->L)"], placeholder: "80", unit: "%", kind: "number" },
+      { id: "settling_time", label: "Settling / split time", phenomena: ["PS(LL)", "PS(LS)"], placeholder: "0.5", unit: "h", kind: "number" },
       { id: "separation_efficiency", label: "Separation efficiency", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "95", unit: "%", kind: "number" },
       { id: "carryover_limit", label: "Carryover / entrainment limit", phenomena: ["PS(LL)", "PS(VL)", "PS(VS)", "PS(LS)"], placeholder: "low, <1%, visually clear..." },
       { id: "interface_risk", label: "Interface / emulsion risk", phenomena: ["PS(LL)", "2phM(LL)", "PC(LL)"], placeholder: "emulsion risk, interface control, rag layer..." },
@@ -388,18 +263,9 @@
       { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
       { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
       { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
-      { id: "density_difference", label: "Density difference", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)"], unit: "kg/m3", placeholder: "organic vs aqueous", reason: "Needed for decanting and interface-settling plausibility." },
-      { id: "partition_coefficient", label: "Partition coefficient", phenomena: ["PT(LL)", "PC(LL)"], unit: "", placeholder: "K or logP", reason: "Helps rank liquid-liquid extraction or washing intensity." },
-      { id: "emulsion_risk", label: "Emulsion risk", phenomena: ["PS(LL)", "2phM(LL)", "PC(LL)"], unit: "", placeholder: "low, medium, high", reason: "Flags scale-up risk in liquid-liquid mixing and decanting." },
-      { id: "solubility", label: "Solubility", phenomena: ["PT(LS)", "PS(LS)", "PCh(L->S)", "PCh(S->L)"], unit: "g/L", placeholder: "vs temperature if known", reason: "Supports crystallization, precipitation, and dissolution choices." },
-      { id: "particle_size", label: "Particle size", phenomena: ["PS(LS)", "PC(LS)", "2phM(LS)"], unit: "um", placeholder: "d50 or range", reason: "Relevant for filtration, drying, suspension, and cake behavior." },
-      { id: "cake_resistance", label: "Cake resistance / compressibility", phenomena: ["PS(LS)", "PC(LS)"], unit: "", placeholder: "low, medium, high", reason: "Flags solid-liquid separation scale-up difficulty." },
-      { id: "separation_selectivity", label: "Selectivity / affinity", phenomena: ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"], unit: "", placeholder: "selectivity, affinity, sorption preference", reason: "Supports membrane, adsorption, extraction, drying-agent, and other property-based separations when simple phase split is weak." },
-      { id: "separating_agent", label: "Separating agent", phenomena: ["PT(VL)", "PS(VL)", "PT(LL)", "PC(LL)", "PT(MLL)", "PT(MVL)"], unit: "", placeholder: "entrainer, extractant, adsorbent, membrane", reason: "Documents the extra agent or material that makes an otherwise weak separation feasible." },
       { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
       { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed only when mixing, residence volume, settling, or equipment sizing depends on volume rather than just mass." },
-      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." },
-      { id: "hazard_note", label: "Hazard / compatibility note", phenomena: ["ES(H)", "PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)"], unit: "", placeholder: "flammable, toxic, corrosive, incompatible...", reason: "Supports purge, vent, solvent recovery, and safety review." }
+      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." }
     ];
 
     const separationCore = globalThis.ProcessUpscalingSeparationCore;
@@ -418,11 +284,14 @@
       "xlogp",
       "exactMass",
       "propertySource",
+      "propertyStatus",
       "thermalSensitivity",
       "mw",
       "tb",
       "tm",
       "pvap",
+      "pvapTemperature",
+      "pvapTemperatureUnit",
       "solubilityParameter",
       "molarVolume",
       "criticalTemp",
@@ -439,10 +308,57 @@
       { id: "mw", label: "MW", unit: "g/mol", placeholder: "e.g. 84.16" },
       { id: "tb", label: "Boiling point", unit: "K", placeholder: "for V-L screen" },
       { id: "pvap", label: "Vapor pressure", unit: "Pa", placeholder: "at relevant T" },
+      { id: "pvapTemperature", label: "Pvap measurement T", unit: "K", placeholder: "required for comparison" },
       { id: "density", label: "Density", unit: "kg/m3", placeholder: "for volume sizing" },
       { id: "solubilityParameter", label: "Solubility parameter", unit: "", placeholder: "affinity screen" },
       { id: "molarVolume", label: "Molar volume", unit: "m3/kmol", placeholder: "size screen" }
     ];
+
+    // Memo for derived models, scoped to one render pass. A full redraw recomputed the scale-up
+    // model five times, the schedule 46 times and the aggregated conditions of nine groups 2,932
+    // times, all from state that does not change while the pass runs. Outside a pass nothing is
+    // cached, so the checks (which stub renderAll) and every edit path keep seeing fresh values.
+    const renderMemo = new Map();
+    let renderPassActive = false;
+    const memoNoArg = Symbol("no-arg");
+
+    function memoInPass(name, key, compute) {
+      if (!renderPassActive) return compute();
+      let byKey = renderMemo.get(name);
+      if (!byKey) {
+        byKey = new Map();
+        renderMemo.set(name, byKey);
+      }
+      const memoKey = key === undefined ? memoNoArg : key;
+      if (byKey.has(memoKey)) return byKey.get(memoKey);
+      const value = compute();
+      byKey.set(memoKey, value);
+      return value;
+    }
+
+    // Trailing debounce for redraws triggered by typing: the state changes on every keystroke,
+    // the expensive redraw happens once the typing pauses.
+    const deferredRenders = new Map();
+    function deferRender(key, fn, delay = 250) {
+      const pending = deferredRenders.get(key);
+      if (pending) clearTimeout(pending);
+      deferredRenders.set(key, setTimeout(() => {
+        deferredRenders.delete(key);
+        fn();
+      }, delay));
+    }
+
+    function withRenderPass(fn) {
+      if (renderPassActive) return fn();
+      renderMemo.clear();
+      renderPassActive = true;
+      try {
+        return fn();
+      } finally {
+        renderPassActive = false;
+        renderMemo.clear();
+      }
+    }
 
     const state = {
       text: "",
@@ -450,13 +366,14 @@
       groups: {},
       links: [],
       scaleBasis: {
-        targetProduct: "octocrylene",
+        targetProduct: "",
         targetAmount: "1000",
         targetUnit: "kg/batch",
         referenceBlockId: "",
         basisAmount: "",
         basisUnit: "kg",
         mode: "batch",
+        planningScenario: "conservative",
         operatingDays: "250",
         hoursPerDay: "16",
         batchesPerDay: "1",
@@ -492,15 +409,18 @@
         scale: true
       },
       showAllHeuristicRules: false,
+      showAllTriggeredHeuristics: false,
       expandedHeuristicRuleIds: {},
-      expandedScaleSections: {},
+      scaleAdvancedOpen: false,
       expandedGanttRows: {},
+      expandedPathwayOptions: {},
       phenomenaGridExpanded: false,
-      scheduleScenarioView: "conservative",
       pubchemStreamSuggestions: {},
       activeSeparationSimulatorGroupId: null,
       activeSeparationSimulatorMode: "full",
       activeConversionBlockId: null,
+      activeTaskTimetableGroupId: null,
+      conversionView: "performance",
       activeInspectorTab: "inspect",
       selectedBlockId: null,
       selectedGroupId: null,
@@ -517,8 +437,10 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetMode: "editable",
+      flowsheetViewPreset: "audit",
+      selectedFlowsheetGroupId: "",
       flowsheetFit: true,
+      flowsheetZoom: 1,
       // Recycle arrows and waste/vent stubs used to always be drawn; defaulting this off hid the
       // streams most relevant to a waste/safety review behind a checkbox nobody knew to look for.
       flowsheetShowAuxiliaryArrows: true,
@@ -530,8 +452,8 @@
     const $ = id => document.getElementById(id);
 
     const undoStack = [];
-    let flowsheetRequestSeq = 0;
     let boardDragFrame = null;
+    let boardDragLinkPaintAt = 0;
     let boardReflowDepth = 0;
     // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
     // Compact/Detailed toggle) - NOT on every render. It was previously unconditional, which meant
@@ -543,7 +465,7 @@
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
     const pubchemStreamSuggestTimers = new Map();
-    const flowsheetLayoutVersion = "publishable-lanes-v1";
+    const flowsheetLayoutVersion = "publishable-lanes-v2";
 
     function undoSnapshot() {
       return JSON.stringify({
@@ -558,6 +480,7 @@
     }
 
     function pushUndo() {
+      if (typeof markProjectAutosaveAsUserWork === "function") markProjectAutosaveAsUserWork();
       undoStack.push(undoSnapshot());
       if (undoStack.length > 50) undoStack.shift();
       updateUndoButton();
@@ -727,6 +650,12 @@
       } else {
         state.groups[groupId].schedule = { ...scheduleDefaults(), ...state.groups[groupId].schedule };
       }
+      if (!Array.isArray(state.groups[groupId].schedule.predecessorIds)) {
+        state.groups[groupId].schedule.predecessorIds = [];
+      }
+      if (!["auto", "manual"].includes(state.groups[groupId].schedule.dependencyMode)) {
+        state.groups[groupId].schedule.dependencyMode = "auto";
+      }
       state.groups[groupId].propertiesEditing = Boolean(state.groups[groupId].propertiesEditing);
       state.groups[groupId].conditionsEditing = Boolean(state.groups[groupId].conditionsEditing);
       if (typeof state.groups[groupId].selectionBasis !== "string") state.groups[groupId].selectionBasis = "";
@@ -745,6 +674,12 @@
       }
       if (!state.groups[groupId].mfaOverrides || typeof state.groups[groupId].mfaOverrides !== "object") {
         state.groups[groupId].mfaOverrides = {};
+      }
+      if (!state.groups[groupId].timeConcurrency || typeof state.groups[groupId].timeConcurrency !== "object" || Array.isArray(state.groups[groupId].timeConcurrency)) {
+        state.groups[groupId].timeConcurrency = {};
+      }
+      if (!state.groups[groupId].timeOffsets || typeof state.groups[groupId].timeOffsets !== "object" || Array.isArray(state.groups[groupId].timeOffsets)) {
+        state.groups[groupId].timeOffsets = {};
       }
       state.groups[groupId].separationSimulator = normalizeSeparationSimulator(state.groups[groupId].separationSimulator);
       if (typeof state.groups[groupId].openOverrideKey !== "string") state.groups[groupId].openOverrideKey = "";
@@ -803,6 +738,9 @@
         operationClass: "auto",
         scaleSensitivity: "unknown",
         dependency: "previous",
+        // "auto" follows text order; "manual" uses explicit predecessorIds.
+        dependencyMode: "auto",
+        predecessorIds: [],
         notes: ""
       };
     }
@@ -910,10 +848,6 @@
     function phenomenaForBehaviorAndText(behavior, text) {
       const preset = behaviorPresets[behavior] || behaviorPresets.unassigned;
       const t = String(text || "").toLowerCase();
-      // Was "\\bcool|..." / "\\bheat|..." - a literal backslash before "cool"/"heat" that can
-      // never appear in plain text, so the bare imperative verb form ("Cool the mixture",
-      // "Heat to reflux" - extremely common protocol phrasing) never matched; only the other
-      // alternatives in each list (cooled/cooling, heated/heating, etc.) did.
       const hasCooling = /\bcool|cooled|cooling|quench|chilled|chill|room temperature|ambient/.test(t);
       const hasHeating = /\bheat|heated|heating|reflux|boil|boiling|warm|warmed|evaporat|distill/.test(t);
 
@@ -923,19 +857,9 @@
         return [...preset.phenomena];
       }
 
-      // inferBehavior only picks ONE dominant preset per block, so a sentence that combines a
-      // thermal step with something else - "Cool to room temperature and wash the organic layer",
-      // "The batch is cooled and then filtered" - used to silently drop the thermal side entirely:
-      // a thermal phenomenon only ever got added when the WHOLE block was classified as "heat/cool"
-      // itself. Add ES(C)/ES(H) on top of whatever preset applies whenever the text separately
-      // mentions cooling/heating, unless that preset already carries the phenomenon (e.g. "reaction"
-      // already implies ES(H); "solvent evaporation" already implies ES(H)).
+      // Add explicit thermal phenomena when text mentions heating/cooling.
       const basePhenomena = [...preset.phenomena];
-      // "Charge and mix" alone carries no thermal phenomenon, so a temperature stated in the same
-      // sentence (e.g. "Charge the reagents at 25 C") previously had no condition field to land in
-      // at all - not even to record that the charge happens at a controlled, non-ambient temperature.
-      // Only default to heating from a bare number (no explicit heat/cool word) for this behavior,
-      // so a plain "Charge the reagents to the reactor" without any thermal detail doesn't get one.
+      // For charge/mix, a stated temperature should still create a thermal condition slot.
       const hasTemperatureValue = behavior === "charge and mix"
         && /\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*c\b|\d+(?:\.\d+)?\s*°?\s*c\b/i.test(text);
       const additions = [];
@@ -945,30 +869,80 @@
     }
 
     function inferInitialConditions(text, phenomena) {
-      const t = text.toLowerCase();
       const conditions = {};
       const units = {};
       const hasThermal = phenomena.some(code => ["ES(H)", "ES(C)", "PT(VL)"].includes(code));
-      const temperatureMatch = text.match(/(\d+(?:\.\d+)?\s*(?:-|to|–)\s*\d+(?:\.\d+)?\s*°?\s*C|\d+(?:\.\d+)?\s*°?\s*C)/i);
-      if (hasThermal && temperatureMatch) {
-        conditions.target_temperature = temperatureMatch[1].replace(/°?\s*C/ig, "").replace(/\s+/g, " ").trim();
+      const temperatureRange = String(text).match(/(-?\d+(?:[.,]\d+)?)\s*(?:-|to|–)\s*(-?\d+(?:[.,]\d+)?)\s*°?\s*C\b/i);
+      const temperatureMatches = [...String(text).matchAll(/(-?\d+(?:[.,]\d+)?)\s*°?\s*C\b/gi)];
+      if (hasThermal && (temperatureRange || temperatureMatches.length)) {
+        const targetTemperature = temperatureRange?.[2] || temperatureMatches.at(-1)[1];
+        conditions.target_temperature = formatNumber(Number(targetTemperature.replace(",", ".")));
         units.target_temperature = "°C";
+        const initialTemperature = temperatureRange?.[1] || (temperatureMatches.length > 1 ? temperatureMatches[0][1] : "");
+        if (initialTemperature) {
+          conditions.initial_temperature = formatNumber(Number(initialTemperature.replace(",", ".")));
+          units.initial_temperature = "°C";
+        }
+        const holdTemperature = String(text).match(/(?:hold|held|maintain|age|react)[^.;]{0,30}?(?:at\s*)?(-?\d+(?:[.,]\d+)?)\s*°?\s*C\b/i);
+        if (holdTemperature) {
+          conditions.holding_temperature = formatNumber(Number(holdTemperature[1].replace(",", ".")));
+          units.holding_temperature = "°C";
+        }
       }
       const hasMixing = phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("));
       const hasSeparation = phenomena.some(code => code.startsWith("PS("));
       const hasReaction = phenomena.some(code => code.startsWith("R("));
-      const duration = extractDurationHours(text);
-      if (duration && hasReaction) {
-        conditions.reaction_time = duration.value;
+      const hasPhaseChange = phenomena.some(code => code.startsWith("PCh("));
+      const hasContact = phenomena.some(code => code.startsWith("PC(") || code.startsWith("2phM("));
+      const reactionDuration = extractDurationNearKeywords(text, /react|convert|hold|age|reflux/i);
+      const mixingDuration = extractDurationNearKeywords(text, /stir|mix|agitat|blend|dispers/i);
+      const separationDuration = extractDurationNearKeywords(text, /settle|separat|split|decant|filter|centrifug/i);
+      const phaseChangeDuration = extractDurationNearKeywords(text, /evaporat|distill|condens|crystalli[sz]|melt|sublim/i);
+      const contactDuration = extractDurationNearKeywords(text, /contact|extract|wash/i);
+      if (reactionDuration && hasReaction) {
+        conditions.reaction_time = reactionDuration.value;
         units.reaction_time = "h";
       }
-      if (duration && hasMixing && /stir|mix|agitat/i.test(text)) {
-        conditions.mixing_time = duration.value;
+      if (mixingDuration && hasMixing) {
+        conditions.mixing_time = mixingDuration.value;
         units.mixing_time = "h";
       }
-      if (duration && hasSeparation && /settle|separat|split|decant/i.test(text)) {
-        conditions.settling_time = duration.value;
+      if (separationDuration && hasSeparation) {
+        conditions.settling_time = separationDuration.value;
         units.settling_time = "h";
+      }
+      if (phaseChangeDuration && hasPhaseChange) {
+        conditions.phase_change_time = phaseChangeDuration.value;
+        units.phase_change_time = "h";
+      }
+      if (contactDuration && hasContact) {
+        conditions.contact_time = contactDuration.value;
+        units.contact_time = "h";
+      }
+      const agitationSpeed = hasMixing && String(text).match(/(\d+(?:[.,]\d+)?)\s*rpm\b/i);
+      if (agitationSpeed) {
+        conditions.agitation_speed = formatNumber(Number(agitationSpeed[1].replace(",", ".")));
+        units.agitation_speed = "rpm";
+      }
+      const pressureMatches = phenomena.some(isVaporPressurePhenomenon)
+        ? [...String(text).matchAll(/(\d+(?:[.,]\d+)?)\s*(mbar|bar|atm)\b/gi)]
+        : [];
+      if (pressureMatches.length) {
+        const last = pressureMatches.at(-1);
+        conditions.target_pressure = formatNumber(Number(last[1].replace(",", ".")));
+        units.target_pressure = last[2].toLowerCase();
+        if (pressureMatches.length > 1) {
+          conditions.initial_pressure = formatNumber(Number(pressureMatches[0][1].replace(",", ".")));
+          units.initial_pressure = pressureMatches[0][2].toLowerCase();
+        }
+      }
+      const yieldMatch = hasReaction && (
+        String(text).match(/(?:yield(?:ed)?|conversion)\s*(?:of|was|is|at|=|:)?\s*(\d+(?:[.,]\d+)?)\s*(?:%|percent\b)/i)
+        || String(text).match(/(\d+(?:[.,]\d+)?)\s*(?:%|percent)\s*(?:yield|conversion)\b/i)
+      );
+      if (yieldMatch) {
+        conditions.conversion_yield = formatNumber(Number(yieldMatch[1].replace(",", ".")));
+        units.conversion_yield = "%";
       }
       return { values: conditions, units };
     }
@@ -983,6 +957,16 @@
       const raw = (lo + hi) / 2;
       const hours = unit.startsWith("min") ? raw / 60 : raw;
       return { value: formatNumber(hours), unit: "h" };
+    }
+
+    function extractDurationNearKeywords(text, keywords) {
+      const source = String(text || "");
+      const duration = String.raw`\d+(?:[.,]\d+)?\s*(?:(?:-|to|–)\s*\d+(?:[.,]\d+)?)?\s*(?:h|hr|hrs|hour|hours|min|mins|minute|minutes)\b`;
+      const keyword = keywords.source;
+      const nearAfter = source.match(new RegExp(`(?:${keyword})[^.;]{0,56}?${duration}`, "i"));
+      if (nearAfter) return extractDurationHours(nearAfter[0]);
+      const nearBefore = source.match(new RegExp(`${duration}[^.;]{0,24}?(?:${keyword})`, "i"));
+      return nearBefore ? extractDurationHours(nearBefore[0]) : null;
     }
 
     function rangesOverlap(a1, a2, b1, b2) {
@@ -1102,6 +1086,9 @@
         conversionBaseQuantity: values.conversionBaseQuantity || "",
         stoichCoeff: values.stoichCoeff || "",
         reactionRole: values.reactionRole || "",
+        substanceRole: values.substanceRole || "",
+        residualOf: values.residualOf || "",
+        internalTransfer: Boolean(values.internalTransfer),
         unit: values.unit || "kg",
         phase: values.phase || "unknown",
         status: values.status || "missing",
@@ -1115,6 +1102,7 @@
         makeupRequired: values.makeupRequired || "",
         accumulationRisk: values.accumulationRisk || "",
         note: values.note || "",
+        source: values.source || "",
         pubchemQuery: values.pubchemQuery || values.compoundName || "",
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, values[field] || values.chemicalProperties?.[field] || ""])),
         editing: Boolean(values.editing)
@@ -1122,13 +1110,113 @@
     }
 
     function loadBaseExampleProject() {
-      const makeBlock = (id, phrase, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}) => {
-        const start = sampleText.indexOf(phrase);
+      const basis = octocryleneExampleBasis;
+      const chemical = {
+        // Densities (kg/m3, 20-25 degC) let the flowsheet weigh the volume-declared charges; Tb/Tm
+        // in K and Pvap in Pa at 25 degC are handbook values for the well-characterised
+        // components so the Lutze screening has evidence to work with. PubChem's PUG-View carries
+        // no thermal data for the two case-specific esters (checked 2026-09-16: MW only), so their
+        // values come from supplier and registration data and are labelled "estimated".
+        benzophenone: { name: "benzophenone", phase: "S", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", tb: "578.6", tm: "321.4", pvap: "0.13", density: "1110", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        cyanoacetate: { name: "2-ethylhexyl cyanoacetate", phase: "L", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", tb: "515", pvap: "4.8", density: "985", propertyStatus: "estimated", propertySource: "Supplier data: 150 degC at 11 mmHg (Sigma-Aldrich SDS), 241 degC at 760 mmHg and 0.036 mmHg at 25 degC (ChemicalBook, predicted); no NIST entry", pvapTemperature: "298.15", pvapTemperatureUnit: "K", note: "Liquid at 25 degC; no pour point reported, Tm left blank. Tb and Pvap are supplier/predicted values, consistent with a Clausius-Clapeyron extrapolation of the reduced-pressure point (548 +/- 25 K)." },
+        catalyst: { name: "ammonium acetate", phase: "S", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", tm: "387", pvap: "0.019", density: "1170", propertyStatus: "database", propertySource: "PubChem PUG-View (HSDB): mp 114 degC, vapour pressure 0.00014 mmHg", pvapTemperature: "298.15", pvapTemperatureUnit: "K", note: "Decomposes at about 114 degC; there is no boiling point, so Tb is left blank and the low vapour pressure keeps volatility rules from proposing to distil it. Water solubility about 1480 g/L, so the whole charge leaves in the aqueous wash." },
+        cyclohexane: { name: "cyclohexane", phase: "L", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", tm: "279.6", pvap: "13000", density: "779", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        octocrylene: { name: "octocrylene", phase: "L", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: basis.productMw, tb: "700", tm: "263", pvap: "0.000001", density: "1051", propertyStatus: "estimated", propertySource: "SCCS/1627/21 Final Opinion on Octocrylene, section 3.1.8: mp -10 degC, bp 218 degC at 1.5 mmHg (decomposes before boiling, >300 degC), vapour pressure 0 Pa at 25 degC, density 1.051 g/cm3; Tb at 1 atm extrapolated", pvapTemperature: "298.15", pvapTemperatureUnit: "K", thermalSensitivity: "high", note: "No crystallisation above -10 degC (263 K), so cyclohexane cannot be removed by crystallisation. The 1 atm boiling point does not exist (decomposition above 300 degC): 700 +/- 40 K is a Clausius-Clapeyron extrapolation of the 218 degC / 1.5 mmHg point, entered only so the volatility ratios evaluate. Vapour pressure below detection, entered as 1e-6 Pa (negligible)." },
+        water: { name: "water", phase: "L", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        brine: { name: "saturated sodium chloride brine", phase: "L", density: "1200", propertyStatus: "database", propertySource: "CRC Handbook: saturated NaCl 26.4 wt% at 25 degC, 1200 kg/m3", note: "Mixture: treated by the screening as water with dissolved salt; Tb/Tm left blank." },
+        ethylAcetate: { name: "ethyl acetate", phase: "L", pubchemQuery: "ethyl acetate", pubchemCid: "8857", mw: "88.11", tb: "350.2", tm: "189.6", pvap: "12400", density: "902", propertyStatus: "database", propertySource: "NIST WebBook / CRC Handbook via PubChem identity", pvapTemperature: "298.15", pvapTemperatureUnit: "K" },
+        wastewater: { name: "wastewater", phase: "L", density: "1000", propertyStatus: "assumption", propertySource: "Aggregate aqueous stream; density of water assumed so the row converts to kg", note: "Mixture: composition is carried by the input rows of U9; Tb/Tm left blank." },
+        residue: { name: "Knoevenagel heavies (still-bottoms residue)", phase: "L", density: "1100", propertyStatus: "assumption", propertySource: citations.knoevenagelHeavies, note: "Uncharacterised mixture of self-condensation and Michael-addition byproducts; density assumed close to the reaction mixture so the row converts to kg. Tb/Tm left blank; GC-MS of the still bottoms would give the real composition." }
+      };
+      const chemicalRole = {
+        benzophenone: "reactant",
+        cyanoacetate: "reactant",
+        catalyst: "catalyst",
+        cyclohexane: "solvent",
+        octocrylene: "product",
+        water: "auxiliary",
+        brine: "auxiliary",
+        ethylAcetate: "solvent",
+        residue: "byproduct"
+      };
+      const component = (role, key, values = {}) => ({
+        role,
+        ...chemical[key],
+        substanceRole: values.substanceRole || chemicalRole[key] || "",
+        scalingMode: "per kg product",
+        ...values
+      });
+      const processComponent = (role, key, values, context) => component(role, key, {
+        ...values,
+        note: [values.note, `Process context: ${context}.`].filter(Boolean).join(" ")
+      });
+      const reactionChargeInventory = (role, context) => [
+        processComponent(role, "benzophenone", {
+          quantity: basis.benzophenoneKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "1"
+        }, context),
+        processComponent(role, "cyanoacetate", {
+          quantity: basis.cyanoacetateKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "1"
+        }, context),
+        processComponent(role, "catalyst", {
+          quantity: basis.catalystKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst",
+          note: `NH4OAc at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate (textbook Knoevenagel loading); the SI names the catalyst without a quantity.`
+        }, context),
+        processComponent(role, "cyclohexane", {
+          quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+        }, context)
+      ];
+      const postReactionInventory = (role, context) => [
+        processComponent(role, "octocrylene", {
+          quantity: basis.productKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate"
+        }, context),
+        processComponent(role, "benzophenone", {
+          quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone"
+        }, context),
+        processComponent(role, "cyanoacetate", {
+          quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated",
+          timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate"
+        }, context),
+        processComponent(role, "residue", {
+          quantity: basis.distillationResidueKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate",
+          source: citations.knoevenagelHeavies,
+          note: `Formed alongside the product at ${basis.distillationResiduePercent}% of the crude; carried with the non-volatile fraction to the final distillation, where it becomes the still-bottoms residue.`
+        }, context),
+        processComponent(role, "cyclohexane", {
+          quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent"
+        }, context),
+        processComponent(role, "catalyst", {
+          quantity: basis.catalystKg, unit: "kg", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst",
+          note: `NH4OAc at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate, carried with the reactor contents until the aqueous wash.`
+        }, context)
+      ];
+      const organicInventory = (role, context) => [
+        ...postReactionInventory(role, context).filter(stream => stream.name !== chemical.catalyst.name),
+        processComponent(role, "ethylAcetate", {
+          quantity: basis.ethylAcetateL, unit: "L", status: "estimated",
+          timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent",
+          note: "One volume of extraction solvent (laboratory practice; the SI gives no amount), carried with the organic phase until the evaporator."
+        }, context)
+      ];
+      const internalInventory = streams => streams.map(stream => ({ ...stream, internalTransfer: true }));
+      const makeBlock = (id, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}, source = "protocol") => {
+        const phrase = octocryleneExampleSteps[id];
+        const start = source === "protocol" ? sampleText.indexOf(phrase) : -1;
+        const fallbackPosition = sampleText.length + (Number(String(id).replace(/[^\d]/g, "")) || 0);
         return {
           id,
           groupId,
-          start: start >= 0 ? start : 0,
-          end: start >= 0 ? start + phrase.length : phrase.length,
+          start: start >= 0 ? start : fallbackPosition,
+          end: start >= 0 ? start + phrase.length : fallbackPosition,
+          source,
           text: phrase,
           behavior,
           phenomena,
@@ -1138,225 +1226,358 @@
           conditionsEditing: false,
           phase: "",
           endpoint: "",
-          status: "example basis"
+          status: source === "protocol" ? "SI-normalized protocol" : "SI scale-up addition"
         };
       };
 
       state.text = sampleText;
       $("sourceInput").value = sampleText;
       state.blocks = [
-        makeBlock(
-          "B1",
-          "Charge 1.82 kg of benzophenone, 1.97 kg of 2-ethylhexyl cyanoacetate, 0.15 kg of ammonium acetate catalyst, and 3.50 kg of cyclohexane to a stirred jacketed reactor fitted with a reflux condenser and a Dean-Stark trap.",
-          "G1",
-          "charge and mix",
-          ["M(L)", "2phM(LS)"],
-          [
-            { role: "input", name: "benzophenone", quantity: "1.82", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", note: "reactive limiting-screen candidate; endpoint in SI: benzophenone below detection/low residual" },
-            { role: "input", name: "2-ethylhexyl cyanoacetate", quantity: "1.97", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", note: "reactive co-reagent for 1:1 Knoevenagel product screening" },
-            { role: "input", name: "ammonium acetate catalyst", quantity: "0.15", unit: "kg", phase: "S", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "catalyst", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", note: "non-stoichiometric catalyst; removed with aqueous work-up, not consumed in conversion balance" },
-            { role: "input", name: "cyclohexane", quantity: "3.50", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "solvent", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "solvent; industrial make-up partly covered by recycle loop CYHX" },
-            { role: "output", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
-          ],
-          { agitation_note: "stirred jacketed reactor" },
-          {}
-        ),
-        makeBlock(
-          "B2",
-          "Heat the stirred mixture to reflux at 85 to 90 °C under nitrogen.",
-          "G2",
-          "heat/cool",
-          ["ES(H)", "M(L)", "PT(LS)"],
-          [
-            { role: "input", name: "charged reaction mixture", quantity: "7.44", unit: "kg", phase: "LS", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "reflux-ready reaction solution", quantity: "7.44", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", note: "benzophenone dissolves as the cyclohexane reaction mixture reaches reflux" }
-          ],
-          { initial_temperature: "25", target_temperature: "85", thermal_mode: "jacket heating to reflux", agitation_note: "stirred mixture, heated to reflux under nitrogen blanket" },
-          { initial_temperature: "°C", target_temperature: "°C" }
-        ),
-        makeBlock(
-          "B3",
-          "Maintain reflux for 18 to 24 h, removing the water formed by the Knoevenagel condensation azeotropically until no further water separates in the Dean-Stark trap and benzophenone concentration ceases to decrease.",
-          "G2",
-          "reaction with in-situ removal",
-          ["M(L)", "2phM(VL)", "R(L)", "ES(H)", "PC(VL)", "PT(VL)", "PS(LL)"],
-          [
-            { role: "input", name: "reflux-ready reaction solution", quantity: "7.44", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", stoichCoeff: "1", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "main product component in the crude organic phase; final purification still occurs in U6" },
-            { role: "output", name: "cyclohexane in crude organic phase", quantity: "3.15", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "solvent retained in the organic phase before thin-film evaporation" },
-            { role: "output", name: "ammonium acetate in crude organic phase", quantity: "0.15", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "ammonium acetate", pubchemCid: "517165", mw: "77.08", note: "catalyst/additive retained until aqueous work-up" },
-            { role: "waste", id: "B3-CB-byproduct-1", name: "water of condensation", quantity: "0.15", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997", note: "azeotropic removal via Dean-Stark decanter; sent to wastewater treatment interface (paper U9, SI Step 4: approx. 0.05 kg water/kg product, i.e. 18.0/361.5 stoichiometric)" },
-            { role: "waste", id: "B3-CB-unreacted-benzophenone", name: "unreacted benzophenone", quantity: "0.308", unit: "kg", phase: "S", status: "calculated", timing: "waste purge", fate: "purge", scalingMode: "per batch", residualOf: "benzophenone", pubchemQuery: "benzophenone", pubchemCid: "3102", mw: "182.22", note: "Auto-generated by Conversion balance: reported 3.00 kg octocrylene at 90% yield back-calculates a 3.333 kg theoretical product basis; stoichiometric residual 1.689 mol benzophenone remains for recovery/purge screening." },
-            { role: "waste", id: "B3-CB-unreacted-2-ethylhexyl-cyanoacetate", name: "unreacted 2-ethylhexyl cyanoacetate", quantity: "0.333", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "purge", scalingMode: "per batch", residualOf: "2-ethylhexyl cyanoacetate", pubchemQuery: "2-ethylhexyl cyanoacetate", pubchemCid: "96359", mw: "197.28", note: "Auto-generated by Conversion balance: reported 3.00 kg octocrylene at 90% yield back-calculates a 3.333 kg theoretical product basis; stoichiometric residual 1.687 mol 2-ethylhexyl cyanoacetate remains for recovery/purge screening." },
-            { role: "waste", name: "cyclohexane vapor to vent", quantity: "0.05", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G7", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "route to vent abatement train (paper U7): condenser + activated carbon polishing (VOC compliance)" },
-            { role: "waste", name: "reactor decanter cyclohexane purge", quantity: "0.30", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", note: "SI Step 4, first loop: 'the U2 reflux/decanter purge is routed together with the U5 thin-film evaporator overhead to the U8 distillation column' - most cyclohexane stays in the internal reflux loop, this is the purge fraction; quantity not given in the SI, assumed for illustration" }
-          ],
-          { reaction_time: "21", holding_temperature: "85", conversion_yield: "90", agitation_note: "refluxing stirred liquid", transfer_endpoint: "no further water separates in the Dean-Stark trap" },
-          { reaction_time: "h", holding_temperature: "°C", conversion_yield: "%" }
-        ),
-        makeBlock(
-          "B4",
-          "Cool the crude reaction mixture to 25 °C.",
-          "G2",
-          "heat/cool",
-          ["ES(C)"],
-          [
-            { role: "input", name: "reactor organic phase before cooling", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", note: "octocrylene + residual reactants + cyclohexane + ammonium acetate after Dean-Stark water removal and solvent purge" },
-            { role: "output", name: "cooled reactor organic phase", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
-          ],
-          { initial_temperature: "85", target_temperature: "25" },
-          { initial_temperature: "°C", target_temperature: "°C" }
-        ),
-        makeBlock(
-          "B5",
-          "Wash the organic phase with 2.0 kg of water in the first counter-current mixer-settler stage, allowing the phases to settle after contact.",
-          "G3",
-          "liquid-liquid wash",
-          ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"],
-          [
-            { role: "input", name: "cooled reactor organic phase", quantity: "6.94", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "input", name: "wash water", quantity: "2.0", unit: "kg", phase: "L", status: "reported", timing: "later addition", fate: "fresh input", scalingMode: "per batch", reactionRole: "auxiliary", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997" },
-            { role: "output", name: "water-washed organic/aqueous dispersion", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" }
-          ],
-          { mixing_time: "0.5", settling_time: "0.5", phase_ratio: "organic:aqueous approx. 7.2:2.0" },
-          { mixing_time: "h", settling_time: "h" }
-        ),
-        makeBlock(
-          "B6",
-          "Wash the organic phase with saturated brine in the second mixer-settler stage, allowing the phases to settle, then separate and discard the aqueous layers.",
-          "G3",
-          "liquid-liquid wash",
-          ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"],
-          [
-            { role: "input", name: "water-washed organic/aqueous dispersion", quantity: "9.21", unit: "kg", phase: "LL", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "input", name: "saturated sodium chloride brine", quantity: "0.50", unit: "kg", phase: "L", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch", reactionRole: "auxiliary", pubchemQuery: "sodium chloride", pubchemCid: "5234", mw: "58.44", note: "screening placeholder for brine wash; exact brine dose not specified in SI" },
-            { role: "output", name: "washed organic phase", quantity: "7.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "aqueous/brine wash effluent", quantity: "2.66", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", destinationGroup: "G9", note: "water/brine effluent carries ammonium acetate catalyst and soluble impurities to wastewater treatment interface (paper U9); ethyl acetate extraction is intentionally not carried into the industrial flowsheet" }
-          ],
-          { separation_efficiency: "95", settling_time: "0.5", transfer_endpoint: "clear organic/aqueous split" },
-          { separation_efficiency: "%", settling_time: "h" }
-        ),
-        makeBlock(
-          "B7",
-          "Dry the washed organic phase over molecular sieves until the water content is below 0.1 percent.",
-          "G4",
-          "solid-liquid drying",
-          ["M(L)", "PC(LS)", "PS(LS)"],
-          [
-            { role: "input", name: "washed organic phase", quantity: "7.05", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "input", name: "molecular sieves 4A", quantity: "0.10", unit: "kg", phase: "S", status: "assumed", timing: "later addition", fate: "fresh input", scalingMode: "per batch", note: "regenerable fixed-bed column at industrial scale" },
-            { role: "output", name: "dried organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "waste", name: "spent sieves with adsorbed water", quantity: "0.15", unit: "kg", phase: "S", status: "estimated", timing: "waste purge", fate: "solid waste", scalingMode: "per batch", note: "regenerated on-site at scale; lab-scale disposal" }
-          ],
-          { transfer_endpoint: "water content below 0.1 percent", contact_time: "1" },
-          { contact_time: "h" }
-        ),
-        makeBlock(
-          "B8",
-          "Evaporate the cyclohexane under vacuum at 100 to 200 mbar in a thin-film evaporator and recover the condensed solvent for reuse.",
-          "G5",
-          "solvent evaporation",
-          ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"],
-          [
-            { role: "input", name: "dried organic phase", quantity: "7.00", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "recovered cyclohexane condensate", quantity: "3.00", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "sent to the dedicated solvent-recovery column (paper U8) rather than direct reuse" },
-            { role: "output", name: "octocrylene-rich distillation feed", quantity: "3.85", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "product-rich concentrate containing octocrylene plus residual reactants/heavies before short-path distillation" },
-            { role: "waste", name: "cyclohexane loss", quantity: "0.15", unit: "kg", phase: "V", status: "calculated", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", destinationGroup: "G7", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "evaporator vent to abatement train (paper U7); make-up fresh cyclohexane required" }
-          ],
-          { target_pressure: "150", phase_change_time: "2", phase_change_fraction: "90", transfer_endpoint: "cyclohexane evaporated to target (90% phase-change fraction)" },
-          { target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%" }
-        ),
-        makeBlock(
-          "B9",
-          "Purify the crude octocrylene by short-path distillation at 1.5 mmHg, collecting purified octocrylene of at least 98 percent purity as final product and sending heavy residues to disposal.",
-          "G6",
-          "distillation purification",
-          ["PT(VL)", "PS(VL)", "ES(H)"],
-          [
-            { role: "input", name: "octocrylene-rich distillation feed", quantity: "3.85", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch" },
-            { role: "output", name: "octocrylene", quantity: "3.00", unit: "kg", phase: "L", status: "reported", timing: "final output", fate: "product", scalingMode: "per kg product", pubchemQuery: "octocrylene", pubchemCid: "22571", mw: "361.48", note: "purified final product, at least 98 percent purity" },
-            { role: "waste", name: "short-path distillation residue", quantity: "0.85", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "heavy ends plus residual benzophenone and 2-ethylhexyl cyanoacetate; sent to incineration / off-site disposal unless a Lutze recovery route is applied" }
-          ],
-          { target_pressure: "2", separation_efficiency: "95", phase_change_time: "1.5", transfer_endpoint: "at least 98 percent purity" },
-          { target_pressure: "mbar", separation_efficiency: "%", phase_change_time: "h" }
-        ),
-        makeBlock(
-          "B10",
-          "Route the cyclohexane-rich vapor purge from the reactor and evaporator to a vent abatement train with a condenser and activated-carbon polishing, returning the recovered VOC by temperature-swing adsorption to the cyclohexane recovery column.",
-          "G7",
-          "vent gas treatment",
-          ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"],
-          [
-            { role: "input", name: "cyclohexane-rich vent stream", quantity: "0.20", unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87" },
-            { role: "output", name: "recovered VOC (cyclohexane-rich, TSA)", quantity: "0.18", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", destinationGroup: "G8", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "SI Step 4, second loop: temperature-swing adsorption recovers cyclohexane from the U7 vent and returns it to U8 (the recovery column), not directly to U1; capture fraction assumed 90%, not quantified in the SI" },
-            { role: "waste", name: "uncaptured VOC to atmosphere", quantity: "0.02", unit: "kg", phase: "V", status: "assumed", timing: "vent/emission", fate: "vent", scalingMode: "fixed loss %", note: "residual emission after abatement; compliance limit dependent, assumed value" }
-          ],
-          { capture_efficiency: "90", contact_time: "0.5", transfer_endpoint: "VOC captured to target (90% capture efficiency)" },
-          { capture_efficiency: "%", contact_time: "h" }
-        ),
-        makeBlock(
-          "B11",
-          "Feed the recovered cyclohexane condensate to a dedicated solvent-recovery column and return the purified cyclohexane to the feed stage.",
-          "G8",
-          "solvent recovery distillation",
-          ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"],
-          [
-            { role: "input", name: "crude cyclohexane recovery feed", quantity: "3.48", unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", scalingMode: "per batch", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", note: "combined U2 decanter purge, U5 condensate, and U7 TSA return" },
-            { role: "output", name: "purified cyclohexane", quantity: "3.41", unit: "kg", phase: "L", status: "assumed", timing: "in-process intermediate", fate: "recovered solvent", recoveryPercent: "98", scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", pubchemQuery: "cyclohexane", pubchemCid: "8078", mw: "84.16", tb: "353.87", density: "779", note: "SI Step 4, first loop: recovery efficiency of at least 98% is targeted; purified cyclohexane returns to U1" },
-            { role: "waste", name: "column bottoms / heavies", quantity: "0.07", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "purge", scalingMode: "per batch", note: "minor heavies purge from the recovery-column reboiler, assumed as 2% of combined recovery feed" }
-          ],
-          { reflux_ratio: "2", column_stages: "8", agitation_note: "staged reflux in solvent-recovery column" },
-          {}
-        ),
-        makeBlock(
-          "B12",
-          "Route the aqueous wash effluent, brine effluent, and reaction water to an on-site wastewater treatment interface for neutralization and off-site discharge.",
-          "G9",
-          "wastewater treatment",
-          ["M(L)"],
-          [
-            { role: "input", name: "reaction water", quantity: "0.15", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", pubchemQuery: "water", pubchemCid: "962", mw: "18.015", tb: "373.15", density: "997" },
-            { role: "input", name: "aqueous/brine wash effluent", quantity: "2.66", unit: "kg", phase: "L", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch" },
-            { role: "output", name: "neutralized aqueous effluent", quantity: "2.81", unit: "kg", phase: "L", status: "assumed", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "combines water/brine wash effluent (B6) and condensation water (B3); neutralized before off-site WWT discharge" }
-          ],
-          { neutralization_ph_target: "7", residence_time: "1", agitation_note: "neutralization tank, pH-controlled" },
-          { residence_time: "h" }
-        )
+        makeBlock("B1", "G1", "charge and mix", ["M(L)", "2phM(LS)"], [
+          component("input", "benzophenone", {
+            quantity: basis.benzophenoneKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "initial charge",
+            fate: "fresh input",
+            reactionRole: "reactant",
+            stoichCoeff: "1",
+            note: "Back-calculated from the 1 kg product basis and the explicit 99.5% endpoint proxy; the SI does not report a charge ratio."
+          }),
+          component("input", "cyanoacetate", {
+            quantity: basis.cyanoacetateKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "initial charge",
+            fate: "fresh input",
+            reactionRole: "reactant",
+            stoichCoeff: "1",
+            note: "Back-calculated on the same 1:1 molar and 99.5% endpoint-proxy basis as benzophenone."
+          }),
+          component("input", "catalyst", {
+            quantity: basis.catalystKg,
+            unit: "kg",
+            status: "estimated",
+            source: `${citations.knoevenagel} Loading contested by the process literature: ${citations.octocrylenePatent} uses ammonium acetate at 0.7-1.2 mol per mol of ketone, near-stoichiometric rather than catalytic, and every published octocrylene route also charges a carboxylic acid co-catalyst (acetic or propionic) at roughly 1 kg per kg of product, which this inventory does not carry. The 20 mol% here is the generic Knoevenagel loading and is likely low by 4-6x; confirm against the notebook before use.`,
+            timing: "initial charge",
+            fate: "fresh input",
+            reactionRole: "catalyst",
+            note: `NH4OAc is named in the SI without a quantity. Entered at ${basis.catalystLoadingMolPercent} mol% on the cyanoacetate (2.780 mol charged), the textbook loading for Knoevenagel condensations of ketones (Jones, Org. React. 15, 1967, 204; Tietze and Beifuss, Comprehensive Organic Synthesis vol. 2, 1991); range 0.021-0.107 kg for 10-50 mol%. Replace with the notebook charge.`
+          }),
+          component("input", "cyclohexane", {
+            quantity: basis.cyclohexaneRecoveredL,
+            unit: "L",
+            status: "calculated",
+            timing: "recycle",
+            fate: "recycled input",
+            reactionRole: "solvent",
+            loopId: "CYHX",
+            scalingMode: "recycle loop",
+            note: "Steady-state target case: 98% of the reported 2.5 L/kg total charge is supplied by recycle.",
+            source: `${citations.geislerDefaults} The 98% recovery assumed here is better than the 95% best case in those defaults, so it is the optimistic bound rather than a typical value; it also governs about fifty times more mass than the vent rows. Upper bound on total loss: ${citations.iedSolvent}`
+          }),
+          component("input", "cyclohexane", {
+            quantity: basis.cyclohexaneMakeupL,
+            unit: "L",
+            status: "calculated",
+            timing: "make-up",
+            fate: "fresh input",
+            reactionRole: "solvent",
+            note: "Maximum make-up implied by the 98% recovery target; actual solvent losses require measured recovery data.",
+            source: `${citations.geislerDefaults} Fresh solvent is charge x (1 - recycle factor). At 2% this is below the 5% implied by the published best case, and far below the regulatory ceiling: ${citations.iedSolvent}`
+          }),
+          ...reactionChargeInventory("output", "after charging and mixing; catalyst quantity remains unknown")
+        ], {
+          initial_temperature: "25",
+          agitation_note: "mechanical stirring under nitrogen blanket"
+        }, { initial_temperature: "°C" }),
+
+        makeBlock("B2", "G2", "heat/cool", ["ES(H)", "M(L)", "PT(LS)"], [
+          ...reactionChargeInventory("input", "charged materials before heat-up"),
+          ...internalInventory(reactionChargeInventory("output", "same components at cyclohexane reflux; benzophenone is dissolved"))
+        ], {
+          initial_temperature: "25",
+          target_temperature: "85-90",
+          thermal_ramp: "0.5-1",
+          thermal_mode: "jacket heating to cyclohexane reflux",
+          agitation_note: "mechanical stirring under nitrogen blanket"
+        }, {
+          initial_temperature: "°C",
+          target_temperature: "°C",
+          thermal_ramp: "h"
+        }),
+
+        makeBlock("B3", "G2", "reaction with in-situ removal", ["M(L)", "2phM(VL)", "R(L)", "ES(H)", "PC(VL)", "PT(VL)", "PS(LL)"], [
+          ...internalInventory(reactionChargeInventory("input", "reaction feed at reflux")),
+          component("output", "octocrylene", {
+            quantity: basis.productKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "in-process intermediate",
+            fate: "product",
+            internalTransfer: true,
+            stoichCoeff: "1",
+            note: "Calculated by the Reaction Balance from charged reagent moles and the endpoint-proxy conversion; no downstream product-loss percentage is invented."
+          }),
+          component("output", "cyclohexane", {
+            quantity: basis.cyclohexaneChargeL,
+            unit: "L",
+            status: "reported",
+            timing: "in-process intermediate",
+            fate: "intermediate",
+            internalTransfer: true,
+            reactionRole: "",
+            note: "Gross solvent inventory on the reported 2.5 L/kg product basis; the Dean-Stark solvent is returned to the reactor."
+          }),
+          component("output", "catalyst", {
+            quantity: basis.catalystKg,
+            unit: "kg",
+            status: "estimated",
+            timing: "in-process intermediate",
+            fate: "intermediate",
+            internalTransfer: true,
+            note: "The SI states that NH4OAc leaves with the first aqueous wash; the mass is the estimated 20 mol% charge, carried unchanged (catalytic, not consumed)."
+          }),
+          component("waste", "water", {
+            id: "B3-CB-byproduct-1",
+            substanceRole: "byproduct",
+            quantity: basis.reactionWaterKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "waste purge",
+            fate: "wastewater",
+            destinationGroup: "G9",
+            note: "One mole of water per mole of product; this reproduces the SI value of approximately 0.05 kg/kg product."
+          }),
+          component("output", "benzophenone", {
+            id: "B3-CB-unreacted-benzophenone",
+            quantity: basis.unreactedBenzophenoneKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "in-process intermediate",
+            fate: "intermediate",
+            internalTransfer: true,
+            residualOf: "benzophenone",
+            note: "Generated by the Reaction Balance using 99.5% as an explicit screening proxy for the reported benzophenone <0.5% endpoint."
+          }),
+          component("output", "cyanoacetate", {
+            id: "B3-CB-unreacted-2-ethylhexyl-cyanoacetate",
+            quantity: basis.unreactedCyanoacetateKg,
+            unit: "kg",
+            status: "calculated",
+            timing: "in-process intermediate",
+            fate: "intermediate",
+            internalTransfer: true,
+            residualOf: "2-ethylhexyl cyanoacetate",
+            note: "Generated on the same 99.5% screening-conversion and 1:1 stoichiometric basis."
+          }),
+          component("waste", "cyclohexane", {
+            quantity: basis.deanStarkPurgeCyclohexaneKg, unit: "kg", phase: "L", status: "estimated",
+            timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8",
+            note: "Cyclohexane dissolved in the 0.050 kg of Dean-Stark water drawn off the trap and routed to U8: solubility 55 mg/L at 25 degC gives 3 mg, entered as 0.00001 kg so the balance closes instead of showing an unknown.",
+            source: `${citations.cyclohexaneWater} That series is the authority for this binary; the 55 mg/L used here is the cyclohexane-in-water branch and is not yet verified against the printed table.`
+          }),
+          component("waste", "cyclohexane", {
+            quantity: basis.reactorVentCyclohexaneKg, unit: "kg", phase: "V", status: "estimated",
+            timing: "vent/emission", fate: "vent", destinationGroup: "G7",
+            note: "Reactor vent loss from vapour-liquid equilibrium: 0.5 m3/h N2 sweep for 20 h = 10 Nm3 at a 10 degC condenser outlet (Pvap 6.3 kPa, NIST Antoine; y = 0.062) gives 2.4 kg per 3000 kg batch. Record the actual sweep rate and condenser temperature.",
+            source: `${citations.cfrPurge} Implementation reference: ${citations.eiip16} Cross-check: ${citations.geislerDefaults} At 0.041% of the cyclohexane charge this sits inside that air-emission bracket and two orders of magnitude under the regulatory ceiling.`
+          })
+        ], {
+          reaction_time: "18-24",
+          holding_temperature: "85-90",
+          transfer_endpoint: "water collection ceases; benzophenone <0.5%",
+          agitation_note: "mechanically stirred liquid reaction with Dean-Stark phase split"
+        }, {
+          reaction_time: "h",
+          holding_temperature: "°C"
+        }),
+
+        makeBlock("B4", "G2", "heat/cool", ["ES(C)"], [
+          ...internalInventory(postReactionInventory("input", "reactor contents before cooling")),
+          ...postReactionInventory("output", "same components after cooling to 25 °C; no loss is reported")
+            .map(stream => ({ ...stream, destinationGroup: "G3" }))
+        ], {
+          initial_temperature: "85-90",
+          target_temperature: "25",
+          thermal_ramp: "1"
+        }, {
+          initial_temperature: "°C",
+          target_temperature: "°C",
+          thermal_ramp: "h"
+        }),
+
+        makeBlock("B5", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
+          ...postReactionInventory("input", "cooled reactor contents entering extraction and water wash"),
+          component("input", "ethylAcetate", {
+            quantity: basis.ethylAcetateL,
+            unit: "L",
+            status: "estimated",
+            timing: "later addition",
+            fate: "fresh input",
+            reactionRole: "solvent",
+            note: "The SI requires an ethyl acetate extraction but gives no volume; one volume of the reaction mixture (1.0 L, 0.902 kg) is laboratory practice. At plant scale the extraction is redundant (cyclohexane already is the organic phase) and EtOAc forms a minimum-boiling azeotrope with cyclohexane (about 72 degC, 56 wt% EtOAc), so U8 cannot return pure cyclohexane once it is in the loop: confirm with the authors whether to drop it at scale.",
+            source: `No published figure: the extraction volume is not reported and one volume of the reaction mixture is laboratory convention, not a sourced value. Plausibility bracket: ${citations.geislerDefaults} At 0.90 kg per kg product this sits inside that solvent-charge range. The octocrylene process patent uses no extraction solvent at all: ${citations.octocrylenePatent}`
+          }),
+          component("input", "water", {
+            quantity: basis.washWaterL,
+            unit: "L",
+            status: "reported",
+            timing: "later addition",
+            fate: "fresh input",
+            reactionRole: "auxiliary",
+            note: "Reported SI ratio: 2 L water per kg product."
+          }),
+          ...internalInventory(organicInventory("output", "organic components retained after extraction and water wash")),
+          component("waste", "water", {
+            quantity: basis.washWaterL,
+            unit: "L",
+            status: "reported",
+            timing: "waste purge",
+            fate: "wastewater",
+            destinationGroup: "G9",
+            note: "Carrier water is reported; dissolved impurity loading is not quantified."
+          }),
+          component("waste", "catalyst", {
+            quantity: basis.catalystKg,
+            unit: "kg",
+            status: "estimated",
+            timing: "waste purge",
+            fate: "wastewater",
+            destinationGroup: "G9",
+            note: "The SI assigns NH4OAc to this stream; the whole estimated charge dissolves in the 2 L wash (solubility about 1480 g/L)."
+          })
+        ], {
+          phase_ratio: "2 L wash water/kg product; ethyl acetate 1 volume (estimated)",
+          transfer_endpoint: "organic layer clear"
+        }),
+
+        makeBlock("B6", "G3", "liquid-liquid wash", ["M(L)", "2phM(LL)", "PC(LL)", "PT(LL)", "PS(LL)"], [
+          ...internalInventory(organicInventory("input", "organic components entering the brine wash")),
+          component("input", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", source: "No published figure for the volume: one volume equal to the water wash is laboratory convention. The composition is sourced: saturated NaCl is 26.4 wt% at 25 degC with density 1200 kg/m3 (CRC Handbook of Chemistry and Physics, aqueous solubility and density tables).", note: "Brine is required by the SI without a dosage; one volume equal to the water wash is laboratory practice. Saturated NaCl at 25 degC is 26.4 wt% at 1200 kg/m3: 1.0 L = 1.20 kg (0.317 kg NaCl + 0.883 kg water). At scale a coalescer or a second water wash usually replaces the brine wash." }),
+          ...organicInventory("output", "organic components retained after the brine wash"),
+          component("waste", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", note: "Spent saturated sodium chloride brine to U9, same volume as charged; water carried into the organic phase is not subtracted at this precision." })
+        ], {
+          transfer_endpoint: "no emulsion; aqueous phase neutral"
+        }),
+
+        makeBlock("B7", "G4", "solid-liquid drying", ["PC(LS)", "PS(LS)"], [
+          ...organicInventory("input", "organic components entering the 4A molecular-sieve bed"),
+          component("input", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "", source: `${citations.cyclohexaneWater} Measured water in cyclohexane is 0.0069 wt% at 25 degC, against the 0.01 wt% assumed here, so this row is slightly conservative. Regeneration discharge follows ${citations.cfrDrying}`, note: "Water carried in the organic phase from the washes: dissolved (3.3 wt% in ethyl acetate, 0.01 wt% in cyclohexane at 20 degC) plus 0.1-0.5 wt% entrained after the decanter. A Karl Fischer titration before the bed replaces the estimate." }),
+          ...organicInventory("output", "same organic components after drying to the Karl-Fischer endpoint"),
+          component("waste", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G9", source: `${citations.cfrDrying} Implementation reference: ${citations.eiip16}`, note: "Water removed by the bed and discharged at regeneration: 0.030 kg dissolved + 0.012 kg entrained - 0.002 kg left in the product at the <500 ppm endpoint (0.008 kg if ethyl acetate is dropped at scale)." })
+        ], {
+          transfer_endpoint: "Karl-Fischer water <500 ppm",
+          contact_device: "regenerable fixed bed of 4A molecular sieves"
+        }),
+
+        makeBlock("B8", "G5", "solvent evaporation", ["PT(VL)", "PS(VL)", "PCh(L->V)", "ES(H)"], [
+          ...organicInventory("input", "organic components entering thin-film solvent removal"),
+          component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "Non-volatile product component sent to final short-path distillation." }),
+          component("output", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "benzophenone", note: "Residual reagent retained with the non-volatile fraction." }),
+          component("output", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual reagent retained with the non-volatile fraction." }),
+          component("output", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Condensed cyclohexane sent to solvent recovery; gross basis before applying the U8 recovery target." }),
+          component("output", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G8", note: "Ethyl acetate condensate, same volume as charged; the SI gives no destination, so it is routed to U8 with the cyclohexane as a mixed solvent, where the azeotrope has to be purged." }),
+          component("waste", "cyclohexane", { quantity: basis.evaporatorVentCyclohexaneKg, unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", destinationGroup: "G7", source: `${citations.cfrVacuum} The air in-leakage correlations there replace the order-of-magnitude allowance used for this row: leakage follows from the vessel volume and the operating pressure, so this number can be calculated rather than assumed once those are declared.`, note: "Non-condensable exhaust of the vacuum system after the process condenser (100-200 mbar): an order-of-magnitude allowance, not a VLE calculation. Replace with the air in-leakage rate of the vacuum system and the condenser outlet temperature." })
+        ], {
+          target_temperature: "40-50",
+          target_pressure: "100-200",
+          thermal_mode: "wiped/thin-film evaporator under vacuum",
+          transfer_endpoint: "cyclohexane and residual ethyl acetate removed"
+        }, {
+          target_temperature: "°C",
+          target_pressure: "mbar"
+        }),
+
+        makeBlock("B9", "G6", "distillation purification", ["PT(VL)", "PS(VL)", "ES(H)"], [
+          component("input", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", note: "Product component entering final short-path distillation." }),
+          component("input", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "benzophenone" }),
+          component("input", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "2-ethylhexyl cyanoacetate" }),
+          component("input", "residue", { quantity: basis.distillationResidueKg, unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", source: citations.knoevenagelHeavies, note: `Carried from the reactor with the non-volatile fraction; ${basis.distillationResiduePercent}% of the crude.` }),
+          component("output", "octocrylene", { quantity: basis.productKg, unit: "kg", status: "reported", timing: "final output", fate: "product", note: "Defined functional unit: 1 kg purified product at >=98% purity. This is a basis definition, not a reported isolation yield." }),
+          component("waste", "benzophenone", { quantity: basis.unreactedBenzophenoneKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "benzophenone", note: "Residual benzophenone separated from the product cut. The SI does not say whether it is recovered; at 0.25 wt% of the product recovery is not economic, so it leaves with the still residue to waste treatment, tracked as its own row." }),
+          component("waste", "cyanoacetate", { quantity: basis.unreactedCyanoacetateKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "purge", residualOf: "2-ethylhexyl cyanoacetate", note: "Residual 2-ethylhexyl cyanoacetate, same fate as the residual benzophenone: leaves with the still residue to waste treatment rather than being hidden in the aggregate residue row." }),
+          component("waste", "residue", { quantity: basis.distillationResidueKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "purge", source: citations.knoevenagelHeavies, note: `The SI reports this heavy fraction with neither quantity nor composition; entered at ${basis.distillationResiduePercent}% of the crude (self-condensation and Michael adducts of the Knoevenagel reaction, mid-point of the 2-5 wt% typical for this chemistry). Composition unconfirmed: GC-MS of the still bottoms would give the real breakdown; the SI's authors should confirm the yield this implies.` })
+        ], {
+          target_temperature: "190-210",
+          target_pressure: "2",
+          thermal_mode: "short-path molecular distillation",
+          transfer_endpoint: "product fraction >=98% purity; evaporator residence <1 min"
+        }, {
+          target_temperature: "°C",
+          target_pressure: "mbar"
+        }),
+
+        makeBlock("B10", "G7", "vent gas treatment", ["PT(VL)", "PS(VL)", "PC(VS)", "ES(C)"], [
+          component("input", "cyclohexane", { quantity: basis.ventInKg, unit: "kg", phase: "V", status: "estimated", timing: "in-process intermediate", fate: "intermediate", note: "Combined U2 reactor and U5 evaporator vent gas entering the abatement unit (sum of the two estimated vent rows); the SI routes them to U7 without a flow." }),
+          component("output", "cyclohexane", { quantity: basis.ventRecoveredKg, unit: "kg", phase: "L", status: "estimated", timing: "in-process intermediate", fate: "recovered solvent", destinationGroup: "G8", source: `${citations.cfrPurge} Capture efficiency is a declared control-device performance, not a calculated split; it is the one number in this unit that has to come from the vendor or a measurement.`, note: `Condensed and desorbed cyclohexane returned to U8 at ${basis.ventCapturePercent}% capture (cold condenser plus activated carbon, typical); the SI reports no capture efficiency.` }),
+          component("waste", "cyclohexane", { quantity: basis.ventEmittedKg, unit: "kg", phase: "V", status: "estimated", timing: "vent/emission", fate: "vent", source: `${citations.iedSolvent} Screening default if the calculation is not available: ${citations.ecoinventGapFill} That default would give roughly five times this figure, so the calculated value is the tighter of the two.`, note: `Cyclohexane emitted to air after abatement at ${basis.ventCapturePercent}% capture; far below the 0.05 L/kg loss allowance already in the case. This row feeds the LCI emission to air.` })
+        ], {
+          contact_device: "condenser plus activated-carbon polishing"
+        }, {}, "scale-up addition"),
+
+        makeBlock("B11", "G8", "solvent recovery distillation", ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], [
+          component("input", "cyclohexane", { quantity: basis.cyclohexaneChargeL, unit: "L", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Reported 2.5 L/kg gross charge used as the closed target-case recovery basis. The two estimated side feeds (U7 recovered vent cyclohexane and the Dean-Stark purge, together below 0.1% of this feed) are part of the same charge and are not added a second time." }),
+          component("input", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "solvent", note: "Ethyl acetate condensate from U5 (estimated one volume). It forms a minimum-boiling azeotrope with cyclohexane (about 72 degC, 56 wt% EtOAc), so it cannot be returned as pure cyclohexane." }),
+          component("output", "cyclohexane", { quantity: basis.cyclohexaneRecoveredL, unit: "L", status: "calculated", timing: "recycle", fate: "recovered solvent", recoveryPercent: basis.solventRecoveryPercent, scalingMode: "recycle loop", loopId: "CYHX", destinationGroup: "G1", note: "Purified recycle; minimum quantity calculated from the SI target of at least 98% recovery." }),
+          component("waste", "cyclohexane", { quantity: basis.cyclohexaneMakeupL, unit: "L", status: "calculated", timing: "waste purge", fate: "loss", note: "Maximum unrecovered cyclohexane share implied by the 98% target; it is not a measured loss." }),
+          component("waste", "ethylAcetate", { quantity: basis.ethylAcetateL, unit: "L", status: "estimated", timing: "waste purge", fate: "purge", note: "Azeotrope purge: the ethyl acetate leaves the column as a light cut with some cyclohexane rather than being recovered. Dropping the extraction at scale removes this stream." })
+        ], {
+          separation_efficiency: basis.solventRecoveryPercent,
+          transfer_endpoint: "cyclohexane recovery >=98%"
+        }, {
+          separation_efficiency: "%"
+        }, "scale-up addition"),
+
+        makeBlock("B12", "G9", "wastewater treatment", ["M(L)"], [
+          component("input", "water", { quantity: basis.reactionWaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater", note: "Stoichiometric reaction water." }),
+          component("input", "water", { quantity: basis.washWaterL, unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", note: "Aqueous wash carrier." }),
+          component("input", "catalyst", { quantity: basis.catalystKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Ammonium acetate dissolved in the aqueous wash (estimated 20 mol% charge)." }),
+          component("input", "brine", { quantity: basis.brineL, unit: "L", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Spent saturated sodium chloride brine (estimated one volume, 1.20 kg)." }),
+          component("input", "water", { quantity: basis.sieveRegenerationWaterKg, unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", note: "Molecular-sieve regeneration water (estimated from the water carried in the organic phase)." }),
+          component("output", "wastewater", { quantity: basis.wastewaterKg, unit: "kg", status: "calculated", timing: "waste purge", fate: "wastewater", note: "Sum of the aqueous inputs: reaction water + wash water + NH4OAc + brine + regeneration water. Composition is carried by the input rows; treatment reagents and the final discharge are not reported." })
+        ], {
+          agitation_note: "neutralization and biological-treatment interface; design data missing"
+        }, {}, "scale-up addition")
       ];
+
       const octocryleneReactionBlock = state.blocks.find(block => block.id === "B3");
-      if (octocryleneReactionBlock) {
-        octocryleneReactionBlock.conversionDetail = {
-          productStreamId: "B3-S2",
-          productAmountMode: "actual",
-          productBasisQuantity: "",
-          balanceMethod: "stoichiometric",
-          stagedResidualStreamIds: [],
-          byproducts: [
-            {
-              id: "octo-water",
-              name: "water of condensation",
-              basis: "generated by stoichiometry",
-              amount: "",
-              percent: "",
-              stoichCoeff: "1",
-              mw: "18.015",
-              unit: "kg",
-              role: "byproduct"
-            }
-          ],
-          lastGeneratedSummary: "Preloaded from SI: 90% reported yield, 1:1 Knoevenagel stoichiometry, water as stoichiometric byproduct; solvent and catalyst excluded from reactive balance."
-        };
-      }
+      octocryleneReactionBlock.conversionDetail = {
+        productStreamId: octocryleneReactionBlock.streams.find(stream => stream.role === "output" && stream.name === "octocrylene")?.id || "",
+        productAmountMode: "from reactants",
+        productBasisQuantity: "",
+        balanceMethod: "stoichiometric",
+        reactionEquation: "benzophenone + 2-ethylhexyl cyanoacetate -> octocrylene + water",
+        effluentName: "component-resolved octocrylene reaction effluent",
+        conversionPercent: basis.endpointConversionPercent,
+        conversionStatus: "estimated",
+        selectivityPercent: "100",
+        selectivityStatus: "assumed",
+        byproducts: [{
+          id: "octo-water",
+          name: "water",
+          basis: "generated by stoichiometry",
+          amount: "",
+          percent: "",
+          stoichCoeff: "1",
+          mw: "18.015",
+          unit: "kg",
+          role: "byproduct"
+        }],
+        lastGeneratedSummary: "SI-reconciled basis: 1:1 Knoevenagel stoichiometry; 99.5% is an explicit screening proxy for the benzophenone <0.5% endpoint, not a reported yield. Water and residual reagents are calculated; the catalyst, extraction solvent, brine, vent, regeneration-water and distillation-residue quantities the SI does not report are engineering estimates labelled as such."
+      };
+
+      const schedule = (values = {}) => ({ ...scheduleDefaults(), ...values });
       state.groups = {
-        G1: { id: "G1", task: "feed preparation and dosing", selectedUnit: "Feed tank and dosing skid", selectionBasis: "paper U1: benzophenone, 2-EH cyanoacetate, cyclohexane, and ammonium acetate are charged/dosed before the shared T1 reaction step", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "roughly constant", dependency: "previous", notes: "feed tanks and solid feeder support charging to U2; receives recovered cyclohexane loop CYHX. Duration includes conservative charging/pre-mix allowance so the single-train schedule remains close to the SI ~28 h makespan." }, properties: { heat_capacity: { value: "1.8", unit: "kJ/kg/K", status: "assumed", note: "aromatic/aliphatic mixture Cp" }, density: { value: "870", unit: "kg/m3", status: "assumed", note: "" } }, propertiesEditing: false, x: 560, y: 90 },
-        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "paper U2 / T1 core: B2 heat-up, B3 liquid-phase Knoevenagel reaction, Dean-Stark water removal, and B4 cool-down remain one reactor operation", schedule: { durationH: "20", parallelUnits: "1", canOverlap: "no", capacityAmount: "15", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", dependency: "previous", notes: "15 m3 semi-batch jacketed reactor with reflux condenser and Dean-Stark side decanter (paper U2); 18-24 h lab range represented as 20 h cycle-time screening value. Reactor sizing per SI Step 6: stoichiometric charge (1512 kg benzophenone + 1637 kg 2-EH cyanoacetate, approx. 3.2 m3) plus cyclohexane at 2.5 L/kg product (7.5 m3 for a 3000 kg batch) gives a 10.7 m3 total charge; at 70% working fill this requires an approx. 15 m3 reactor." }, properties: { heat_capacity: { value: "1.9", unit: "kJ/kg/K", status: "assumed", note: "" }, viscosity: { value: "40", unit: "mPa s", status: "assumed", note: "crude viscosity rises with conversion; mixing-sensitive at scale" } }, propertiesEditing: false, x: 1120, y: 90 },
-        G3: { id: "G3", task: "aqueous and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "paper U3: two-stage mixer-settler train replaces lab wash/separation and removes ammonium acetate/soluble impurities without adding ethyl acetate extraction", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "increases with scale", dependency: "previous", notes: "water wash followed by brine wash; U3 2-3 h secondary task below the parallelization threshold in SI Step 6. Aqueous/brine effluent is routed to U9." }, properties: { density_difference: { value: "130", unit: "kg/m3", status: "assumed", note: "" }, emulsion_risk: { value: "medium", unit: "", status: "assumed", note: "watch LL scale-up" } }, propertiesEditing: false, x: 1680, y: 90 },
-        G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "paper U4: fixed-bed 4A molecular-sieve drying is the industrial replacement for lab drying salts", schedule: { durationH: "1.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "regenerable molecular-sieve bed. Third SI recycle loop: water is desorbed during regeneration and the bed returns to service, avoiding a continuous spent-salt waste stream." }, properties: {}, propertiesEditing: false, x: 2240, y: 90 },
-        G5: { id: "G5", task: "cyclohexane solvent removal", selectedUnit: "Evaporation", selectionBasis: "paper U5: wiped/thin-film evaporator under vacuum removes cyclohexane with short residence and sends overhead to U8 recovery", schedule: { durationH: "2.5", parallelUnits: "1", canOverlap: "no", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "thin-film evaporator at 100-200 mbar and around 50 C jacket. Duration close to B8 phase-change time plus vacuum draw margin." }, properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "cyclohexane" }, heat_capacity: { value: "1.85", unit: "kJ/kg/K", status: "assumed", note: "" } }, propertiesEditing: false, x: 2800, y: 90 },
-        G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "paper U6: short-path molecular distillation is selected for high-boiling, thermally sensitive octocrylene purification", schedule: { durationH: "4", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "short-path molecular distillation at approx. 1.5 mmHg (~2 mbar), 190-210 C, residence <1 min. SI Step 6 treats U6 as a 3-5 h secondary bottleneck that can be relieved through parallelization/pre-emptive duplication; represented here as 2 parallel lanes." }, properties: { viscosity: { value: "180", unit: "mPa s", status: "assumed", note: "crude octocrylene at feed temperature" } }, propertiesEditing: false, x: 3360, y: 90 },
-        G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "paper U7: condenser plus activated-carbon polishing handles cyclohexane-rich VOC vents from U2 and U5", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "second SI recycle loop: cyclohexane recovered by temperature-swing adsorption (TSA) returns to U8, not directly to U1." }, properties: {}, propertiesEditing: false, x: 1680, y: 520 },
-        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "paper U8: dedicated solvent-recovery column combines U2 decanter purge, U5 overhead, and U7 TSA return before recycle to U1", schedule: { durationH: "3", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "principal recycle loop: targets >=98% cyclohexane recovery and returns purified cyclohexane to U1 feed preparation." }, properties: {}, propertiesEditing: false, x: 2800, y: 520 },
-        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "paper U9: compliance interface for reaction water plus aqueous/brine wash effluent", schedule: { durationH: "1", parallelUnits: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", dependency: "previous", notes: "neutralization tank + bio-WWT inlet; collects Dean-Stark condensation water and U3 effluent containing ammonium acetate catalyst/soluble salts." }, properties: {}, propertiesEditing: false, x: 1120, y: 520 }
+        G1: { id: "G1", task: "feed preparation and dosing", selectedUnit: "Feed tank and dosing skid", selectionBasis: "SI U1: separate benzophenone, 2-EH cyanoacetate, and cyclohexane feeds plus NH4OAc solid feeder", schedule: schedule({ durationH: "1", scaleSensitivity: "roughly constant", notes: "Estimated, not reported: one hour is the usual allowance for a solids charge (about 1.5 t benzophenone, 1.6 t cyanoacetate) and a 7.5 m3 solvent transfer on the 3000 kg batch. The 98% target recycle returns to this stage." }), properties: {}, propertiesEditing: false, x: 560, y: 90 },
+        G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "SI U2/T1: B2 heat-up, B3 liquid-phase reaction/Dean-Stark removal, and B4 cooling share one reactor", schedule: schedule({ durationH: "20", capacityAmount: "5", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", notes: "The SI states an approximately 20 h U2 bottleneck and a 5 m3 reactor. Its separate 3000 kg batch claim is capacity-inconsistent with 2.5 L/kg cyclohexane: solvent alone is 7.5 m3 before reactants and freeboard." }), properties: {}, propertiesEditing: false, x: 1120, y: 90 },
+        G3: { id: "G3", task: "ethyl acetate extraction, aqueous wash, and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "SI protocol and U3: ethyl acetate extraction is named in the cyclohexane route; water/brine contacting is implemented as a mixer-settler train", schedule: schedule({ durationH: "2-3", scaleSensitivity: "increases with scale", notes: "SI range. Ethyl acetate and brine volumes are laboratory-practice estimates (one volume each), not reported." }), properties: {}, propertiesEditing: false, x: 1680, y: 90 },
+        G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "SI U4: regenerable fixed-bed 4A molecular sieves replace single-use laboratory drying salts", schedule: schedule({ durationH: "2", scaleSensitivity: "increases with scale", notes: "Estimated, not reported: fixed-bed contact time for about 10 m3 of organic phase per batch (2.9 m3 product + 7.5 m3 cyclohexane) through a 2-3 m3 sieve bed at a liquid hourly space velocity of 2 per hour. Inlet water loading and regeneration demand are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 2240, y: 90 },
+        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "Cyclohexane boiling point stated in SI heuristic closure." } }, propertiesEditing: false, x: 2800, y: 90 },
+        G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "SI U6: short-path molecular distillation for a high-boiling, thermally sensitive product", schedule: schedule({ durationH: "3-5", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "SI range and pre-emptive duplication; residence in the evaporator is separately stated as <1 min." }), properties: {}, propertiesEditing: false, x: 3360, y: 90 },
+        G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "SI U7: cold-trap condenser plus activated-carbon polishing for U2/U5 VOC vents", schedule: schedule({ durationH: "20", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G1"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: a continuous service that runs for as long as the reactor vents (20 h). Scheduled from the end of feed preparation so that it runs alongside the reaction rather than after the evaporator, which the automatic text-order dependency would assume; it does not add to the plant cycle. Vent flow and capture efficiency are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 1680, y: 520 },
+        G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "SI U8: recover cyclohexane from U2/U5 and return it to U1", schedule: schedule({ durationH: "6", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane per batch at a column throughput of about 1 t/h. Recovery target >=98%; column duty, stages and reflux are not reported." }), properties: {}, propertiesEditing: false, x: 2800, y: 520 },
+        G9: { id: "G9", task: "wastewater treatment interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "SI U9: reaction water plus aqueous/brine discharges to neutralization and biological WWT", schedule: schedule({ durationH: "1", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G4"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: nominal transfer to the treatment plant, scheduled after the last aqueous discharge (the sieve regeneration in G4). Treatment residence time, reagents, and final discharge are not reported." }), properties: {}, propertiesEditing: false, x: 1120, y: 520 }
       };
       state.links = [
         { from: "G1", to: "G2" },
@@ -1367,44 +1588,45 @@
         { from: "G2", to: "G8" },
         { from: "G5", to: "G8" },
         { from: "G8", to: "G1" },
-        { from: "G3", to: "G9" },
-        { from: "G2", to: "G9" },
         { from: "G2", to: "G7" },
         { from: "G5", to: "G7" },
-        { from: "G7", to: "G8" }
+        { from: "G7", to: "G8" },
+        { from: "G2", to: "G9" },
+        { from: "G3", to: "G9" },
+        { from: "G4", to: "G9" }
       ];
-      if (octocryleneReactionBlock && state.groups.G2) {
-        syncSeparationSimulatorSubstances(state.groups.G2);
-        syncGroupReactionBalanceFromConversionBlock(octocryleneReactionBlock);
-      }
+      syncSeparationSimulatorSubstances(state.groups.G2);
+      syncGroupReactionBalanceFromConversionBlock(octocryleneReactionBlock);
+
       state.scaleBasis = {
+        ...scaleBasisDefaults(),
         targetProduct: "octocrylene",
         targetAmount: "750",
         targetUnit: "t/year",
         referenceBlockId: "B9",
-        basisAmount: "3.0",
+        basisAmount: "1",
         basisUnit: "kg",
         mode: "batch",
-        operatingDays: "250",
+        planningScenario: "overlapped",
+        scheduleMethod: "duration",
+        operatingDays: "260.4166666667",
         hoursPerDay: "24",
-        batchesPerDay: "1",
-        batchDuration: "",
         oeePercent: "80",
         parallelUnits: "1",
         allowableCapacityUtilizationPercent: "85",
-        productKgPerBatch: "",
-        reactantsLoadingLPerKgProduct: "1.067",
-        solventLoadingLPerKgProduct: "2.5",
+        productKgPerBatch: "3000",
+        reactantsLoadingLPerKgProduct: "",
+        solventLoadingLPerKgProduct: basis.cyclohexaneChargeL,
         reactorWorkingFillPercent: "70",
-        productMolecularWeightGmol: "361.5",
-        condensationWaterMolPerMol: "1",
         confidence: "rough"
       };
       state.ruleChecks = [];
       state.aiRefine = null;
       state.selectedBlockId = null;
-      state.selectedGroupId = "G2";
-      state.selectedIds = ["B2", "B3", "B4"];
+      // Nothing is selected on load: the group drawer and the selected-item card stay closed until
+      // the user picks something, instead of opening on G2 with its full material editor.
+      state.selectedGroupId = null;
+      state.selectedIds = [];
       state.menuBlockId = null;
       state.menuGroupId = null;
       state.menuStreamId = null;
@@ -1415,14 +1637,13 @@
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = "G2";
       state.activeInspectorTab = "inspect";
+      state.showAllTriggeredHeuristics = false;
       renderAll();
-      requestAnimationFrame(() => {
-        centerSelection();
-      });
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
+      requestAnimationFrame(() => fitBoard());
     }
-
     function loadTripleReactantExampleProject() {
-      const text = "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate at 90 percent yield. After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
+      const text = "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate and triethylammonium acetate at 90 percent yield. The balanced model treats triethylamine as a stoichiometric acid scavenger. After reaction, separate the salt-rich phase and evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.";
       const makeBlock = (id, phrase, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}) => {
         const start = text.indexOf(phrase);
         return {
@@ -1448,51 +1669,84 @@
       state.blocks = [
         makeBlock(
           "B1",
-          "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate at 90 percent yield.",
+          "Charge 1.00 kg of benzyl alcohol, 0.95 kg of acetic anhydride, and 1.10 kg of triethylamine to a stirred liquid-phase reactor. Hold at 65 °C for 3 h to form benzyl acetate and triethylammonium acetate at 90 percent yield. The balanced model treats triethylamine as a stoichiometric acid scavenger.",
           "G1",
           "reaction",
           ["R(L)", "M(L)", "ES(H)"],
           [
-            { role: "input", name: "benzyl alcohol", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "acetic anhydride", quantity: "0.95", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "input", name: "triethylamine", quantity: "1.10", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch" },
-            { role: "output", name: "benzyl acetate", quantity: "1.39", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", note: "Theoretical product basis from limiting benzyl alcohol; conversion popup makes 90%, approx. 1.25 kg." }
+            { role: "input", name: "benzyl alcohol", quantity: "1.00", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", mw: "108.14" },
+            { role: "input", name: "acetic anhydride", quantity: "0.95", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", mw: "102.09" },
+            { role: "input", name: "triethylamine", quantity: "1.10", unit: "kg", phase: "L", status: "reported", timing: "initial charge", fate: "fresh input", scalingMode: "per batch", reactionRole: "reactant", stoichCoeff: "1", mw: "101.19" },
+            { role: "output", name: "benzyl acetate", quantity: "1.25", conversionBaseQuantity: "1.3887", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "product", scalingMode: "per batch", stoichCoeff: "1", mw: "150.18", destinationGroup: "G2", note: "Actual product component at 90% yield; 100% theoretical product basis is 1.3887 kg." },
+            { id: "B1-CB-unreacted-benzyl-alcohol", role: "output", name: "unreacted benzyl alcohol", quantity: "0.100", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G2", scalingMode: "per batch", mw: "108.14", note: "Component of the reaction effluent at 90% conversion; recovery or disposal is decided in the downstream separation." },
+            { id: "B1-CB-unreacted-acetic-anhydride", role: "output", name: "unreacted acetic anhydride", quantity: "0.100", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G2", scalingMode: "per batch", mw: "102.09", note: "Component of the reaction effluent; retained separately in the inventory for downstream recovery screening." },
+            { id: "B1-CB-unreacted-triethylamine", role: "output", name: "unreacted triethylamine", quantity: "0.258", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G2", scalingMode: "per batch", mw: "101.19", note: "Component of the reaction effluent; recovery or disposal is decided in the downstream separation." },
+            { id: "B1-CB-byproduct-1", role: "output", name: "triethylammonium acetate salt", quantity: "1.342", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G2", scalingMode: "per batch", mw: "161.24", note: "Stoichiometric reaction-effluent component; the salt-rich phase split remains a screening assumption until experimentally verified." }
           ],
-          { conversion_yield: "90", target_temperature: "65", reaction_time: "3", mixing_mode: "stirred liquid phase" },
-          { conversion_yield: "%", target_temperature: "°C", reaction_time: "h" }
+          { conversion_yield: "90", initial_temperature: "25", target_temperature: "65", holding_temperature: "65", holding_time: "3", thermal_ramp: "0.5", thermal_mode: "jacket heating with controlled cooling duty", reaction_time: "3", mixing_time: "3.5", agitation_speed: "300", agitation_note: "stirred liquid phase; maintain suspension-free homogeneous contact", initial_pressure: "1", target_pressure: "1" },
+          { conversion_yield: "%", initial_temperature: "°C", target_temperature: "°C", holding_temperature: "°C", holding_time: "h", thermal_ramp: "h", reaction_time: "h", mixing_time: "h", agitation_speed: "rpm", initial_pressure: "bar", target_pressure: "bar" }
         ),
         makeBlock(
           "B2",
-          "After reaction, evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.",
+          "After reaction, separate the salt-rich phase and evaluate recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from the benzyl acetate product-rich liquid.",
           "G2",
-          "distillation purification",
-          ["PT(VL)", "PS(VL)", "ES(H)"],
+          "separation",
+          ["PT(LL)", "PS(LL)", "PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)", "ES(H)"],
           [
             { role: "output", name: "recovered triethylamine", quantity: "0.26", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "recovered solvent", scalingMode: "per batch", destinationGroup: "G1" },
             { role: "output", name: "recovered acetic anhydride", quantity: "0.10", unit: "kg", phase: "L", status: "calculated", timing: "in-process intermediate", fate: "recover", scalingMode: "per batch", destinationGroup: "G1" },
             { role: "output", name: "benzyl alcohol residue", quantity: "0.10", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "recover", scalingMode: "per batch" },
+            { role: "waste", name: "triethylammonium acetate salt-rich phase", quantity: "1.34", unit: "kg", phase: "L", status: "calculated", timing: "waste purge", fate: "wastewater", scalingMode: "per batch", note: "Stoichiometric acid-capture byproduct; route assumes a separable polar phase and requires experimental phase verification." },
             { role: "output", name: "benzyl acetate product", quantity: "1.25", unit: "kg", phase: "L", status: "estimated", timing: "final output", fate: "product", scalingMode: "per batch" }
           ],
-          { separation_efficiency: "90", transfer_endpoint: "benzyl acetate product", target_temperature: "80" },
-          { separation_efficiency: "%", target_temperature: "°C" }
+          { initial_temperature: "65", target_temperature: "80", holding_time: "1", thermal_ramp: "0.5", thermal_mode: "jacket heating followed by staged vacuum distillation and condensation", initial_pressure: "1", target_pressure: "200", contact_device: "settler/decanter followed by staged vacuum column", phase_ratio: "organic:salt-rich about 1.35:1 by mass", transfer_endpoint: "salt-rich phase removed, then residual reagents recovered before benzyl acetate product cut", phase_change_time: "1.25", phase_change_fraction: "90", settling_time: "0.5", separation_efficiency: "90", carryover_limit: "<2 wt% salt-rich phase in organic product-rich phase", interface_risk: "screening assumption; verify LLE and emulsion tendency experimentally", waste_note: "segregate triethylammonium acetate salt-rich phase; do not classify recoverable residual reagents as undifferentiated waste" },
+          { initial_temperature: "°C", target_temperature: "°C", holding_time: "h", thermal_ramp: "h", initial_pressure: "bar", target_pressure: "mbar", phase_change_time: "h", phase_change_fraction: "%", settling_time: "h", separation_efficiency: "%" }
         )
       ];
       const reactionBlock = state.blocks.find(block => block.id === "B1");
       if (reactionBlock) {
         reactionBlock.conversionDetail = {
           productStreamId: "B1-S4",
-          productAmountMode: "theoretical",
-          byproducts: []
+          productAmountMode: "from reactants",
+          productBasisQuantity: "1.3887",
+          balanceMethod: "stoichiometric",
+          reactionEquation: "benzyl alcohol + acetic anhydride + triethylamine -> benzyl acetate + triethylammonium acetate",
+          effluentName: "benzyl acetate reaction effluent",
+          conversionPercent: "90",
+          conversionStatus: "assumed",
+          selectivityPercent: "100",
+          selectivityStatus: "assumed",
+          lastGeneratedSummary: "Example preloaded with the actual product and four calculated components of the reaction effluent.",
+          byproducts: [{
+            id: "triethylammonium-acetate",
+            name: "triethylammonium acetate",
+            basis: "generated by stoichiometry",
+            stoichCoeff: "1",
+            mw: "161.24",
+            unit: "kg",
+            role: "byproduct"
+          }]
         };
       }
       state.groups = {
         G1: {
           id: "G1",
-          task: "three-reactant benzyl acetate reaction at 90 percent yield",
+          task: "three-reactant benzyl acetate reaction with stoichiometric salt formation",
           selectedUnit: "Batch / semi-batch reactor",
-          selectionBasis: "secondary demo: reaction group used to test multi-reactant residual handling and sequential Lutze separation pathways",
-          schedule: { ...scheduleDefaults(), durationH: "3", scaleSensitivity: "kinetics-bound", notes: "demo only; verify stoichiometry before design use" },
-          properties: { density: { value: "930", unit: "kg/m3", status: "assumed", note: "demo mixture density for automatic reactor sizing from MFA mass" } },
+          selectionBasis: "secondary example: reaction group used to illustrate multi-reactant residual handling and sequential Lutze separation pathways",
+          schedule: { ...scheduleDefaults(), durationH: "", scaleSensitivity: "kinetics-bound", notes: "example dataset; verify stoichiometry before design use" },
+          timeOffsets: {
+            "B1::thermal_ramp": "0",
+            "B1::mixing_time": "0",
+            "B1::holding_time": "0.5",
+            "B1::reaction_time": "0.5"
+          },
+          properties: {
+            heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "screening mixture Cp at 25-65 °C; replace with measured mixture data" },
+            density: { value: "930", unit: "kg/m3", status: "assumed", note: "screening mixture density near 65 °C for automatic reactor sizing" },
+            viscosity: { value: "3", unit: "mPa s", status: "assumed", note: "low-viscosity liquid screening value near reaction temperature" },
+            degradation_temperature: { value: "180", unit: "°C", status: "assumed", note: "conservative screening ceiling for thermal route review; not a measured onset" }
+          },
           propertiesEditing: false,
           x: 620,
           y: 120
@@ -1500,10 +1754,19 @@
         G2: {
           id: "G2",
           task: "sequential residual reagent recovery",
-          selectedUnit: "Distillation",
-          selectionBasis: "secondary demo: staged recovery of residual triethylamine, acetic anhydride, and benzyl alcohol from benzyl acetate",
-          schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "demo only" },
-          properties: {},
+          selectedUnit: "Decanter + staged distillation",
+          selectionBasis: "secondary example: salt-phase removal followed by staged recovery of residual reagents from benzyl acetate",
+          schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "example dataset" },
+          properties: {
+            boiling_point: { value: "89-213", unit: "°C", status: "database", note: "range spans volatile residual triethylamine through benzyl acetate/benzyl alcohol at atmospheric pressure" },
+            vapor_pressure: { value: "temperature dependent", unit: "mbar", status: "assumed", note: "use component vapor pressures at 298.15 K in LUTZE; recalculate at column pressure for design" },
+            azeotrope_risk: { value: "unknown", unit: "", status: "assumed", note: "binary VLE must be verified before selecting a final distillation sequence" },
+            degradation_temperature: { value: "180", unit: "°C", status: "assumed", note: "conservative product-side thermal screening limit" },
+            miscibility: { value: "partial", unit: "", status: "assumed", note: "salt-rich/product-rich L-L split is a demo hypothesis requiring experimental LLE confirmation" },
+            heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "screening crude-mixture value" },
+            density: { value: "960", unit: "kg/m3", status: "assumed", note: "screening crude-mixture density near separation temperature" },
+            viscosity: { value: "5", unit: "mPa s", status: "assumed", note: "screening value for settling and pumping checks" }
+          },
           propertiesEditing: false,
           x: 1180,
           y: 120
@@ -1529,8 +1792,8 @@
       state.ruleChecks = [];
       state.aiRefine = null;
       state.selectedBlockId = null;
-      state.selectedGroupId = "G1";
-      state.selectedIds = ["B1"];
+      state.selectedGroupId = null;
+      state.selectedIds = [];
       state.menuBlockId = null;
       state.menuGroupId = null;
       state.menuStreamId = null;
@@ -1541,15 +1804,317 @@
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = "G1";
       state.activeInspectorTab = "inspect";
+      state.showAllTriggeredHeuristics = false;
       loadTripleReactantSeparationDemo("G1");
       renderAll();
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
       requestAnimationFrame(() => {
-        centerSelection();
+        fitBoard();
       });
     }
 
-    function loadMethylbenzeneExampleProject() {
-      loadTripleReactantExampleProject();
+
+    // Biodiesel: base-catalysed transesterification of a vegetable oil (triolein basis) to fatty
+    // acid methyl esters. Charges follow the textbook laboratory procedure (6:1 methanol-to-oil
+    // molar ratio, 1 wt% NaOH on oil, 60 degC, 1 h; Freedman, Pryde and Mounts, JAOCS 61, 1984,
+    // 1638; Van Gerpen, Fuel Process. Technol. 86, 2005, 1097). Conversion 97.5% is the mid-point
+    // of the 96-98% those sources report; product quality follows EN 14214. Physical properties
+    // are handbook values at 25 degC (NIST WebBook, CRC) with PubChem identities; the methanol
+    // split between the two phases and the wash losses are typical engineering values, labelled
+    // "estimated". Quantities carry four significant figures on a 1 kg oil basis.
+    // `reactionOnly` loads the methoxide make-up and the reactor alone, with the quantified
+    // reaction effluent and the screening data, so the downstream train is built with the Lutze
+    // screening instead of being read from the protocol. Applying the recommended pathway then
+    // gives the decanter and the methanol flash the full case declares.
+    function loadBiodieselExampleProject({ reactionOnly = false } = {}) {
+      const text = reactionOnly ? biodieselReactionOnlyText : biodieselSampleText;
+      const steps = biodieselExampleSteps;
+      const chem = {
+        oil: { name: "triolein", pubchemQuery: "triolein", pubchemCid: "5497163", molecularFormula: "C57H104O6", mw: "885.43", tm: "278", density: "910", phase: "L" },
+        methanol: { name: "methanol", pubchemQuery: "methanol", pubchemCid: "887", molecularFormula: "CH4O", mw: "32.04", tb: "337.8", tm: "175.6", pvap: "16900", density: "792", phase: "L" },
+        naoh: { name: "sodium hydroxide", pubchemQuery: "sodium hydroxide", pubchemCid: "14798", molecularFormula: "HNaO", mw: "40.00", tm: "596", tb: "1661", density: "2130", phase: "S" },
+        fame: { name: "methyl oleate", pubchemQuery: "methyl oleate", pubchemCid: "5364509", molecularFormula: "C19H36O2", mw: "296.49", tb: "622", tm: "253.3", density: "874", phase: "L" },
+        glycerol: { name: "glycerol", pubchemQuery: "glycerol", pubchemCid: "753", molecularFormula: "C3H8O3", mw: "92.09", tb: "563", tm: "291.3", pvap: "0.022", density: "1261", phase: "L" },
+        water: { name: "water", pubchemQuery: "water", pubchemCid: "962", molecularFormula: "H2O", mw: "18.015", tb: "373.15", tm: "273.15", pvap: "3170", density: "997", phase: "L" }
+      };
+      const sub = (role, key, overrides = {}) => ({ role, ...chem[key], scalingMode: "per kg product", ...overrides });
+      const internal = streams => streams.map(stream => ({ ...stream, internalTransfer: true }));
+      const makeBlock = (id, groupId, behavior, phenomena, streams, conditions = {}, conditionUnits = {}, source = "protocol") => {
+        const phrase = steps[id];
+        const start = source === "protocol" ? text.indexOf(phrase) : -1;
+        const fallbackPosition = text.length + (Number(String(id).replace(/[^\d]/g, "")) || 0);
+        return {
+          id,
+          groupId,
+          start: start >= 0 ? start : fallbackPosition,
+          end: start >= 0 ? start + phrase.length : fallbackPosition,
+          source,
+          text: phrase,
+          behavior,
+          phenomena,
+          streams: streams.map((stream, index) => createStream(stream.role, { id: `${id}-S${index + 1}`, ...stream })),
+          conditions,
+          conditionUnits,
+          conditionsEditing: false,
+          phase: "",
+          endpoint: "",
+          status: source === "protocol" ? "literature protocol" : "scale-up addition"
+        };
+      };
+      const cite = "Freedman et al. 1984; Van Gerpen 2005";
+
+      state.text = text;
+      $("sourceInput").value = text;
+      state.blocks = [
+        makeBlock("B1", "G1", "charge and mix", ["M(L)", "2phM(LS)"], [
+          sub("input", "methanol", { quantity: "0.1114", unit: "kg", status: "calculated", timing: "make-up", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "3", note: `Make-up methanol: 6:1 molar charge (0.2171 kg) minus the 0.1057 kg recovered from the ester phase and the glycerol phase (${cite}).` }),
+          sub("input", "methanol", { quantity: "0.1057", unit: "kg", status: "calculated", timing: "recycle", fate: "recycled input", reactionRole: "reactant", stoichCoeff: "3", scalingMode: "recycle loop", loopId: "MEOH", note: "Recovered methanol returned from the ester-phase flash (G4) and the glycerol-phase column (G7), 95% recovery each." }),
+          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "catalyst", note: `1 wt% NaOH on oil (${cite}).` }),
+          sub("output", "methanol", { quantity: "0.2171", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", destinationGroup: "G2", note: "6 mol methanol per mol triolein: 6 x 1.1294 mol x 32.04 g/mol." }),
+          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G2", phase: "L", note: "Dissolved as sodium methoxide." })
+        ], { initial_temperature: "25", mixing_time: "0.25", agitation_note: "dissolve NaOH in methanol with stirring; exothermic, keep below 40 °C" },
+           { initial_temperature: "°C", mixing_time: "h" }),
+        makeBlock("B2", "G2", "reaction", ["M(L)", "R(L)", "ES(H)"], [
+          sub("input", "oil", { quantity: "1.000", unit: "kg", status: "reported", timing: "initial charge", fate: "fresh input", reactionRole: "reactant", stoichCoeff: "1", note: "Refined vegetable oil on a triolein basis: 1.1294 mol." }),
+          sub("input", "methanol", { quantity: "0.2171", unit: "kg", status: "calculated", timing: "later addition", fate: "intermediate", reactionRole: "reactant", stoichCoeff: "3", note: "Methoxide solution from G1." }),
+          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "later addition", fate: "intermediate", reactionRole: "catalyst", phase: "L", note: "Dissolved in the methoxide solution." }),
+          sub("output", "fame", { quantity: "0.9795", conversionBaseQuantity: "1.0046", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "product", stoichCoeff: "3", destinationGroup: "G3", note: `3 mol methyl oleate per mol triolein at 97.5% conversion; theoretical 1.0046 kg (${cite}).` }),
+          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", stoichCoeff: "1", destinationGroup: "G3", note: "1 mol glycerol per mol triolein converted." }),
+          sub("output", "methanol", { quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G3", note: "Excess methanol: 0.2171 kg charged minus 0.1058 kg consumed." }),
+          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G3", note: "Unconverted glycerides at 97.5% conversion; mono- and diglycerides in practice." }),
+          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G3", phase: "L" })
+        ], { initial_temperature: "25", target_temperature: "60", holding_temperature: "60", thermal_ramp: "0.5", reaction_time: "1", agitation_speed: "600", conversion_yield: "97.5", initial_pressure: "1", thermal_mode: "jacket heating, atmospheric reflux condenser", transfer_endpoint: "ester content >= 96.5 % by mass (EN 14214)" },
+           { initial_temperature: "°C", target_temperature: "°C", holding_temperature: "°C", thermal_ramp: "h", reaction_time: "h", agitation_speed: "rpm", conversion_yield: "%", initial_pressure: "bar" }),
+        makeBlock("B3", "G3", "liquid-liquid wash", ["2phM(LL)", "PT(LL)", "PS(LL)"], [
+          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "methanol", { quantity: "0.1113", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "reported", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("output", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G4", note: "Upper ester phase (density 874 kg/m3)." }),
+          sub("output", "methanol", { quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G4", note: "About 37% of the excess methanol stays in the ester phase; typical partition, verify by GC." }),
+          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G4" }),
+          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G7", note: "Lower glycerol-rich phase (density 1261 kg/m3)." }),
+          sub("output", "methanol", { quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol", destinationGroup: "G7", note: "About 63% of the excess methanol leaves with the glycerol phase; typical partition, verify by GC." }),
+          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G7", phase: "L", note: "Catalyst follows the polar glycerol phase." })
+        ], { holding_temperature: "50", settling_time: "1.5", phase_ratio: "about 0.18 kg glycerol phase per kg oil", agitation_note: "no agitation; gravity settling of the two liquid phases", transfer_endpoint: "lower glycerol-rich phase drawn off; sharp interface" },
+           { holding_temperature: "°C", settling_time: "h" }),
+        makeBlock("B4", "G4", "solvent evaporation", ["ES(H)", "PT(VL)", "PS(VL)"], [
+          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "methanol", { quantity: "0.0413", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("output", "methanol", { quantity: "0.0392", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Condensed overhead returned to methoxide preparation; 95% recovery assumed." }),
+          sub("waste", "methanol", { quantity: "0.0021", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour at 200 mbar; 5% of the ester-phase methanol." }),
+          sub("output", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G5" }),
+          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G5" })
+        ], { target_temperature: "70", target_pressure: "200", phase_change_time: "1", thermal_mode: "jacketed still with condenser under vacuum", transfer_endpoint: "methanol below 0.2 % in the ester phase (EN 14214)" },
+           { target_temperature: "°C", target_pressure: "mbar", phase_change_time: "h" }),
+        makeBlock("B5", "G5", "liquid-liquid wash", ["2phM(LL)", "PT(LL)", "PS(LL)"], [
+          sub("input", "fame", { quantity: "0.9795", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "later addition", fate: "fresh input", reactionRole: "auxiliary", note: "Three washes of 0.3 L warm water per kg ester (Van Gerpen 2005)." }),
+          sub("output", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "0.5% ester loss to the wash water assumed." }),
+          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein", destinationGroup: "G6" }),
+          sub("output", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", destinationGroup: "G6", note: "Water entrained in the washed ester, about 0.5 wt%." }),
+          sub("waste", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", note: "Spent wash water with soaps, residual methanol and glycerol." }),
+          sub("waste", "fame", { quantity: "0.0049", unit: "kg", status: "estimated", timing: "waste purge", fate: "loss", destinationGroup: "G8", note: "Ester lost to the wash water (0.5%)." })
+        ], { holding_temperature: "50", settling_time: "0.5", phase_ratio: "3 x 0.3 L water per kg ester", agitation_note: "gentle stirring during water addition, then settle; vigorous mixing emulsifies", transfer_endpoint: "wash water neutral; no soap; clear ester phase" },
+           { holding_temperature: "°C", settling_time: "h" }),
+        makeBlock("B6", "G6", "solvent evaporation", ["ES(H)", "PT(VL)", "PS(VL)"], [
+          sub("input", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+          sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" }),
+          sub("input", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+          ...internal([
+            sub("output", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+            sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
+          ]),
+          sub("waste", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "waste purge", fate: "wastewater", destinationGroup: "G8", phase: "V", note: "Water vapour drawn off under vacuum, condensed and sent to wastewater." })
+        ], { target_temperature: "105", target_pressure: "50", phase_change_time: "0.5", thermal_mode: "vacuum drying with condenser", transfer_endpoint: "water < 500 mg/kg (EN 14214)" },
+           { target_temperature: "°C", target_pressure: "mbar", phase_change_time: "h" }),
+        makeBlock("B7", "G6", "filtration", ["PS(LS)"], [
+          ...internal([
+            sub("input", "fame", { quantity: "0.9746", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate" }),
+            sub("input", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", residualOf: "triolein" })
+          ]),
+          sub("output", "fame", { quantity: "0.9736", unit: "kg", status: "estimated", timing: "final output", fate: "product", note: "Biodiesel (FAME) product; ester content 97.5 % by mass with the residual glycerides, within EN 14214." }),
+          sub("output", "oil", { quantity: "0.0250", unit: "kg", status: "calculated", timing: "final output", fate: "product", residualOf: "triolein", note: "Residual glycerides leaving with the product, within the EN 14214 limits." }),
+          { role: "waste", name: "filter residue", quantity: "0.0010", unit: "kg", phase: "S", status: "estimated", timing: "waste purge", fate: "solid waste", scalingMode: "per kg product", note: "Soaps and particulates retained on the 5 micrometre filter, about 0.1 % of the ester." }
+        ], { contact_device: "5 µm polishing filter", transfer_endpoint: "clear ester; ester content >= 96.5 % (EN 14214)" }, {}),
+        makeBlock("B8", "G7", "solvent recovery distillation", ["M(L)", "2phM(VL)", "PC(VL)", "PT(VL)", "PS(VL)", "ES(H)", "ES(C)"], [
+          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "methanol", { quantity: "0.0700", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", residualOf: "methanol" }),
+          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("output", "methanol", { quantity: "0.0665", unit: "kg", status: "estimated", timing: "recycle", fate: "recovered solvent", destinationGroup: "G1", recoveryPercent: "95", scalingMode: "recycle loop", loopId: "MEOH", note: "Overhead methanol returned to methoxide preparation; 95% recovery assumed." }),
+          sub("waste", "methanol", { quantity: "0.0035", unit: "kg", status: "estimated", timing: "vent/emission", fate: "vent", phase: "V", note: "Uncondensed methanol vapour, 5 %." }),
+          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "co-product", substanceRole: "byproduct", destinationGroup: "G8", note: "Crude glycerol bottoms to neutralization and valorization." }),
+          sub("output", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", destinationGroup: "G8", phase: "L" })
+        ], { target_temperature: "70", target_pressure: "1000", separation_efficiency: "95", agitation_note: "reboiler circulation; no mechanical agitation", transfer_endpoint: "methanol recovery >= 95 %" },
+           { target_temperature: "°C", target_pressure: "mbar", separation_efficiency: "%" }, "scale-up addition"),
+        makeBlock("B9", "G8", "wastewater interface", ["PS(LL)"], [
+          sub("input", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "in-process intermediate", fate: "intermediate", substanceRole: "byproduct" }),
+          sub("input", "naoh", { quantity: "0.010", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "intermediate", reactionRole: "catalyst", phase: "L" }),
+          sub("input", "water", { quantity: "0.9", unit: "L", status: "reported", timing: "in-process intermediate", fate: "wastewater" }),
+          sub("input", "water", { quantity: "0.0050", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "wastewater" }),
+          sub("input", "fame", { quantity: "0.0049", unit: "kg", status: "estimated", timing: "in-process intermediate", fate: "loss" }),
+          sub("output", "glycerol", { quantity: "0.1014", unit: "kg", status: "calculated", timing: "final output", fate: "co-product", substanceRole: "byproduct", note: "Crude glycerol (about 80 % after neutralization) sold for refining." }),
+          { role: "waste", name: "wastewater", quantity: "0.917", unit: "kg", phase: "L", density: "1000", status: "estimated", timing: "waste purge", fate: "wastewater", scalingMode: "per kg product", note: "Wash water and drying condensate with the neutralized catalyst salts, soaps and traces of ester: 0.897 + 0.005 + 0.005 + 0.010 kg." }
+        ], { agitation_note: "acid neutralization of the crude glycerol phase; wash water to biological treatment" }, {}, "scale-up addition")
+      ];
+      if (reactionOnly) {
+        // Keep the make-up and the reactor; the effluent leaves the reactor with no declared
+        // destination, which is exactly what the screening is for.
+        state.blocks = state.blocks.filter(block => ["B1", "B2"].includes(block.id));
+        state.blocks.forEach(block => block.streams.forEach(stream => {
+          if (stream.destinationGroup && !["G1", "G2"].includes(stream.destinationGroup)) stream.destinationGroup = "";
+        }));
+        const effluentBlock = state.blocks.find(block => block.id === "B2");
+        if (effluentBlock) {
+          // With no train declared, the excess methanol leaves as unreacted reagent (to be
+          // recovered), not as an intermediate bound for a unit that does not exist yet.
+          effluentBlock.streams.forEach(stream => {
+            if (stream.role === "output" && stream.name === "methanol") stream.fate = "unreacted reagent";
+          });
+          effluentBlock.text = steps.B2r || effluentBlock.text;
+          const start = text.indexOf(effluentBlock.text);
+          if (start >= 0) {
+            effluentBlock.start = start;
+            effluentBlock.end = start + effluentBlock.text.length;
+          }
+        }
+      }
+      const reactionBlock = state.blocks.find(block => block.id === "B2");
+      if (reactionBlock) {
+        reactionBlock.conversionDetail = {
+          productStreamId: "B2-S4",
+          productAmountMode: "from reactants",
+          productBasisQuantity: "1.0046",
+          balanceMethod: "stoichiometric",
+          reactionEquation: "triolein + 3 methanol -> 3 methyl oleate + glycerol",
+          effluentName: "transesterification effluent",
+          conversionPercent: "97.5",
+          conversionStatus: "reported",
+          selectivityPercent: "100",
+          selectivityStatus: "assumed",
+          lastGeneratedSummary: "Literature transesterification: 1 kg triolein, 6:1 methanol, 1 wt% NaOH, 60 degC, 1 h, 97.5% conversion (Freedman et al. 1984; Van Gerpen 2005).",
+          byproducts: [{ id: "glycerol", name: "glycerol", basis: "generated by stoichiometry", stoichCoeff: "1", mw: "92.09", unit: "kg", role: "byproduct" }]
+        };
+      }
+      const schedule = overrides => ({ ...scheduleDefaults(), ...overrides });
+      state.groups = {
+        G1: { id: "G1", task: "sodium methoxide preparation", selectedUnit: "Feed tank and dosing skid", selectionBasis: "Methanol and catalyst make-up tank with recycled-methanol return; exothermic dissolution, stirred and cooled.", schedule: schedule({ durationH: "0.5", scaleSensitivity: "roughly constant", notes: "Dissolution of NaOH in methanol; recycled methanol returns here." }), properties: {}, propertiesEditing: false, x: 80, y: 90 },
+        G2: { id: "G2", task: "transesterification of triolein with methanol", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "Jacketed stirred batch reactor with reflux condenser, 60 degC, 1 h (Freedman et al. 1984).", schedule: schedule({ durationH: "1.5", scaleSensitivity: "kinetics-bound", notes: "0.5 h heat-up plus 1 h reaction; kinetics-bound, do not divide by parallel units." }), properties: { density: { value: "880", unit: "kg/m3", status: "estimated", note: "reaction mixture at 60 degC" }, heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "estimated", note: "oil-methanol mixture" } }, propertiesEditing: false, x: 640, y: 90 },
+        G3: { id: "G3", task: "glycerol phase separation", selectedUnit: "Decanter", selectionBasis: "Gravity settling of the immiscible glycerol phase (1261 kg/m3) under the ester phase (874 kg/m3); 1.5 h at 50 degC.", schedule: schedule({ durationH: "1.5", scaleSensitivity: "increases with scale", notes: "Settling time grows with vessel height; consider a continuous centrifuge at scale." }), properties: { density: { value: "900", unit: "kg/m3", status: "estimated", note: "two-phase mixture" } }, propertiesEditing: false, x: 1200, y: 90 },
+        G4: { id: "G4", task: "excess methanol flash from the ester phase", selectedUnit: "Flash vaporization", selectionBasis: "Excess methanol flashed from the ester at 70 degC and 200 mbar; boiling points 338 K against 622 K; overhead returned to methoxide preparation.", schedule: schedule({ durationH: "1", scaleSensitivity: "equipment dependent", notes: "Condenser duty limited; the washed ester cannot start before the flash ends." }), properties: {}, propertiesEditing: false, x: 1760, y: 90 },
+        G5: { id: "G5", task: "water washing of the ester", selectedUnit: "Liquid-liquid extraction", selectionBasis: "Three warm-water washes remove soaps, residual glycerol and methanol from the ester (Van Gerpen 2005).", schedule: schedule({ durationH: "1.5", scaleSensitivity: "increases with scale", notes: "Three washes with 0.5 h settling each; emulsion risk with high soap content." }), properties: {}, propertiesEditing: false, x: 2320, y: 90 },
+        G6: { id: "G6", task: "ester drying and polishing filtration", selectedUnit: "Drying", selectionBasis: "Vacuum drying at 105 degC to below 500 mg/kg water (EN 14214), then a 5 micrometre polishing filter.", schedule: schedule({ durationH: "1", scaleSensitivity: "equipment dependent", notes: "Drying 0.5 h plus filtration." }), properties: {}, propertiesEditing: false, x: 2880, y: 90 },
+        G7: { id: "G7", task: "methanol recovery from the glycerol phase", selectedUnit: "Distillation", selectionBasis: "Dedicated column recovers methanol from the glycerol phase and returns it to methoxide preparation.", schedule: schedule({ durationH: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Runs in parallel with the main train." }), properties: {}, propertiesEditing: false, x: 1200, y: 520 },
+        G8: { id: "G8", task: "crude glycerol neutralization and wastewater interface", selectedUnit: "Wastewater treatment interface", selectionBasis: "Crude glycerol neutralized and sold for refining; wash water and condensate to biological treatment.", schedule: schedule({ durationH: "1", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Boundary operation." }), properties: {}, propertiesEditing: false, x: 2320, y: 520 }
+      };
+      state.links = [
+        { from: "G1", to: "G2" }, { from: "G2", to: "G3" }, { from: "G3", to: "G4" }, { from: "G4", to: "G5" }, { from: "G5", to: "G6" },
+        { from: "G3", to: "G7" }, { from: "G7", to: "G1" }, { from: "G4", to: "G1" }, { from: "G7", to: "G8" }, { from: "G5", to: "G8" }, { from: "G6", to: "G8" }
+      ];
+      if (reactionOnly) {
+        Object.keys(state.groups).forEach(id => { if (!["G1", "G2"].includes(id)) delete state.groups[id]; });
+        state.groups.G1.schedule.notes = "Dissolution of NaOH in methanol; recycled methanol will return here once the recovery units exist.";
+        state.groups.G2.x = 640;
+        state.links = [{ from: "G1", to: "G2" }];
+      }
+      state.scaleBasis = {
+        ...scaleBasisDefaults(),
+        targetProduct: "methyl oleate",
+        targetAmount: "4000",
+        targetUnit: "t/year",
+        referenceBlockId: reactionOnly ? "B2" : "B7",
+        basisAmount: reactionOnly ? "0.9795" : "0.9736",
+        basisUnit: "kg",
+        mode: "batch",
+        planningScenario: "conservative",
+        scheduleMethod: "batches_per_day",
+        operatingDays: "300",
+        hoursPerDay: "24",
+        batchesPerDay: "3",
+        batchDuration: "",
+        scheduleMarginPercent: "10",
+        oeePercent: "85",
+        parallelUnits: "1",
+        allowableCapacityUtilizationPercent: "85",
+        productKgPerBatch: "",
+        reactantsLoadingLPerKgProduct: "",
+        solventLoadingLPerKgProduct: "",
+        reactorWorkingFillPercent: "70",
+        productMolecularWeightGmol: "296.49",
+        condensationWaterMolPerMol: "",
+        confidence: "rough"
+      };
+      state.ruleChecks = [];
+      state.aiRefine = null;
+      state.selectedBlockId = null;
+      state.selectedGroupId = null;
+      state.selectedIds = [];
+      state.menuBlockId = null;
+      state.menuGroupId = null;
+      state.menuStreamId = null;
+      state.connectingFrom = null;
+      state.lastSelection = null;
+      state.zoom = 0.62;
+      state.boardCompact = true;
+      state.draftPos = { x: 24, y: 24 };
+      state.focusEndpoint = "G2";
+      state.activeInspectorTab = "inspect";
+      state.showAllTriggeredHeuristics = false;
+      loadBiodieselSeparationDemo("G2");
+      renderAll();
+      if (typeof markProjectAutosaveAsExampleOnly === "function") markProjectAutosaveAsExampleOnly();
+      requestAnimationFrame(() => fitBoard());
+    }
+
+    // Lutze/Garg screening data for the biodiesel reaction outlet: the five substances with
+    // handbook properties (NIST WebBook / CRC at 298.15 K; Hildebrand parameters from Barton,
+    // FAME values from Batista et al.). Values marked "estimated" are typical, not measured here.
+    function loadBiodieselSeparationDemo(groupId) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      const common = { source: "biodiesel case", propertySource: "NIST WebBook / CRC Handbook via PubChem identity; Hildebrand parameters from Barton", pvapTemperature: "298.15", pvapTemperatureUnit: "K" };
+      simulator.substances = [
+        normalizeSeparationSubstance({ ...common, id: "CS1", name: "methyl oleate", role: "product", phase: "L", fate: "product", quantity: "0.9795", unit: "kg", stoichCoeff: "3", pubchemCid: "5364509", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5364509", molecularFormula: "C19H36O2", canonicalSmiles: "CCCCCCCCC=CCCCCCCCC(=O)OC", exactMass: "296.2715", propertyStatus: "database", thermalSensitivity: "medium", mw: "296.49", tb: "622", tm: "253.3", pvap: "0.0002", solubilityParameter: "17.0", molarVolume: "339", criticalTemp: "764", note: "Fatty acid methyl ester; normal boiling point extrapolated (218 degC at 20 mmHg); vapour pressure at 25 degC is an EPI Suite estimate; oxidation-sensitive." }),
+        normalizeSeparationSubstance({ ...common, id: "CS2", name: "glycerol", role: "byproduct", phase: "L", fate: "recover", quantity: "0.1014", unit: "kg", stoichCoeff: "1", pubchemCid: "753", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/753", molecularFormula: "C3H8O3", canonicalSmiles: "C(C(CO)O)O", xlogp: "-1.8", exactMass: "92.0473", propertyStatus: "database", thermalSensitivity: "low", mw: "92.09", tb: "563", tm: "291.3", pvap: "0.022", solubilityParameter: "36.1", molarVolume: "73.0", criticalTemp: "850", note: "Immiscible with the ester phase; recovered as crude glycerol co-product." }),
+        normalizeSeparationSubstance({ ...common, id: "CS3", name: "methanol", role: "solvent", phase: "L", fate: "recycle", quantity: "0.1113", unit: "kg", reactionFeedQuantity: "0.2171", reactionFeedUnit: "kg", residualOf: "methanol", residualSourceId: "B2-S2", stoichCoeff: "3", pubchemCid: "887", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/887", molecularFormula: "CH4O", canonicalSmiles: "CO", xlogp: "-0.5", exactMass: "32.0262", propertyStatus: "database", thermalSensitivity: "low", mw: "32.04", tb: "337.8", tm: "175.6", pvap: "16900", solubilityParameter: "29.6", molarVolume: "40.5", criticalTemp: "512.6", note: "Excess reagent after 97.5% conversion; recovered by flash/distillation and recycled." }),
+        normalizeSeparationSubstance({ ...common, id: "CS4", name: "triolein", role: "reactant", phase: "L", fate: "keep with mixture", quantity: "0.0250", unit: "kg", reactionFeedQuantity: "1.000", reactionFeedUnit: "kg", residualOf: "triolein", residualSourceId: "B2-S1", stoichCoeff: "1", pubchemCid: "5497163", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/5497163", molecularFormula: "C57H104O6", exactMass: "884.7833", propertyStatus: "estimated", thermalSensitivity: "medium", mw: "885.43", tm: "278", pvap: "0.000001", solubilityParameter: "16.0", molarVolume: "973", note: "Unconverted glycerides; stay with the ester within the EN 14214 limits. No measurable normal boiling point (decomposes); vapour pressure entered as negligible." }),
+        normalizeSeparationSubstance({ ...common, id: "CS5", name: "sodium hydroxide", role: "catalyst", phase: "L", fate: "waste", quantity: "0.010", unit: "kg", pubchemCid: "14798", pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/14798", molecularFormula: "HNaO", exactMass: "39.9925", propertyStatus: "database", thermalSensitivity: "low", mw: "40.00", tb: "1661", tm: "596", note: "Base catalyst dissolved in methanol; follows the glycerol phase and is neutralized." })
+      ];
+      simulator.reactionBalance = normalizeReactionBalance({
+        conversionPercent: "97.5",
+        selectivityPercent: "100",
+        yieldPercent: "97.5",
+        basis: "conversion",
+        limiting: "CS4",
+        mainProductId: "CS1",
+        note: "Literature balance: triolein + 3 methanol -> 3 methyl oleate + glycerol at 97.5% conversion, 6:1 methanol-to-oil (Freedman et al. 1984; Van Gerpen 2005)."
+      });
+      // Binary mixture insights the KB3.1 screening reads. The glycerol phase split is the
+      // defining fact of every biodiesel plant (Van Gerpen 2005); methanol forms no azeotrope
+      // with the ester, the glycerol or the oil.
+      const insight = (note, overrides = {}) => ({ relativeVolatility: "", azeotrope: "unknown", pressureSensitive: "unknown", miscibilityGap: "unknown", eutectic: "unknown", ...overrides, note });
+      simulator.pairInsights = {
+        [separationPairKey("CS1", "CS2")]: insight("Glycerol is immiscible with the methyl ester and settles as the dense lower phase (1261 against 874 kg/m3); decanting is standard practice.", { miscibilityGap: "yes", azeotrope: "no" }),
+        [separationPairKey("CS1", "CS3")]: insight("Methanol/methyl oleate: no azeotrope; screening volatility ratio from the 298.15 K vapour pressures (methyl oleate value is an EPI Suite estimate).", { azeotrope: "no", miscibilityGap: "no", relativeVolatility: "8.5e7" }),
+        [separationPairKey("CS1", "CS4")]: insight("Unconverted glycerides stay dissolved in the ester and are tolerated by EN 14214; no split is sought.", { miscibilityGap: "no", azeotrope: "no" }),
+        [separationPairKey("CS1", "CS5")]: insight("The base catalyst is insoluble in the ester phase and follows the glycerol phase.", { miscibilityGap: "yes" }),
+        [separationPairKey("CS2", "CS3")]: insight("Methanol and glycerol are fully miscible; methanol is stripped from the glycerol phase by distillation.", { azeotrope: "no", miscibilityGap: "no" }),
+        [separationPairKey("CS2", "CS4")]: insight("Glycerol and oil are immiscible.", { miscibilityGap: "yes" }),
+        [separationPairKey("CS2", "CS5")]: insight("The catalyst dissolves in the glycerol phase and is neutralised there.", { miscibilityGap: "no" }),
+        [separationPairKey("CS3", "CS4")]: insight("Methanol is only partly soluble in the oil at 60 degC; the excess separates after reaction.", { azeotrope: "no" }),
+        [separationPairKey("CS3", "CS5")]: insight("Sodium hydroxide dissolves in methanol as methoxide; non-volatile.", { miscibilityGap: "no" }),
+        [separationPairKey("CS4", "CS5")]: insight("The catalyst is insoluble in the oil.", { miscibilityGap: "yes" })
+      };
+      simulator.lookupSummary = normalizeLookupSummary({
+        status: "done",
+        message: "Loaded the biodiesel reaction effluent: methyl oleate product, glycerol co-product, excess methanol, unconverted glycerides and the base catalyst, with handbook properties and the known phase behaviour.",
+        lastUpdated: new Date().toISOString()
+      });
+      simulator.pathway = { steps: [], viewMode: "guided", selectedStepId: "", appliedAt: "" };
+      simulator.tab = "pathway";
+      simulator.notes = "Biodiesel effluent loaded with literature phase behaviour: the glycerol phase split and the methanol volatility are the two facts the plant is built on. The methyl oleate vapour pressure is an EPI Suite estimate.";
     }
 
     function normalizeStream(stream) {
@@ -1562,6 +2127,9 @@
         conversionBaseQuantity: String(stream?.conversionBaseQuantity || ""),
         stoichCoeff: String(stream?.stoichCoeff || ""),
         reactionRole: normalizeStreamReactionRole(stream, role),
+        substanceRole: String(stream?.substanceRole || ""),
+        residualOf: String(stream?.residualOf || ""),
+        internalTransfer: Boolean(stream?.internalTransfer),
         unit: streamUnits.includes(stream?.unit) ? stream.unit : "kg",
         phase: streamPhases.includes(stream?.phase) ? stream.phase : "unknown",
         status: streamDataStatuses.includes(stream?.status) ? stream.status : "missing",
@@ -1575,6 +2143,7 @@
         makeupRequired: String(stream?.makeupRequired || ""),
         accumulationRisk: String(stream?.accumulationRisk || ""),
         note: String(stream?.note || ""),
+        source: String(stream?.source || ""),
         pubchemQuery: String(stream?.pubchemQuery || stream?.compoundName || ""),
         ...Object.fromEntries(streamChemicalPropertyFields.map(field => [field, String(stream?.[field] || stream?.chemicalProperties?.[field] || "")])),
         thermalSensitivity: separationThermalOptions.includes(stream?.thermalSensitivity || stream?.chemicalProperties?.thermalSensitivity)
@@ -1754,10 +2323,31 @@
       return ["V", "L", "S"].filter(part => normalized.includes(part));
     }
 
-    function sanitizeBlockPhenomena(block) {
+    // Phenomena that the declared stream phases cannot support (a PT(VL) on a block whose
+    // streams are all liquid). They used to be deleted silently on every render, which took the
+    // framework's primary evidence away without a trace: the octocrylene distillation lost its
+    // vapour-liquid phenomena because its distillate was declared liquid. Now they stay and are
+    // flagged, here and in Data Quality, and the user decides: add the phase or remove the code.
+    function phenomenaPhaseConflicts(block) {
+      if (!block) return [];
+      ensureBlockFlowFields(block);
       const context = blockPhaseContext(block);
-      if (!context.hasKnown) return;
-      block.phenomena = block.phenomena.filter(code => phenomenonCompatibleWithPhase(code, context));
+      if (!context.hasKnown) return [];
+      return (block.phenomena || []).filter(code => !phenomenonCompatibleWithPhase(code, context));
+    }
+
+    function phenomenonConflictTip(code, block) {
+      const context = blockPhaseContext(block);
+      const match = String(code).match(/\(([^)]+)\)$/);
+      const needed = match ? phaseComponents(match[1].replace(/^M/, "")).filter(part => !context.components.has(part)) : [];
+      const phaseName = { V: "vapour", L: "liquid", S: "solid" };
+      const missing = needed.map(part => phaseName[part] || part).join(" and ");
+      return `${code}: no ${missing || "matching"} phase is declared on this block's streams. Declare a ${missing || "matching"} stream (for example the distillate or vent) or remove the phenomenon.`;
+    }
+
+    function sanitizeBlockPhenomena(block) {
+      // Kept as a no-op for callers and tests: pruning is now reported, not applied.
+      return phenomenaPhaseConflicts(block);
     }
 
     function phenomenonCompatibleWithPhase(code, context) {
@@ -1828,43 +2418,65 @@
       return unitCatalog
         .map(unit => {
           const overlap = unit.phenomena.filter(item => phen.has(item));
-          const sameTask = unit.task === group.task;
-          const score = overlap.length + (sameTask ? 6 : 0);
-          return { ...unit, overlap, sameTask, score };
+          // Group tasks are free-text descriptions ("Knoevenagel reaction with
+          // in-situ water removal"), while unit.task is a six-value vocabulary, so
+          // strict equality matched no group at all in the shipped example and this
+          // sort key was dead. taskTextUnitScore maps the description onto the
+          // vocabulary, which is what makes the key mean anything.
+          const sameTask = unit.task === group.task || taskTextUnitScore(group, unit) > 0;
+          // Ranking on raw overlap count rewards units that simply declare more
+          // phenomena: a unit covering 8 of the group's needs while dragging in 7
+          // unrequested ones outranked a unit whose 4 declared phenomena were all
+          // requested. Jaccard charges for those extras.
+          const union = phen.size + unit.phenomena.length - overlap.length;
+          const coverage = union > 0 ? overlap.length / union : 0;
+          return { ...unit, overlap, sameTask, coverage };
         })
-        .filter(unit => unit.score > 0)
+        .filter(unit => unit.sameTask || unit.overlap.length)
         .filter(unit => unitTaskCompatibleWithGroup(unit, group))
         .filter(unit => unit.phenomena.every(code => phenomenonCompatibleWithPhase(code, context)))
         .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
-        .sort((a, b) => b.score - a.score || Number(b.sameTask) - Number(a.sameTask));
+        .sort((a, b) => Number(b.sameTask) - Number(a.sameTask)
+          || b.coverage - a.coverage
+          || b.overlap.length - a.overlap.length
+          || a.name.localeCompare(b.name));
     }
 
     function unitOperationCandidatesForGroup(group) {
+      return memoInPass("unitOperationCandidatesForGroup", group?.id || group, () => unitOperationCandidatesForGroupUncached(group));
+    }
+
+    function unitOperationCandidatesForGroupUncached(group) {
       if ((group.phenomena || []).length) return scoredUnitCandidates(matchesForGroup(group), group);
       const context = groupPhaseContext(group);
       return unitCatalog
         .map(unit => {
-          const textScore = taskTextUnitScore(group, unit);
-          const phaseScore = unitOperationFeedPhaseCompatible(unit, context) ? 1 : 0;
-          const conditionScore = unitConditionScore(group, unit);
-          const mfaScore = unitMfaTransitionScore(group, unit);
-          const score = textScore + phaseScore + conditionScore + mfaScore;
-          return { ...unit, overlap: [], sameTask: false, score, conditionScore, mfaScore, preliminary: true };
+          const taskEvidence = taskTextUnitScore(group, unit) > 0;
+          const conditionEvidence = unitConditionScore(group, unit) > 0;
+          const mfaEvidence = unitMfaTransitionScore(group, unit) > 0;
+          return { ...unit, overlap: [], sameTask: false, taskEvidence, conditionEvidence, mfaEvidence, preliminary: true };
         })
-        .filter(unit => unit.score > 0)
+        .filter(unit => unit.taskEvidence || unit.conditionEvidence || unit.mfaEvidence)
         .filter(unit => preliminaryUnitTaskCompatible(unit, group))
         .filter(unit => unitOperationFeedPhaseCompatible(unit, context))
-        .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+        .sort((a, b) => Number(b.taskEvidence) - Number(a.taskEvidence)
+          || Number(b.mfaEvidence) - Number(a.mfaEvidence)
+          || Number(b.conditionEvidence) - Number(a.conditionEvidence)
+          || a.name.localeCompare(b.name));
     }
 
     function scoredUnitCandidates(candidates, group) {
       return candidates
         .map(candidate => {
-          const conditionScore = unitConditionScore(group, candidate);
-          const mfaScore = unitMfaTransitionScore(group, candidate);
-          return { ...candidate, conditionScore, mfaScore, score: candidate.score + conditionScore + mfaScore };
+          const conditionEvidence = unitConditionScore(group, candidate) > 0;
+          const mfaEvidence = unitMfaTransitionScore(group, candidate) > 0;
+          return { ...candidate, conditionEvidence, mfaEvidence };
         })
-        .sort((a, b) => b.score - a.score || Number(b.sameTask) - Number(a.sameTask));
+        .sort((a, b) => Number(b.sameTask) - Number(a.sameTask)
+          || b.overlap.length - a.overlap.length
+          || Number(b.mfaEvidence) - Number(a.mfaEvidence)
+          || Number(b.conditionEvidence) - Number(a.conditionEvidence)
+          || a.name.localeCompare(b.name));
     }
 
     function taskTextUnitScore(group, unit) {
@@ -1971,22 +2583,8 @@
       if (candidate.sameTask) fit.push("it matches the assigned task");
       if (candidate.overlap?.length) fit.push(`it covers ${candidate.overlap.join(", ")}`);
       const basis = fit.length ? fit.join(" and ") : "it is a related heuristic option";
-      const feed = candidate.feedPhases?.length ? ` Typical feed phase: ${candidate.feedPhases.join(", ")}.` : "";
-      const outlet = candidate.outlet ? ` Key outlet phase: ${candidate.outlet}.` : "";
-      return `${candidate.rationale}${feed}${outlet} Use this when ${basis}.`;
-    }
-
-    function proposalBasisHtml(group, alternatives) {
-      const context = groupPhaseContext(group);
-      const phases = Array.from(context.effectiveRaw || []);
-      return `
-        <div class="proposal-basis">
-          <span><strong>Ranking</strong> task class + MFA phase transition + conditions</span>
-          <span><strong>Refinement</strong> Lutze phenomena and phase compatibility, when reviewed</span>
-          <span><strong>Group phases</strong> ${escapeHtml(phases.length ? phases.join(", ") : "unknown")}</span>
-          <span><strong>Candidates</strong> ${alternatives.length}</span>
-        </div>
-      `;
+      const feed = candidate.feedPhases?.length ? ` Feed: ${candidate.feedPhases.join(", ")}.` : "";
+      return `${candidate.rationale}${feed} Fits because ${basis}.`;
     }
 
     function groupUnitSuggestionReadiness(group) {
@@ -2027,7 +2625,7 @@
     function unitOperationGateTooltip(readiness, group = null) {
       if (readiness?.ready) {
         const action = group?.selectedUnit ? "switch" : "assign";
-        return `Ready to ${action}: the task has a task definition, material streams, phase labels, and at least one condition. Suggestions are ranked from task class, MFA/phase transition, conditions, and Lutze review when available.`;
+        return `Ready to ${action}. Ranked by task class, phase transition, conditions and Lutze evidence.`;
       }
       const missing = readiness?.missing?.length ? readiness.missing.join(", ") : "task data";
       const details = [];
@@ -2038,7 +2636,7 @@
         details.push(phaseDetail);
       }
       if (!readiness?.conditionsReady) details.push("add at least one operating condition such as temperature, pressure, time, pH, mixing, or phase-change evidence");
-      return `Unit-operation assignment is locked because ${missing} are incomplete. ${details.length ? `To unlock it: ${details.join("; ")}.` : "Complete the task-level data first."} This prevents choosing equipment before the material/phase/condition basis is auditable.`;
+      return `Locked: ${missing} incomplete. ${details.length ? `To unlock: ${details.join("; ")}.` : "Complete the task-level data first."}`;
     }
 
     function groupUnitSuggestionGateHtml(group, options = {}) {
@@ -2099,14 +2697,24 @@
       const readiness = groupUnitSuggestionReadiness(group);
       const groupState = ensureGroup(group.id);
       if (!readiness.ready || !groupState.unitSuggestionsExpanded) return "";
-      const alternatives = unitOperationCandidatesForGroup(group).slice(0, limit);
+      // The board is where the choice is actually made, so the evidence behind the ranking is
+      // printed under each candidate rather than kept in a hover tooltip only, and the list can
+      // be opened past the first few instead of silently stopping at four.
+      const all = unitOperationCandidatesForGroup(group);
+      const showAll = Boolean(groupState.unitPickerShowAll);
+      const alternatives = showAll ? all : all.slice(0, limit);
+      const hidden = all.length - alternatives.length;
       return `
         <div class="board-unit-picker">
-          ${alternatives.length ? alternatives.map(candidate => `
+          ${alternatives.length ? alternatives.map((candidate, index) => `
             <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-unit="${escapeAttr(candidate.name)}" data-unit-group="${escapeAttr(group.id)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-              ${escapeHtml(candidate.name)}
+              <span class="alt-rank">${index + 1}</span>
+              <span class="alt-name">${escapeHtml(candidate.name)}</span>
+              ${candidateFitMetaHtml(candidate)}
             </button>
           `).join("") : `<span class="muted small">No matching unit operation.</span>`}
+          ${hidden > 0 ? `<button class="mini-button" data-unit-picker-more="${escapeAttr(group.id)}">Show ${hidden} more candidate${hidden === 1 ? "" : "s"}</button>` : ""}
+          ${showAll && all.length > limit ? `<button class="mini-button" data-unit-picker-more="${escapeAttr(group.id)}">Show fewer</button>` : ""}
         </div>
       `;
     }
@@ -2114,19 +2722,21 @@
     function candidateFitMetaHtml(candidate) {
       if (candidate.preliminary) {
         const evidence = [
-          "task/phase",
-          candidate.conditionScore ? "conditions" : "",
-          candidate.mfaScore ? "MFA transition" : ""
+          candidate.taskEvidence ? "task wording" : "",
+          "feed phase",
+          candidate.conditionEvidence ? "conditions" : "",
+          candidate.mfaEvidence ? "MFA transition" : ""
         ].filter(Boolean).join(" + ");
-        return `<span class="candidate-fit-meta">pre-Lutze suggestion; score ${candidate.score}; ${escapeHtml(evidence)}</span>`;
+        return `<span class="candidate-fit-meta">pre-Lutze suggestion; matched by ${escapeHtml(evidence)}</span>`;
       }
       const overlap = candidate.overlap?.length ? candidate.overlap.join(", ") : "no direct overlap";
       const evidence = [
-        overlap,
-        candidate.conditionScore ? `conditions +${candidate.conditionScore}` : "",
-        candidate.mfaScore ? `MFA +${candidate.mfaScore}` : ""
+        candidate.sameTask ? "task category" : "",
+        `PBB ${overlap}`,
+        candidate.conditionEvidence ? "conditions" : "",
+        candidate.mfaEvidence ? "MFA transition" : ""
       ].filter(Boolean).join("; ");
-      return `<span class="candidate-fit-meta">score ${candidate.score}; ${escapeHtml(evidence)}</span>`;
+      return `<span class="candidate-fit-meta">matched by ${escapeHtml(evidence)}</span>`;
     }
 
     function selectionBasisStatus(group) {
@@ -2135,21 +2745,6 @@
       if (/paper|SI |Table|U\d+|KB|H\d+/i.test(text)) return { label: "paper-linked", className: "blue" };
       if (/heuristic|assum|not derivable|screen|property|scale/i.test(text)) return { label: "heuristic", className: "green" };
       return { label: "recorded", className: "green" };
-    }
-
-    function selectionBasisHtml(group) {
-      if (!group.selectedUnit) return "";
-      const status = selectionBasisStatus(group);
-      return `
-        <div class="selection-basis-row">
-          <div class="row between">
-            <div class="label">Selection basis - why ${escapeHtml(group.selectedUnit)}?</div>
-            <span class="pill ${status.className}">${escapeHtml(status.label)}</span>
-          </div>
-          <input data-selection-basis="${escapeAttr(group.id)}" value="${escapeAttr(group.selectionBasis || "")}"
-            placeholder="paper unit, heuristic rule, property screen, or scale-up assumption">
-        </div>
-      `;
     }
 
     function selectedUnitInCurrentRanking(group) {
@@ -2166,12 +2761,35 @@
       return phenomenonGlossary[code] || "Phenomenological descriptor used to compare blocks with possible unit-operation alternatives.";
     }
 
-    function phenomenonPill(code) {
-      return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${escapeHtml(code)}</span>`;
+    function phenomenonName(code) {
+      return phenomenonShortNames?.[code] || "";
     }
 
-    function phenomenonOptionButton(code, active, disabled) {
-      return `<button class="phen-option tip ${active ? "active" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${escapeHtml(code)}</button>`;
+    // Plain name first, code second and smaller: "Heating ES(H)". A code without a name shows as
+    // the code alone, so an unknown descriptor still renders.
+    function phenomenonLabelHtml(code) {
+      const name = phenomenonName(code);
+      return name
+        ? `${escapeHtml(name)} <span class="phen-abbr">${escapeHtml(code)}</span>`
+        : escapeHtml(code);
+    }
+
+    function phenomenonPill(code) {
+      return `<span class="pill green tip" data-tip="${escapeAttr(phenomenonTip(code))}">${phenomenonLabelHtml(code)}</span>`;
+    }
+
+    function phenomenonConflictPill(code, block) {
+      return `<span class="pill warn tip phen-conflict" data-tip="${escapeAttr(phenomenonConflictTip(code, block))}">${phenomenonLabelHtml(code)} !</span>`;
+    }
+
+    // Same code as plain text with the glossary on hover: a list of phenomena is information,
+    // not a row of state badges.
+    function phenomenonCode(code) {
+      return `<span class="phen-code" title="${escapeAttr(`${phenomenonName(code) ? `${phenomenonName(code)}. ` : ""}${phenomenonTip(code)}`)}">${escapeHtml(code)}</span>`;
+    }
+
+    function phenomenonOptionButton(code, active, disabled, conflictTip = "") {
+      return `<button class="phen-option tip ${active ? "active" : ""} ${conflictTip ? "phen-conflict" : ""}" data-phen="${escapeAttr(code)}" data-tip="${escapeAttr(conflictTip || phenomenonTip(code))}" ${disabled ? "disabled" : ""}>${phenomenonLabelHtml(code)}${conflictTip ? " !" : ""}</button>`;
     }
 
     async function loadTextView() {
@@ -2366,7 +2984,26 @@
       }
     }
 
+    // The textarea and the annotated view show the same text. Once blocks exist the annotated view
+    // is the working copy, so the textarea folds away; it reopens when the project is cleared. A
+    // fold the user changed by hand is left alone until the block count crosses zero again.
+    function syncSourceTextFold() {
+      const details = $("sourceTextDetails");
+      if (!details) return;
+      const hasBlocks = state.blocks.length > 0;
+      if (hasBlocks !== Boolean(state.sourceTextFolded)) {
+        details.open = !hasBlocks;
+        state.sourceTextFolded = hasBlocks;
+      }
+      const summary = $("sourceTextSummary");
+      if (summary) {
+        const words = String(state.text || "").trim().split(/\s+/).filter(Boolean).length;
+        summary.textContent = details.open ? "" : words ? `${words} words loaded` : "";
+      }
+    }
+
     function renderAnnotatedText() {
+      syncSourceTextFold();
       const root = $("annotatedText");
       if (!state.text) {
         root.innerHTML = `<span class="muted">Load text to start annotating blocks.</span>`;
@@ -2391,7 +3028,7 @@
           siblings.some(item => state.selectedBlockId === item.id) ? "primary-selected" : ""
         ].filter(Boolean).join(" ");
         const extraLabel = siblings.length > 1 ? ` <span class="pill" title="${escapeAttr(siblings.slice(1).map(item => item.id).join(", "))} share this same text (e.g. parallel-unit copies) — manage them on the board">+${siblings.length - 1}</span>` : "";
-        html += `<span class="${classes}" data-label="${escapeAttr(block.id)}" data-block-id="${block.id}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
+        html += `<span class="${classes}" data-block-id="${block.id}" title="${escapeAttr(siblings.map(item => item.id).join(", "))} / ${escapeAttr(block.groupId || "ungrouped")}"><span class="annotated-block-label">${escapeHtml(block.id)}${extraLabel}</span><button class="annotated-block-delete" data-delete-block="${escapeAttr(block.id)}" title="Delete ${escapeAttr(block.id)}" aria-label="Delete ${escapeAttr(block.id)}">x</button>${escapeHtml(state.text.slice(block.start, block.end))}</span>`;
         cursor = block.end;
       }
       html += escapeHtml(state.text.slice(cursor));
@@ -2543,7 +3180,7 @@
         const boxClasses = `group-box tip ${state.boardCompact ? "compact" : ""} ${active ? "active" : ""} ${contextActive ? "context-active" : ""} ${state.connectingFrom === group.id ? "connecting" : ""}`;
         if (state.boardCompact) {
           return `
-            <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+            <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
               <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
               <div class="group-head">
                 <div class="row">
@@ -2564,7 +3201,7 @@
           `;
         }
         return `
-          <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-node-id="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
+          <section class="${boxClasses}" style="left:${group.x}px; top:${group.y}px; width:${nodeWidth(group.blocks.length)}px" data-group-box="${group.id}" data-tip="${escapeAttr(groupContentsTip(group))}">
             <span class="connect-handle" data-connect-handle="${escapeAttr(group.id)}" title="Drag to another group or block to connect them"></span>
             <div class="group-head">
               <div class="row">
@@ -2640,9 +3277,10 @@
         });
       });
 
+      bindLinkRemovalHandlers(root);
       root.querySelectorAll("[data-group-box]").forEach(box => {
         box.addEventListener("click", event => {
-          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-select-group], [data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
+          if (event.target.closest("[data-block-card]") || event.target.closest("[data-unit]") || event.target.closest("[data-open-group-board], [data-compact-group-board], [data-add-group-task-stream]") || event.target.closest("[data-suggest-unit-operation]")) return;
           if (state.connectingFrom && state.connectingFrom !== box.dataset.groupBox) {
             addConnection(state.connectingFrom, box.dataset.groupBox);
             return;
@@ -2660,12 +3298,6 @@
         };
         box.addEventListener("pointerdown", startGroupBoxDrag);
         if (!window.PointerEvent) box.addEventListener("mousedown", startGroupBoxDrag);
-      });
-      root.querySelectorAll("[data-select-group]").forEach(button => {
-        button.addEventListener("click", event => {
-          event.stopPropagation();
-          selectGroup(button.dataset.selectGroup);
-        });
       });
       root.querySelectorAll("[data-open-group-board]").forEach(button => {
         button.addEventListener("click", event => {
@@ -2717,6 +3349,16 @@
           ensureGroup(group.id).unitSuggestionsExpanded = false;
           renderAll();
         });
+      });
+      root.querySelectorAll("[data-unit-picker-more]").forEach(button => {
+        button.addEventListener("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const groupState = ensureGroup(button.dataset.unitPickerMore);
+          groupState.unitPickerShowAll = !groupState.unitPickerShowAll;
+          renderAll();
+        });
+        button.addEventListener("mousedown", event => event.stopPropagation());
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
@@ -2776,6 +3418,35 @@
       return { points: [fromCenter, toCenter] };
     }
 
+    // Walks the orthogonal route's straight segments to find the point half the total path length in,
+    // used to place the arrow's remove-marker roughly at its visual middle regardless of how many
+    // bends the route has (a plain average of the vertices would skew toward whichever segment has
+    // the most bends, not the geometric middle of the line actually drawn).
+    function pointAtPathMidpoint(points) {
+      if (!points.length) return { x: 0, y: 0 };
+      if (points.length === 1) return points[0];
+      const segLengths = [];
+      let total = 0;
+      for (let i = 0; i < points.length - 1; i += 1) {
+        const dx = points[i + 1].x - points[i].x;
+        const dy = points[i + 1].y - points[i].y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        segLengths.push(len);
+        total += len;
+      }
+      let target = total / 2;
+      for (let i = 0; i < segLengths.length; i += 1) {
+        if (target <= segLengths[i] || i === segLengths.length - 1) {
+          const t = segLengths[i] > 0 ? Math.min(1, Math.max(0, target / segLengths[i])) : 0;
+          const a = points[i];
+          const b = points[i + 1];
+          return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        }
+        target -= segLengths[i];
+      }
+      return points[0];
+    }
+
     function renderLinksSvg(board, fastMode = false) {
       const nodeMasks = allNodeRects().map(rect => {
         const masked = shrinkRect(rect, 7);
@@ -2790,18 +3461,31 @@
           placedSegments.push({ a: points[index], b: points[index + 1] });
         }
       };
-      const links = state.links.map(link => {
+      // Every arrow gets an invisible, fat "hit" path (pointer-events re-enabled via CSS despite the
+      // whole .link-layer being pointer-events:none) purely so hovering it (anywhere along the line)
+      // highlights the arrow and reveals a small "x" marker at its midpoint - that marker, not the
+      // line itself, is the actual click target for removal (see .link-remove-marker below and its
+      // [data-link-index] click handler set up alongside each place that renders this SVG).
+      const links = state.links.map((link, index) => {
         if (isBackwardLink(link)) {
           const route = recycleLaneRoute(link, recycleLane++);
           if (!route) return "";
           claimSegments(route.points);
           const path = orthogonalPath(route.points);
           const start = route.points[0];
+          const mid = pointAtPathMidpoint(route.points);
           return `
-            <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
-            <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)"></path>
-            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
-            <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
+            <g class="link-group">
+              <path class="link-hit" d="${path}" stroke="transparent" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path class="link-visible" d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+              <path class="link-visible" d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-dasharray="8 6" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)"></path>
+              <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+              <text x="${round(route.labelX)}" y="${round(route.laneY - 8)}" class="link-label recycle" text-anchor="middle">recycle ${escapeHtml(resolvedEndpointId(link.from))} → ${escapeHtml(resolvedEndpointId(link.to))}</text>
+              <g class="link-remove-marker" data-link-index="${index}" data-tip="Remove this arrow (${escapeAttr(link.from)} → ${escapeAttr(link.to)})">
+                <circle class="link-remove-bg" cx="${round(mid.x)}" cy="${round(mid.y)}" r="8"></circle>
+                <text class="link-remove-x" x="${round(mid.x)}" y="${round(mid.y)}" text-anchor="middle" dominant-baseline="central">×</text>
+              </g>
+            </g>
           `;
         }
         const route = fastMode ? fastConnectionRoute(link.from, link.to) : connectionRoute(link.from, link.to, placedSegments);
@@ -2809,10 +3493,18 @@
         if (!fastMode) claimSegments(route.points);
         const path = orthogonalPath(route.points);
         const start = route.points[0];
+        const mid = pointAtPathMidpoint(route.points);
         return `
-          <path d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
-          <path d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
-          <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+          <g class="link-group">
+            <path class="link-hit" d="${path}" stroke="transparent" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+            <path class="link-visible" d="${path}" stroke="#f2faf5" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" mask="url(#nodeTextMask)"></path>
+            <path class="link-visible" d="${path}" stroke="#286d3f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" marker-end="url(#arrowHead)" mask="url(#nodeTextMask)"></path>
+            <circle cx="${round(start.x)}" cy="${round(start.y)}" r="3.6" fill="#f2faf5" stroke="#286d3f" stroke-width="1.8"></circle>
+            <g class="link-remove-marker" data-link-index="${index}" data-tip="Remove this arrow (${escapeAttr(link.from)} → ${escapeAttr(link.to)})">
+              <circle class="link-remove-bg" cx="${round(mid.x)}" cy="${round(mid.y)}" r="8"></circle>
+              <text class="link-remove-x" x="${round(mid.x)}" y="${round(mid.y)}" text-anchor="middle" dominant-baseline="central">×</text>
+            </g>
+          </g>
         `;
       }).join("");
       return `
@@ -2893,7 +3585,28 @@
       });
       if (!changed) return;
       const svg = canvas.querySelector(".link-layer");
-      if (svg) svg.outerHTML = renderLinksSvg(board);
+      if (svg) {
+        svg.outerHTML = renderLinksSvg(board);
+        bindLinkRemovalHandlers(canvas);
+      }
+    }
+
+    // Click-to-remove for arrows on the canvas: each <g data-link-index> in renderLinksSvg's output
+    // carries a fat invisible hit-path (see there) so this works without requiring a pixel-perfect
+    // click on the thin visible line. Re-bind after every outerHTML replacement of .link-layer.
+    function bindLinkRemovalHandlers(root) {
+      root.querySelectorAll(".link-remove-marker").forEach(marker => {
+        marker.addEventListener("click", async event => {
+          event.stopPropagation();
+          const index = Number(marker.dataset.linkIndex);
+          const link = state.links[index];
+          if (!link) return;
+          if (!(await confirmModal(`Remove the arrow ${link.from} → ${link.to}?`))) return;
+          pushUndo();
+          state.links.splice(index, 1);
+          renderAll();
+        });
+      });
     }
 
     // Detailed (non-compact) group boxes render their full content (block cards, phenomena,
@@ -3231,6 +3944,16 @@
       return Math.max(min, Math.min(max, value));
     }
 
+    function blockSourceMeta(block) {
+      if (block?.source === "manual") {
+        return { label: "manual", description: "Manual block not linked to protocol text." };
+      }
+      if (block?.source === "scale-up addition") {
+        return { label: "scale-up addition", description: "Industrial operation added during scale-up; it has no laboratory counterpart." };
+      }
+      return { label: "protocol", description: "Block linked to the loaded protocol text." };
+    }
+
     function blockCardHtml(block) {
       ensureBlockFlowFields(block);
       ensureBlockConditionFields(block);
@@ -3243,10 +3966,11 @@
       const conditionCount = conditionValuesForBlock(block).length;
       const hasNotes = Boolean(String(block.notes || "").trim());
       const bodyText = String(block.text || "").trim();
-      const sourcePill = block.source === "manual" ? `<span class="pill">manual</span>` : "";
+      const sourceMeta = blockSourceMeta(block);
+      const sourcePill = sourceMeta.label === "protocol" ? "" : `<span class="pill">${escapeHtml(sourceMeta.label)}</span>`;
       const needsTask = !block.groupId;
       return `
-        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-node-id="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
+        <article class="block-card tip ${state.selectedBlockId === block.id ? "selected" : ""} ${state.selectedIds.includes(block.id) ? "multi" : ""} ${state.connectingFrom === block.id ? "connecting" : ""} ${needsTask ? "needs-task" : ""}" data-block-card="${block.id}" data-tip="${escapeAttr(blockContentsTip(block))}">
           ${needsTask ? `<span class="connect-handle" data-connect-handle="${escapeAttr(block.id)}" title="Drag to another block or group to connect them"></span>` : ""}
           <div class="row between block-card-head">
             <strong>${block.id}</strong>
@@ -3267,41 +3991,35 @@
 
     function blockContentsTip(block) {
       ensureBlockFlowFields(block);
+      const counts = streamCounts(block);
+      const conditionCount = conditionValuesForBlock(block).length;
       const lines = [
         `${block.id} - ${block.behavior}`,
-        `Source: ${block.source === "manual" ? "manual block, not linked to protocol text" : "protocol text"}`,
-        `Phenomena: ${block.phenomena.length ? block.phenomena.join(", ") : "none"}`
+        `Source: ${blockSourceMeta(block).description}`,
+        `Phenomena: ${block.phenomena.length ? block.phenomena.join(", ") : "none"}`,
+        `MFA: ${counts.input} inputs, ${counts.output} outputs, ${counts.waste} waste`,
+        `Conditions: ${conditionCount}`
       ];
-      const streamLines = streamTipLines(block.streams);
-      if (streamLines.length) {
-        lines.push("", ...streamLines);
-      } else {
-        lines.push("", "MFA streams: none yet");
-      }
-      const conditionLines = conditionTipLines(block);
-      if (conditionLines.length) lines.push("", "Conditions:", ...conditionLines);
       if (String(block.notes || "").trim()) lines.push("", "Notes:", String(block.notes || "").trim());
       return lines.join("\n");
     }
 
     function groupContentsTip(group) {
+      const counts = group.blocks.reduce((total, block) => {
+        ensureBlockFlowFields(block);
+        const current = streamCounts(block);
+        total.input += current.input;
+        total.output += current.output;
+        total.waste += current.waste;
+        return total;
+      }, { input: 0, output: 0, waste: 0 });
       const lines = [
         `${group.id} - ${group.task}`,
         `Blocks: ${group.blocks.map(block => block.id).join(", ") || "none"}`,
-        `Phenomena: ${group.phenomena.length ? group.phenomena.join(", ") : "none"}`
+        `Phenomena: ${group.phenomena.length ? group.phenomena.join(", ") : "none"}`,
+        `MFA: ${counts.input} inputs, ${counts.output} outputs, ${counts.waste} waste`,
+        `Conditions: ${aggregateGroupConditions(group).length}`
       ];
-      const streams = group.blocks.flatMap(block => {
-        ensureBlockFlowFields(block);
-        return block.streams.map(stream => ({ ...stream, blockId: block.id }));
-      });
-      const streamLines = streamTipLines(streams);
-      if (streamLines.length) {
-        lines.push("", ...streamLines);
-      } else {
-        lines.push("", "MFA streams: none yet");
-      }
-      const conditionLines = groupConditionTipLines(group);
-      if (conditionLines.length) lines.push("", "Group conditions:", ...conditionLines);
       return lines.join("\n");
     }
 
@@ -3329,20 +4047,6 @@
         ],
         conditions
       };
-    }
-
-    function groupCompositeSummaryHtml(group) {
-      const summary = groupProcessSummary(group);
-      return `
-        <button class="group-composite-summary" data-select-group="${escapeAttr(group.id)}" title="Open the aggregated process view for ${escapeAttr(group.id)}">
-          <span>
-            <strong>Combined Process</strong>
-            <span>${escapeHtml(summary.title)}</span>
-          </span>
-          <span class="group-composite-meta">${escapeHtml(summary.meta.join(" / "))}</span>
-          ${summary.conditions.length ? `<span class="group-composite-conditions">${escapeHtml(summary.conditions.join(" / "))}</span>` : ""}
-        </button>
-      `;
     }
 
     function groupBoardMetaHtml(group) {
@@ -3389,7 +4093,7 @@
         conditionCount ? `C:${conditionCount}` : ""
       ].filter(Boolean).join(" / ");
       return `
-        <button class="group-mini-block ${selected ? "selected" : ""}" data-block-card="${escapeAttr(block.id)}" data-node-id="${escapeAttr(block.id)}" data-tip="${escapeAttr(blockContentsTip(block))}">
+        <button class="group-mini-block ${selected ? "selected" : ""}" data-block-card="${escapeAttr(block.id)}" data-tip="${escapeAttr(blockContentsTip(block))}">
           <strong>${escapeHtml(block.id)}</strong>
           <span>${escapeHtml(block.behavior)}</span>
           ${body ? `<small>${escapeHtml(body)}</small>` : ""}
@@ -3415,21 +4119,6 @@
       `;
     }
 
-    function streamTipLines(streams) {
-      return streamEditorSections.flatMap(role => {
-        const items = role === "outlet"
-          ? streams.filter(stream => streamIsOutlet(stream))
-          : streams.filter(stream => stream.role === role);
-        if (!items.length) return [];
-        const header = streamSectionMeta(role).title;
-        return [
-          `${header}:`,
-          ...items.slice(0, 5).map(stream => `- ${streamTipText(stream)}`),
-          ...(items.length > 5 ? [`- +${items.length - 5} more`] : [])
-        ];
-      });
-    }
-
     function streamTipText(stream) {
       const name = stream.name.trim() || "untitled stream";
       const quantity = stream.quantity.trim() ? `${stream.quantity.trim()} ${stream.unit}` : "quantity missing";
@@ -3439,23 +4128,6 @@
       const fate = stream.fate && stream.fate !== "unknown" ? `, ${stream.fate}` : "";
       const block = stream.blockId ? ` [${stream.blockId}]` : "";
       return `${name} - ${quantity}${phase}${timing}${fate}${status}${block}`;
-    }
-
-    function groupMfaSummaryHtml(group) {
-      const aggregates = mfaGroupsForDisplay(aggregateGroupStreams(group)).filter(roleGroup => roleGroup.items.length);
-      if (!aggregates.length) return "";
-      return `
-        <div class="group-mfa">
-          <div class="label">Group MFA</div>
-          ${aggregates.map(roleGroup => `
-            <div class="group-mfa-role role-${escapeAttr(roleGroup.role)}">
-              <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
-              ${roleGroup.items.slice(0, 3).map(item => groupMfaItemHtml(item, group.id, false, roleGroup.role)).join("")}
-              ${roleGroup.items.length > 3 ? `<span class="muted small">+${roleGroup.items.length - 3} more material groups</span>` : ""}
-            </div>
-          `).join("")}
-        </div>
-      `;
     }
 
     function groupMfaItemHtml(item, groupId, editable, role = "") {
@@ -3512,35 +4184,6 @@
       `;
     }
 
-    function groupConditionSummaryHtml(group) {
-      const aggregates = aggregateGroupConditions(group);
-      if (!aggregates.length) return "";
-      return `
-        <div class="group-mfa">
-          <div class="label">Group Conditions</div>
-          ${aggregates.slice(0, 4).map(item => groupConditionItemHtml(item, group.id, false)).join("")}
-          ${aggregates.length > 4 ? `<span class="muted small">+${aggregates.length - 4} more conditions</span>` : ""}
-        </div>
-      `;
-    }
-
-    function groupConditionItemHtml(item, groupId, editable) {
-      const pillLabel = item.effectiveDisplay || (item.override ? `${item.override.value} ${item.unit || ""}`.trim() : item.display);
-      return `
-        <div class="group-mfa-item">
-          <div class="group-mfa-item-head">
-            <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.override ? "blue" : ["summed_numeric_same_unit", "common_value", "phase_labeled"].includes(item.status) ? "green" : "warn"}">${escapeHtml(pillLabel)}</span>
-          </div>
-          <div class="group-mfa-lines">
-            ${item.lines.slice(0, 3).map(line => `<span>${escapeHtml(line)}</span>`).join("")}
-            ${item.lines.length > 3 ? `<span>+${item.lines.length - 3} more entries</span>` : ""}
-          </div>
-          ${overrideControlHtml(item, groupId, editable, "condition", item.display)}
-        </div>
-      `;
-    }
-
     function groupConditionProfileHtml(group, conditions) {
       const groupState = ensureGroup(group.id);
       if (!conditions.length) return `<div class="mfa-empty">No saved group conditions yet.</div>`;
@@ -3585,6 +4228,150 @@
       `;
     }
 
+    function groupTimeConcurrencyHtml(group) {
+      const entries = groupTimeEntries(group);
+      if (!entries.length) return "";
+      const schedule = groupTimeSchedule(group);
+      return `
+        <div class="task-timetable-launcher">
+          <div>
+            <strong>Task timetable</strong>
+            <span class="muted small">${entries.length} timed event${entries.length === 1 ? "" : "s"}; ${formatNumber(schedule.totalH)} h effective</span>
+          </div>
+          <button type="button" class="mini-button primary" data-open-task-timetable="${escapeAttr(group.id)}">Open timetable</button>
+        </div>
+      `;
+    }
+
+    function taskTimetableHtml(group) {
+      const schedule = groupTimeSchedule(group);
+      const entries = schedule.rows;
+      if (!entries.length) return `<div class="mfa-empty">No timed events were found. Add a reaction, mixing, holding, ramp, contact, phase-change, or settling duration to this task.</div>`;
+      const concurrency = ensureGroup(group.id).timeConcurrency || {};
+      const totalH = schedule.totalH;
+      return `
+        <div class="task-timetable-summary">
+          <div><span class="label">Task</span><strong>${escapeHtml(group.id)} - ${escapeHtml(group.task)}</strong></div>
+          <div><span class="label">Effective duration</span><strong>${formatNumber(totalH)} h</strong></div>
+          <div><span class="label">Timed events</span><strong>${entries.length}</strong></div>
+          <div><span class="label">Overlapping pairs</span><strong>${schedule.overlapCount}</strong></div>
+        </div>
+        <div class="task-timetable-chart" aria-label="Task timetable for ${escapeAttr(group.id)}">
+          ${entries.map(entry => {
+            const left = totalH > 0 ? entry.startH / totalH * 100 : 0;
+            const width = totalH > 0 ? entry.durationH / totalH * 100 : 100;
+            return `
+            <div class="task-timetable-chart-row">
+              <span title="${escapeAttr(entry.label)} (${escapeAttr(entry.blockId)})">${escapeHtml(entry.label)}</span>
+              <div class="task-timetable-track">
+                <div class="task-timetable-event-bar" style="left:${left}%;width:${Math.max(2, width)}%" title="${escapeAttr(entry.label)} (${escapeAttr(entry.blockId)}): ${formatNumber(entry.startH)}-${formatNumber(entry.finishH)} h">
+                  <span>${formatNumber(entry.durationH)}h</span>
+                </div>
+              </div>
+            </div>
+          `; }).join("")}
+          <div class="task-timetable-axis"><span>0 h</span><span>${formatNumber(totalH)} h</span></div>
+        </div>
+        <div class="task-timetable-toolbar">
+          <span class="muted small">Set each event's start and duration. Events overlap whenever their time ranges intersect.</span>
+          <button type="button" class="mini-button" data-timetable-sequential="${escapeAttr(group.id)}">Make all sequential</button>
+        </div>
+        <div class="task-timetable-rows">
+          ${entries.map(entry => `
+            <div class="task-timetable-row">
+              <div class="task-timetable-event">
+                <strong>${escapeHtml(entry.label)}</strong>
+                <span class="muted small">${escapeHtml(entry.blockId)}${entry.phenomena.length ? ` · ${escapeHtml(entry.phenomena.join(", "))}` : ""}</span>
+              </div>
+              <label><span>Start</span><div class="condition-input-row"><input type="number" min="0" step="0.05" data-timetable-start="${escapeAttr(entry.key)}" data-timetable-group="${escapeAttr(group.id)}" value="${escapeAttr(formatNumber(entry.startH))}"><span class="unit-badge">h</span></div></label>
+              <label><span>Duration</span><div class="condition-input-row"><input type="number" min="0" step="0.05" data-timetable-duration="${escapeAttr(entry.key)}" data-timetable-block="${escapeAttr(entry.blockId)}" data-timetable-condition="${escapeAttr(entry.id)}" value="${escapeAttr(formatNumber(entry.durationH))}"><span class="unit-badge">h</span></div></label>
+              <label><span>Quick align</span><select data-time-concurrency-entry="${escapeAttr(entry.key)}" data-time-concurrency-group="${escapeAttr(group.id)}">
+                <option value="">Keep start time</option>
+                ${entries.filter(other => other.key !== entry.key).map(other => `<option value="${escapeAttr(other.key)}" ${concurrency[entry.key] === other.key ? "selected" : ""}>Start with ${escapeHtml(other.label)} (${escapeHtml(other.blockId)})</option>`).join("")}
+              </select></label>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function openTaskTimetable(groupId) {
+      if (!groupModel(groupId)) return;
+      state.activeTaskTimetableGroupId = groupId;
+      $("taskTimetableModal").hidden = false;
+      renderTaskTimetableModal();
+    }
+
+    function closeTaskTimetable() {
+      $("taskTimetableModal").hidden = true;
+      state.activeTaskTimetableGroupId = null;
+    }
+
+    function renderTaskTimetableModal() {
+      const body = $("taskTimetableModalBody");
+      const group = groupModel(state.activeTaskTimetableGroupId);
+      if (!body || !group) return;
+      body.innerHTML = taskTimetableHtml(group);
+      body.querySelectorAll("[data-timetable-start]").forEach(input => {
+        input.addEventListener("change", () => {
+          const groupState = ensureGroup(input.dataset.timetableGroup);
+          const value = Math.max(0, conversionNumber(input.value));
+          groupState.timeOffsets[input.dataset.timetableStart] = String(value);
+          delete groupState.timeConcurrency[input.dataset.timetableStart];
+          invalidateAiRefine();
+          renderTaskTimetableModal();
+          renderStepFlowInspector();
+          renderScaleBasisPanel();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-timetable-duration]").forEach(input => {
+        input.addEventListener("change", () => {
+          const block = state.blocks.find(item => item.id === input.dataset.timetableBlock);
+          if (!block) return;
+          ensureBlockConditionFields(block);
+          const value = Math.max(0, conversionNumber(input.value));
+          block.conditions[input.dataset.timetableCondition] = value ? String(value) : "";
+          block.conditionUnits[input.dataset.timetableCondition] = "h";
+          invalidateAiRefine();
+          renderTaskTimetableModal();
+          renderStepFlowInspector();
+          renderScaleBasisPanel();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-time-concurrency-entry]").forEach(select => {
+        select.addEventListener("change", () => {
+          const groupState = ensureGroup(select.dataset.timeConcurrencyGroup);
+          const key = select.dataset.timeConcurrencyEntry;
+          if (select.value) {
+            const target = groupTimeSchedule(group).rows.find(entry => entry.key === select.value);
+            if (target) groupState.timeOffsets[key] = String(target.startH);
+            groupState.timeConcurrency[key] = select.value;
+          } else {
+            delete groupState.timeConcurrency[key];
+          }
+          invalidateAiRefine();
+          renderTaskTimetableModal();
+          renderStepFlowInspector();
+          renderScaleBasisPanel();
+          renderExport();
+        });
+      });
+      body.querySelectorAll("[data-timetable-sequential]").forEach(button => {
+        button.addEventListener("click", () => {
+          const groupState = ensureGroup(button.dataset.timetableSequential);
+          groupState.timeConcurrency = {};
+          groupState.timeOffsets = {};
+          invalidateAiRefine();
+          renderTaskTimetableModal();
+          renderStepFlowInspector();
+          renderScaleBasisPanel();
+          renderExport();
+        });
+      });
+    }
+
     function groupConditionLabelCardHtml(item) {
       const source = item.lines.join("\n");
       return `
@@ -3625,6 +4412,10 @@
     }
 
     function aggregateGroupConditions(group) {
+      return memoInPass("aggregateGroupConditions", group?.id || group, () => aggregateGroupConditionsUncached(group));
+    }
+
+    function aggregateGroupConditionsUncached(group) {
       const entries = group.blocks.flatMap(block => {
         ensureBlockConditionFields(block);
         return conditionValuesForBlock(block).map(item => ({
@@ -3739,6 +4530,7 @@
     }
 
     function exportConditionEntry(item) {
+      const relevantPhenomena = (item.blockPhenomena || []).filter(code => (item.phenomena || []).includes(code));
       return {
         blockId: item.blockId,
         id: item.id,
@@ -3747,22 +4539,15 @@
         unit: item.unit,
         display: formatConditionValue(item),
         kind: item.kind || "text",
-        phenomena: item.phenomena
+        phenomena: relevantPhenomena.length ? relevantPhenomena : item.blockPhenomena || []
       };
-    }
-
-    function groupConditionTipLines(group) {
-      return aggregateGroupConditions(group).flatMap(item => [
-        `- ${item.label}: ${item.display} (${item.status})`,
-        ...item.lines.slice(0, 3).map(line => `  ${line}`)
-      ]);
     }
 
     function aggregateGroupStreams(group) {
       const streams = group.blocks.flatMap(block => {
         ensureBlockFlowFields(block);
         return block.streams
-          .filter(stream => stream.name.trim())
+          .filter(stream => stream.name.trim() && !stream.internalTransfer)
           .map(stream => ({ ...stream, blockId: block.id }));
       });
       const mfaOverrides = ensureGroup(group.id).mfaOverrides;
@@ -3802,8 +4587,9 @@
         const canSum = numeric.every(value => Number.isFinite(value)) && unit;
         if (canSum) {
           const total = numeric.reduce((sum, value) => sum + value, 0);
-          totals.push({ total, unit, timing });
-          lines.push(`${timing}: ${formatNumber(total)} ${unit} (${group.map(stream => stream.blockId).join(", ")})`);
+          const provenance = weakestProvenance(group.map(stream => stream.status));
+          totals.push({ total, unit, timing, provenance });
+          lines.push(`${timing}: ${quantityTextByProvenance(total, provenance, unit)} (${group.map(stream => stream.blockId).join(", ")})`);
         } else {
           group.forEach(stream => {
             const quantity = stream.quantity ? `${stream.quantity} ${stream.unit}` : "quantity missing";
@@ -3839,7 +4625,8 @@
       if (units.size !== 1) return { text: "", value: null, unit: "" };
       const total = totals.reduce((sum, item) => sum + item.total, 0);
       const unit = totals[0].unit;
-      return { text: `${formatNumber(total)} ${unit}`, value: formatNumber(total), unit };
+      const provenance = weakestProvenance(totals.map(item => item.provenance));
+      return { text: quantityTextByProvenance(total, provenance, unit), value: formatNumber(total), unit, provenance };
     }
 
     function parseStreamQuantity(value) {
@@ -3850,6 +4637,95 @@
 
     function formatNumber(value) {
       return Number.isInteger(value) ? String(value) : String(Math.round(value * 1000) / 1000);
+    }
+
+    // Significant figures by provenance. "3 decimals" gave a 2.5 L charge and a 0.002533 kg
+    // residual the same treatment and printed 0.507 for a back-calculated 0.5066: false
+    // precision for the one, lost precision for the other. A reported value is shown with four
+    // figures (its own text wherever it is displayed as entered), a calculated one with three, an
+    // estimated, assumed or missing one with two. A total inherits its weakest contributor. The
+    // integer part is never rounded away: 4444 kg stays 4444, not 4400.
+    const provenanceRank = { reported: 0, calculated: 1, estimated: 2, assumed: 3, missing: 4 };
+
+    function provenanceKey(status) {
+      const key = String(status || "").trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(provenanceRank, key) ? key : "missing";
+    }
+
+    function weakestProvenance(statuses) {
+      let worst = "";
+      let worstRank = -1;
+      (statuses || []).forEach(status => {
+        const key = provenanceKey(status);
+        if (provenanceRank[key] > worstRank) {
+          worstRank = provenanceRank[key];
+          worst = key;
+        }
+      });
+      return worst || "missing";
+    }
+
+    function provenanceDigits(status) {
+      const rank = provenanceRank[provenanceKey(status)];
+      return rank === 0 ? 4 : rank === 1 ? 3 : 2;
+    }
+
+    function significantText(value, digits = 3) {
+      const number = typeof value === "number" ? value : parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return "";
+      if (number === 0) return "0";
+      const magnitude = Math.floor(Math.log10(Math.abs(number)));
+      const decimals = Math.max(0, Math.min(12, digits - 1 - magnitude));
+      return String(Number(number.toFixed(decimals)));
+    }
+
+    // Screening-default relative uncertainty by provenance, in the spirit of the LCA pedigree
+    // matrix: a reported value is taken as measured (2 %), a calculated one carries the
+    // stoichiometry and the inputs it rests on (5 %), an estimate is an engineering typical
+    // (20 %), an assumption a guess (30 %). A missing value has no uncertainty because it has no
+    // value. Sums combine in quadrature, as independent contributions, so a total of many
+    // reported streams stays tight and one estimated stream widens it.
+    const provenanceUncertaintyPercent = { reported: 2, calculated: 5, estimated: 20, assumed: 30 };
+
+    function streamUncertaintyPercent(status) {
+      const key = provenanceKey(status);
+      return Object.prototype.hasOwnProperty.call(provenanceUncertaintyPercent, key) ? provenanceUncertaintyPercent[key] : NaN;
+    }
+
+    function combinedUncertaintyKg(items) {
+      let sumOfSquares = 0;
+      let any = false;
+      (items || []).forEach(item => {
+        const percent = streamUncertaintyPercent(item.status);
+        if (!Number.isFinite(item.kg) || !Number.isFinite(percent)) return;
+        any = true;
+        sumOfSquares += (item.kg * percent / 100) ** 2;
+      });
+      return any ? Math.sqrt(sumOfSquares) : NaN;
+    }
+
+    function uncertaintyPercentText(valueKg, uncertaintyKg) {
+      if (!Number.isFinite(valueKg) || !Number.isFinite(uncertaintyKg) || valueKg <= 0) return "";
+      return `±${significantText(uncertaintyKg / valueKg * 100, 2)}%`;
+    }
+
+    function quantityTextByProvenance(value, status, unit = "") {
+      const text = significantText(value, provenanceDigits(status));
+      return text ? `${text}${unit ? ` ${unit}` : ""}` : "";
+    }
+
+    // Display-only rounding for derived screening figures (batches/year, kg/year, operating
+    // days). The model strings keep formatNumber's three decimals because the checks compare
+    // them exactly, but "204.082 batches/year" on screen is false precision for a screening
+    // estimate in a tool whose stated purpose is to avoid exactly that.
+    function formatDisplayNumber(value) {
+      const number = typeof value === "number" ? value : parseStreamQuantity(value);
+      if (!Number.isFinite(number)) return typeof value === "string" ? value : "";
+      // The scale basis declares its own confidence (rough / estimated / validated); the figures
+      // it produces are shown with two, three or four significant figures accordingly.
+      const confidence = String(state.scaleBasis?.confidence || "rough");
+      const digits = confidence === "validated" ? 4 : confidence === "estimated" ? 3 : 2;
+      return significantText(number, digits);
     }
 
     function massToKg(value, unit) {
@@ -3876,6 +4752,7 @@
         basisAmount: "",
         basisUnit: "kg",
         mode: "batch",
+        planningScenario: "conservative",
         scheduleMethod: "auto",
         operatingDays: "250",
         hoursPerDay: "16",
@@ -3904,6 +4781,7 @@
       if (!scaleTargetUnitOptions.includes(state.scaleBasis.targetUnit)) state.scaleBasis.targetUnit = "kg/batch";
       if (!["kg", "g", "t"].includes(state.scaleBasis.basisUnit)) state.scaleBasis.basisUnit = "kg";
       if (!["batch", "continuous"].includes(state.scaleBasis.mode)) state.scaleBasis.mode = "batch";
+      if (!["conservative", "overlapped"].includes(state.scaleBasis.planningScenario)) state.scaleBasis.planningScenario = "conservative";
       if (!["auto", "duration", "batches_per_day"].includes(state.scaleBasis.scheduleMethod)) state.scaleBasis.scheduleMethod = "auto";
       if (!["rough", "estimated", "validated"].includes(state.scaleBasis.confidence)) state.scaleBasis.confidence = "rough";
       return state.scaleBasis;
@@ -3954,13 +4832,29 @@
       return perYear / (operatingDays * hoursPerDay);
     }
 
+    function annualProductiveHours(basis) {
+      const operatingDays = parseStreamQuantity(basis.operatingDays);
+      const hoursPerDay = parseStreamQuantity(basis.hoursPerDay);
+      const oee = percentFactor(basis.oeePercent, 100);
+      if (!Number.isFinite(operatingDays) || operatingDays <= 0 || !Number.isFinite(hoursPerDay) || hoursPerDay <= 0 || !Number.isFinite(oee) || oee <= 0) return NaN;
+      return operatingDays * hoursPerDay * oee;
+    }
+
+    function planningCycleTimeH(basis) {
+      if (basis.planningScenario === "overlapped") {
+        const gantt = taskScheduleModel();
+        return Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
+      }
+      return effectiveBatchDurationH(basis);
+    }
+
     function effectiveBatchesPerYear(basis) {
       if (basis.scheduleMethod === "batches_per_day") return NaN;
-      const duration = effectiveBatchDurationH(basis);
-      const oee = percentFactor(basis.oeePercent, 100);
+      const duration = planningCycleTimeH(basis);
+      const productiveHours = annualProductiveHours(basis);
       const parallel = parseStreamQuantity(basis.parallelUnits);
-      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(oee) || oee <= 0 || !Number.isFinite(parallel) || parallel <= 0) return NaN;
-      return 8760 * oee * parallel / duration;
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(productiveHours) || productiveHours <= 0 || !Number.isFinite(parallel) || parallel <= 0) return NaN;
+      return productiveHours * parallel / duration;
     }
 
     function effectiveBatchDurationH(basis) {
@@ -3976,19 +4870,30 @@
       const targetBatch = Number.isFinite(targetBatchOverride) && targetBatchOverride > 0 ? targetBatchOverride : targetKgPerBatch(basis);
       const targetYear = targetKgPerYear(basis);
       const duration = effectiveBatchDurationH(basis);
-      const oee = percentFactor(basis.oeePercent, 100);
+      const productiveHours = annualProductiveHours(basis);
       const parallel = parseStreamQuantity(basis.parallelUnits);
       const scheduleMargin = Math.max(0, parseStreamQuantity(basis.scheduleMarginPercent) || 0);
       const plantCycleTime = gantt.plantCycleTimeH;
-      const conservativeBatches = Number.isFinite(duration) && duration > 0 && Number.isFinite(oee)
-        ? 8760 * oee / duration
+      const conservativeBatches = Number.isFinite(duration) && duration > 0 && Number.isFinite(productiveHours) && Number.isFinite(parallel)
+        ? productiveHours * parallel / duration
         : NaN;
-      const overlappedBatches = Number.isFinite(plantCycleTime) && plantCycleTime > 0 && Number.isFinite(oee)
-        ? 8760 * oee / plantCycleTime
+      const overlappedBatches = Number.isFinite(plantCycleTime) && plantCycleTime > 0 && Number.isFinite(productiveHours) && Number.isFinite(parallel)
+        ? productiveHours * parallel / plantCycleTime
         : NaN;
+      // The declared ranges, when any task carries one: makespan and batches per year across the
+      // lower and upper bounds, as text for the panels.
+      const makespanRange = gantt.makespanRangeH;
+      const cycleRange = basis.planningScenario === "overlapped" ? gantt.plantCycleRangeH : makespanRange;
+      const batchesRange = cycleRange && Number.isFinite(productiveHours) && Number.isFinite(parallel) && cycleRange.min > 0 && basis.scheduleMethod !== "batches_per_day"
+        ? { min: productiveHours * parallel / cycleRange.max, max: productiveHours * parallel / cycleRange.min }
+        : null;
       return {
         method: Number.isFinite(effectiveBatches) ? "duration_OEE_parallel_units" : "batches_per_day_days_per_year",
         effectiveBatchesPerYear: Number.isFinite(effectiveBatches) ? formatNumber(effectiveBatches) : "",
+        effectiveBatchesPerYearRange: batchesRange && batchesRange.max - batchesRange.min > 0.05 ? `${significantText(batchesRange.min, 3)}–${significantText(batchesRange.max, 3)}` : "",
+        batchMakespanRangeH: makespanRange && makespanRange.max > makespanRange.min ? rangeHoursText(makespanRange.min, makespanRange.max) : "",
+        plantCycleRangeH: gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max) : "",
+        rangedTaskIds: gantt.rangedTaskIds || [],
         effectiveKgPerBatch: Number.isFinite(targetBatch) ? formatNumber(targetBatch) : "",
         annualCapacityKg: Number.isFinite(targetYear) ? formatNumber(targetYear) : "",
         batchDurationH: Number.isFinite(duration) ? formatNumber(duration) : "",
@@ -3998,83 +4903,256 @@
         overlappedBatchesPerYear: Number.isFinite(overlappedBatches) ? formatNumber(overlappedBatches) : "",
         conservativeKgPerYear: Number.isFinite(conservativeBatches) && Number.isFinite(targetBatch) ? formatNumber(conservativeBatches * targetBatch) : "",
         overlappedKgPerYear: Number.isFinite(overlappedBatches) && Number.isFinite(targetBatch) ? formatNumber(overlappedBatches * targetBatch) : "",
-        oeePercent: Number.isFinite(oee) ? formatNumber(oee * 100) : "",
+        productiveHoursPerYear: Number.isFinite(productiveHours) ? formatNumber(productiveHours) : "",
+        planningScenario: basis.planningScenario,
+        oeePercent: formatNumber(percentFactor(basis.oeePercent, 100) * 100),
         parallelUnits: Number.isFinite(parallel) ? formatNumber(parallel) : "",
         scheduleMarginPercent: formatNumber(scheduleMargin)
       };
     }
 
-    function parseDurationHoursValue(value) {
+    // A declared range ("2-3", "18 to 24") stays a range: the midpoint schedules, and the bounds
+    // travel with the task so the makespan and the plant cycle come out as min / mid / max
+    // instead of a midpoint that looks like a measurement.
+    function parseDurationHoursRange(value) {
       const text = String(value || "").trim().replace(",", ".");
-      if (!text) return NaN;
+      const none = { min: NaN, max: NaN, mid: NaN, isRange: false, text };
+      if (!text) return none;
       const range = text.match(/(\d+(?:\.\d+)?)\s*(?:-|to|–)\s*(\d+(?:\.\d+)?)/i);
       if (range) {
         const lo = Number(range[1]);
         const hi = Number(range[2]);
-        return Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2 : NaN;
+        if (!Number.isFinite(lo) || !Number.isFinite(hi)) return none;
+        const min = Math.min(lo, hi);
+        const max = Math.max(lo, hi);
+        return { min, max, mid: (min + max) / 2, isRange: max > min, text };
       }
       const number = text.match(/[-+]?\d+(?:\.\d+)?/);
-      return number ? Number(number[0]) : NaN;
+      if (!number) return none;
+      const single = Number(number[0]);
+      return { min: single, max: single, mid: single, isRange: false, text };
+    }
+
+    function parseDurationHoursValue(value) {
+      return parseDurationHoursRange(value).mid;
+    }
+
+    function rangeHoursText(min, max, digits = 3) {
+      if (!Number.isFinite(min) || !Number.isFinite(max)) return "";
+      return `${significantText(min, digits)}–${significantText(max, digits)} h`;
+    }
+
+    // Resolves each task's predecessor(s). "auto" tasks implicitly branch off the nearest earlier
+    // *blocking* task (canOverlap !== "yes") in text order - this exactly reproduces the legacy
+    // cursor-sum behavior when nobody has customized anything, and - unlike simply chaining every
+    // task to the one immediately before it - correctly treats consecutive canOverlap: yes tasks
+    // (e.g. several side branches listed one after another, such as vent abatement / solvent
+    // recovery / wastewater interface) as independent siblings off that same blocking task rather
+    // than as a fabricated sequential chain between them. "manual" tasks use the explicit
+    // predecessorIds the user picked instead, so real branches and recycle loops can be modeled.
+    function resolveTaskPredecessors(tasks) {
+      const idSet = new Set(tasks.map(task => task.groupId));
+      let lastBlockingId = null;
+      tasks.forEach(task => {
+        if (task.dependencyMode === "manual") {
+          task.resolvedPredecessorIds = task.predecessorIds.filter(id => id !== task.groupId && idSet.has(id));
+        } else {
+          task.resolvedPredecessorIds = lastBlockingId ? [lastBlockingId] : [];
+          if (task.canOverlap !== "yes") lastBlockingId = task.groupId;
+        }
+      });
+    }
+
+    // Manual predecessorIds can form a cycle (e.g. A waits on B and B waits on A). Cut every
+    // loop-closing edge *before* the forward/backward passes run, rather than detecting it inline
+    // during their recursion: a task can be reached along more than one path (it can be both a
+    // predecessor of, and a successor to, other members of a diamond-shaped graph), so an inline
+    // "currently visiting" check fires on ordinary shared-ancestor graphs too, not just true cycles,
+    // and once it fires there is no safe placeholder value to hand back mid-recursion - whatever is
+    // written gets silently clobbered the moment the recursion unwinds back through the real edge.
+    // Pruning first guarantees resolvedPredecessorIds is a DAG by the time either pass touches it, so
+    // both passes can do a plain memoized walk with no special-casing.
+    function pruneCyclicPredecessors(tasks) {
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const state = new Map();
+      const stack = [];
+      const cyclicIds = new Set();
+      function visit(task) {
+        if (state.get(task.groupId) === "done") return;
+        state.set(task.groupId, "visiting");
+        stack.push(task.groupId);
+        const keep = [];
+        task.resolvedPredecessorIds.forEach(predId => {
+          if (state.get(predId) === "visiting") {
+            const loopStart = stack.indexOf(predId);
+            stack.slice(loopStart).forEach(id => cyclicIds.add(id));
+            return;
+          }
+          keep.push(predId);
+          const pred = byId.get(predId);
+          if (pred) visit(pred);
+        });
+        task.resolvedPredecessorIds = keep;
+        stack.pop();
+        state.set(task.groupId, "done");
+      }
+      tasks.forEach(visit);
+      tasks.forEach(task => { task.cyclicDependency = cyclicIds.has(task.groupId); });
+    }
+
+    // Forward pass over the dependency graph (a simple activity-on-node network). Each task starts
+    // once every predecessor has reached its "gating" point: a blocking predecessor (canOverlap !==
+    // "yes" in auto mode, or any predecessor in manual mode) gates on its own finish; an
+    // auto-mode overlap predecessor gates on its own start, since it is explicitly allowed to still
+    // be running once the next task begins. A task's real finishH (start + its own duration) is
+    // tracked separately and always counts toward the overall makespan below - so a long side branch
+    // (e.g. a solvent-recovery column marked canOverlap: yes) can no longer silently run past the
+    // point where the main chain says the batch is "done", which the old cursor-only sum allowed.
+    // Assumes resolvedPredecessorIds is already a DAG (see pruneCyclicPredecessors above).
+    function computeTaskTimes(tasks) {
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const done = new Set();
+      function resolve(task) {
+        if (done.has(task.groupId)) return;
+        done.add(task.groupId);
+        const preds = task.resolvedPredecessorIds.map(id => byId.get(id)).filter(Boolean);
+        preds.forEach(resolve);
+        const start = preds.length ? Math.max(...preds.map(pred => pred.gatingFinishH)) : 0;
+        const finish = start + (Number.isFinite(task.effectiveTimeH) ? task.effectiveTimeH : 0);
+        task.startH = start;
+        task.finishH = finish;
+        task.gatingFinishH = task.dependencyMode !== "manual" && task.canOverlap === "yes" ? start : finish;
+      }
+      tasks.forEach(resolve);
+    }
+
+    // Backward CPM pass: zero-slack tasks are the true batch-makespan critical path.
+    function computeCriticalPath(tasks, totalEnd) {
+      if (!Number.isFinite(totalEnd)) {
+        tasks.forEach(task => { task.slackH = NaN; task.onCriticalPath = false; });
+        return;
+      }
+      const byId = new Map(tasks.map(task => [task.groupId, task]));
+      const successorIds = new Map(tasks.map(task => [task.groupId, []]));
+      tasks.forEach(task => task.resolvedPredecessorIds.forEach(predId => {
+        if (successorIds.has(predId)) successorIds.get(predId).push(task.groupId);
+      }));
+      const gateDuration = task => task.gatingFinishH - task.startH;
+      const realDuration = task => Number.isFinite(task.effectiveTimeH) ? task.effectiveTimeH : 0;
+      const done = new Set();
+      function resolve(task) {
+        if (done.has(task.groupId)) return;
+        done.add(task.groupId);
+        const succTasks = (successorIds.get(task.groupId) || []).map(id => byId.get(id)).filter(Boolean);
+        succTasks.forEach(resolve);
+        const selfConstraint = totalEnd - realDuration(task) + gateDuration(task);
+        const successorConstraints = succTasks.map(succ => succ.lateGateH - gateDuration(succ));
+        task.lateGateH = Math.min(selfConstraint, ...successorConstraints);
+      }
+      tasks.forEach(resolve);
+      tasks.forEach(task => {
+        const lateStartRealH = task.lateGateH - gateDuration(task);
+        task.slackH = lateStartRealH - task.startH;
+        task.onCriticalPath = Number.isFinite(task.slackH) && Math.abs(task.slackH) < 1e-4;
+      });
     }
 
     function taskScheduleModel() {
-      const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index));
+      return memoInPass("taskScheduleModel", undefined, () => taskScheduleModelUncached());
+    }
+
+    // `bound` picks which end of every declared range schedules: the midpoint by default; the
+    // lower and upper bounds are run once more each when any task carries a range, so the
+    // makespan and the plant cycle are reported as min / mid / max.
+    function taskScheduleModelUncached(bound = "mid") {
+      const tasks = groupIdsInTextOrder().map((groupId, index) => taskScheduleEntry(groupModel(groupId), index, bound));
       const timed = tasks.filter(task => Number.isFinite(task.durationH) && task.durationH > 0);
+      resolveTaskPredecessors(tasks);
+      pruneCyclicPredecessors(tasks);
+      computeTaskTimes(tasks);
+
+      // Plant cycle is the slowest single stage; batch makespan follows dependencies.
       const ranked = [...timed].sort((a, b) => b.effectiveTimeH - a.effectiveTimeH);
       const maxEffective = ranked.length ? ranked[0].effectiveTimeH : NaN;
-      const secondEffective = ranked[1]?.effectiveTimeH ?? 0;
-      const bottleneckGapH = Number.isFinite(maxEffective) ? maxEffective - secondEffective : NaN;
-      const bottleneckGapPercent = Number.isFinite(maxEffective) && maxEffective > 0 ? bottleneckGapH / maxEffective * 100 : NaN;
-      const criticalBottleneck = ranked.length === 1
-        ? Number.isFinite(maxEffective) && maxEffective >= bottleneckThresholds.minGapH
+
+      const finishValues = tasks.filter(task => Number.isFinite(task.finishH)).map(task => task.finishH);
+      const estimatedCycleTimeH = timed.length && finishValues.length ? Math.max(...finishValues) : NaN;
+      computeCriticalPath(tasks, estimatedCycleTimeH);
+
+      // Bottleneck is the longest task on the dependency critical path.
+      const criticalRanked = timed.filter(task => task.onCriticalPath).sort((a, b) => b.effectiveTimeH - a.effectiveTimeH);
+      const maxCritical = criticalRanked.length ? criticalRanked[0].effectiveTimeH : NaN;
+      const secondCritical = criticalRanked[1]?.effectiveTimeH ?? 0;
+      const bottleneckGapH = Number.isFinite(maxCritical) ? maxCritical - secondCritical : NaN;
+      const bottleneckGapPercent = Number.isFinite(maxCritical) && maxCritical > 0 ? bottleneckGapH / maxCritical * 100 : NaN;
+      const criticalBottleneck = criticalRanked.length === 1
+        ? Number.isFinite(maxCritical) && maxCritical >= bottleneckThresholds.minGapH
         : Number.isFinite(bottleneckGapH)
           && bottleneckGapH >= bottleneckThresholds.minGapH
           && Number.isFinite(bottleneckGapPercent)
           && bottleneckGapPercent >= bottleneckThresholds.minGapPercent;
-      const bottleneck = criticalBottleneck ? ranked[0] : null;
+      const bottleneck = criticalBottleneck ? criticalRanked[0] : null;
       const bottleneckStatus = timed.length
         ? criticalBottleneck
           ? "critical"
           : "balanced"
         : "missing";
-      let cursor = 0;
       tasks.forEach(task => {
-        task.startH = Number.isFinite(task.effectiveTimeH) ? cursor : NaN;
         task.widthPercent = Number.isFinite(task.effectiveTimeH) && Number.isFinite(maxEffective) && maxEffective > 0
           ? Math.max(4, Math.min(100, task.effectiveTimeH / maxEffective * 100))
           : 0;
         task.isBottleneck = Boolean(bottleneck && task.groupId === bottleneck.groupId);
-        if (Number.isFinite(task.effectiveTimeH) && task.canOverlap !== "yes") cursor += task.effectiveTimeH;
       });
-      const estimatedCycleTimeH = timed.length ? tasks.reduce((sum, task) => {
-        if (!Number.isFinite(task.effectiveTimeH) || task.canOverlap === "yes") return sum;
-        return sum + task.effectiveTimeH;
-      }, 0) : NaN;
-      const oee = percentFactor(ensureScaleBasis().oeePercent, 100);
-      const batchesPerYear = Number.isFinite(estimatedCycleTimeH) && estimatedCycleTimeH > 0 && Number.isFinite(oee)
-        ? 8760 * oee / estimatedCycleTimeH
+      const basis = ensureScaleBasis();
+      const productiveHours = annualProductiveHours(basis);
+      const parallelTrains = parseStreamQuantity(basis.parallelUnits);
+      const batchesPerYear = Number.isFinite(estimatedCycleTimeH) && estimatedCycleTimeH > 0 && Number.isFinite(productiveHours) && Number.isFinite(parallelTrains)
+        ? productiveHours * parallelTrains / estimatedCycleTimeH
         : NaN;
+      const rangedTasks = tasks.filter(task => task.durationIsRange);
+      let makespanRangeH = null;
+      let plantCycleRangeH = null;
+      let batchesPerYearRange = null;
+      if (bound === "mid" && rangedTasks.length) {
+        const low = taskScheduleModelUncached("min");
+        const high = taskScheduleModelUncached("max");
+        const span = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? { min: Math.min(a, b), max: Math.max(a, b) } : null);
+        makespanRangeH = span(low.estimatedCycleTimeH, high.estimatedCycleTimeH);
+        plantCycleRangeH = span(low.plantCycleTimeH, high.plantCycleTimeH);
+        batchesPerYearRange = span(low.batchesPerYear, high.batchesPerYear);
+      }
       return {
         tasks,
         bottleneck,
-        bottleneckCandidate: ranked[0] || null,
+        bottleneckCandidate: criticalRanked[0] || null,
         bottleneckStatus,
         bottleneckGapH,
         bottleneckGapPercent,
         estimatedCycleTimeH,
         plantCycleTimeH: maxEffective,
         batchesPerYear,
+        makespanRangeH,
+        plantCycleRangeH,
+        batchesPerYearRange,
+        rangedTaskIds: rangedTasks.map(task => task.groupId),
         ready: timed.length > 0,
-        missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length
+        missingDurationCount: tasks.filter(task => !Number.isFinite(task.durationH)).length,
+        cyclicDependencyGroupIds: tasks.filter(task => task.cyclicDependency).map(task => task.groupId)
       };
     }
 
-    function taskScheduleEntry(group, index) {
+    function taskScheduleEntry(group, index, bound = "mid") {
       const raw = ensureGroup(group.id);
       const schedule = raw.schedule;
       const inferred = inferGroupDurationInfo(group);
-      const manualDuration = parseDurationHoursValue(schedule.durationH);
-      const durationH = Number.isFinite(manualDuration) && manualDuration > 0 ? manualDuration : inferred.durationH;
+      const manualRange = parseDurationHoursRange(schedule.durationH);
+      const manualDuration = manualRange.mid;
+      const useManual = Number.isFinite(manualDuration) && manualDuration > 0;
+      const durationMidH = useManual ? manualDuration : inferred.durationH;
+      const durationMinH = useManual ? manualRange.min : inferred.minH;
+      const durationMaxH = useManual ? manualRange.max : inferred.maxH;
+      const durationIsRange = useManual ? manualRange.isRange : Boolean(inferred.isRange);
+      const durationH = durationIsRange && bound === "min" ? durationMinH : durationIsRange && bound === "max" ? durationMaxH : durationMidH;
       const parallel = Math.max(1, parseDurationHoursValue(schedule.parallelUnits) || 1);
       const hasManualOperationClass = schedule.operationClass && schedule.operationClass !== "auto" && scheduleOperationClassOptions.includes(schedule.operationClass);
       const operationClass = hasManualOperationClass
@@ -4096,10 +5174,15 @@
         blocks: group.blocks.map(block => block.id),
         durationInput: schedule.durationH,
         durationH,
+        durationMinH: durationIsRange ? durationMinH : durationH,
+        durationMaxH: durationIsRange ? durationMaxH : durationH,
+        durationIsRange,
         adjustedDurationH,
         durationSource: Number.isFinite(manualDuration) && manualDuration > 0 ? "manual" : inferred.source,
         parallelUnits: parallel,
         canOverlap: scheduleOverlapOptions.includes(schedule.canOverlap) ? schedule.canOverlap : "no",
+        dependencyMode: schedule.dependencyMode === "manual" ? "manual" : "auto",
+        predecessorIds: Array.isArray(schedule.predecessorIds) ? schedule.predecessorIds.slice() : [],
         capacityAmount: schedule.capacityAmount || "",
         capacityUnit: capacityUnitOptions.includes(schedule.capacityUnit) && schedule.capacityUnit
           ? schedule.capacityUnit
@@ -4137,22 +5220,115 @@
     }
 
     function inferGroupDurationInfo(group) {
-      const conditionDurations = aggregateGroupConditions(group)
-        .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
-        .flatMap(item => item.entries || [])
-        .map(entry => parseDurationHoursValue(entry.value))
-        .filter(value => Number.isFinite(value) && value > 0);
-      if (conditionDurations.length) {
-        return { durationH: conditionDurations.reduce((sum, value) => sum + value, 0), source: "condition sum" };
+      const schedule = groupTimeSchedule(group);
+      if (schedule.rows.length) {
+        // The timetable total may merge concurrent entries; the declared spread of each entry is
+        // carried as an offset on the total rather than re-derived, which keeps concurrency intact.
+        const below = schedule.rows.reduce((sum, row) => sum + (row.durationIsRange ? row.durationH - row.durationMinH : 0), 0);
+        const above = schedule.rows.reduce((sum, row) => sum + (row.durationIsRange ? row.durationMaxH - row.durationH : 0), 0);
+        return { durationH: schedule.totalH, minH: schedule.totalH - below, maxH: schedule.totalH + above, isRange: below > 0 || above > 0, source: "task timetable" };
       }
-      const textDurations = extractDurationHoursAll(group.text);
+      const textDurations = extractDurationRangesAll(group.text);
       if (textDurations.length) {
-        return { durationH: textDurations.reduce((sum, value) => sum + value, 0), source: "text duration" };
+        const sum = key => textDurations.reduce((total, item) => total + item[key], 0);
+        return { durationH: sum("mid"), minH: sum("min"), maxH: sum("max"), isRange: textDurations.some(item => item.isRange), source: "text duration" };
       }
-      return { durationH: NaN, source: "missing" };
+      return { durationH: NaN, minH: NaN, maxH: NaN, isRange: false, source: "missing" };
     }
 
-    function extractDurationHoursAll(text) {
+    // Every additive time entry (mixing_time, holding_time, ...) on every block in the group is its
+    // own timeline "phenomenon" by default, so with no concurrency links set this reproduces the old
+    // plain sum. Marking two entries "contemporaneo a" each other merges them (via the entryKey graph
+    // below) into one cluster whose contribution to the task duration is the slowest member only -
+    // the others run nested inside it rather than adding on top.
+    function groupTimeEntries(group) {
+      return aggregateGroupConditions(group)
+        .filter(item => additiveConditionIds().has(item.id) && (item.unit || "") === "h")
+        .flatMap(item => item.entries || [])
+        .map(entry => {
+          const range = parseDurationHoursRange(entry.value);
+          return {
+            key: `${entry.blockId}::${entry.id}`,
+            blockId: entry.blockId,
+            id: entry.id,
+            label: entry.label,
+            phenomena: entry.phenomena || [],
+            durationH: range.mid,
+            durationMinH: range.min,
+            durationMaxH: range.max,
+            durationIsRange: range.isRange
+          };
+        })
+        .filter(entry => Number.isFinite(entry.durationH) && entry.durationH > 0);
+    }
+
+    function groupTimeClusters(group) {
+      const entries = groupTimeEntries(group);
+      if (!entries.length) return [];
+      const concurrency = ensureGroup(group.id).timeConcurrency || {};
+      const entryKeys = new Set(entries.map(entry => entry.key));
+      const parent = new Map(entries.map(entry => [entry.key, entry.key]));
+      const find = key => {
+        let root = key;
+        while (parent.get(root) !== root) root = parent.get(root);
+        let cursor = key;
+        while (parent.get(cursor) !== root) {
+          const next = parent.get(cursor);
+          parent.set(cursor, root);
+          cursor = next;
+        }
+        return root;
+      };
+      entries.forEach(entry => {
+        const partnerKey = concurrency[entry.key];
+        if (!partnerKey || !entryKeys.has(partnerKey) || partnerKey === entry.key) return;
+        const rootA = find(entry.key);
+        const rootB = find(partnerKey);
+        if (rootA !== rootB) parent.set(rootA, rootB);
+      });
+      const clusters = new Map();
+      entries.forEach(entry => {
+        const root = find(entry.key);
+        if (!clusters.has(root)) clusters.set(root, []);
+        clusters.get(root).push(entry);
+      });
+      return Array.from(clusters.values()).map(members => ({
+        members: members.slice().sort((a, b) => b.durationH - a.durationH),
+        totalH: Math.max(...members.map(m => m.durationH))
+      }));
+    }
+
+    function groupTimeSchedule(group) {
+      const entries = groupTimeEntries(group);
+      if (!entries.length) return { rows: [], totalH: 0, overlapCount: 0 };
+      const offsets = ensureGroup(group.id).timeOffsets || {};
+      const defaultStarts = new Map();
+      let cursorH = 0;
+      groupTimeClusters(group).forEach(cluster => {
+        cluster.members.forEach(entry => defaultStarts.set(entry.key, cursorH));
+        cursorH += cluster.totalH;
+      });
+      const rows = entries.map(entry => {
+        const explicitStart = Number(offsets[entry.key]);
+        const startH = Number.isFinite(explicitStart) && explicitStart >= 0
+          ? explicitStart
+          : defaultStarts.get(entry.key) || 0;
+        return { ...entry, startH, finishH: startH + entry.durationH };
+      });
+      let overlapCount = 0;
+      rows.forEach((entry, index) => {
+        rows.slice(index + 1).forEach(other => {
+          if (rangesOverlap(entry.startH, entry.finishH, other.startH, other.finishH)) overlapCount += 1;
+        });
+      });
+      return {
+        rows,
+        totalH: Math.max(...rows.map(entry => entry.finishH)),
+        overlapCount
+      };
+    }
+
+    function extractDurationRangesAll(text) {
       const values = [];
       const regex = /(\d+(?:[.,]\d+)?)\s*(?:(?:-|to|–)\s*(\d+(?:[.,]\d+)?))?\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes)\b/gi;
       let match;
@@ -4160,11 +5336,16 @@
         const lo = Number(match[1].replace(",", "."));
         const hi = match[2] ? Number(match[2].replace(",", ".")) : lo;
         if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue;
-        const unit = match[3].toLowerCase();
-        const value = (lo + hi) / 2;
-        values.push(unit.startsWith("min") ? value / 60 : value);
+        const factor = match[3].toLowerCase().startsWith("min") ? 1 / 60 : 1;
+        const min = Math.min(lo, hi) * factor;
+        const max = Math.max(lo, hi) * factor;
+        values.push({ min, max, mid: (min + max) / 2, isRange: max > min });
       }
       return values;
+    }
+
+    function extractDurationHoursAll(text) {
+      return extractDurationRangesAll(text).map(item => item.mid);
     }
 
     function inferGroupScaleSensitivity(group) {
@@ -4215,12 +5396,12 @@
         missing.push("U/A if quantitative correction is needed");
       } else if (operationClass === "reaction_kinetic") {
         need("reaction time", Boolean(conditionMap.reaction_time || conditionMap.holding_time));
-        need("conversion/yield", Boolean(conditionMap.conversion_yield));
+        need("reaction yield", Boolean(conditionMap.conversion_yield));
         if (group.phenomena.some(code => code.startsWith("M(") || code.startsWith("2phM("))) need("mixing adequacy", Boolean(conditionMap.mixing_time || conditionMap.agitation_speed || conditionMap.agitation_note));
         if (group.phenomena.some(code => ["ES(H)", "ES(C)"].includes(code))) need("heat-removal/thermal control note", Boolean(conditionMap.thermal_mode || conditionMap.thermal_ramp));
       } else if (operationClass === "filtration") {
         need("solid loading", Boolean(conditionMap.solid_loading));
-        need("particle/cake behaviour", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size") || propertyHasValue(group, "cake_resistance")));
+        need("particle/cake behaviour", Boolean(conditionMap.cake_or_particle_note));
         missing.push("filter area / cake resistance if quantitative correction is needed");
       } else if (operationClass === "drying") {
         need("wet inventory", hasStreams);
@@ -4230,9 +5411,8 @@
         need("transfer volume or mass", hasStreams);
         need("flow rate / transfer time", Boolean(conditionMap.contact_time || conditionMap.transfer_endpoint));
       } else if (operationClass === "crystallization") {
-        need("solubility", propertyHasValue(group, "solubility"));
         need("cooling/supersaturation profile", Boolean(conditionMap.thermal_ramp || conditionMap.transfer_endpoint));
-        need("seed/particle target", Boolean(conditionMap.cake_or_particle_note || propertyHasValue(group, "particle_size")));
+        need("seed/particle target", Boolean(conditionMap.cake_or_particle_note));
       } else if (operationClass === "cleaning_turnaround") {
         need("cleaning/turnaround duration", Boolean(conditionMap.contact_time || conditionMap.holding_time));
         missing.push("surface/CIP basis if quantitative correction is needed");
@@ -4255,28 +5435,39 @@
       const candidates = candidateBasisStreams();
       if (!candidates.length) return null;
       const product = String(basis.targetProduct || "").trim().toLowerCase();
-      const byBlock = basis.referenceBlockId
-        ? candidates.find(item => item.block.id === basis.referenceBlockId)
-        : null;
-      if (byBlock) return byBlock;
-      if (product) {
-        const byName = candidates.find(item => item.stream.name.toLowerCase().includes(product));
-        if (byName) return byName;
+      const bestCandidate = list => {
+        if (!list.length) return null;
+        if (product) {
+          const byName = list.find(item => item.stream.name.toLowerCase().includes(product));
+          if (byName) return byName;
+        }
+        const declaredProduct = list.find(item => item.stream.fate === "product");
+        if (declaredProduct) return declaredProduct;
+        const finalOutput = list.find(item => item.stream.timing === "final output");
+        return finalOutput || list[list.length - 1];
+      };
+      if (basis.referenceBlockId) {
+        const fromSelectedBlock = bestCandidate(candidates.filter(item => item.block.id === basis.referenceBlockId));
+        if (fromSelectedBlock) return fromSelectedBlock;
       }
-      const finalOutput = candidates.find(item => item.stream.timing === "final output");
-      return finalOutput || candidates[candidates.length - 1];
+      return bestCandidate(candidates);
     }
 
     function scaleModel() {
+      return memoInPass("scaleModel", undefined, () => scaleModelUncached());
+    }
+
+    function scaleModelUncached() {
       const basis = ensureScaleBasis();
       const reference = inferReferenceStream(basis);
       const manualBasisKg = massToKg(basis.basisAmount, basis.basisUnit);
       const inferredBasisKg = reference ? massToKg(reference.stream.quantity, reference.stream.unit) : NaN;
       const basisKg = Number.isFinite(manualBasisKg) && manualBasisKg > 0 ? manualBasisKg : inferredBasisKg;
       const manualProductBatchKg = parseStreamQuantity(basis.productKgPerBatch);
-      const targetBatchKg = Number.isFinite(manualProductBatchKg) && manualProductBatchKg > 0
+      const targetBatchKg = targetKgPerBatch(basis);
+      const sizingBatchKg = Number.isFinite(manualProductBatchKg) && manualProductBatchKg > 0
         ? manualProductBatchKg
-        : targetKgPerBatch(basis);
+        : targetBatchKg;
       const productFactor = Number.isFinite(targetBatchKg) && Number.isFinite(basisKg) && basisKg > 0 ? targetBatchKg / basisKg : NaN;
       const upstreamFactor = productFactor;
       const blocks = blocksInOrder().map(block => {
@@ -4288,7 +5479,7 @@
         };
       });
       const rows = blocks.flatMap(block => block.streams);
-      const reactorSizing = reactorSizingModel(basis, targetBatchKg, rows, reference);
+      const reactorSizing = reactorSizingModel(basis, sizingBatchKg, rows, reference, targetBatchKg);
       return {
         basis,
         reference: reference ? {
@@ -4315,12 +5506,18 @@
       };
     }
 
+    // The reactor to size is chosen from evidence, in a fixed order: the first group that
+    // declares a reaction phenomenon, then the group that makes the reference product if it
+    // looks like a reactor, then the selected group, then a wording match. The selected group
+    // used to come first, so the sizing basis changed with whatever the user had clicked.
     function reactorSizingGroupId(basis, reference) {
-      const selected = selectedGroup();
-      if (selected && reactionReactorLikeGroup(selected)) return selected.id;
+      const ids = groupIdsInTextOrder();
+      const declaredReaction = ids.find(id => (groupModel(id)?.phenomena || []).some(code => code.startsWith("R(")));
+      if (declaredReaction) return declaredReaction;
       const referenceGroup = reference?.block?.groupId ? groupModel(reference.block.groupId) : null;
       if (referenceGroup && reactionReactorLikeGroup(referenceGroup)) return referenceGroup.id;
-      const ids = groupIdsInTextOrder();
+      const selected = selectedGroup();
+      if (selected && reactionReactorLikeGroup(selected)) return selected.id;
       const reactionId = ids.find(id => reactionReactorLikeGroup(groupModel(id)));
       if (reactionId) return reactionId;
       return ids.find(id => /reactor|vessel|tank|batch|semi-batch|cstr/i.test(`${ensureGroup(id).selectedUnit || ""} ${ensureGroup(id).task || ""}`)) || "";
@@ -4330,6 +5527,23 @@
       if (!group) return false;
       const text = `${group.task || ""} ${group.selectedUnit || ""} ${group.text || ""}`.toLowerCase();
       return (group.phenomena || []).some(code => code.startsWith("R(")) || /reactor|reaction|batch|semi-batch|cstr/.test(text);
+    }
+
+    function reactionSizingBasis(groupId) {
+      const group = groupId ? groupModel(groupId) : null;
+      if (!group) return { productMw: NaN, waterMolPerMol: NaN, source: "manual override" };
+      const balance = reactionBalanceModel(group);
+      const product = balance?.mainProduct;
+      const productStoich = parseStreamQuantity(product?.stoich);
+      const water = (balance?.rows || []).find(row => row.role === "byproduct" && /\bwater\b|\bh2o\b/i.test(row.name || ""));
+      const waterStoich = parseStreamQuantity(water?.stoich);
+      return {
+        productMw: parseStreamQuantity(product?.mw),
+        waterMolPerMol: Number.isFinite(productStoich) && productStoich > 0 && Number.isFinite(waterStoich) && waterStoich >= 0
+          ? waterStoich / productStoich
+          : NaN,
+        source: product ? `Reaction Balance (${groupId})` : "manual override"
+      };
     }
 
     function solventLikeScaleRow(row) {
@@ -4369,6 +5583,19 @@
         .filter(item => !solventLikeScaleRow(item.row))
         .reduce((sum, item) => sum + item.value, 0);
       const totalChargeM3 = converted.reduce((sum, item) => sum + item.value, 0);
+      // Mass-balance sanity check: the charge cannot weigh less than the product batch it has to
+      // produce. When it does, the MFA rows are still carrying lab-scale numbers - typically because
+      // their scaling mode is "per batch", which tells the engine they are already final and must not
+      // be multiplied by the product factor. Without this guard the model happily returned a
+      // lab-sized reactor (tens of litres) for an industrial target and reported no missing data.
+      const chargeMassKg = Number.isFinite(densityKgM3) ? totalChargeM3 * densityKgM3 : NaN;
+      if (Number.isFinite(chargeMassKg) && chargeMassKg > 0 && chargeMassKg < targetBatchKg) {
+        return {
+          ready: false,
+          groupId,
+          missing: [`${groupId} MFA charge is about ${formatNumber(chargeMassKg)} kg, below the ${formatNumber(targetBatchKg)} kg/batch product target - check the stream scaling mode ("per batch" keeps lab values unscaled)`]
+        };
+      }
       return {
         ready: true,
         groupId,
@@ -4383,7 +5610,7 @@
     // Returns the calculated MINIMUM working volume at the stated fill fraction, not an as-built
     // vessel size: real reactor selection adds a design margin (commonly ~10%) on top of this
     // figure and rounds up to the nearest standard manufacturer size.
-    function reactorSizingModel(basis, targetBatchKg, scaleRows = [], reference = null) {
+    function reactorSizingModel(basis, targetBatchKg, scaleRows = [], reference = null, scaledRowsBatchKg = targetBatchKg) {
       const productBatchKg = Number.isFinite(targetBatchKg) && targetBatchKg > 0 ? targetBatchKg : NaN;
       // Both reactants and solvent are stored as L per kg product (recipe ratios, assumed scale-invariant),
       // not as fixed m3 totals, so the charge volume scales automatically with the target batch size instead
@@ -4391,8 +5618,11 @@
       const reactantsLoadingLPerKg = parseStreamQuantity(basis.reactantsLoadingLPerKgProduct);
       const solventLoadingLPerKg = parseStreamQuantity(basis.solventLoadingLPerKgProduct);
       const workingFill = percentFactor(basis.reactorWorkingFillPercent, 70);
-      const mw = parseStreamQuantity(basis.productMolecularWeightGmol);
-      const waterStoich = parseStreamQuantity(basis.condensationWaterMolPerMol);
+      const reactionBasis = reactionSizingBasis(reactorSizingGroupId(basis, reference));
+      const manualMw = parseStreamQuantity(basis.productMolecularWeightGmol);
+      const manualWaterStoich = parseStreamQuantity(basis.condensationWaterMolPerMol);
+      const mw = Number.isFinite(manualMw) && manualMw > 0 ? manualMw : reactionBasis.productMw;
+      const waterStoich = Number.isFinite(manualWaterStoich) && manualWaterStoich >= 0 ? manualWaterStoich : reactionBasis.waterMolPerMol;
       const manualReactantsVolumeM3 = Number.isFinite(productBatchKg) && Number.isFinite(reactantsLoadingLPerKg) && reactantsLoadingLPerKg >= 0
         ? productBatchKg * reactantsLoadingLPerKg / 1000
         : NaN;
@@ -4400,7 +5630,20 @@
         ? productBatchKg * solventLoadingLPerKg / 1000
         : NaN;
       const manualReady = Number.isFinite(manualReactantsVolumeM3) || Number.isFinite(manualSolventVolumeM3);
-      const autoCharge = manualReady ? { ready: false, missing: [] } : reactorAutoChargeModel(basis, productBatchKg, scaleRows, reference);
+      const manualIncomplete = manualReady && !(Number.isFinite(manualReactantsVolumeM3) && Number.isFinite(manualSolventVolumeM3));
+      const autoChargeRaw = manualReady ? { ready: false, missing: [] } : reactorAutoChargeModel(basis, scaledRowsBatchKg, scaleRows, reference);
+      const autoScaleFactor = Number.isFinite(productBatchKg) && productBatchKg > 0 && Number.isFinite(scaledRowsBatchKg) && scaledRowsBatchKg > 0
+        ? productBatchKg / scaledRowsBatchKg
+        : 1;
+      const autoCharge = autoChargeRaw.ready && autoScaleFactor !== 1
+        ? {
+            ...autoChargeRaw,
+            reactantsVolumeM3: autoChargeRaw.reactantsVolumeM3 * autoScaleFactor,
+            solventVolumeM3: autoChargeRaw.solventVolumeM3 * autoScaleFactor,
+            totalChargeM3: autoChargeRaw.totalChargeM3 * autoScaleFactor,
+            source: `${autoChargeRaw.source}; adjusted to sizing batch`
+          }
+        : autoChargeRaw;
       const reactantsVolumeM3 = manualReady
         ? (Number.isFinite(manualReactantsVolumeM3) ? manualReactantsVolumeM3 : 0)
         : autoCharge.reactantsVolumeM3;
@@ -4411,16 +5654,16 @@
         ? reactantsVolumeM3 + solventVolumeM3
         : autoCharge.totalChargeM3;
       const source = manualReady
-        ? "manual L/kg product recipe loadings"
+        ? manualIncomplete ? "partial manual L/kg product loadings (lower bound)" : "manual L/kg product recipe loadings"
         : autoCharge.ready
           ? autoCharge.source
           : "waiting for automatic MFA charge volume";
-      const reactantsLoadingOut = Number.isFinite(reactantsLoadingLPerKg)
+      const reactantsLoadingOut = manualReady
         ? reactantsLoadingLPerKg
         : Number.isFinite(productBatchKg) && Number.isFinite(reactantsVolumeM3)
           ? reactantsVolumeM3 * 1000 / productBatchKg
           : NaN;
-      const solventLoadingOut = Number.isFinite(solventLoadingLPerKg)
+      const solventLoadingOut = manualReady
         ? solventLoadingLPerKg
         : Number.isFinite(productBatchKg) && Number.isFinite(solventVolumeM3)
           ? solventVolumeM3 * 1000 / productBatchKg
@@ -4435,13 +5678,16 @@
       return {
         productBatchKg: Number.isFinite(productBatchKg) ? formatNumber(productBatchKg) : "",
         reactantsLoadingLPerKgProduct: Number.isFinite(reactantsLoadingOut) ? formatNumber(reactantsLoadingOut) : "",
-        reactantsVolumeM3: Number.isFinite(reactantsVolumeM3) ? formatNumber(reactantsVolumeM3) : "",
+        reactantsVolumeM3: manualReady && !Number.isFinite(manualReactantsVolumeM3) ? "" : Number.isFinite(reactantsVolumeM3) ? formatNumber(reactantsVolumeM3) : "",
         solventLoadingLPerKgProduct: Number.isFinite(solventLoadingOut) ? formatNumber(solventLoadingOut) : "",
-        solventVolumeM3: Number.isFinite(solventVolumeM3) ? formatNumber(solventVolumeM3) : "",
+        solventVolumeM3: manualReady && !Number.isFinite(manualSolventVolumeM3) ? "" : Number.isFinite(solventVolumeM3) ? formatNumber(solventVolumeM3) : "",
         totalChargeM3: Number.isFinite(totalChargeM3) ? formatNumber(totalChargeM3) : "",
         workingFillPercent: Number.isFinite(workingFill) ? formatNumber(workingFill * 100) : "",
         reactorVolumeM3: Number.isFinite(reactorVolumeM3) ? formatNumber(reactorVolumeM3) : "",
         generatedWaterKg: Number.isFinite(generatedWaterKg) ? formatNumber(generatedWaterKg) : "",
+        productMolecularWeightGmol: Number.isFinite(mw) ? formatNumber(mw) : "",
+        waterMolPerMol: Number.isFinite(waterStoich) ? formatNumber(waterStoich) : "",
+        stoichiometrySource: Number.isFinite(manualMw) || Number.isFinite(manualWaterStoich) ? "manual override" : reactionBasis.source,
         source,
         autoGroupId: autoCharge.groupId || "",
         autoReady: Boolean(autoCharge.ready),
@@ -4449,6 +5695,8 @@
         missing: [...new Set([
           Number.isFinite(productBatchKg) ? "" : "product kg/batch",
           manualReady || autoCharge.ready ? "" : "reactants/solvent loading or MFA volume",
+          manualReady && !Number.isFinite(manualReactantsVolumeM3) ? "reactants loading" : "",
+          manualReady && !Number.isFinite(manualSolventVolumeM3) ? "solvent loading" : "",
           Number.isFinite(workingFill) ? "" : "working fill",
           Number.isFinite(mw) ? "" : "product MW for stoichiometric water",
           ...(autoCharge.missing || [])
@@ -4542,19 +5790,29 @@
           : { value: NaN, unit: "kg/h", source: "missing load or time" };
       }
       if (capacityUnit === "m3") {
+        const reference = inferReferenceStream(scale.basis);
+        const sizingGroupId = reactorSizingGroupId(scale.basis, reference);
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        if (task.groupId === sizingGroupId && Number.isFinite(charge)) {
+          return { value: charge, unit: "m3", source: "reactor sizing total charge" };
+        }
         const group = groupModel(task.groupId) || ensureGroup(task.groupId);
         const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
         if (Number.isFinite(groupVolume.value)) return groupVolume;
-        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
         return Number.isFinite(charge)
           ? { value: charge, unit: "m3", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
           : groupVolume;
       }
       if (capacityUnit === "L") {
+        const reference = inferReferenceStream(scale.basis);
+        const sizingGroupId = reactorSizingGroupId(scale.basis, reference);
+        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
+        if (task.groupId === sizingGroupId && Number.isFinite(charge)) {
+          return { value: charge * 1000, unit: "L", source: "reactor sizing total charge" };
+        }
         const group = groupModel(task.groupId) || ensureGroup(task.groupId);
         const groupVolume = groupScaledLoadVolumeM3(scale, task.groupId, group);
         if (Number.isFinite(groupVolume.value)) return { ...groupVolume, value: groupVolume.value * 1000, unit: "L" };
-        const charge = parseStreamQuantity(reactorSizing.totalChargeM3);
         return Number.isFinite(charge)
           ? { value: charge * 1000, unit: "L", source: "reactor sizing total charge", missing: groupVolume.missing || [] }
           : { ...groupVolume, unit: "L" };
@@ -4563,6 +5821,10 @@
     }
 
     function throughputDiagnosticsModel(scale, gantt = taskScheduleModel()) {
+      return memoInPass("throughputDiagnosticsModel", scale, () => throughputDiagnosticsModelUncached(scale, gantt));
+    }
+
+    function throughputDiagnosticsModelUncached(scale, gantt) {
       const reactorSizing = scale.reactorSizing || reactorSizingModel(scale.basis, parseStreamQuantity(scale.target.kgPerBatch));
       const allowable = Math.max(1, parseStreamQuantity(scale.basis.allowableCapacityUtilizationPercent) || 85);
       const plantCycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
@@ -4572,31 +5834,29 @@
         const utilization = Number.isFinite(actual.value) && Number.isFinite(capacity) && capacity > 0
           ? actual.value / capacity * 100
           : NaN;
-        const timeScore = Number.isFinite(task.effectiveTimeH) && Number.isFinite(plantCycle) ? task.effectiveTimeH / plantCycle : NaN;
-        const combinedScore = Number.isFinite(timeScore) && Number.isFinite(utilization) ? timeScore * utilization / 100 : NaN;
+        const cycleSharePercent = Number.isFinite(task.effectiveTimeH) && Number.isFinite(plantCycle) && plantCycle > 0
+          ? task.effectiveTimeH / plantCycle * 100
+          : NaN;
         return {
           groupId: task.groupId,
           task: task.task,
           effectiveTimeH: task.effectiveTimeH,
-          timeScore,
+          cycleSharePercent,
           capacityAmount: task.capacityAmount,
           capacityUnit: task.capacityUnit,
           actualValue: actual.value,
           actualUnit: actual.unit,
           actualSource: actual.source,
           actualMissing: actual.missing || [],
-          utilizationPercent: utilization,
-          combinedScore
+          utilizationPercent: utilization
         };
       });
       const withUtilization = rows.filter(row => Number.isFinite(row.utilizationPercent));
       const sizeBottleneck = withUtilization.slice().sort((a, b) => b.utilizationPercent - a.utilizationPercent)[0] || null;
-      const throughputBottleneck = rows.filter(row => Number.isFinite(row.combinedScore)).sort((a, b) => b.combinedScore - a.combinedScore)[0] || null;
       return {
         allowableCapacityUtilizationPercent: allowable,
         timeBottleneck: gantt.bottleneck || gantt.bottleneckCandidate || null,
         sizeBottleneck,
-        throughputBottleneck,
         rows
       };
     }
@@ -4671,6 +5931,10 @@
     }
 
     function recycleSummary(scale = scaleModel()) {
+      return memoInPass("recycleSummary", scale, () => recycleSummaryUncached(scale));
+    }
+
+    function recycleSummaryUncached(scale) {
       const scaledByStreamId = new Map((scale.rows || []).map(row => [row.streamId, row]));
       const streams = blocksInOrder().flatMap(block => {
         ensureBlockFlowFields(block);
@@ -4787,6 +6051,10 @@
     }
 
     function energyBridgeModel(scale = scaleModel()) {
+      return memoInPass("energyBridgeModel", scale, () => energyBridgeModelUncached(scale));
+    }
+
+    function energyBridgeModelUncached(scale) {
       return groupIdsInTextOrder().flatMap(groupId => {
         const group = groupModel(groupId);
         const phenomena = new Set(group.phenomena);
@@ -4817,6 +6085,10 @@
     }
 
     function scaleUpAssessmentModel(scale = scaleModel()) {
+      return memoInPass("scaleUpAssessmentModel", scale, () => scaleUpAssessmentModelUncached(scale));
+    }
+
+    function scaleUpAssessmentModelUncached(scale) {
       const energy = energyBridgeModel(scale);
       const recycle = recycleSummary(scale);
       const cards = [];
@@ -4847,16 +6119,12 @@
           const missing = [];
           if (!conditions.settling_time) missing.push("settling time");
           if (!conditions.separation_efficiency) missing.push("separation efficiency");
-          if (!properties.has("density_difference")) missing.push("density difference");
           if (!properties.has("miscibility")) missing.push("miscibility");
-          if (!properties.has("emulsion_risk")) missing.push("emulsion risk");
           cards.push(scaleRiskCard(group, "Liquid-liquid scale-up", missing.length ? "high" : "medium", missing, "Check phase disengagement, interface control, emulsion risk, wash/extraction volume, and decanter feasibility."));
         }
         if ([...phenomena].some(code => ["PS(LS)", "PT(LS)", "PC(LS)", "2phM(LS)"].includes(code))) {
           const missing = [];
           if (!conditions.solid_loading) missing.push("solid loading");
-          if (!properties.has("particle_size")) missing.push("particle size");
-          if (!properties.has("cake_resistance")) missing.push("cake resistance/compressibility");
           cards.push(scaleRiskCard(group, "Solid-liquid scale-up", missing.length ? "medium" : "low", missing, "Check filtration/drying behavior, cake handling, salt loading, and solids transfer."));
         }
         if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
@@ -4903,6 +6171,10 @@
     }
 
     function heuristicReviewModel(scale = scaleModel()) {
+      return memoInPass("heuristicReviewModel", scale, () => heuristicReviewModelUncached(scale));
+    }
+
+    function heuristicReviewModelUncached(scale) {
       const ctx = heuristicContext(scale);
       const groupIds = groupIdsInTextOrder();
       // heuristicRuleGroupIds below needs every rule checked against every group's own context to
@@ -4910,10 +6182,15 @@
       // blocks and streams) is the same for every rule, so it's built once per group here and reused,
       // instead of being rebuilt from scratch for every (rule, group) pair.
       const groupContexts = new Map(groupIds.map(groupId => [groupId, heuristicContext(scale, groupId)]));
+      const projectWideRuleIds = new Set(["H04", "H05", "H06", "H32"]);
       const triggered = heuristicRuleLibrary
-        .map(rule => ({ rule, card: heuristicRuleCard(rule, ctx) }))
-        .filter(item => item.card)
-        .map(({ rule, card }) => ({ ...card, groupIds: heuristicRuleGroupIds(rule, groupIds, groupContexts) }))
+        .map(rule => {
+          const localGroupIds = heuristicRuleGroupIds(rule, groupIds, groupContexts);
+          const cardContext = localGroupIds.length || projectWideRuleIds.has(rule.id) ? ctx : null;
+          const card = cardContext ? heuristicRuleCard(rule, cardContext) : null;
+          return card ? { ...card, groupIds: localGroupIds } : null;
+        })
+        .filter(Boolean)
         .sort((a, b) =>
           severityRank(a.severity) - severityRank(b.severity)
           || a.id.localeCompare(b.id));
@@ -4976,10 +6253,10 @@
       const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
       const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
       const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
-      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg|1\.5/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
+      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
       const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
-      const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText) || properties.has("hazard_note");
+      const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText);
       const hasHeatSensitive = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText) || properties.has("degradation_temperature");
       const hasReversible = /reversible|equilibrium|dean-stark|water removal|azeotrope|drive.*right|in-situ removal/.test(allText);
       const hasExotherm = /exotherm|heat release|cooling jacket|quench|cold shot/.test(allText);
@@ -4988,7 +6265,16 @@
       const hasDrying = /dry|drying|sieve|mgso4|na2so4|moisture|water <|karl/.test(allText);
       const hasAdsorption = /adsorb|activated carbon|carbon bed|molecular sieve|sieve/.test(allText);
       const hasMembrane = /membrane|pervaporation|permeat|retentate/.test(allText) || [...phenomena].some(code => code.includes("(M"));
-      const hasHighTemperature = /400\s*C|750\s*F|furnace|fired|hot oil|190|210/.test(allText);
+      // Fired or hot-oil heating is a wording cue; the temperature itself is read from the declared
+      // conditions or from a stated "NNN °C", not from bare numbers that happened to be the case
+      // study's head temperature (and matched "2100 kg" just as well).
+      const statedTemperatures = Array.from(allText.matchAll(/(\d{2,3}(?:\.\d+)?)\s*(?:°|deg(?:rees)?)?\s*c\b/g)).map(match => Number(match[1]));
+      const conditionTemperatures = groupConditions
+        .filter(item => /temperature/.test(String(item.id || "")))
+        .map(item => parseStreamQuantity(String(item.value ?? item.text ?? "")))
+        .filter(Number.isFinite);
+      const hasHighTemperature = /furnace|fired heat|hot oil|thermal oil/.test(allText)
+        || [...statedTemperatures, ...conditionTemperatures].some(temperature => temperature >= 180);
       const hasPressureChange = hasVacuum || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText) || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
       const tags = new Set();
       if (hasReaction) tags.add("reaction");
@@ -5020,15 +6306,22 @@
       if (hasVL || /boil|evapor|reflux/.test(allText)) tags.add("boiling");
       if ([...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) tags.add("heat_exchange").add("utility");
       if (/selectiv|yield|conversion|side reaction|byproduct/.test(allText)) tags.add("selectivity");
+      if (groupConditions.length) tags.add("condition");
       if (/inert|nitrogen|n2|catalyst poison/.test(allText)) tags.add("inert");
-      if (/valuable|product|solvent|octocrylene|cyclohexane/.test(allText)) tags.add("valuable");
+      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) tags.add("valuable");
       if (/wash|brine|water wash|cake wash/.test(allText)) tags.add("washing");
+      if (/accumul|build[- ]?up/.test(allText)) tags.add("accumulation");
+      if (/classif|particle[- ]?size distribution/.test(allText)) tags.add("classification");
+      if (/size reduction|crush|grind|mill/.test(allText)) tags.add("size_reduction");
+      if (/agglomerat|granulat|pelleti/.test(allText)) tags.add("size_enlargement");
+      if ([...phenomena].some(code => code === "ES(H)")) tags.add("heating");
+      if ([...phenomena].some(code => code === "ES(C)")) tags.add("cooling");
       return { tags, blocks, groups, phenomena, phases, fates, text: allText, scale };
     }
 
     function heuristicRuleCard(rule, ctx) {
       const matchedTags = rule.tags.filter(tag => ctx.tags.has(tag));
-      if (!matchedTags.length || !heuristicRuleIsRelevant(rule, matchedTags)) return null;
+      if (!matchedTags.length || !heuristicRuleIsRelevant(rule, matchedTags, ctx)) return null;
       const evidence = heuristicEvidence(rule, matchedTags, ctx);
       return {
         id: rule.id,
@@ -5043,65 +6336,71 @@
       };
     }
 
-    function heuristicRuleIsRelevant(rule, matchedTags) {
-      const specificMatches = matchedTags.filter(tag => !genericHeuristicTags().has(tag));
-      if (matchedTags.length >= 2) return true;
-      if (specificMatches.length && rule.severity !== "low") return true;
-      if (specificMatches.length && strongHeuristicTags().has(specificMatches[0])) return true;
-      return false;
+    function heuristicRuleIsRelevant(rule, matchedTags, ctx) {
+      const has = (...tags) => tags.every(tag => ctx.tags.has(tag));
+      const text = ctx.text || "";
+      const mentions = pattern => pattern.test(text);
+      const hasPhenomenon = pattern => [...ctx.phenomena].some(code => pattern.test(code));
+      switch (rule.id) {
+        case "H01": return has("hazard", "reaction");
+        case "H02": return has("reaction", "selectivity") && mentions(/excess|limiting reactant|stoichiometr/);
+        case "H03": return has("inert", "reaction");
+        case "H04": return has("purge", "recycle") && (has("accumulation") || mentions(/inert|impurit|side-product/));
+        case "H05": return has("purge") && (has("hazard") || has("valuable"));
+        case "H06": return has("reversible", "recycle");
+        case "H07": return has("reaction", "selectivity", "condition");
+        case "H08": return has("reversible", "reaction", "separation");
+        case "H09": return has("liquid_separation") && (ctx.tags.has("ll") || ctx.tags.has("vl"));
+        case "H10": return has("vapor", "condensation") && mentions(/conden|reflux|vapor recovery/);
+        case "H11": return has("vapor", "gas_separation") && mentions(/gas mixture|non-condens|permeat|absorp/);
+        case "H12": return has("crystallization", "solid_liquid") && mentions(/inorganic|salt solution/);
+        case "H13": return has("crystallization", "solid_liquid", "condition");
+        case "H14": return has("crystallization") && mentions(/melt crystall/);
+        case "H15": return has("solid_liquid") && (hasPhenomenon(/^PS\(LS\)$/) || mentions(/filter|sediment|centrif|clarif/));
+        case "H16": return has("solid_liquid", "washing") && mentions(/cake|filter/);
+        case "H17": return has("drying", "solid_liquid");
+        case "H18": return has("solid_particle") && mentions(/particle|cake|powder|crystal size/);
+        case "H19": return has("adsorption") && mentions(/adsorb|activated carbon|molecular sieve/);
+        case "H20": return has("membrane", "separation");
+        case "H21": return has("exotherm", "reaction", "cooling");
+        case "H22": return has("exotherm", "reaction", "cooling", "heat_exchange");
+        case "H23": return has("endotherm", "reaction", "heating");
+        case "H24": return has("endotherm", "reaction", "heating", "heat_exchange");
+        case "H25": return has("heat_exchange") && mentions(/heat exchanger|external loop|intercool|reboiler|condenser/);
+        case "H26": return has("heat_exchange") && mentions(/heat recover|temperature approach|pinch/);
+        case "H27": return has("cooling", "condensation", "vl");
+        case "H28": return has("boiling", "vl", "heating") && mentions(/close-boiling|pure stream/);
+        case "H29": return has("high_temperature", "heating");
+        case "H30": return has("utility") && (ctx.tags.has("heating") || ctx.tags.has("cooling"));
+        case "H31": return has("heat_exchange", "pressure") && mentions(/heat exchanger|reboiler|condenser/);
+        case "H32": return has("heat_exchange", "utility") && ctx.tags.has("heating") && ctx.tags.has("cooling");
+        case "H33": return has("heat_sensitive", "heating", "vl");
+        case "H34": return has("gas_pressure", "vapor") && mentions(/\bfan\b|small pressure rise/);
+        case "H35": return has("gas_pressure", "vapor") && mentions(/\bblower\b|moderate pressure rise/);
+        case "H36": return has("gas_pressure", "vapor") && mentions(/compressor|compression ratio|compress gas/);
+        case "H37": return has("liquid_pressure", "liquid") && mentions(/\bpump|pumping/);
+        case "H38": return has("solid_liquid", "liquid_pressure") && mentions(/slurry.*pump|pump.*slurry/);
+        case "H39": return has("liquid_pressure", "vl") && mentions(/\bpump|pumping/);
+        case "H40": return has("pressure_reduction", "liquid") && mentions(/letdown|control valve|pressure reduction/);
+        case "H41": return has("pressure_reduction", "vapor") && mentions(/expander|turbine|work recovery/);
+        case "H42": return has("pressure_reduction", "vl") && mentions(/flash|letdown/);
+        case "H43": return has("vapor", "liquid_pressure", "condensation") && mentions(/compress|compression/);
+        case "H44": return has("vacuum", "vl");
+        case "H45": return has("vacuum", "condensation", "vl");
+        case "H46": return has("vacuum", "vent", "vapor");
+        case "H47": return has("vacuum", "hazard");
+        case "H48": return has("solid_particle", "solids_handling") && mentions(/convey|screw feeder|pneumatic transport/);
+        case "H49": return has("solid_particle", "size_reduction");
+        case "H50": return has("solid_particle", "size_enlargement");
+        case "H51": return has("solid_particle", "classification");
+        case "H52": return has("vapor_solid", "solid_particle") && mentions(/entrained solid|cyclone|gas filter|scrubber/);
+        case "H53": return has("solid_liquid", "classification") && mentions(/hydrocyclone|classifier/);
+        default: return false;
+      }
     }
 
     function heuristicRuleConfidence(rule, matchedTags) {
-      const specificMatches = matchedTags.filter(tag => !genericHeuristicTags().has(tag));
-      if (matchedTags.length >= 3 || specificMatches.length >= 2) return "strong";
-      if (matchedTags.length >= 2 || specificMatches.length) return "focused";
-      return "screening";
-    }
-
-    function genericHeuristicTags() {
-      return new Set([
-        "reaction",
-        "mixing",
-        "liquid",
-        "vapor",
-        "pressure",
-        "heat_exchange",
-        "utility",
-        "liquid_separation",
-        "gas_separation",
-        "separation",
-        "boiling",
-        "condensation",
-        "heating",
-        "cooling"
-      ]);
-    }
-
-    function strongHeuristicTags() {
-      return new Set([
-        "vacuum",
-        "recycle",
-        "purge",
-        "hazard",
-        "heat_sensitive",
-        "reversible",
-        "exotherm",
-        "endotherm",
-        "crystallization",
-        "drying",
-        "adsorption",
-        "membrane",
-        "high_temperature",
-        "solid_liquid",
-        "vapor_solid",
-        "solid_particle",
-        "solids_handling",
-        "filtration",
-        "washing",
-        "selectivity",
-        "inert",
-        "valuable"
-      ]);
+      return matchedTags.length === rule.tags.length ? "direct context" : "contextual screen";
     }
 
     function heuristicEvidence(rule, matchedTags, ctx) {
@@ -5214,24 +6513,11 @@
       return false;
     }
 
-    function conditionTipLines(block, blockId = "") {
-      ensureBlockConditionFields(block);
-      const values = conditionValuesForBlock(block);
-      return values.slice(0, 6).map(item => {
-        const prefix = blockId ? `[${blockId}] ` : "";
-        return `- ${prefix}${item.label}: ${formatConditionValue(item)}`;
-      });
-    }
-
-    function scaleSectionHtml(key, title, gridInnerHtml) {
-      const expanded = Boolean(state.expandedScaleSections[key]);
+    function scaleSectionHtml(_key, title, gridInnerHtml) {
       return `
-        <div class="scale-section ${expanded ? "expanded" : "collapsed"}">
-          <div class="scale-section-toggle-head" data-toggle-scale-section="${escapeAttr(key)}">
-            <span>${escapeHtml(title)}</span>
-            <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
-          </div>
-          ${expanded ? `<div class="scale-grid">${gridInnerHtml}</div>` : ""}
+        <div class="scale-advanced-group">
+          <div class="label">${escapeHtml(title)}</div>
+          <div class="scale-grid">${gridInnerHtml}</div>
         </div>
       `;
     }
@@ -5241,15 +6527,26 @@
       const root = $("scaleBasisPanel");
       const basis = ensureScaleBasis();
       const model = scaleModel();
+      const candidates = candidateBasisStreams();
+      const seenReferenceBlocks = new Set();
       const referenceOptions = [
-        `<option value="">auto from product/output</option>`,
-        ...blocksInOrder().map(block => `<option value="${escapeAttr(block.id)}" ${basis.referenceBlockId === block.id ? "selected" : ""}>${escapeHtml(block.id)} - ${escapeHtml(block.behavior)}</option>`)
+        `<option value="">Auto-select product output</option>`,
+        ...candidates.filter(item => {
+          if (seenReferenceBlocks.has(item.block.id)) return false;
+          seenReferenceBlocks.add(item.block.id);
+          return true;
+        }).map(item => `<option value="${escapeAttr(item.block.id)}" ${basis.referenceBlockId === item.block.id ? "selected" : ""}>${escapeHtml(item.block.id)} - ${escapeHtml(item.stream.name || "output")}: ${escapeHtml(item.stream.quantity)} ${escapeHtml(item.stream.unit)}</option>`)
       ].join("");
+      const productNames = [...new Set(candidates.map(item => item.stream.name).filter(Boolean))];
+      const referenceLabel = model.reference
+        ? `${model.reference.blockId} / ${model.reference.streamName || model.reference.streamId}: ${model.reference.quantity} ${model.reference.unit}`
+        : "No quantified product output available";
       quickRoot.innerHTML = `
         <div class="scale-quick-grid">
           <label>
             <div class="label">Target product</div>
-            <input data-scale-field="targetProduct" value="${escapeAttr(basis.targetProduct)}" placeholder="octocrylene">
+            <input data-scale-field="targetProduct" value="${escapeAttr(basis.targetProduct)}" list="scaleProductOptions" placeholder="Select or name product">
+            <datalist id="scaleProductOptions">${productNames.map(name => `<option value="${escapeAttr(name)}"></option>`).join("")}</datalist>
           </label>
           <label>
             <div class="label">Amount</div>
@@ -5260,18 +6557,61 @@
             <select data-scale-field="targetUnit">${optionHtml(scaleTargetUnitOptions, basis.targetUnit)}</select>
           </label>
         </div>
+        <div class="scale-source-line"><span>Reference</span><strong>${escapeHtml(referenceLabel)}</strong></div>
       `;
       const fieldLabel = (text, tip) => `<div class="label tip" data-tip="${escapeAttr(tip)}">${escapeHtml(text)}</div>`;
       const scheduleMethodOptions = [
         { value: "auto", label: "Auto (duration if available, else batches/day)" },
-        { value: "duration", label: "Duration x OEE x parallel units" },
+        { value: "duration", label: "Calendar / cycle time x OEE x trains" },
         { value: "batches_per_day", label: "Batches/day x operating days" }
       ];
       const batchesPerDayInactive = basis.scheduleMethod === "duration" || (basis.scheduleMethod === "auto" && model.schedule.method === "duration_OEE_parallel_units");
+      const sizing = model.reactorSizing || {};
+      const reactorGroup = groupIdsInTextOrder().map(groupModel).find(reactionReactorLikeGroup);
+      const declaredReactorM3 = reactorGroup?.schedule?.capacityUnit === "m3" ? parseStreamQuantity(reactorGroup.schedule.capacityAmount) : NaN;
+      const requiredReactorM3 = parseStreamQuantity(sizing.reactorVolumeM3);
+      const reactorCapacityConflict = Number.isFinite(declaredReactorM3) && Number.isFinite(requiredReactorM3) && requiredReactorM3 > declaredReactorM3;
       root.innerHTML = `
-        ${scaleSectionHtml("referenceBasis", "Reference basis", `
+        <section class="scale-primary-setup">
+          <div class="scale-section-title">
+            <span>Capacity &amp; calendar</span>
+            <span class="scale-source-badge">${escapeHtml(model.schedule.productiveHoursPerYear ? formatDisplayNumber(model.schedule.productiveHoursPerYear) : "-")} productive h/year</span>
+          </div>
+          <div class="scale-scenario-control" role="group" aria-label="Planning scenario">
+            <button type="button" class="${basis.planningScenario === "conservative" ? "chosen" : ""}" data-planning-scenario="conservative">
+              <strong>Conservative</strong><span>Batch makespan</span>
+            </button>
+            <button type="button" class="${basis.planningScenario === "overlapped" ? "chosen" : ""}" data-planning-scenario="overlapped">
+              <strong>Overlapped</strong><span>Limiting equipment cycle</span>
+            </button>
+          </div>
+          <div class="scale-primary-grid">
+            <label>${fieldLabel("Days/year", "Scheduled operating days used in annual capacity.")}<input data-scale-field="operatingDays" value="${escapeAttr(formatDisplayNumber(parseStreamQuantity(basis.operatingDays)))}" inputmode="decimal" placeholder="250"></label>
+            <label>${fieldLabel("Hours/day", "Scheduled operating hours per day used in annual capacity.")}<input data-scale-field="hoursPerDay" value="${escapeAttr(basis.hoursPerDay)}" inputmode="decimal" placeholder="16"></label>
+            <label>${fieldLabel("OEE, %", "Productive fraction of scheduled hours after downtime, maintenance, and changeovers.")}<input data-scale-field="oeePercent" value="${escapeAttr(basis.oeePercent)}" inputmode="decimal" placeholder="80"></label>
+            <label>${fieldLabel("Production trains", "Number of complete, identical process trains operating in parallel.")}<input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1"></label>
+          </div>
+          <div class="scale-equipment-basis">
+            <label>${fieldLabel("Reactor working fill, %", "Fraction of reactor volume available for the process charge. This changes reactor size, not annual operating hours.")}<input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70"></label>
+            <div class="${reactorCapacityConflict ? "capacity-conflict" : ""}">
+              <span class="label">Required reactor</span>
+              <strong>${escapeHtml(sizing.reactorVolumeM3 ? `${formatDisplayNumber(sizing.reactorVolumeM3)} m3` : "waiting for charge basis")}</strong>
+              <small>${reactorCapacityConflict ? `exceeds declared ${formatDisplayNumber(declaredReactorM3)} m3 capacity` : "scaled liquid charge / working fill"}</small>
+            </div>
+          </div>
+          <div class="scale-derived-strip">
+            <span><strong>Annual capacity</strong> calendar x OEE x trains / ${basis.planningScenario === "overlapped" ? "plant cycle" : "batch makespan"}</span>
+            <span><strong>Equipment charge</strong> ${escapeHtml(sizing.source || "waiting for MFA")}</span>
+            <span><strong>Stoichiometry</strong> ${escapeHtml(sizing.stoichiometrySource || "waiting for Reaction Balance")}</span>
+          </div>
+        </section>
+
+        <details class="scale-advanced-details" data-scale-advanced ${state.scaleAdvancedOpen ? "open" : ""}>
+          <summary><span><strong>Advanced assumptions</strong><small>Reference, scheduling and sizing overrides</small></span></summary>
+          <div class="scale-advanced-body">
+        ${scaleSectionHtml("referenceBasis", "Reference override", `
             <label class="scale-wide">
-              ${fieldLabel("Reference output block", "Which existing block's output stream anchors the lab-scale recipe ratios (reactants/solvent per kg product). Leave on auto to use the block with a numeric product-like output.")}
+              ${fieldLabel("Reference product output", "Quantified product output that anchors the laboratory recipe basis. Leave on auto to select the declared product stream.")}
               <select data-scale-field="referenceBlockId">${referenceOptions}</select>
             </label>
             <label>
@@ -5284,29 +6624,21 @@
             </label>
         `)}
 
-        ${scaleSectionHtml("operatingSchedule", "Operating schedule", `
+        ${scaleSectionHtml("operatingSchedule", "Schedule override", `
             <label>
               ${fieldLabel("Mode", "Continuous processes skip the batches/day and batch-duration fields below.")}
               <select data-scale-field="mode">${optionHtml(["batch", "continuous"], basis.mode)}</select>
             </label>
             <label class="scale-wide">
-              ${fieldLabel("Annual batches method", "Which calculation drives annual batches. Auto picks duration x OEE x parallel units whenever that data is available, otherwise falls back to batches/day. Force either method to override that automatic pick.")}
+              ${fieldLabel("Annual batches method", "Which calculation drives annual batches. Auto uses scheduled calendar hours, OEE, selected cycle time, and production trains when available; otherwise it falls back to batches/day.")}
               <select data-scale-field="scheduleMethod">${scheduleMethodOptions.map(opt => `<option value="${escapeAttr(opt.value)}" ${opt.value === basis.scheduleMethod ? "selected" : ""}>${escapeHtml(opt.label)}</option>`).join("")}</select>
             </label>
             <label>
-              ${fieldLabel("Batches/day", batchesPerDayInactive ? "Not used: the annual batches method above is set to (or auto-resolves to) duration x OEE x parallel units, so this field has no effect. Switch the method above to \"Batches/day x operating days\" to use it." : "Used to derive annual batches per the method selected above.")}
+              ${fieldLabel("Batches/day", batchesPerDayInactive ? "Not used while the calendar/cycle-time method is active. Select Batches/day x operating days to use this fallback." : "Used to derive annual batches per the method selected above.")}
               <input data-scale-field="batchesPerDay" value="${escapeAttr(basis.batchesPerDay)}" inputmode="decimal" placeholder="1" ${batchesPerDayInactive ? "disabled" : ""}>
             </label>
-            <label>
-              ${fieldLabel("Days/year", "Used with batches/day for the batches/day method above, and to convert daily/annual targets to an hourly rate.")}
-              <input data-scale-field="operatingDays" value="${escapeAttr(basis.operatingDays)}" inputmode="decimal" placeholder="250">
-            </label>
-            <label>
-              ${fieldLabel("Hours/day", "Only used to display an hourly production rate; does not affect the batch or annual targets.")}
-              <input data-scale-field="hoursPerDay" value="${escapeAttr(basis.hoursPerDay)}" inputmode="decimal" placeholder="16">
-            </label>
             <label class="scale-wide">
-              ${fieldLabel("Batch duration, h", "Manual override for the single-train batch cycle time. Leave blank to use the sum of task durations from the Gantt panel instead - this is the preferred, non-fallback path.")}
+              ${fieldLabel("Batch duration, h", "Optional replacement for the timetable batch makespan. Leave blank to use task durations.")}
               <input data-scale-field="batchDuration" value="${escapeAttr(basis.batchDuration)}" inputmode="decimal" placeholder="optional">
             </label>
             <label>
@@ -5314,54 +6646,36 @@
               <input data-scale-field="scheduleMarginPercent" value="${escapeAttr(basis.scheduleMarginPercent)}" inputmode="decimal" placeholder="0">
             </label>
             <label>
-              ${fieldLabel("OEE, %", "Overall Equipment Effectiveness: fraction of calendar time (8760 h/year) the plant is actually producing after downtime, changeovers, and maintenance. Drives annual batch count together with batch duration and parallel units. Not the same as the equipment fill limit below, which is about size, not time.")}
-              <input data-scale-field="oeePercent" value="${escapeAttr(basis.oeePercent)}" inputmode="decimal" placeholder="80">
-            </label>
-            <label>
-              ${fieldLabel("Parallel units", "Number of identical trains running the same schedule in parallel. Multiplies the annual batch count from the duration-based method.")}
-              <input data-scale-field="parallelUnits" value="${escapeAttr(basis.parallelUnits)}" inputmode="decimal" placeholder="1">
-            </label>
-            <label>
-              ${fieldLabel("Equipment fill limit, %", "How full a single piece of equipment (e.g. reactor working volume) is allowed to run - used only to flag over-capacity tasks in the Bottleneck classification below. Distinct from OEE above, which is about time availability, not fill level.")}
+              ${fieldLabel("Capacity alarm, %", "Task-capacity utilization that triggers a review warning; this does not size the reactor.")}
               <input data-scale-field="allowableCapacityUtilizationPercent" value="${escapeAttr(basis.allowableCapacityUtilizationPercent)}" inputmode="decimal" placeholder="85">
-              <div class="muted small">Alarm threshold for the Bottleneck check, not a design value. Different from "Working fill, %" in Reactor sizing below, which sizes the vessel in the first place - the two are entered separately and don't sync automatically.</div>
             </label>
         `)}
 
-        ${scaleSectionHtml("reactorSizing", "Reactor sizing / stoichiometric checks", `
+        ${scaleSectionHtml("reactorSizing", "Sizing override", `
             <label>
-              ${fieldLabel("Product kg/batch override", "Overrides the batch size used only for the reactor-sizing check below. Does not change 'Target kg/batch' in Calculated basis, which is driven by the operating schedule instead - the two can disagree on purpose if you want to test a different reactor size.")}
-              <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="auto">
+              ${fieldLabel("Sizing batch, kg", "Optional what-if batch used only for equipment sizing. It does not alter the production target, schedule, scale factor, or scaled MFA.")}
+              <input data-scale-field="productKgPerBatch" value="${escapeAttr(basis.productKgPerBatch)}" inputmode="decimal" placeholder="from production plan">
             </label>
             <label>
-              ${fieldLabel("Reactants L/kg product", "Volume of reactants charged per kg of product, from the lab recipe. Scales automatically with batch size.")}
-              <input data-scale-field="reactantsLoadingLPerKgProduct" value="${escapeAttr(basis.reactantsLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.27">
+              ${fieldLabel("Reactants L/kg product", "Optional recipe override. Leave blank to derive charge volume from scaled MFA and density.")}
+              <input data-scale-field="reactantsLoadingLPerKgProduct" value="${escapeAttr(basis.reactantsLoadingLPerKgProduct)}" inputmode="decimal" placeholder="from MFA">
             </label>
             <label>
-              ${fieldLabel("Solvent L/kg product", "Volume of solvent charged per kg of product, from the lab recipe. Scales automatically with batch size.")}
-              <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="e.g. 1.51">
+              ${fieldLabel("Solvent L/kg product", "Optional recipe override. Leave blank to derive charge volume from scaled MFA and density.")}
+              <input data-scale-field="solventLoadingLPerKgProduct" value="${escapeAttr(basis.solventLoadingLPerKgProduct)}" inputmode="decimal" placeholder="from MFA">
             </label>
             <label>
-              ${fieldLabel("Working fill, %", "Screening default: 70%. Literature/vendor guidance commonly uses 70-80% working volume for stirred vessels to keep headspace for foam, gas disengagement, reflux, thermal expansion, and agitation. SuperPro/Intelligen uses 90% as a max allowable working/vessel-volume default constraint, so >85-90% should be treated as a warning, not a routine design point.")}
-              <input data-scale-field="reactorWorkingFillPercent" value="${escapeAttr(basis.reactorWorkingFillPercent)}" inputmode="decimal" placeholder="70">
-              <div class="muted small">Sizes the required reactor volume below (charge / working fill). Changing this recalculates that volume but does NOT update the Gantt "Capacity" field used by the Bottleneck check - update Capacity to match, or a mismatch warning will appear in Heuristics/Review Results.</div>
+              ${fieldLabel("Product MW, g/mol", "Optional fallback when Reaction Balance does not provide the product molecular weight.")}
+              <input data-scale-field="productMolecularWeightGmol" value="${escapeAttr(basis.productMolecularWeightGmol)}" inputmode="decimal" placeholder="${escapeAttr(sizing.productMolecularWeightGmol || "from Reaction Balance")}">
             </label>
             <label>
-              ${fieldLabel("Product MW, g/mol", "Product molecular weight, used only to estimate stoichiometric condensation water below.")}
-              <input data-scale-field="productMolecularWeightGmol" value="${escapeAttr(basis.productMolecularWeightGmol)}" inputmode="decimal" placeholder="optional">
-            </label>
-            <label>
-              ${fieldLabel("Water mol/mol product", "Moles of water released per mole of product formed, from the reaction stoichiometry.")}
-              <input data-scale-field="condensationWaterMolPerMol" value="${escapeAttr(basis.condensationWaterMolPerMol)}" inputmode="decimal" placeholder="1">
+              ${fieldLabel("Water mol/mol product", "Optional fallback when Reaction Balance does not define a water byproduct coefficient.")}
+              <input data-scale-field="condensationWaterMolPerMol" value="${escapeAttr(basis.condensationWaterMolPerMol)}" inputmode="decimal" placeholder="${escapeAttr(sizing.waterMolPerMol || "from Reaction Balance")}">
             </label>
         `)}
 
-        ${scaleSectionHtml("tracking", "Tracking", `
-            <label>
-              ${fieldLabel("Confidence", "How reliable the current scale-up numbers are, for your own tracking - rough (screening guess), estimated (some real data), or validated (measured/vendor-confirmed). Does not change any calculation.")}
-              <select data-scale-field="confidence">${optionHtml(["rough", "estimated", "validated"], basis.confidence)}</select>
-            </label>
-        `)}
+          </div>
+        </details>
         ${scaleResultsHtml(model)}
       `;
       [quickRoot, root].forEach(container => {
@@ -5370,54 +6684,108 @@
           field.addEventListener("change", rerenderScaleAfterEdit);
         });
       });
-      root.querySelectorAll("[data-toggle-scale-section]").forEach(head => {
-        head.addEventListener("click", () => {
-          const key = head.dataset.toggleScaleSection;
-          state.expandedScaleSections[key] = !state.expandedScaleSections[key];
-          renderScaleBasisPanel();
-        });
+      root.querySelector("[data-scale-advanced]")?.addEventListener("toggle", event => {
+        state.scaleAdvancedOpen = event.target.open;
       });
-      root.querySelectorAll("[data-schedule-scenario-view]").forEach(button => {
+      root.querySelectorAll("[data-planning-scenario]").forEach(button => {
         button.addEventListener("click", () => {
-          state.scheduleScenarioView = button.dataset.scheduleScenarioView;
+          ensureScaleBasis().planningScenario = button.dataset.planningScenario;
+          invalidateAiRefine();
           renderScaleBasisPanel();
+          renderHeuristicsPanel();
+          refreshReviewPanels();
+          renderExport();
         });
       });
-      root.querySelectorAll("[data-toggle-gantt-row]").forEach(head => {
+      root.querySelectorAll("[data-open-gantt]").forEach(button => button.addEventListener("click", openGanttModal));
+      bindGanttControls(root);
+      if (!$("ganttModal").hidden) renderGanttModal();
+    }
+
+    function openGanttModal() {
+      $("ganttModal").hidden = false;
+      renderGanttModal();
+    }
+
+    function closeGanttModal() {
+      $("ganttModal").hidden = true;
+    }
+
+    function renderGanttModal() {
+      const body = $("ganttModalBody");
+      if (!body) return;
+      const gantt = taskScheduleModel();
+      body.innerHTML = ganttPanelHtml(gantt);
+      bindGanttControls(body);
+    }
+
+    function bindGanttControls(container) {
+      container.querySelectorAll("[data-toggle-gantt-decision]").forEach(button => {
+        button.addEventListener("click", () => {
+          const body = button.nextElementSibling;
+          if (!body) return;
+          body.hidden = !body.hidden;
+          button.setAttribute("aria-expanded", body.hidden ? "false" : "true");
+        });
+      });
+      container.querySelectorAll("[data-toggle-gantt-row]").forEach(head => {
         head.addEventListener("click", () => {
           const groupId = head.dataset.toggleGanttRow;
           state.expandedGanttRows[groupId] = !state.expandedGanttRows[groupId];
           renderScaleBasisPanel();
         });
       });
-      root.querySelectorAll("[data-scale-focus-group]").forEach(button => {
-        button.addEventListener("click", () => focusGroupForEditing(button.dataset.scaleFocusGroup));
+      container.querySelectorAll("[data-scale-focus-group]").forEach(button => {
+        button.addEventListener("click", () => {
+          closeGanttModal();
+          focusGroupForEditing(button.dataset.scaleFocusGroup);
+        });
       });
-      root.querySelectorAll("[data-add-density-basis]").forEach(button => {
-        button.addEventListener("click", () => openDensityBasisEditor(button.dataset.addDensityBasis));
+      container.querySelectorAll("[data-open-task-timetable]").forEach(button => {
+        button.addEventListener("click", () => {
+          closeGanttModal();
+          openTaskTimetable(button.dataset.openTaskTimetable);
+        });
       });
-      root.querySelectorAll("[data-schedule-field]").forEach(field => {
+      container.querySelectorAll("[data-add-density-basis]").forEach(button => {
+        button.addEventListener("click", () => {
+          closeGanttModal();
+          openDensityBasisEditor(button.dataset.addDensityBasis);
+        });
+      });
+      container.querySelectorAll("[data-schedule-field]").forEach(field => {
         field.addEventListener("input", updateGroupScheduleField);
         field.addEventListener("change", rerenderScaleAfterEdit);
       });
-      root.querySelectorAll("[data-load-schedule-example]").forEach(button => {
+      container.querySelectorAll("[data-predecessor-toggle]").forEach(checkbox => {
+        checkbox.addEventListener("change", () => {
+          const groupState = ensureGroup(checkbox.dataset.predecessorTask);
+          const predecessorId = checkbox.dataset.predecessorToggle;
+          const ids = new Set(groupState.schedule.predecessorIds);
+          if (checkbox.checked) ids.add(predecessorId); else ids.delete(predecessorId);
+          groupState.schedule.predecessorIds = Array.from(ids);
+          invalidateAiRefine();
+          renderScaleBasisPanel();
+        });
+      });
+      container.querySelectorAll("[data-load-schedule-example]").forEach(button => {
         button.addEventListener("click", applyScheduleExample);
       });
-      root.querySelectorAll("[data-split-n]").forEach(input => {
+      container.querySelectorAll("[data-split-n]").forEach(input => {
         input.addEventListener("input", () => {
           let n = Math.round(Number(input.value));
           if (!Number.isFinite(n) || n < 2) n = 2;
           if (n > 20) n = 20;
           const groupId = input.dataset.splitN;
           const baseDuration = Number(input.dataset.splitBaseDuration);
-          const preview = [...root.querySelectorAll("[data-split-preview]")].find(el => el.dataset.splitPreview === groupId);
-          const button = [...root.querySelectorAll("[data-split-bottleneck]")].find(el => el.dataset.splitBottleneck === groupId);
+          const preview = [...container.querySelectorAll("[data-split-preview]")].find(el => el.dataset.splitPreview === groupId);
+          const button = [...container.querySelectorAll("[data-split-bottleneck]")].find(el => el.dataset.splitBottleneck === groupId);
           const divideDuration = button?.dataset.splitDivideDuration === "true";
           if (preview) preview.textContent = bottleneckSplitPreviewText(baseDuration, n, divideDuration);
           if (button) button.dataset.splitCount = String(n);
         });
       });
-      root.querySelectorAll("[data-split-bottleneck]").forEach(button => {
+      container.querySelectorAll("[data-split-bottleneck]").forEach(button => {
         button.addEventListener("click", async () => {
           const groupId = button.dataset.splitBottleneck;
           const n = Number(button.dataset.splitCount);
@@ -5478,20 +6846,52 @@
       `;
     }
 
+    function scalePriorityChecks(assessmentAlerts, checkedAlerts) {
+      const checked = checkedAlerts.length > 0;
+      const source = checked ? checkedAlerts : assessmentAlerts;
+      const grouped = new Map();
+      source.forEach(item => {
+        const key = checked ? item.scope || "general" : item.groupId || "project";
+        const current = grouped.get(key) || { severity: item.severity, target: key, titles: [], details: [] };
+        if (severityRank(item.severity) < severityRank(current.severity)) current.severity = item.severity;
+        current.titles.push(item.title);
+        current.details.push(checked ? item.action || item.reason : item.missing.length ? `Missing/check: ${item.missing.join(", ")}` : item.recommendation);
+        grouped.set(key, current);
+      });
+      return [...grouped.values()]
+        .map(item => ({
+          severity: item.severity,
+          target: item.target,
+          title: [...new Set(item.titles)].slice(0, 2).join("; "),
+          detail: `${item.details[0]}${item.details.length > 1 ? ` (+${item.details.length - 1} related checks)` : ""}`
+        }))
+        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.target.localeCompare(b.target));
+    }
+
     function scaleResultsHtml(model) {
-      const reference = model.reference
-        ? `${model.reference.blockId} / ${model.reference.streamName || model.reference.streamId}: ${model.reference.quantity} ${model.reference.unit}`
-        : "No numeric output stream found yet.";
       const assessment = scaleUpAssessmentModel(model);
       const recycle = recycleSummary(model);
       const energy = energyBridgeModel(model);
       const gantt = taskScheduleModel();
       const throughput = throughputDiagnosticsModel(model, gantt);
+      const assessmentAlerts = assessment
+        .filter(item => item.severity === "high" || item.severity === "medium")
+        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+      const checkedAlerts = state.ruleChecks
+        .filter(item => item.severity === "high" || item.severity === "medium")
+        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+      const priorityChecks = scalePriorityChecks(assessmentAlerts, checkedAlerts);
+      const capacityAlert = throughput.rows.some(row => Number.isFinite(row.utilizationPercent) && row.utilizationPercent > throughput.allowableCapacityUtilizationPercent);
+      const plannedBatchKg = parseStreamQuantity(model.target.kgPerBatch);
+      const sizingBatchKg = parseStreamQuantity(model.reactorSizing?.productBatchKg);
+      const sizingOverrideMismatch = Number.isFinite(plannedBatchKg) && Number.isFinite(sizingBatchKg) && Math.abs(plannedBatchKg - sizingBatchKg) > 0.001;
       const metrics = [
-        ["Reference", reference],
-        ["Target kg/batch", model.target.kgPerBatch || "missing schedule/basis"],
-        ["Target kg/year", model.target.kgPerYear || "missing annual basis"],
-        ["Scale factor", model.factors.productFactor || "not available"]
+        ["Planned kg/batch", model.target.kgPerBatch || "missing"],
+        ["Annual target", model.target.kgPerYear ? `${model.target.kgPerYear} kg` : "missing"],
+        ["Annual batches", model.schedule.effectiveBatchesPerYear ? `${formatDisplayNumber(model.schedule.effectiveBatchesPerYear)}${model.schedule.effectiveBatchesPerYearRange ? ` (${model.schedule.effectiveBatchesPerYearRange} across declared ranges)` : ""}` : "missing"],
+        ["Scale factor", model.factors.productFactor || "missing"],
+        ["Batch makespan", model.schedule.batchMakespanH ? `${model.schedule.batchMakespanH} h${model.schedule.batchMakespanRangeH ? ` (${model.schedule.batchMakespanRangeH} declared)` : ""}` : "missing"],
+        ["Required reactor", model.reactorSizing?.reactorVolumeM3 ? `${formatDisplayNumber(model.reactorSizing.reactorVolumeM3)} m3` : "incomplete"]
       ];
       const rowGroups = scaledRowsByRole(model);
       return `
@@ -5507,30 +6907,51 @@
               `).join("")}
             </div>
           </div>
+          ${sizingOverrideMismatch ? `<div class="scale-assumption-notice">Equipment sizing uses the ${escapeHtml(model.reactorSizing.productBatchKg)} kg what-if batch; the production plan remains ${escapeHtml(model.target.kgPerBatch)} kg/batch.</div>` : ""}
 
-          <div class="scale-metric">
-            <span class="label">Schedule scenarios${infoIconHtml("Conservative uses batch makespan (batches do not start before the previous batch leaves the train). Overlapped uses plant cycle time = max(task time / parallel units) - new batches can start at the limiting equipment cycle.")}</span>
-            ${scheduleScenariosHtml(model.schedule)}
-          </div>
-
-          <div class="scale-metric">
-            <span class="label">Reactor sizing / stoichiometric checks${infoIconHtml("Preferred path: enter reactants and solvent L/kg product from the recipe, then reactor volume = ((reactants + solvent) x product kg/batch / 1000) / working fill. If those recipe loading fields are blank, the tool tries an automatic MFA path: find the reaction/reactor group, scale its input streams to the production target, convert direct L/mL/m3 streams or mass streams with group density, then divide total charge by working fill. Water = product kg/batch x 18.015 / product MW x stoichiometric water coefficient. Working fill citation basis: stirred-tank/bioreactor guidance typically reports 70-80% working volume; SuperPro/Intelligen batch-vessel docs use 90% as max allowable working/vessel-volume default. This is a screening minimum; real vessel selection adds design margin and rounds up to standard sizes.")}</span>
-            ${reactorSizingHtml(model.reactorSizing)}
-          </div>
-
-          <div class="scale-metric">
+          <div class="scale-metric scale-schedule-overview">
             <div class="scale-section-title">
-              <span>Gantt / Bottleneck${infoIconHtml("Critical bottleneck = largest effective task only when it is clearly above the next task. Adjusted time = input duration plus Gantt margin, divided by parallel units.")}</span>
-              <button data-load-schedule-example="octocrylene" title="Overwrites every group's duration/capacity/notes with generic keyword-matched example values. Asks for confirmation first; can be undone.">Fill Example Durations</button>
+              <span>Production schedule${infoIconHtml("Conservative uses the complete batch makespan. Overlapped uses the limiting equipment cycle. Open the schedule to edit each task duration, capacity, parallel units, and dependencies.")}</span>
+              <button class="primary" data-open-gantt>Open Schedule</button>
             </div>
-            ${gantt.ready ? ganttPanelHtml(gantt) : `<div class="mfa-empty">Add durations in group conditions or directly in the Gantt rows to estimate cycle time and bottlenecks.</div>`}
+            ${scheduleScenariosHtml(model.schedule)}
+            ${ganttSummaryLauncherHtml(gantt)}
           </div>
+
+          <div class="scale-readiness-strip ${priorityChecks.length || recycle.warnings.length || capacityAlert ? "attention" : "ready"}">
+            <strong>${priorityChecks.length || recycle.warnings.length || capacityAlert ? "Review required" : "Scale-up checks ready"}</strong>
+            <span>${priorityChecks.length} review area${priorityChecks.length === 1 ? "" : "s"}${capacityAlert ? " · capacity limit exceeded" : ""}</span>
+          </div>
+
+          ${priorityChecks.length ? `
+            <div class="scale-priority-list">
+              ${priorityChecks.slice(0, 3).map(item => `
+                <div class="scale-priority-row ${escapeAttr(item.severity)}">
+                  <span class="severity-pill">${escapeHtml(item.severity)}</span>
+                  <div><strong>${escapeHtml(item.target ? `${item.target} - ${item.title}` : item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>
+                </div>
+              `).join("")}
+              ${priorityChecks.length > 3 ? `<span class="muted small">+${priorityChecks.length - 3} more review areas available under Heuristics.</span>` : ""}
+            </div>
+          ` : ""}
+
+          ${compactDetailsHtml(
+            "Equipment sizing result",
+            reactorSizingHtml(model.reactorSizing),
+            model.reactorSizing?.ready && model.reactorSizing.reactorVolumeM3
+              ? `${formatDisplayNumber(model.reactorSizing.reactorVolumeM3)} m3 required`
+              : "data incomplete",
+            false
+          )}
 
           ${compactDetailsHtml(
             "Bottleneck classification",
             throughputDiagnosticsHtml(throughput),
-            throughput.timeBottleneck ? `${throughput.timeBottleneck.groupId} time bottleneck` : "capacity and throughput checks"
+            throughput.timeBottleneck ? `${throughput.timeBottleneck.groupId} time bottleneck` : "capacity and throughput checks",
+            false
           )}
+
+          <div class="scale-supporting-heading"><strong>Supporting data</strong><span>Open only when you need calculation detail or export evidence.</span></div>
 
           ${compactDetailsHtml(
             "Scaled MFA preview",
@@ -5545,12 +6966,13 @@
           )}
 
           ${compactDetailsHtml(
-            "Scale-up assessment",
+            "All scale-up checks",
             `
             ${assessment.length ? assessment.slice(0, 8).map(scaleAssessmentCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, and conditions to generate scale-up risk cards.</div>`}
             ${assessment.length > 8 ? `<span class="muted small">+${assessment.length - 8} more assessment cards in export</span>` : ""}
             `,
-            assessment.length ? `${assessment.length} cards` : "no risk cards"
+            assessment.length ? `${assessment.length} cards` : "no risk cards",
+            false
           )}
 
           ${compactDetailsHtml(
@@ -5571,7 +6993,8 @@
             ` : ""}
             ${recycle.warnings.length ? `<span class="pill warn">${recycle.warnings.length} recycle warning${recycle.warnings.length === 1 ? "" : "s"}</span>` : ""}
             `,
-            recycle.closures.length ? `${recycle.closures.length} closure rows` : `${recycle.fates.length} fate classes`
+            recycle.closures.length ? `${recycle.closures.length} closure rows` : `${recycle.fates.length} fate classes`,
+            false
           )}
           ${compactDetailsHtml(
             "Energy bridge candidates",
@@ -5586,22 +7009,36 @@
       const row = (label, makespan, batches, kgYear, note) => `
         <div class="scaled-flow-row">
           <strong>${escapeHtml(label)}</strong>
-          <span>${escapeHtml(makespan || "missing")} h</span>
-          <span>${escapeHtml(batches || "missing")} batches/year</span>
-          <span>${escapeHtml(kgYear || "missing")} kg/year</span>
+          <span>${escapeHtml(makespan ? formatDisplayNumber(makespan) : "missing")} h</span>
+          <span>${escapeHtml(batches ? formatDisplayNumber(batches) : "missing")} batches/year</span>
+          <span>${escapeHtml(kgYear ? formatDisplayNumber(kgYear) : "missing")} kg/year</span>
           <span class="muted small">${escapeHtml(note)}</span>
         </div>
       `;
-      const view = state.scheduleScenarioView === "overlapped" ? "overlapped" : "conservative";
+      const view = ensureScaleBasis().planningScenario === "overlapped" ? "overlapped" : "conservative";
       const activeRow = view === "overlapped"
-        ? row("Overlapped train", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches can start at the limiting equipment cycle")
-        : row("Conservative single-train", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "batches do not start before the previous batch leaves the train");
+        ? row("Overlapped plan", schedule.plantCycleTimeH, schedule.overlappedBatchesPerYear, schedule.overlappedKgPerYear, "new batches start at the limiting equipment cycle")
+        : row("Conservative plan", schedule.batchMakespanH, schedule.conservativeBatchesPerYear, schedule.conservativeKgPerYear, "a new batch starts after the previous batch leaves the train");
+      const comparison = view === "overlapped"
+        ? `Conservative comparison: ${schedule.conservativeKgPerYear ? formatDisplayNumber(schedule.conservativeKgPerYear) : "missing"} kg/year`
+        : `Overlapped comparison: ${schedule.overlappedKgPerYear ? formatDisplayNumber(schedule.overlappedKgPerYear) : "missing"} kg/year`;
       return `
-        <div class="schedule-scenario-toggle">
-          <button class="mini-button ${view === "conservative" ? "chosen" : ""}" data-schedule-scenario-view="conservative">Conservative</button>
-          <button class="mini-button ${view === "overlapped" ? "chosen" : ""}" data-schedule-scenario-view="overlapped">Overlapped</button>
-        </div>
         ${activeRow}
+        <div class="muted small scale-scenario-comparison">${escapeHtml(comparison)}</div>
+      `;
+    }
+
+    function ganttSummaryLauncherHtml(gantt) {
+      const bottleneck = gantt.bottleneck?.groupId
+        || (gantt.bottleneckStatus === "balanced" ? "balanced" : "missing");
+      const timedCount = gantt.tasks.length - gantt.missingDurationCount;
+      return `
+        <div class="gantt-summary gantt-summary-compact">
+          <div class="scale-mini-metric"><span class="label">Batch makespan</span><strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>${gantt.makespanRangeH && gantt.makespanRangeH.max > gantt.makespanRangeH.min ? `<span class="muted small">${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} declared</span>` : ""}</div>
+          <div class="scale-mini-metric"><span class="label">Plant cycle</span><strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong>${gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? `<span class="muted small">${escapeHtml(rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max))} declared</span>` : ""}</div>
+          <div class="scale-mini-metric"><span class="label">Bottleneck</span><strong>${escapeHtml(bottleneck)}</strong></div>
+          <div class="scale-mini-metric"><span class="label">Task timing</span><strong>${timedCount}/${gantt.tasks.length} set</strong></div>
+        </div>
       `;
     }
 
@@ -5610,17 +7047,17 @@
         return `<div class="mfa-empty">Add product kg/batch, reactants volume, solvent loading, working fill, and product MW to reproduce reactor size and stoichiometric water checks.</div>`;
       }
       const rows = [
-        ["Product basis", sizing.productBatchKg ? `${sizing.productBatchKg} kg/batch` : "missing"],
+        ["Sizing batch", sizing.productBatchKg ? `${sizing.productBatchKg} kg/batch` : "missing"],
         ["Reactants volume", sizing.reactantsVolumeM3 ? `${sizing.reactantsVolumeM3} m3` : "missing"],
         ["Solvent volume", sizing.solventVolumeM3 ? `${sizing.solventVolumeM3} m3` : "missing"],
         ["Total charge", sizing.totalChargeM3 ? `${sizing.totalChargeM3} m3` : "missing"],
         ["Working fill", sizing.workingFillPercent ? `${sizing.workingFillPercent}%` : "missing"],
-        ["Required reactor volume", sizing.reactorVolumeM3 ? `${sizing.reactorVolumeM3} m3` : "missing"],
+        ["Required reactor volume", sizing.reactorVolumeM3 ? `${formatDisplayNumber(sizing.reactorVolumeM3)} m3` : "missing"],
         ["Condensation water", sizing.generatedWaterKg ? `${sizing.generatedWaterKg} kg/batch` : "missing"]
       ];
       return `
         <div class="mfa-empty ${sizing.autoReady ? "ok" : ""}" style="margin-bottom:6px">
-          Reactor sizing source: ${escapeHtml(sizing.source || "missing")}${sizing.autoGroupId ? ` (${escapeHtml(sizing.autoGroupId)})` : ""}.
+          Charge source: ${escapeHtml(sizing.source || "missing")}${sizing.autoGroupId ? ` (${escapeHtml(sizing.autoGroupId)})` : ""}. Stoichiometry: ${escapeHtml(sizing.stoichiometrySource || "missing")}.
           ${sizing.autoGroupId && (sizing.missing || []).some(item => /density/i.test(item)) ? `<button class="mini-button scale-inline-action" data-add-density-basis="${escapeAttr(sizing.autoGroupId)}">Add Density Basis</button>` : ""}
         </div>
         <div class="scale-metric-grid">
@@ -5638,13 +7075,11 @@
     function throughputDiagnosticsHtml(model) {
       const time = model.timeBottleneck;
       const size = model.sizeBottleneck;
-      const throughput = model.throughputBottleneck;
       const named = item => item ? `${item.groupId} - ${item.task || ""}` : "missing";
       const value = (item, kind) => {
         if (!item) return "missing";
         if (kind === "time") return Number.isFinite(item.effectiveTimeH) ? `${formatNumber(item.effectiveTimeH)} h effective` : "missing";
         if (kind === "size") return Number.isFinite(item.utilizationPercent) ? `${formatNumber(item.utilizationPercent)}% utilization` : "capacity data missing";
-        if (kind === "throughput") return Number.isFinite(item.combinedScore) ? `${formatNumber(item.combinedScore * 100)} score` : "capacity data missing";
         return "";
       };
       const capacityRows = model.rows.filter(row => row.capacityAmount || row.capacityUnit);
@@ -5659,11 +7094,6 @@
             <span class="label">Size bottleneck</span>
             <strong>${escapeHtml(named(size))}</strong>
             <span class="muted small">${escapeHtml(value(size, "size"))}; limit ${escapeHtml(formatNumber(model.allowableCapacityUtilizationPercent))}%</span>
-          </div>
-          <div class="scale-mini-metric">
-            <span class="label">Throughput bottleneck</span>
-            <strong>${escapeHtml(named(throughput))}</strong>
-            <span class="muted small">${escapeHtml(value(throughput, "throughput"))}</span>
           </div>
         </div>
         ${capacityRows.length ? `
@@ -5704,6 +7134,15 @@
 
     function heuristicRulesPanelHtml(heuristics) {
       const refine = state.aiRefine;
+      const severityOrder = { high: 0, medium: 1, low: 2 };
+      const triggeredRules = [...heuristics.triggered].sort((a, b) =>
+        (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3)
+        || String(a.id).localeCompare(String(b.id))
+      );
+      const visibleTriggeredRules = state.showAllTriggeredHeuristics
+        ? triggeredRules
+        : triggeredRules.slice(0, 8);
+      const hiddenTriggeredCount = Math.max(0, triggeredRules.length - visibleTriggeredRules.length);
       return `
         <div class="scale-results">
           <div class="scale-metric">
@@ -5732,8 +7171,16 @@
             Boolean(refine)
           )}
           <div class="scale-metric">
-            <span class="label">Triggered Rule Cards</span>
-            ${heuristics.triggered.length ? heuristics.triggered.map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
+            <div class="row between">
+              <span class="label">Triggered Rules</span>
+              ${triggeredRules.length > 8 ? `<span class="muted small">${visibleTriggeredRules.length} of ${triggeredRules.length}</span>` : ""}
+            </div>
+            ${visibleTriggeredRules.length ? visibleTriggeredRules.map(heuristicCardHtml).join("") : `<div class="mfa-empty">Add grouped phenomena, streams, phases, and conditions to activate heuristic rules.</div>`}
+            ${triggeredRules.length > 8 ? `
+              <button data-toggle-triggered-rules="true">
+                ${state.showAllTriggeredHeuristics ? "Show priority rules only" : `Show ${hiddenTriggeredCount} more triggered rules`}
+              </button>
+            ` : ""}
           </div>
           ${state.showAllHeuristicRules ? `
             <div class="scale-metric">
@@ -5754,6 +7201,12 @@
       root.querySelectorAll("[data-toggle-heuristic-library]").forEach(button => {
         button.addEventListener("click", () => {
           state.showAllHeuristicRules = !state.showAllHeuristicRules;
+          renderHeuristicsPanel();
+        });
+      });
+      root.querySelectorAll("[data-toggle-triggered-rules]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.showAllTriggeredHeuristics = !state.showAllTriggeredHeuristics;
           renderHeuristicsPanel();
         });
       });
@@ -5821,7 +7274,11 @@
           <span>${escapeHtml(refine.mode)}</span>
           ${refine.scope ? `<span class="muted small">Scopes: ${escapeHtml(refine.scope)}</span>` : ""}
           ${refine.conflicts.length
-            ? refine.conflicts.slice(0, 5).map(item => `<span class="muted small">${escapeHtml(item.severity.toUpperCase())}: ${escapeHtml(item.title)} -> ${escapeHtml(item.action)}</span>`).join("")
+            ? refine.conflicts.slice(0, 5).map(item => {
+              const reason = String(item.reason || item.title || "");
+              const shortReason = reason.length > 150 ? `${reason.slice(0, 147)}...` : reason;
+              return `<span class="muted small">${escapeHtml(item.severity.toUpperCase())} - ${escapeHtml(item.target || "process")}: ${escapeHtml(shortReason)}</span>`;
+            }).join("")
             : `<span class="muted small">No high-priority conflicts detected from the current rule set.</span>`}
           ${refine.conflicts.length > 5 ? `<span class="muted small">+${refine.conflicts.length - 5} more conflicts in Review Results / export.</span>` : ""}
         </div>
@@ -5859,29 +7316,116 @@
       const gapText = Number.isFinite(gantt.bottleneckGapH) && Number.isFinite(gantt.bottleneckGapPercent)
         ? `Gap to next task: ${formatNumber(gantt.bottleneckGapH)} h / ${formatNumber(gantt.bottleneckGapPercent)}%. Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}%.`
         : `Critical threshold: >=${formatNumber(bottleneckThresholds.minGapH)} h and >=${formatNumber(bottleneckThresholds.minGapPercent)}% above the next longest task.`;
+      const statusText = gantt.bottleneck
+        ? `${gantt.bottleneck.groupId} is critical${Number.isFinite(gantt.bottleneckGapH) ? ` and ${formatNumber(gantt.bottleneckGapH)} h longer than the next critical task` : ""}.`
+        : gantt.bottleneckStatus === "balanced"
+          ? "No task is sufficiently dominant to classify as a critical bottleneck."
+          : "Add task durations to calculate the critical path.";
       return `
-        <div class="muted small" style="margin-bottom:8px">${escapeHtml(gapText)}</div>
+        <div class="gantt-toolbar">
+          <div><strong>Schedule status</strong><span title="${escapeAttr(gapText)}">${escapeHtml(statusText)}</span></div>
+          ${gantt.missingDurationCount ? `<button data-load-schedule-example="octocrylene" class="mini-button" title="Fill every task with generic example durations; asks first, can be undone">Fill Example Durations</button>` : ""}
+        </div>
         <div class="gantt-summary">
           <div class="scale-mini-metric">
-            <span class="label">Gantt makespan</span>
+            <span class="label">Batch makespan</span>
             <strong>${Number.isFinite(gantt.estimatedCycleTimeH) ? `${formatNumber(gantt.estimatedCycleTimeH)} h` : "missing"}</strong>
+            <span class="muted small">complete dependency path${gantt.makespanRangeH && gantt.makespanRangeH.max > gantt.makespanRangeH.min ? `; ${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} across the declared ranges` : ""}</span>
           </div>
           <div class="scale-mini-metric">
             <span class="label">Plant cycle</span>
             <strong>${Number.isFinite(gantt.plantCycleTimeH) ? `${formatNumber(gantt.plantCycleTimeH)} h` : "missing"}</strong>
+            <span class="muted small">longest effective stage${gantt.plantCycleRangeH && gantt.plantCycleRangeH.max > gantt.plantCycleRangeH.min ? `; ${escapeHtml(rangeHoursText(gantt.plantCycleRangeH.min, gantt.plantCycleRangeH.max))} across the declared ranges` : ""}</span>
           </div>
           <div class="scale-mini-metric">
-            <span class="label">Batches/year</span>
-            <strong>${Number.isFinite(gantt.batchesPerYear) ? formatNumber(gantt.batchesPerYear) : "missing"}</strong>
+            <span class="label">Conservative batches/year</span>
+            <strong>${Number.isFinite(gantt.batchesPerYear) ? formatDisplayNumber(gantt.batchesPerYear) : "missing"}</strong>
+            <span class="muted small">from batch makespan</span>
           </div>
           <div class="scale-mini-metric">
             <span class="label">Bottleneck</span>
             <strong>${escapeHtml(bottleneckLabel)}</strong>
+            <span class="muted small">on critical path</span>
           </div>
         </div>
+        ${ganttTimelineHtml(gantt)}
         ${gantt.bottleneck ? bottleneckActionHtml(gantt.bottleneck) : balancedGanttActionHtml(gantt)}
+        <div class="gantt-task-list-head"><strong>Task assumptions</strong><span>${gantt.tasks.length} tasks · timing and capacity inputs</span></div>
         <div class="scale-results">
-          ${gantt.tasks.map(ganttRowHtml).join("")}
+          ${gantt.tasks.map(task => ganttRowHtml(task, gantt.tasks)).join("")}
+        </div>
+      `;
+    }
+
+    // A real time-axis view of the schedule, positioning each task's bar at its actual startH/finishH
+    // (computed by the CPM engine in taskScheduleModel) instead of the plain relative-duration bars in
+    // ganttRowHtml below - so overlap, sequencing, and how much slack a task has are visible at a
+    // glance instead of only inferable from reading numbers row by row.
+    function ganttTimelineHtml(gantt) {
+      const makespan = gantt.estimatedCycleTimeH;
+      const placed = gantt.tasks.filter(task => Number.isFinite(task.startH) && Number.isFinite(task.finishH) && task.finishH > task.startH);
+      if (!Number.isFinite(makespan) || makespan <= 0 || !placed.length) return "";
+      // Every task keeps its row: the ones without a duration are drawn as hatched placeholders in
+      // sequence, so the chart shows the whole process and where the timing data stops, instead
+      // of three bars for a nine-task process. In the overlapped scenario the next batch is drawn
+      // as a ghost starting at the plant cycle time, which is what "overlapped" means on a chart.
+      const overlapped = ensureScaleBasis().planningScenario === "overlapped";
+      const plantCycle = Number.isFinite(gantt.plantCycleTimeH) && gantt.plantCycleTimeH > 0 ? gantt.plantCycleTimeH : NaN;
+      const showNextBatch = overlapped && Number.isFinite(plantCycle) && plantCycle < makespan;
+      const span = showNextBatch ? makespan + plantCycle : makespan;
+      const tickCount = 5;
+      const ticks = Array.from({ length: tickCount + 1 }, (_, i) => span * i / tickCount);
+      const pct = value => (value / span * 100).toFixed(2);
+      const unplacedCount = gantt.tasks.length - placed.length;
+      const bar = (task, offsetH, ghost) => {
+        const leftPct = Math.max(0, Math.min(100, (task.startH + offsetH) / span * 100));
+        const widthPct = Math.max(0.8, Math.min(100 - leftPct, (task.finishH - task.startH) / span * 100));
+        const tone = task.isBottleneck ? "bottleneck" : task.onCriticalPath ? "critical" : "";
+        const rangeNote = task.durationIsRange ? `; declared ${rangeHoursText(task.durationMinH, task.durationMaxH)}, midpoint drawn` : "";
+        const title = ghost
+          ? `${task.groupId} - next batch: ${formatNumber(task.startH + offsetH)}–${formatNumber(task.finishH + offsetH)} h (starts at the plant cycle time)`
+          : `${task.groupId} - ${task.task}: ${formatNumber(task.startH)}–${formatNumber(task.finishH)} h${task.isBottleneck ? " (bottleneck)" : task.onCriticalPath ? " (critical path)" : ""}${rangeNote}`;
+        // A declared range is drawn as such: the bar ends at the midpoint, a thinner extension
+        // reaches the upper bound, so the reader sees an interval rather than a measurement.
+        const extension = !ghost && task.durationIsRange && Number.isFinite(task.durationMaxH) && task.durationH > 0
+          ? (() => {
+            const scale = (task.finishH - task.startH) / task.durationH;
+            const extraPct = Math.max(0, Math.min(100 - leftPct - widthPct, (task.durationMaxH - task.durationH) * scale / span * 100));
+            return extraPct > 0 ? `<div class="gantt-timeline-bar range-extension" style="left:${leftPct + widthPct}%; width:${extraPct}%" title="${escapeAttr(`${task.groupId}: up to ${significantText(task.durationMaxH, 3)} h declared`)}"></div>` : "";
+          })()
+          : "";
+        return `<div class="gantt-timeline-bar ${tone} ${ghost ? "ghost" : ""} ${!ghost && task.durationIsRange ? "ranged" : ""}" style="left:${leftPct}%; width:${widthPct}%" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"></div>${extension}`;
+      };
+      const rangedTasks = gantt.tasks.filter(task => task.durationIsRange);
+      const rangeSummary = rangedTasks.length
+        ? `<div class="gantt-range-note">Declared ranges kept as ranges: ${rangedTasks.map(task => `${escapeHtml(task.groupId)} ${escapeHtml(rangeHoursText(task.durationMinH, task.durationMaxH))}`).join(", ")}. Bars use the midpoint${gantt.makespanRangeH ? `; the makespan spans ${escapeHtml(rangeHoursText(gantt.makespanRangeH.min, gantt.makespanRangeH.max))} across the bounds` : ""}.</div>`
+        : "";
+      return `
+        <div class="gantt-timeline" role="img" aria-label="${escapeAttr(`Gantt timeline with ${placed.length} scheduled tasks over ${formatNumber(makespan)} hours${unplacedCount ? ` and ${unplacedCount} without a duration` : ""}.`)}">
+          <div class="gantt-timeline-legend" aria-hidden="true">
+            <span class="standard">Scheduled</span><span class="critical">Critical path</span><span class="bottleneck">Bottleneck</span>${unplacedCount ? `<span class="unscheduled">No duration</span>` : ""}${showNextBatch ? `<span class="ghost">Next batch</span>` : ""}${rangedTasks.length ? `<span class="range-extension">Declared range</span>` : ""}
+          </div>
+          ${rangeSummary}
+          <div class="gantt-timeline-axis">
+            ${ticks.map(tick => `<span style="left:${pct(tick)}%">${formatNumber(Math.round(tick * 10) / 10)} h</span>`).join("")}
+          </div>
+          <div class="gantt-timeline-body">
+            ${ticks.map(tick => `<div class="gantt-timeline-grid" style="left:${pct(tick)}%"></div>`).join("")}
+            ${showNextBatch ? `<div class="gantt-timeline-marker" style="left:${pct(plantCycle)}%" title="${escapeAttr(`Plant cycle ${formatNumber(plantCycle)} h: the next batch can start here`)}"><span>next batch ${formatNumber(plantCycle)} h</span></div>` : ""}
+            ${gantt.tasks.map(task => {
+              const isPlaced = placed.includes(task);
+              return `
+                <div class="gantt-timeline-row ${isPlaced ? "" : "unscheduled"}">
+                  <span class="gantt-timeline-label" title="${escapeAttr(task.task)}"><strong>${escapeHtml(task.groupId)}</strong><small>${escapeHtml(task.task)}</small></span>
+                  <div class="gantt-timeline-track">
+                    ${isPlaced
+                      ? `${bar(task, 0, false)}${showNextBatch ? bar(task, plantCycle, true) : ""}`
+                      : `<div class="gantt-timeline-bar unscheduled" style="left:0; width:100%" title="${escapeAttr(`${task.groupId} - ${task.task}: no duration yet; add it in the task row below or use Fill Example Durations`)}"><span>no duration</span></div>`}
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
         </div>
       `;
     }
@@ -5892,7 +7436,7 @@
         <div class="rule-card low" style="margin:8px 0">
           <span class="severity-pill">balanced</span>
           <strong>No critical bottleneck detected</strong>
-          <span>${escapeHtml(gantt.bottleneckCandidate.groupId)} is currently the longest task, but it is too close to the next task to flag as a critical bottleneck.</span>
+          <span>${escapeHtml(gantt.bottleneckCandidate.groupId)} is currently the longest task on the critical path, but it is too close to the next one to flag as a critical bottleneck.</span>
           <span class="muted small">Use this state as a rough balanced schedule. Split only if you have equipment/capacity evidence, not just because one bar is slightly longer.</span>
         </div>
       `;
@@ -5945,17 +7489,20 @@
         `
       ) : "";
       return `
-        <div class="rule-card medium" style="margin:8px 0">
-          <span class="severity-pill">bottleneck</span>
-          <strong>${escapeHtml(task.groupId)} controls the cycle time</strong>
-          <span>${escapeHtml(split)}</span>
-          <span class="muted small">${escapeHtml(recommendation)}</span>
-          ${splitButton}
+        <div class="gantt-decision-card">
+          <button type="button" class="gantt-decision-summary" data-toggle-gantt-decision aria-expanded="false">
+            <span><em class="severity-pill">bottleneck</em><strong>${escapeHtml(task.groupId)} controls the cycle time</strong><small>${escapeHtml(split)}</small></span>
+            <small>Review options</small>
+          </button>
+          <div class="gantt-decision-body" hidden>
+            <span>${escapeHtml(recommendation)}</span>
+            ${splitButton}
+          </div>
         </div>
       `;
     }
 
-    function ganttRowHtml(task) {
+    function ganttRowHtml(task, allTasks = []) {
       const duration = Number.isFinite(task.durationH) ? `${formatNumber(task.durationH)} h` : "missing duration";
       const adjusted = Number.isFinite(task.adjustedDurationH) && Math.abs(task.adjustedDurationH - task.durationH) > 0.0001
         ? `; adjusted ${formatNumber(task.adjustedDurationH)} h with ${formatNumber(task.scheduleMarginPercent)}% margin`
@@ -5971,40 +7518,72 @@
       const densityButton = showDensityBasis
         ? `<button class="mini-button scale-density-button" data-add-density-basis="${escapeAttr(task.groupId)}">${propertyHasValue(groupModel(task.groupId) || ensureGroup(task.groupId), "density") ? "Edit Density Basis" : "Add Density Basis"}</button>`
         : "";
+      const interval = Number.isFinite(task.startH) && Number.isFinite(task.finishH)
+        ? `${formatNumber(task.startH)}–${formatNumber(task.finishH)} h`
+        : "not placed";
       return `
         <div class="gantt-row ${task.isBottleneck ? "bottleneck" : ""} ${expanded ? "expanded" : "collapsed"}">
           <div class="gantt-row-head" data-toggle-gantt-row="${escapeAttr(task.groupId)}">
             <div class="gantt-task-meta">
               <strong>${escapeHtml(task.groupId)} - ${escapeHtml(task.task)}</strong>
               <span>${escapeHtml(task.blocks.join(", "))}${task.selectedUnit ? ` / ${escapeHtml(task.selectedUnit)}` : ""}</span>
-              <span class="muted small">${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}; source: ${escapeHtml(task.durationSource)}</span>
+              <span class="muted small">Source: ${escapeHtml(task.durationSource)}</span>
               ${task.isBottleneck ? `<span class="pill warn">bottleneck</span>` : ""}
               ${scaleSensitivityBadgeHtml(task.scaleSensitivity)}
             </div>
-            <div class="gantt-row-bar-col">
-              <div class="gantt-bar-track" title="${escapeAttr(effective)}">
-                <div class="gantt-bar" style="width:${task.widthPercent}%"></div>
-              </div>
-              <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
+            <div class="gantt-row-timing">
+              <strong>${escapeHtml(interval)}</strong>
+              <span>${escapeHtml(duration)}${escapeHtml(adjusted)}; ${escapeHtml(effective)}</span>
             </div>
+            <span class="rule-card-chevron">${expanded ? "▾" : "▸"}</span>
           </div>
           ${expanded ? `
             <div>
               <div class="gantt-controls">
-                <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="Task duration in hours"></label>
+                <label><span>Duration h</span><input data-schedule-field="durationH" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.durationInput)}" placeholder="${Number.isFinite(task.durationH) ? formatNumber(task.durationH) : "h"}" title="${escapeAttr(task.durationIsRange ? `Declared range ${rangeHoursText(task.durationMinH, task.durationMaxH)}: the midpoint ${formatNumber(task.durationH)} h schedules, the bounds give the makespan range` : "Task duration in hours; a range such as 2-3 is kept as a range")}"></label>
                 <label><span>Parallel</span><input data-schedule-field="parallelUnits" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.parallelUnits)}" placeholder="1" title="Parallel units"></label>
                 <label><span>Capacity</span><input data-schedule-field="capacityAmount" data-schedule-group="${escapeAttr(task.groupId)}" value="${escapeAttr(task.capacityAmount)}" placeholder="optional" title="Optional equipment capacity for size bottleneck checks"></label>
                 <label><span>Capacity unit</span><select data-schedule-field="capacityUnit" data-schedule-group="${escapeAttr(task.groupId)}" title="Optional capacity unit for size bottleneck checks">${optionHtml(capacityUnitOptions.filter(Boolean), task.capacityUnit || suggestedCapacityUnitForGroup(groupModel(task.groupId) || ensureGroup(task.groupId)))}</select></label>
-                <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale. Set to kinetics-bound if a heat/cool holding step is actually where a reaction runs - its Gantt time is then never divided by parallel units.">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
+                <label><span>Time vs. scale</span><select data-schedule-field="scaleSensitivity" data-schedule-group="${escapeAttr(task.groupId)}" title="How this task's time behaves with scale; kinetics-bound is never divided by parallel units">${scaleSensitivityOptionHtml(task.scaleSensitivity)}</select></label>
+                <label><span>Starts after</span><select data-schedule-field="dependencyMode" data-schedule-group="${escapeAttr(task.groupId)}" title="Auto follows the previous task in text order; Manual picks the tasks to wait for">${dependencyModeOptionHtml(task.dependencyMode)}</select></label>
               </div>
+              ${dependencyPickerHtml(task, allTasks)}
               <div class="gantt-scale-note">
                 <strong>${escapeHtml(profile.label)}</strong>
                 <span class="pill ${profile.badge === "high" || profile.badge === "medium-high" ? "warn" : profile.badge === "low" ? "green" : "blue"}">${escapeHtml(profile.badge)} sensitivity</span>
                 <span class="muted small">${escapeHtml(scaleNote)}</span>
+                <button class="mini-button" data-open-task-timetable="${escapeAttr(task.groupId)}">Task Timetable</button>
                 ${densityButton}
               </div>
             </div>
           ` : ""}
+        </div>
+      `;
+    }
+
+    function dependencyModeOptionHtml(selected) {
+      const options = [
+        { value: "auto", label: "Auto (previous task)" },
+        { value: "manual", label: "Manual (pick below)" }
+      ];
+      return options.map(opt => `<option value="${escapeAttr(opt.value)}" ${opt.value === selected ? "selected" : ""}>${escapeHtml(opt.label)}</option>`).join("");
+    }
+
+    function dependencyPickerHtml(task, allTasks) {
+      if (task.dependencyMode !== "manual") return "";
+      const others = allTasks.filter(other => other.groupId !== task.groupId);
+      return `
+        <div class="dependency-picker">
+          <div class="muted small">Predecessors - ${escapeHtml(task.groupId)} waits until all checked tasks finish.</div>
+          <div class="dependency-picker-list">
+            ${others.map(other => `
+              <label class="dependency-picker-item">
+                <input type="checkbox" data-predecessor-toggle="${escapeAttr(other.groupId)}" data-predecessor-task="${escapeAttr(task.groupId)}" ${task.predecessorIds.includes(other.groupId) ? "checked" : ""}>
+                <span>${escapeHtml(other.groupId)} - ${escapeHtml(other.task)}</span>
+              </label>
+            `).join("")}
+          </div>
+          ${task.cyclicDependency ? `<div class="muted small" style="color:var(--orange)">Circular dependency involving ${escapeHtml(task.groupId)} - the loop-closing link was ignored for scheduling until fixed.</div>` : ""}
         </div>
       `;
     }
@@ -6047,7 +7626,7 @@
     function energyBridgeRowHtml(item) {
       const mass = item.massBasis.value ? `${item.massBasis.value} ${item.massBasis.unit}` : "mass missing";
       const cpHint = item.missing.includes("Cp")
-        ? `<span class="muted small">Cp goes in Phenomena/Group > Properties Refinement > Heat capacity Cp.</span>`
+        ? `<span class="muted small">Cp goes in Phenomena > Properties Refinement > Heat capacity Cp.</span>`
         : "";
       return `
         <div class="scaled-flow-row">
@@ -6062,7 +7641,8 @@
     }
 
     function scaledFlowRowHtml(row) {
-      const scaled = row.scaledQuantity ? `${row.scaledQuantity} ${row.scaledUnit}` : "not scaled";
+      const uncertainty = streamUncertaintyPercent(row.status);
+      const scaled = row.scaledQuantity ? `${row.scaledQuantity} ${row.scaledUnit}${Number.isFinite(uncertainty) ? ` ±${uncertainty}%` : ""}` : "not scaled";
       return `
         <div class="scaled-flow-row">
           <strong>${escapeHtml(row.name || "untitled stream")}</strong>
@@ -6133,7 +7713,7 @@
       const groups = groupIdsInTextOrder().map(groupModel);
       const fallback = [
         { durationH: "0.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", capacityAmount: "", capacityUnit: "", notes: "charge/pre-mix" },
-        { durationH: "20", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", capacityAmount: "15", capacityUnit: "m3", notes: "Knoevenagel reflux/decanter, primary bottleneck" },
+        { durationH: "20", operationClass: "reaction_kinetic", scaleSensitivity: "kinetics-bound", capacityAmount: "", capacityUnit: "", notes: "Knoevenagel reflux/decanter, primary bottleneck; size must be entered from a reconciled charge basis" },
         { durationH: "2.5", operationClass: "pumping_transfer", scaleSensitivity: "roughly constant", capacityAmount: "", capacityUnit: "", notes: "aqueous/brine wash" },
         { durationH: "1", operationClass: "drying", scaleSensitivity: "increases with scale", capacityAmount: "", capacityUnit: "", notes: "drying/contact step" },
         { durationH: "4", operationClass: "heating_cooling", scaleSensitivity: "equipment dependent", capacityAmount: "", capacityUnit: "", notes: "solvent removal or final distillation" }
@@ -6169,11 +7749,12 @@
       state.scaleBasis.scheduleMarginPercent = "0";
       state.scaleBasis.batchDuration = "";
       state.scaleBasis.allowableCapacityUtilizationPercent = "85";
-      state.scaleBasis.reactantsLoadingLPerKgProduct = "1.067";
+      state.scaleBasis.productKgPerBatch = "3000";
+      state.scaleBasis.reactantsLoadingLPerKgProduct = "";
       state.scaleBasis.solventLoadingLPerKgProduct = "2.5";
       state.scaleBasis.reactorWorkingFillPercent = "70";
-      state.scaleBasis.productMolecularWeightGmol = "361.5";
-      state.scaleBasis.condensationWaterMolPerMol = "1";
+      state.scaleBasis.productMolecularWeightGmol = "";
+      state.scaleBasis.condensationWaterMolPerMol = "";
       renderScaleBasisPanel();
       renderHeuristicsPanel();
       refreshReviewPanels();
@@ -6385,7 +7966,7 @@
       const high = refine.conflicts.filter(item => item.severity === "high").length;
       const medium = refine.conflicts.filter(item => item.severity === "medium").length;
       const low = refine.conflicts.filter(item => item.severity === "low").length;
-      const missing = refine.conflicts.filter(item => /missing|lacks|incomplete/i.test(`${item.title} ${item.reason}`)).length;
+      const missing = refine.conflicts.filter(isDataGapIssue).length;
       const top = refine.conflicts[0];
       return `
         <div class="process-commentary">
@@ -6525,11 +8106,46 @@
       return Object.entries(scopeMatches).some(([scope, matched]) => matched && options?.[scope] !== false);
     }
 
+    // "Missing duration" and "heating and cooling in one group" are different kinds of finding:
+    // one asks for a number, the other for an engineering decision. Counting them together made
+    // the reference example read as "4 high and 59 medium conflicts", which is mostly a to-do
+    // list of data to enter, not 63 design problems.
+    function isDataGapIssue(item) {
+      return /missing|lacks|incomplete|needs data|need data|not reported|no numeric|unspecified|needs? (more )?evidence/i.test(`${item.title || ""} ${item.reason || ""}`);
+    }
+
     function aiRefineSummary(conflicts, heuristics) {
-      const high = conflicts.filter(item => item.severity === "high").length;
-      const medium = conflicts.filter(item => item.severity === "medium").length;
-      if (high || medium) return `${high} high and ${medium} medium priority conflicts before scale-up`;
+      const gaps = conflicts.filter(isDataGapIssue);
+      const design = conflicts.filter(item => !isDataGapIssue(item));
+      if (design.length || gaps.length) {
+        const high = design.filter(item => item.severity === "high").length;
+        const medium = design.filter(item => item.severity === "medium").length;
+        const parts = [];
+        if (design.length) parts.push(`${design.length} design conflict${design.length === 1 ? "" : "s"} (${high} high, ${medium} medium)`);
+        if (gaps.length) parts.push(`${gaps.length} data gap${gaps.length === 1 ? "" : "s"}`);
+        return `${parts.join(" and ")} before scale-up`;
+      }
       return `${heuristics.triggered.length} heuristic rules screened with no high-priority conflict`;
+    }
+
+    // The same finding raised for several groups (identical severity, title, reason and action)
+    // becomes one card that lists the targets, instead of four identical cards that read as noise.
+    function mergeDuplicateRuleIssues(issues) {
+      const merged = new Map();
+      issues.forEach(issue => {
+        const key = [issue.severity, issue.title, issue.reason, issue.action].join(" ");
+        const existing = merged.get(key);
+        if (!existing) {
+          merged.set(key, { ...issue, targets: [issue.target].filter(Boolean) });
+          return;
+        }
+        if (issue.target && !existing.targets.includes(issue.target)) existing.targets.push(issue.target);
+        // A data gap raised for twenty streams lists the first few and counts the rest; the full
+        // list is still in `targets` for the export and the Review Results cards.
+        const shown = existing.targets.slice(0, 6);
+        existing.target = shown.join(", ") + (existing.targets.length > shown.length ? ` and ${existing.targets.length - shown.length} more` : "");
+      });
+      return Array.from(merged.values());
     }
 
     function buildRuleChecks() {
@@ -6557,6 +8173,9 @@
       }
       if (state.blocks.length && groupIdsInTextOrder().length && gantt.missingDurationCount) {
         issues.push(ruleIssue("medium", "Task durations missing", `${gantt.missingDurationCount} grouped task${gantt.missingDurationCount === 1 ? "" : "s"} lack duration data for bottleneck analysis.`, "Gantt schedule", "Add duration h in group conditions or directly in the Gantt rows."));
+      }
+      if (gantt.cyclicDependencyGroupIds && gantt.cyclicDependencyGroupIds.length) {
+        issues.push(ruleIssue("medium", "Circular task dependency", `${gantt.cyclicDependencyGroupIds.join(", ")} form a dependency loop; the loop-closing link was ignored for scheduling.`, "Gantt schedule", "Open \"Starts after\" on each listed task and remove whichever predecessor closes the loop."));
       }
       if (gantt.bottleneck && ["increases with scale", "equipment dependent"].includes(gantt.bottleneck.scaleSensitivity)) {
         issues.push(ruleIssue("medium", "Scale-sensitive bottleneck", `${gantt.bottleneck.groupId} controls cycle time and is ${gantt.bottleneck.scaleSensitivity}.`, gantt.bottleneck.groupId, "Review equipment capacity, split into parallel units, or revise the selected unit operation."));
@@ -6657,7 +8276,7 @@
         .forEach(item => {
           issues.push(ruleIssue(item.severity, "Scale-up risk needs review", `${item.title}: ${item.recommendation}`, item.groupId || item.task, "Complete the missing/check fields before treating the scaled process as robust."));
         });
-      return issues.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
+      return mergeDuplicateRuleIssues(issues).sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
     }
 
     function processSequenceChecks() {
@@ -6932,20 +8551,31 @@
 
     function renderInspector() {
       const block = selectedBlock();
+      const group = selectedGroup();
       const hasBlock = Boolean(block);
       ["behaviorSelect", "blockText"].forEach(id => $(id).disabled = !hasBlock);
+      $("blockInspectorFields").hidden = !hasBlock;
+      const sourceMeta = blockSourceMeta(block);
       $("selectedBlockInfo").innerHTML = block
-        ? `<strong>${block.id}</strong> <span class="pill">${escapeHtml(block.groupId || "ungrouped")}</span>${block.source === "manual" ? `<span class="pill">manual</span>` : ""}<div class="muted small">${block.source === "manual" ? "Manual block not linked to protocol text. Use it for emerged scale-up operations, inferred separators, compliance steps, or assumptions." : "Edit this text when the extracted selection is missing a word or needs clearer wording."}</div>`
-        : "No block selected.";
+        ? `<strong>${block.id}</strong> <span class="muted small">· ${escapeHtml(block.groupId || "ungrouped")} · ${escapeHtml(sourceMeta.label)}</span><div class="muted small">${escapeHtml(sourceMeta.description)} ${block.source === "protocol" ? "Edit this text when the extracted selection needs correction." : "Record the engineering basis in notes and selection rationale."}</div>`
+        : group
+          ? `<strong>${escapeHtml(group.id)}</strong> <span class="muted small">· group selected</span><div class="muted small">Select one of its blocks to edit description and phenomena.</div>`
+          : "No block selected.";
       $("behaviorSelect").value = block?.behavior || "unassigned";
       renderBehaviorPresetHelp(block?.behavior || "unassigned");
       $("blockText").value = block?.text || "";
       renderPhenomenaGrid(block);
+      renderGroupProperties(group || (block?.groupId ? groupModel(block.groupId) : null));
+      renderProjectSubstances();
 
-      renderStepAuditPanel();
-      renderHeuristicsPanel();
-      renderScaleBasisPanel();
-      refreshReviewPanels();
+      // Hidden tabs are drawn when they are opened (setInspectorTab), not on every pass: the
+      // Scale-Up and Heuristics panels cost about 90 ms together and were rebuilt unseen.
+      if (state.activeInspectorTab === "heuristics") {
+        renderHeuristicsPanel();
+        refreshReviewPanels();
+      } else if (state.activeInspectorTab === "scale") {
+        renderScaleBasisPanel();
+      }
       renderExport();
     }
 
@@ -6960,124 +8590,11 @@
       `;
     }
 
-    function step13AuditModel() {
-      const blocks = blocksInOrder();
-      const groups = groupIdsInTextOrder().map(groupId => groupModel(groupId));
-      const allStreams = blocks.flatMap(block => {
-        ensureBlockFlowFields(block);
-        return block.streams || [];
-      });
-      const missingPurpose = blocks.filter(block => !blockHasAssignedPurpose(block));
-      const missingOutput = blocks.filter(block => blockExpectsStreams(block) && !streamCounts(block).output);
-      const missingPhase = allStreams.filter(stream => !String(stream.phase || "").trim() || stream.phase === "unknown");
-      const missingPhenomena = blocks.filter(block => !(block.phenomena || []).length);
-      const ungrouped = blocks.filter(block => !block.groupId);
-      const missingTaskOrUnit = groups.filter(group => !group.task || group.task === "unassigned" || !group.selectedUnit);
-      const incompatibleUnit = groups.filter(group => group.selectedUnit && !selectedUnitSupportedByEvidence(group));
-      const missingSelectionBasis = groups.filter(group => group.selectedUnit && unitOperationCandidatesForGroup(group).length > 1 && !String(group.selectionBasis || "").trim());
-
-      const statusFor = issues => !blocks.length ? "todo" : issues.length ? "partial" : "done";
-      return [
-        {
-          step: 1,
-          title: "Block Data",
-          status: statusFor([...missingPurpose, ...missingOutput, ...missingPhase]),
-          summary: blocks.length
-            ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}, ${allStreams.length} stream${allStreams.length === 1 ? "" : "s"}`
-            : "No blocks yet.",
-          issues: [
-            ...missingPurpose.map(block => ({ text: `${block.id}: purpose preset missing`, kind: "block", id: block.id })),
-            ...missingOutput.map(block => ({ text: `${block.id}: output stream missing`, kind: "block", id: block.id })),
-            ...missingPhase.map(stream => ({ text: `${stream.id || "stream"}: phase missing`, kind: "stream", id: stream.id }))
-          ]
-        },
-        {
-          step: 2,
-          title: "Phenomena",
-          status: statusFor(missingPhenomena),
-          summary: blocks.length
-            ? `${blocks.length - missingPhenomena.length}/${blocks.length} blocks mapped`
-            : "Create blocks first.",
-          issues: missingPhenomena.map(block => ({ text: `${block.id}: no phenomena assigned`, kind: "block", id: block.id }))
-        },
-        {
-          step: 3,
-          title: "Tasks & Unit Ops",
-          status: !groups.length ? "todo" : [...ungrouped, ...missingTaskOrUnit, ...incompatibleUnit].length ? "partial" : "done",
-          summary: groups.length
-            ? `${groups.length} task group${groups.length === 1 ? "" : "s"}`
-            : "No task groups yet.",
-          issues: [
-            ...ungrouped.map(block => ({ text: `${block.id}: not assigned to a group`, kind: "block", id: block.id })),
-            ...missingTaskOrUnit.map(group => ({ text: `${group.id}: task or selected unit missing`, kind: "group", id: group.id })),
-            ...incompatibleUnit.map(group => ({ text: `${group.id}: selected unit not supported by evidence`, kind: "group", id: group.id })),
-            ...missingSelectionBasis.map(group => ({ text: `${group.id}: selection basis missing`, kind: "group", id: group.id, warningOnly: true }))
-          ]
-        }
-      ];
-    }
-
-    function renderStepAuditPanel() {
-      const root = $("stepAuditPanel");
-      if (!root) return;
-      const cards = step13AuditModel();
-      root.innerHTML = cards.map(card => {
-        const blockingIssues = card.issues.filter(issue => !issue.warningOnly);
-        const first = card.issues[0];
-        const statusLabel = card.status === "done" ? "done" : card.status === "partial" ? "needs work" : "todo";
-        return `
-          <article class="step-audit-card ${card.status}">
-            <div class="step-audit-head">
-              <strong>Step ${card.step}. ${escapeHtml(card.title)}</strong>
-              <span class="pill ${card.status === "done" ? "green" : card.status === "partial" ? "warn" : ""}">${escapeHtml(statusLabel)}</span>
-            </div>
-            <div class="muted small">${escapeHtml(card.summary)}</div>
-            <div class="step-audit-issues">
-              ${card.issues.length
-                ? card.issues.slice(0, 3).map(issue => `<button class="step-audit-issue ${issue.warningOnly ? "warning-only" : ""}" data-step-audit-kind="${escapeAttr(issue.kind)}" data-step-audit-id="${escapeAttr(issue.id)}">${escapeHtml(issue.text)}</button>`).join("")
-                : `<span class="pill green">No open issue</span>`}
-              ${card.issues.length > 3 ? `<span class="muted small">+${card.issues.length - 3} more</span>` : ""}
-            </div>
-            ${first ? `<button class="mini-button" data-step-audit-kind="${escapeAttr(first.kind)}" data-step-audit-id="${escapeAttr(first.id)}">${blockingIssues.length ? "Open first gap" : "Open warning"}</button>` : ""}
-          </article>
-        `;
-      }).join("");
-      root.querySelectorAll("[data-step-audit-kind]").forEach(button => {
-        button.addEventListener("click", () => focusStepAuditTarget(button.dataset.stepAuditKind, button.dataset.stepAuditId));
-      });
-    }
-
-    function focusStepAuditTarget(kind, id) {
-      if (!id) return;
-      if (kind === "group") {
-        const group = groupModel(id);
-        if (!group) return;
-        state.selectedGroupId = id;
-        state.selectedBlockId = null;
-        state.selectedIds = group.blocks.map(block => block.id);
-        state.focusEndpoint = id;
-      } else if (kind === "stream") {
-        const block = blocksInOrder().find(item => (item.streams || []).some(stream => stream.id === id));
-        if (!block) return;
-        state.selectedBlockId = block.id;
-        state.selectedGroupId = null;
-        state.selectedIds = [block.id];
-        state.focusEndpoint = block.groupId || block.id;
-        const stream = block.streams.find(item => item.id === id);
-        if (stream) stream.editing = true;
-      } else {
-        const block = state.blocks.find(item => item.id === id);
-        if (!block) return;
-        state.selectedBlockId = block.id;
-        state.selectedGroupId = null;
-        state.selectedIds = [block.id];
-        state.focusEndpoint = block.groupId || block.id;
-      }
-      setInspectorTab("inspect");
-      renderAll();
-    }
-
-
+    // Mounts the group-properties panel into #groupProperties. This wiring went missing during an
+    // earlier board redesign (the container was dropped from the page while every render function
+    // below survived), which silently made Cp/density/viscosity impossible to enter and left the
+    // "Add Density Basis" buttons in the Scale-Up tab as dead ends - they set propertiesEditing and
+    // switched tab, but there was no panel left to switch to.
     function renderGroupProperties(group) {
       const root = $("groupProperties");
       if (!root) return;
@@ -7128,26 +8645,6 @@
           ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No property data entered yet. The tool will still run, but separation decisions remain lower-confidence.</div>`}
         </section>
       `;
-    }
-
-    function bindGroupPropertiesControls(root, groupId) {
-      bindPropertyPredictorControls(root, groupId);
-      root.querySelectorAll("[data-edit-properties]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(button.dataset.editProperties).propertiesEditing = true;
-          renderAll();
-        });
-      });
-      root.querySelectorAll("[data-save-properties]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(button.dataset.saveProperties).propertiesEditing = false;
-          renderAll();
-        });
-      });
-      root.querySelectorAll("[data-property-field]").forEach(field => {
-        field.addEventListener("input", updateGroupPropertyField);
-        field.addEventListener("change", updateGroupPropertyField);
-      });
     }
 
     function propertyPredictorPanelHtml(group) {
@@ -7219,6 +8716,26 @@
       `;
     }
 
+    function bindGroupPropertiesControls(root, groupId) {
+      bindPropertyPredictorControls(root, groupId);
+      root.querySelectorAll("[data-edit-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.editProperties).propertiesEditing = true;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-save-properties]").forEach(button => {
+        button.addEventListener("click", () => {
+          ensureGroup(button.dataset.saveProperties).propertiesEditing = false;
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-property-field]").forEach(field => {
+        field.addEventListener("input", updateGroupPropertyField);
+        field.addEventListener("change", updateGroupPropertyField);
+      });
+    }
+
     function bindPropertyPredictorControls(root, groupId) {
       root.querySelectorAll("[data-predictor-mode]").forEach(select => {
         select.addEventListener("change", () => {
@@ -7253,36 +8770,23 @@
       });
     }
 
-    function lutzeReactionSeparationLaunchHtml(group, model = separationSimulatorModel(group)) {
-      const path = separationPathwayModel(group, model);
-      const balance = path.balance;
-      const missing = [];
-      if (model.substances.length < 2) missing.push("substances");
-      if (!balance.mainProduct) missing.push("main product");
-      if (!Number.isFinite(balance.conversion)) missing.push("conversion/yield");
-      if (!path.nextOptions.length) missing.push("property/binary evidence");
-      const status = missing.length ? `Needs ${missing.join(", ")}` : `${path.nextOptions.length} route move${path.nextOptions.length === 1 ? "" : "s"} ready`;
+    // Two entry points into the same modal. Basic keeps the guided Lutze/Garg
+    // pathway flow in front; Advanced exposes the diagnostic KB3.1 sandbox tabs.
+    function lutzeReactionSeparationLaunchHtml(group) {
       return `
-        <section class="predictor-card lutze-launch-card">
-          <div class="predictor-head">
-            <div>
-              <div class="label">Optional post-reaction separation support</div>
-              <strong>Lutze Reaction-Separation</strong>
-              <div class="muted small">Use this when the reaction leaves a product mixed with residual reagents, byproducts, solvent, or recoverable streams.</div>
-            </div>
-            <span class="pill ${missing.length ? "warn" : "green"}">${escapeHtml(status)}</span>
-          </div>
-          <div class="lutze-launch-copy">
-            <span>Builds a draft separation pathway from this task's MFA, conversion balance, phases, and chemical properties.</span>
-            <span>The main flowchart is unchanged until you apply one pathway.</span>
-          </div>
-          <div class="lutze-launch-facts">
-            <span><strong>${model.substances.length}</strong> substances</span>
-            <span><strong>${model.pairs.length}</strong> binary pairs</span>
-            <span><strong>${path.nextOptions.length}</strong> next moves</span>
-          </div>
-          <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">Simulate Lutze Substance Separation</button>
-        </section>
+        <div class="separation-launch-row">
+          <button class="primary lutze-launch-button" data-open-lutze-reaction-separation="${escapeAttr(group.id)}">
+            <span>Basic</span>
+            <strong>Lutze/Garg screening</strong>
+            <small>Guided mixture and pathway</small>
+          </button>
+          <button class="lutze-launch-button tip" data-open-separation-simulator="${escapeAttr(group.id)}"
+            data-tip="Advanced KB3.1 sandbox: balance, components, pair screening, workup and suggestions">
+            <span>Advanced</span>
+            <strong>Separation sandbox</strong>
+            <small>Balance, pairs, workup</small>
+          </button>
+        </div>
       `;
     }
 
@@ -7292,8 +8796,6 @@
       }
       if (!Array.isArray(block.conversionDetail.byproducts)) block.conversionDetail.byproducts = [];
       block.conversionDetail.byproducts = block.conversionDetail.byproducts.map(normalizeConversionOutlet);
-      if (!Array.isArray(block.conversionDetail.stagedResidualStreamIds)) block.conversionDetail.stagedResidualStreamIds = [];
-      block.conversionDetail.stagedResidualStreamIds = Array.from(new Set(block.conversionDetail.stagedResidualStreamIds.map(id => String(id || "")).filter(Boolean)));
       block.conversionDetail.productBasisQuantity = String(block.conversionDetail.productBasisQuantity || "");
       if (!conversionProductAmountModes.some(mode => mode.value === block.conversionDetail.productAmountMode)) {
         block.conversionDetail.productAmountMode = "";
@@ -7301,6 +8803,17 @@
       if (!conversionBalanceMethods.some(method => method.value === block.conversionDetail.balanceMethod)) {
         block.conversionDetail.balanceMethod = "simple";
       }
+      block.conversionDetail.conversionPercent = String(block.conversionDetail.conversionPercent || "");
+      block.conversionDetail.selectivityPercent = String(block.conversionDetail.selectivityPercent || "");
+      block.conversionDetail.conversionStatus = ["reported", "estimated", "assumed", "calculated"].includes(block.conversionDetail.conversionStatus)
+        ? block.conversionDetail.conversionStatus
+        : block.conversionDetail.conversionPercent ? "reported" : "assumed";
+      block.conversionDetail.selectivityStatus = ["reported", "estimated", "assumed", "calculated"].includes(block.conversionDetail.selectivityStatus)
+        ? block.conversionDetail.selectivityStatus
+        : block.conversionDetail.selectivityPercent ? "reported" : "assumed";
+      block.conversionDetail.reactionEquation = String(block.conversionDetail.reactionEquation || "");
+      block.conversionDetail.effluentName = String(block.conversionDetail.effluentName || "reaction mixture");
+      block.conversionDetail.lastAppliedAt = String(block.conversionDetail.lastAppliedAt || "");
       block.conversionDetail.lastGeneratedSummary = String(block.conversionDetail.lastGeneratedSummary || "");
       return block.conversionDetail;
     }
@@ -7435,12 +8948,12 @@
 
     function productModeHelpText(mode, percent) {
       if (mode === "actual") {
-        return `Use this when the protocol reports an obtained amount at ${formatNumber(percent)}% yield. Example: 10 kg at ${formatNumber(percent)}% means 10 kg is already the produced amount.`;
+        return `Entered amount is the product obtained at ${formatNumber(percent)}% yield; the theoretical basis is back-calculated.`;
       }
       if (mode === "theoretical") {
-        return `Use this when the entered amount is the 100% theoretical product basis. Example: 10 kg at ${formatNumber(percent)}% previews ${formatNumber(10 * percent / 100)} kg produced.`;
+        return `Entered amount is the 100% theoretical basis; ${formatNumber(percent)}% yield determines the produced amount.`;
       }
-      return "Use this when product amount should be estimated from reagent amounts, MW, and stoichiometric coefficients when available.";
+      return "Product amount is estimated from reagent quantities, MW, and stoichiometric coefficients.";
     }
 
     function productModeTooltip(mode) {
@@ -7527,10 +9040,10 @@
     }
 
     function streamMolesForConversion(stream) {
-      const qty = conversionNumber(stream?.quantity);
-      const mw = conversionNumber(stream?.mw);
+      const qty = conversionFiniteNumber(stream?.quantity);
+      const mw = conversionFiniteNumber(stream?.mw);
       const unit = String(stream?.unit || "").toLowerCase();
-      if (!Number.isFinite(qty)) return NaN;
+      if (!Number.isFinite(qty) || qty <= 0) return NaN;
       if (unit === "mol") return qty;
       if (unit === "kmol") return qty * 1000;
       if (!Number.isFinite(mw) || mw <= 0) return NaN;
@@ -7542,6 +9055,11 @@
     function conversionStoichCoeff(stream) {
       const coeff = conversionNumber(stream?.stoichCoeff);
       return coeff > 0 ? coeff : 1;
+    }
+
+    function conversionExplicitStoichCoeff(stream) {
+      const coeff = conversionFiniteNumber(stream?.stoichCoeff);
+      return Number.isFinite(coeff) && coeff > 0 ? coeff : NaN;
     }
 
     function streamQuantityFromMoles(moles, stream) {
@@ -7559,7 +9077,7 @@
     function conversionStoichiometricExtent(reactants) {
       const rows = reactants.map(stream => {
         const initialMol = streamMolesForConversion(stream);
-        const coeff = conversionStoichCoeff(stream);
+        const coeff = conversionExplicitStoichCoeff(stream);
         const extentBasis = Number.isFinite(initialMol) && coeff > 0 ? initialMol / coeff : NaN;
         return { stream, initialMol, coeff, extentBasis };
       });
@@ -7576,12 +9094,15 @@
     }
 
     function productAmountFromReactants(product, reactants, method = "simple") {
-      const productCoeff = conversionStoichCoeff(product);
+      const productCoeff = method === "stoichiometric"
+        ? conversionExplicitStoichCoeff(product)
+        : conversionStoichCoeff(product);
       const stoich = method === "stoichiometric" ? conversionStoichiometricExtent(reactants) : null;
       const limitingMol = stoich?.ready
         ? stoich.limitingExtent * productCoeff
         : Math.min(...reactants.map(streamMolesForConversion).filter(Number.isFinite));
-      if (!Number.isFinite(limitingMol) || limitingMol <= 0) return { value: NaN, source: "missing reagent MW/amount" };
+      if (!Number.isFinite(productCoeff)) return { value: NaN, source: "missing product stoichiometric coefficient" };
+      if (!Number.isFinite(limitingMol) || limitingMol <= 0) return { value: NaN, source: "missing reagent amount, MW, or stoichiometric coefficient" };
       const unit = String(product?.unit || "kg").toLowerCase();
       const productMw = conversionNumber(product?.mw);
       const source = stoich?.ready
@@ -7594,6 +9115,27 @@
       if (unit === "kg") return { value: productKg, source };
       if (unit === "g") return { value: productKg * 1000, source };
       return { value: NaN, source: "unsupported product unit for reactant calculation" };
+    }
+
+    function conversionStoichiometryGaps(product, reactants) {
+      const gaps = [];
+      reactants.forEach(stream => {
+        const name = stream.name || "reactive input";
+        const unit = String(stream.unit || "").trim().toLowerCase();
+        if (!(conversionFiniteNumber(stream.quantity) > 0)) gaps.push(`${name}: feed amount`);
+        if (!Number.isFinite(conversionExplicitStoichCoeff(stream))) gaps.push(`${name}: coefficient`);
+        if (!["g", "kg", "mol", "kmol"].includes(unit)) gaps.push(`${name}: mass or molar unit`);
+        if (["g", "kg"].includes(unit) && !(conversionFiniteNumber(stream.mw) > 0)) gaps.push(`${name}: MW`);
+      });
+      if (!product) {
+        gaps.push("main product");
+      } else {
+        const unit = String(product.unit || "kg").trim().toLowerCase();
+        if (!Number.isFinite(conversionExplicitStoichCoeff(product))) gaps.push(`${product.name || "product"}: coefficient`);
+        if (!["g", "kg", "mol", "kmol"].includes(unit)) gaps.push(`${product.name || "product"}: mass or molar unit`);
+        if (["g", "kg"].includes(unit) && !(conversionFiniteNumber(product.mw) > 0)) gaps.push(`${product.name || "product"}: MW`);
+      }
+      return [...new Set(gaps)];
     }
 
     function conversionOutletMass(row, context) {
@@ -7670,9 +9212,17 @@
       const detail = ensureConversionDetail(block);
       const rawYield = String(block.conditions.conversion_yield || "").trim();
       const hasYieldCondition = Boolean(rawYield);
-      const percent = Math.max(0, Math.min(100, conversionNumber(rawYield || "95")));
-      const yieldStatus = hasYieldCondition ? "reported" : "assumed";
-      const leftoverPercent = 100 - percent;
+      const rawConversion = String(detail.conversionPercent || "").trim();
+      const rawSelectivity = String(detail.selectivityPercent || "").trim();
+      const derivedYield = rawConversion && rawSelectivity
+        ? conversionNumber(rawConversion) * conversionNumber(rawSelectivity) / 100
+        : NaN;
+      const percent = Math.max(0, Math.min(100, conversionNumber(rawYield || (Number.isFinite(derivedYield) ? derivedYield : "95"))));
+      let conversionPercent = Math.max(0, Math.min(100, conversionNumber(rawConversion || percent)));
+      const selectivityPercent = Math.max(0, Math.min(100, conversionNumber(rawSelectivity || "100")));
+      const yieldStatus = hasYieldCondition ? "reported" : Number.isFinite(derivedYield) ? "calculated" : "assumed";
+      let conversionStatus = rawConversion ? detail.conversionStatus : "assumed";
+      const selectivityStatus = rawSelectivity ? detail.selectivityStatus : "assumed";
       const inputs = conversionInputStreams(block);
       const reactants = conversionReactantStreams(block);
       const nonReactiveInputs = conversionNonReactiveInputStreams(block);
@@ -7680,15 +9230,16 @@
       const product = conversionProductStream(block);
       const balanceMethod = detail.balanceMethod || "simple";
       const stoich = conversionStoichiometricExtent(reactants);
-      const stoichReady = balanceMethod === "stoichiometric" && stoich.ready;
+      const stoichGaps = conversionStoichiometryGaps(product, reactants);
+      const stoichReady = balanceMethod === "stoichiometric" && stoich.ready && stoichGaps.length === 0;
       const residualPoolUnit = reactants.some(stream => Number.isFinite(streamMassKgForConversion(stream))) ? "kg" : (reactants[0]?.unit || product?.unit || "kg");
       let pooledLeftover = 0;
       const productMode = product ? conversionProductAmountMode(block, product) : "actual";
       const productInputQty = conversionNumber(product?.quantity);
-      const fromReactants = product ? productAmountFromReactants(product, reactants, stoichReady ? "stoichiometric" : "simple") : { value: NaN, source: "" };
+      const fromReactants = product ? productAmountFromReactants(product, reactants, balanceMethod) : { value: NaN, source: "" };
       const canCalculateFromReactants = Number.isFinite(fromReactants.value);
       let effectiveProductMode = productMode;
-      if (productMode === "from reactants" && !canCalculateFromReactants && String(product?.quantity || "").trim()) {
+      if (balanceMethod !== "stoichiometric" && productMode === "from reactants" && !canCalculateFromReactants && String(product?.quantity || "").trim()) {
         effectiveProductMode = "actual";
       }
       let productQty = product ? conversionProductBasisQuantity(block, product) : 0;
@@ -7715,15 +9266,20 @@
       const productMadeMol = product ? streamMolesForConversion({ ...product, quantity: productMade }) : NaN;
       const productCoeff = conversionStoichCoeff(product);
       const stoichExtentFromProduct = Number.isFinite(productMadeMol) && productCoeff > 0 ? productMadeMol / productCoeff : NaN;
-      const stoichExtentFromYield = Number.isFinite(stoich.limitingExtent) ? stoich.limitingExtent * percent / 100 : NaN;
-      const stoichReactedExtent = Number.isFinite(stoichExtentFromProduct)
-        ? Math.min(stoichExtentFromProduct, stoich.limitingExtent)
-        : stoichExtentFromYield;
+      if (!rawConversion && effectiveProductMode === "actual" && Number.isFinite(stoichExtentFromProduct) && Number.isFinite(stoich.limitingExtent) && stoich.limitingExtent > 0) {
+        conversionPercent = Math.max(0, Math.min(100, stoichExtentFromProduct / stoich.limitingExtent * 100));
+        conversionStatus = "calculated";
+      }
+      const leftoverPercent = 100 - conversionPercent;
+      const stoichExtentFromConversion = Number.isFinite(stoich.limitingExtent) ? stoich.limitingExtent * conversionPercent / 100 : NaN;
+      const stoichReactedExtent = Number.isFinite(stoichExtentFromConversion)
+        ? stoichExtentFromConversion
+        : stoichExtentFromProduct;
       let pooledLeftoverConvertible = true;
       const reactantRows = reactants.map(stream => {
         const qty = conversionNumber(stream.quantity);
         const stoichRow = stoich.rows.find(row => row.stream === stream);
-        let used = qty * percent / 100;
+        let used = qty * conversionPercent / 100;
         let leftover = qty * leftoverPercent / 100;
         let usedMol = NaN;
         let leftoverMol = NaN;
@@ -7800,8 +9356,12 @@
       return {
         detail,
         percent,
+        conversionPercent,
+        selectivityPercent,
         hasYieldCondition,
         yieldStatus,
+        conversionStatus,
+        selectivityStatus,
         leftoverPercent,
         inputs,
         reactants,
@@ -7810,6 +9370,7 @@
         product,
         balanceMethod,
         stoichReady,
+        stoichGaps,
         stoichLimitingName: stoich.limiting?.stream?.name || "",
         stoichReactedExtent,
         productMode: effectiveProductMode,
@@ -7849,8 +9410,19 @@
       if (calc.product && calc.productMode !== "from reactants" && !(calc.productQty > 0 || calc.productMade > 0)) {
         issues.push({ severity: "error", text: "The selected product has no positive amount for the chosen product-basis mode." });
       }
-      if (calc.product && calc.productMode === "from reactants" && !(calc.productQty > 0)) {
+      if (calc.product && calc.productMode === "from reactants" && !calc.canCalculateFromReactants) {
         issues.push({ severity: "error", text: "Reactant-derived product calculation needs reagent amounts, reagent MW where needed, product MW, and product coefficient when not 1." });
+      }
+      if (calc.percent > calc.conversionPercent + 0.0001) {
+        issues.push({
+          severity: calc.conversionStatus === "calculated" && calc.productMode === "actual" ? "warn" : "error",
+          text: calc.conversionStatus === "calculated" && calc.productMode === "actual"
+            ? `Reported yield (${formatNumber(calc.percent)}%) and feed-based molar conversion (${formatNumber(calc.conversionPercent)}%) use inconsistent bases. Verify the reported product and reagent quantities.`
+            : `Reaction yield (${formatNumber(calc.percent)}%) cannot exceed reactant conversion (${formatNumber(calc.conversionPercent)}%) on the same molar basis.`
+        });
+      }
+      if (calc.conversionStatus !== "calculated" && calc.percent > calc.conversionPercent * calc.selectivityPercent / 100 + 0.0001) {
+        issues.push({ severity: "error", text: `Yield exceeds conversion x selectivity (${formatNumber(calc.conversionPercent * calc.selectivityPercent / 100)}%). Check the three reaction performance values.` });
       }
       if (
         calc.product
@@ -7864,7 +9436,7 @@
         });
       }
       if (calc.balanceMethod === "stoichiometric" && !calc.stoichReady) {
-        issues.push({ severity: "warn", text: "Stoichiometric balance needs mol units or MW for every reagent plus coefficients; simple residuals are shown until complete." });
+        issues.push({ severity: "error", text: `Complete Reaction inputs before saving: ${calc.stoichGaps.join("; ") || "amounts, MW, and coefficients are required"}.` });
       }
       if (calc.balanceMethod === "stoichiometric" && calc.byproductRows.some(row => (row.role === "coproduct" || row.role === "byproduct") && row.basis !== "generated by stoichiometry")) {
         issues.push({ severity: "warn", text: "Declared co-products/byproducts with flat bases are not derived from their own stoichiometric coefficient. Use Generated by stoichiometry when the byproduct follows the reaction equation." });
@@ -7904,11 +9476,11 @@
 
     function conversionIssuesHtml(issues) {
       if (!issues.length) {
-        return `<div class="conversion-checks ok compact"><strong>Ready</strong><span>No blocking balance issue.</span></div>`;
+        return `<div class="conversion-checks ok compact"><strong>Internally consistent</strong><span>No blocking arithmetic issue. Review assumptions before saving.</span></div>`;
       }
       return `
         <div class="conversion-checks ${conversionHasBlockingIssues(issues) ? "error" : "warn"}">
-          <strong>${conversionHasBlockingIssues(issues) ? "Fix before applying" : "Review before applying"}</strong>
+          <strong>${conversionHasBlockingIssues(issues) ? "Fix before saving" : "Review before saving"}</strong>
           ${issues.map(issue => `<span>${escapeHtml(issue.text)}</span>`).join("")}
         </div>
       `;
@@ -7919,15 +9491,30 @@
       const groupState = ensureGroup(block.groupId);
       const simulator = groupState.separationSimulator;
       simulator.reactionBalance = normalizeReactionBalance(simulator.reactionBalance);
-      const conversion = String(block.conditions?.conversion_yield || "").trim();
+      const detail = ensureConversionDetail(block);
+      const reactionYield = String(block.conditions?.conversion_yield || "").trim();
+      const conversion = String(detail.conversionPercent || "").trim();
+      const selectivity = String(detail.selectivityPercent || "100").trim();
+      if (reactionYield) simulator.reactionBalance.yieldPercent = reactionYield;
       if (conversion) simulator.reactionBalance.conversionPercent = conversion;
-      simulator.reactionBalance.basis = simulator.reactionBalance.basis || "conversion";
+      if (selectivity) simulator.reactionBalance.selectivityPercent = selectivity;
+      simulator.reactionBalance.basis = "conversion";
       const product = conversionProductStream(block);
       if (product?.name) {
         const productName = cleanSubstanceName(product.name).toLowerCase();
         const matchingSubstance = simulator.substances.find(item => cleanSubstanceName(item.name).toLowerCase() === productName);
         if (matchingSubstance) simulator.reactionBalance.mainProductId = matchingSubstance.id;
       }
+      // A preloaded or imported residual stream contains the post-reaction quantity. Preserve the
+      // original feed basis separately so the work-up model does not apply conversion a second time
+      // to an already-unreacted amount.
+      conversionCalculationModel(block).reactantRows.forEach(row => {
+        const key = canonicalChemicalKey(row.stream.name);
+        const substance = simulator.substances.find(item => substanceChemicalKey(item) === key || canonicalChemicalKey(item.name) === key);
+        if (!substance) return;
+        substance.reactionFeedQuantity = String(row.stream.quantity || "");
+        substance.reactionFeedUnit = String(row.stream.unit || "");
+      });
     }
 
     function addConversionProductOutput(block) {
@@ -7986,6 +9573,17 @@
       return `${block.id}-CB-${suffix}`.replace(/[^A-Za-z0-9_-]/g, "-");
     }
 
+    function reactionWorkupGroupId(block) {
+      const sourceGroupId = String(block?.groupId || "");
+      if (!sourceGroupId) return "";
+      const link = (state.links || []).find(item =>
+        resolvedEndpointId(item.from) === sourceGroupId
+        && resolvedEndpointId(item.to) !== sourceGroupId
+        && state.groups[resolvedEndpointId(item.to)]
+      );
+      return link ? resolvedEndpointId(link.to) : "";
+    }
+
     function upsertConversionStream(block, role, id, values) {
       ensureBlockFlowFields(block);
       let stream = block.streams.find(item => item.id === id);
@@ -8022,6 +9620,9 @@
           phase: stream.phase || "unknown",
           quantity: stream.quantity || "",
           unit: stream.unit || "",
+          reactionFeedQuantity: meta.reactionFeedQuantity || "",
+          reactionFeedUnit: meta.reactionFeedUnit || "",
+          reactionGenerated: Boolean(meta.reactionGenerated),
           residualOf: meta.residualOf || "",
           residualSourceId: meta.residualSourceId || "",
           chemicalKey: key,
@@ -8036,6 +9637,9 @@
         substance.phase = stream.phase && stream.phase !== "unknown" ? stream.phase : substance.phase;
         substance.quantity = stream.quantity || substance.quantity;
         substance.unit = stream.unit || substance.unit;
+        if (meta.reactionFeedQuantity !== undefined) substance.reactionFeedQuantity = String(meta.reactionFeedQuantity || "");
+        if (meta.reactionFeedUnit !== undefined) substance.reactionFeedUnit = String(meta.reactionFeedUnit || "");
+        if (meta.reactionGenerated !== undefined) substance.reactionGenerated = Boolean(meta.reactionGenerated);
         substance.chemicalKey = key || substance.chemicalKey;
         substance.residualOf = substance.residualOf || meta.residualOf || "";
         substance.residualSourceId = substance.residualSourceId || meta.residualSourceId || "";
@@ -8062,14 +9666,15 @@
       const originalResidual = `${formatNumber(row.leftover * safeFraction)} ${row.stream.unit || ""}`.trim();
       const fullResidual = `${formatNumber(row.leftover)} ${row.stream.unit || ""}`.trim();
       const allocationTrace = safeFraction < 1
-        ? `; ${formatNumber(safeFraction * 100)}% of the residual pool remains unrouted after named residual outlets`
+        ? `; ${formatNumber(safeFraction * 100)}% of the residual pool remains unallocated after named residual outlets`
         : "";
       const molTrace = calc.stoichReady && Number.isFinite(row.leftoverMol)
         ? `; stoichiometric residual ${formatNumber(row.leftoverMol * safeFraction)} mol`
         : "";
       const massTrace = writesKg && residualUnit !== (row.stream.unit || "")
-        ? `; converted to ${formatNumber(row.leftoverKg * safeFraction)} kg for MFA/Lutze using MW ${formatNumber(row.mw)} g/mol`
+        ? `; converted to ${formatNumber(row.leftoverKg * safeFraction)} kg for the material inventory using MW ${formatNumber(row.mw)} g/mol`
         : "";
+      const workupGroupId = reactionWorkupGroupId(block);
       return {
         sourceName,
         id: conversionGeneratedStreamId(block, `unreacted-${sourceName}`),
@@ -8079,10 +9684,11 @@
           unit: residualUnit,
           phase: row.stream.phase || "unknown",
           status: "calculated",
-          timing: "waste purge",
-          fate: "purge",
+          timing: "in-process intermediate",
+          fate: "intermediate",
+          destinationGroup: workupGroupId,
           scalingMode: "per batch",
-          note: `Auto-generated by Conversion balance: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted (${fullResidual}); saved unrouted fraction ${originalResidual}${allocationTrace}${molTrace}${massTrace}; treat as recovery or waste candidate before Lutze separation.`,
+          note: `Calculated reaction-effluent component: ${formatNumber(calc.leftoverPercent)}% of ${sourceName} remains unreacted (${fullResidual}); included fraction ${originalResidual}${allocationTrace}${molTrace}${massTrace}. Recovery or disposal is assigned in the downstream separation.`,
           ...streamChemicalPropertyPayloadWithDensity(row.stream)
         }
       };
@@ -8092,94 +9698,16 @@
       const safeFraction = Math.max(0, Math.min(1, Number.isFinite(fraction) ? fraction : 1));
       if (!((row.leftover || 0) * safeFraction > 0)) return null;
       const payload = conversionResidualPayload(block, calc, row, safeFraction);
-      const stream = upsertConversionStream(block, "waste", payload.id, payload.values);
+      const stream = upsertConversionStream(block, "output", payload.id, payload.values);
       if (block.groupId) {
         upsertSeparationSubstanceForConversion(block.groupId, stream, "reactant", "recover", block.id, {
           residualOf: payload.sourceName,
-          residualSourceId: row.stream.id
+          residualSourceId: row.stream.id,
+          reactionFeedQuantity: row.stream.quantity,
+          reactionFeedUnit: row.stream.unit
         });
       }
       return stream;
-    }
-
-    function conversionGeneratedOutletIsWaste(row) {
-      const text = String(row?.name || "").toLowerCase();
-      return /\b(water|condensation|brine|salt|waste|effluent)\b/.test(text);
-    }
-
-    function wastewaterDestinationGroupId() {
-      const entry = Object.values(state.groups || {}).find(group => {
-        const text = `${group.task || ""} ${group.selectedUnit || ""}`.toLowerCase();
-        return text.includes("wastewater");
-      });
-      return entry?.id || "";
-    }
-
-    function stagedConversionResidualRows(calc) {
-      const stagedIds = new Set(calc.detail.stagedResidualStreamIds || []);
-      const fraction = calc.unroutedResidualFraction ?? 1;
-      return calc.reactantRows.filter(row => row.leftover * fraction > 0 && stagedIds.has(row.stream.id));
-    }
-
-    function stageConversionResidual(block, streamId) {
-      if (!block) return;
-      const detail = ensureConversionDetail(block);
-      const id = String(streamId || "");
-      if (!id || detail.stagedResidualStreamIds.includes(id)) return;
-      detail.stagedResidualStreamIds.push(id);
-      invalidateAiRefine();
-      renderConversionModal();
-    }
-
-    function stageAllConversionResiduals(block) {
-      if (!block) return;
-      const calc = conversionCalculationModel(block);
-      const detail = ensureConversionDetail(block);
-      const ids = calc.reactantRows
-        .filter(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0)
-        .map(row => row.stream.id)
-        .filter(Boolean);
-      detail.stagedResidualStreamIds = Array.from(new Set([...detail.stagedResidualStreamIds, ...ids]));
-      invalidateAiRefine();
-      renderConversionModal();
-    }
-
-    function removeStagedConversionResidual(block, streamId) {
-      if (!block) return;
-      const detail = ensureConversionDetail(block);
-      detail.stagedResidualStreamIds = detail.stagedResidualStreamIds.filter(id => id !== streamId);
-      invalidateAiRefine();
-      renderConversionModal();
-    }
-
-    function saveStagedConversionResiduals(block) {
-      if (!block) return;
-      const calc = conversionCalculationModel(block);
-      const issues = conversionValidationIssues(calc);
-      if (conversionHasBlockingIssues(issues)) {
-        alertModal(issues.filter(issue => issue.severity === "error").map(issue => issue.text).join("\n"));
-        return;
-      }
-      const staged = stagedConversionResidualRows(calc);
-      if (!staged.length) return;
-      pushUndo();
-      staged.forEach(row => writeConversionResidualReagent(block, calc, row, calc.unroutedResidualFraction));
-      syncLegacyStreamLists(block);
-      calc.detail.lastGeneratedSummary = `Saved ${staged.length} staged residual reagent stream(s) from conversion preview for MFA/Lutze.`;
-      if (block.groupId) {
-        syncGroupReactionBalanceFromConversionBlock(block);
-        ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
-      }
-      invalidateAiRefine();
-      renderConversionModal();
-      renderStepFlowInspector();
-      if (typeof flowsheetUnitCategory === "function") {
-        renderGroupFlow();
-        renderStepAuditPanel();
-      } else {
-        renderAll();
-      }
-      renderExport();
     }
 
     function applyConversionBalanceStreams(block) {
@@ -8193,6 +9721,10 @@
       }
       pushUndo();
       removeGeneratedConversionStreams(block);
+      if (!String(calc.detail.reactionEquation || "").trim()) {
+        calc.detail.reactionEquation = suggestedReactionEquation(calc);
+      }
+      const workupGroupId = reactionWorkupGroupId(block);
       if (calc.product) {
         const basis = calc.productQty || conversionNumber(calc.product.quantity);
         calc.detail.productBasisQuantity = String(basis || "");
@@ -8201,12 +9733,14 @@
         calc.product.quantity = formatNumber(calc.productMade);
         calc.product.status = "calculated";
         calc.product.fate = "product";
+        calc.product.timing = "in-process intermediate";
+        calc.product.destinationGroup = workupGroupId;
         calc.product.note = [
           calc.product.note,
-          `Balanced from conversion popup: ${conversionProductModeLabel(calc.productMode)}; ${formatNumber(calc.percent)}% yield on ${formatNumber(basis)} ${calc.product.unit || "kg"} theoretical basis gives ${formatNumber(calc.productMade)} ${calc.product.unit || "kg"}.`
+          `Saved from Reaction Balance: ${conversionProductModeLabel(calc.productMode)}; ${formatNumber(calc.percent)}% yield on ${formatNumber(basis)} ${calc.product.unit || "kg"} theoretical basis gives ${formatNumber(calc.productMade)} ${calc.product.unit || "kg"}.`
         ].filter(Boolean).join(" ");
         if (block.groupId) {
-          const productSubstance = upsertSeparationSubstanceForConversion(block.groupId, calc.product, "product", "product", block.id);
+          const productSubstance = upsertSeparationSubstanceForConversion(block.groupId, calc.product, "product", "product", block.id, { reactionGenerated: true });
           const simulator = ensureGroup(block.groupId).separationSimulator;
           if (productSubstance) simulator.reactionBalance.mainProductId = productSubstance.id;
         }
@@ -8218,35 +9752,34 @@
         const name = String(row.name || "").trim();
         if (!name || !(row.mass > 0)) return;
         const isResidualOutlet = row.role === "residual";
-        const isGeneratedWaste = !isResidualOutlet && conversionGeneratedOutletIsWaste(row);
         const role = isResidualOutlet ? "impurity" : row.role === "coproduct" ? "coproduct" : "byproduct";
-        const streamRole = isResidualOutlet || isGeneratedWaste ? "waste" : "output";
+        const streamRole = isResidualOutlet ? "waste" : "output";
         const stream = upsertConversionStream(block, streamRole, conversionGeneratedStreamId(block, `${isResidualOutlet ? "residual-outlet" : "byproduct"}-${index + 1}`), {
           name,
           quantity: formatNumber(row.mass),
           unit: row.unit || calc.fallbackUnit,
           phase: "unknown",
           status: "calculated",
-          timing: isResidualOutlet || isGeneratedWaste ? "waste purge" : "in-process intermediate",
-          fate: isResidualOutlet ? "purge" : isGeneratedWaste ? "wastewater" : row.role === "coproduct" ? "co-product" : "intermediate",
+          timing: isResidualOutlet ? "waste purge" : "in-process intermediate",
+          fate: isResidualOutlet ? "purge" : row.role === "coproduct" ? "co-product" : "intermediate",
           scalingMode: "per batch",
-          destinationGroup: isGeneratedWaste ? wastewaterDestinationGroupId() : "",
-          note: `Auto-generated by Conversion balance as ${isResidualOutlet ? "named residual outlet" : role}: ${row.displayBasis}.`
+          destinationGroup: isResidualOutlet ? "" : workupGroupId,
+          note: `Calculated by Reaction Balance as ${isResidualOutlet ? "named residual outlet" : `${role} component of ${calc.detail.effluentName || "reaction mixture"}`}: ${row.displayBasis}.`
         });
-        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, role, "recover", block.id);
+        if (block.groupId) upsertSeparationSubstanceForConversion(block.groupId, stream, role, isResidualOutlet ? "waste" : "recover", block.id, { reactionGenerated: !isResidualOutlet });
       });
       if (block.groupId) {
         syncGroupReactionBalanceFromConversionBlock(block);
         ensureGroup(block.groupId).separationSimulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
       }
       syncLegacyStreamLists(block);
-      calc.detail.lastGeneratedSummary = `Balanced ${formatNumber(calc.percent)}% conversion: ${calc.reactantRows.filter(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0).length} unrouted residual reagent stream(s), ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct or named residual outlet stream(s).`;
+      calc.detail.lastAppliedAt = new Date().toISOString();
+      calc.detail.lastGeneratedSummary = `Saved at ${formatNumber(calc.conversionPercent)}% conversion, ${formatNumber(calc.selectivityPercent)}% selectivity, and ${formatNumber(calc.percent)}% yield: ${calc.reactantRows.filter(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0).length} residual component(s) and ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct component(s).`;
       invalidateAiRefine();
       renderConversionModal();
       renderStepFlowInspector();
       if (typeof flowsheetUnitCategory === "function") {
         renderGroupFlow();
-        renderStepAuditPanel();
       } else {
         renderAll();
       }
@@ -8256,6 +9789,26 @@
     function conversionNumber(value) {
       const n = parseFloat(String(value == null ? "" : value).replace(",", "."));
       return Number.isFinite(n) ? n : 0;
+    }
+
+    function conversionFiniteNumber(value) {
+      const text = String(value == null ? "" : value).trim().replace(",", ".");
+      if (!text) return NaN;
+      const number = Number(text);
+      return Number.isFinite(number) ? number : NaN;
+    }
+
+    function setConversionBalanceMethod(block, method) {
+      const detail = ensureConversionDetail(block);
+      detail.balanceMethod = conversionBalanceMethods.some(item => item.value === method) ? method : "simple";
+      if (detail.balanceMethod === "stoichiometric") {
+        detail.productAmountMode = "from reactants";
+        detail.productBasisQuantity = "";
+        const product = conversionProductStream(block);
+        if (product) product.conversionBaseQuantity = "";
+      }
+      invalidateAiRefine();
+      return detail.balanceMethod;
     }
 
     function openConversionModal(blockId) {
@@ -8270,6 +9823,7 @@
         hydrateConversionStreamProperties(block);
       }
       state.activeConversionBlockId = blockId;
+      state.conversionView = "performance";
       const modal = $("conversionModal");
       if (!modal) return;
       modal.hidden = false;
@@ -8282,14 +9836,27 @@
       state.activeConversionBlockId = null;
     }
 
-    function updateConversionPercent(block, rawValue) {
+    function updateConversionPercent(block, rawValue, target = null) {
       const clamped = Math.max(0, Math.min(100, conversionNumber(rawValue)));
       ensureBlockConditionFields(block);
       block.conditions.conversion_yield = String(clamped);
       block.conditionUnits.conversion_yield = "%";
       syncGroupReactionBalanceFromConversionBlock(block);
       invalidateAiRefine();
-      renderConversionModal();
+      if (target?.type === "range") renderConversionModalKeepingFocus(target);
+      else if (target) renderConversionModalAfterCommit(target);
+      else renderConversionModal();
+      renderStepFlowInspector();
+      renderExport();
+    }
+
+    function updateReactionPerformanceValue(block, field, rawValue, target = null) {
+      const detail = ensureConversionDetail(block);
+      detail[field] = String(Math.max(0, Math.min(100, conversionNumber(rawValue))));
+      detail[field === "conversionPercent" ? "conversionStatus" : "selectivityStatus"] = "reported";
+      syncGroupReactionBalanceFromConversionBlock(block);
+      invalidateAiRefine();
+      target ? renderConversionModalAfterCommit(target) : renderConversionModal();
       renderStepFlowInspector();
       renderExport();
     }
@@ -8302,30 +9869,43 @@
       return palette[index % palette.length];
     }
 
-    function conversionStreamRowHtml(name, total, usedOrMade, leftover, unit, usedLabel) {
-      const basis = total || (usedOrMade + leftover) || 1;
-      const usedPct = basis ? Math.min(100, Math.max(0, (usedOrMade / basis) * 100)) : 0;
-      const label = usedLabel === "made" ? "Made" : "Used";
+    function conversionInfoIcon(text) {
+      return `<span class="info-dot" title="${escapeAttr(text)}" data-tooltip="${escapeAttr(text)}" tabindex="0">?</span>`;
+    }
+
+    function suggestedReactionEquation(calc) {
+      const term = (coefficient, name) => {
+        const coeff = conversionNumber(coefficient || "1");
+        return `${coeff && Math.abs(coeff - 1) > 0.0001 ? `${formatNumber(coeff)} ` : ""}${name || "unnamed component"}`;
+      };
+      const reactants = calc.reactantRows.map(row => term(row.coeff, row.stream.name));
+      const products = [];
+      if (calc.product) products.push(term(calc.product.stoichCoeff, calc.product.name));
+      calc.byproductRows
+        .filter(row => row.basis === "generated by stoichiometry" && String(row.name || "").trim())
+        .forEach(row => products.push(term(row.stoichCoeff, row.name)));
+      if (!reactants.length && !products.length) return "";
+      return `${reactants.join(" + ") || "reactants"} -> ${products.join(" + ") || "products"}`;
+    }
+
+    function reactionDefinitionHtml(calc) {
+      const equation = calc.detail.reactionEquation || suggestedReactionEquation(calc);
+      const impliedYield = calc.conversionPercent * calc.selectivityPercent / 100;
+      const relationState = calc.percent <= impliedYield + 0.0001 ? "ok" : "error";
       return `
-        <div class="conversion-stream-row">
-          <div class="conversion-stream-row-head">
-            <strong>${escapeHtml(name)}</strong>
-            <span class="muted small">${total ? total.toFixed(2) : "0"} ${escapeHtml(unit || "kg")} total</span>
-          </div>
-          <div class="conversion-bar">
-            <span class="conversion-bar-seg used" style="width:${usedPct}%" title="${label}: ${usedOrMade.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
-            <span class="conversion-bar-seg leftover" style="width:${100 - usedPct}%" title="Leftover: ${leftover.toFixed(2)} ${escapeAttr(unit || "kg")}"></span>
-          </div>
-          <div class="conversion-stream-row-numbers muted small">
-            <span>${label}: ${usedOrMade.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
-            <span>Leftover: ${leftover.toFixed(2)} ${escapeHtml(unit || "kg")}</span>
+        <div class="reaction-definition-card">
+          <label>
+            <span class="label">Reaction equation</span>
+            <input id="reactionEquation" value="${escapeAttr(equation)}" placeholder="A + B -> P + coproduct">
+          </label>
+          <div class="reaction-definition-note">
+            <span>Editable documentation. Calculations use the coefficients and molecular weights in Reaction inputs.</span>
+            <span class="reaction-performance-relation ${relationState}">
+              Yield ${formatNumber(calc.percent)}% &le; conversion ${formatNumber(calc.conversionPercent)}% &times; selectivity ${formatNumber(calc.selectivityPercent)}% = ${formatNumber(impliedYield)}%
+            </span>
           </div>
         </div>
       `;
-    }
-
-    function conversionInfoIcon(text) {
-      return `<span class="info-dot" title="${escapeAttr(text)}" data-tooltip="${escapeAttr(text)}" tabindex="0">?</span>`;
     }
 
     function conversionYieldBasisStatementHtml(calc, productEntryQuantity) {
@@ -8337,13 +9917,13 @@
       let detail = "";
       if (calc.productMode === "actual") {
         main = `${entry} ${unit} ${name} is treated as the amount obtained at ${formatNumber(calc.percent)}% yield.`;
-        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; the missing ${formatNumber(calc.leftoverPercent)}% is represented as unreacted reagent streams.`;
+        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; ${formatNumber(calc.conversionPercent)}% conversion leaves ${formatNumber(calc.leftoverPercent)}% unreacted.`;
       } else if (calc.productMode === "theoretical") {
         main = `${entry} ${unit} ${name} is treated as the 100% theoretical product basis.`;
-        detail = `${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit} actual product; ${formatNumber(calc.leftoverPercent)}% remains tied to unreacted reagents.`;
+        detail = `${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit} actual product; ${formatNumber(calc.conversionPercent)}% conversion determines reagent residuals.`;
       } else {
         main = `${name} basis is estimated from limiting reagent data.`;
-        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; ${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit}.`;
+        detail = `100% theoretical basis = ${formatNumber(calc.productQty)} ${unit}; ${formatNumber(calc.percent)}% yield gives ${formatNumber(calc.productMade)} ${unit}, with residuals based on ${formatNumber(calc.conversionPercent)}% conversion.`;
       }
       if (calc.balanceMethod === "stoichiometric" && calc.stoichReady && calc.stoichLimitingName) {
         detail += ` Limiting reagent: ${calc.stoichLimitingName}.`;
@@ -8389,7 +9969,7 @@
             <span>Mass closure</span>
             <strong>${escapeHtml(closureText)}</strong>
           </div>
-          <div class="conversion-analysis-note" title="Only inputs classified as Reagent/reactant are consumed; solvents, catalysts, auxiliaries, and inerts pass through for MFA/Lutze handling.">
+          <div class="conversion-analysis-note" title="Only reagents are consumed; solvents, catalysts, auxiliaries and inerts pass through">
             ${calc.reactantRows.length} reactive input${calc.reactantRows.length === 1 ? "" : "s"} / ${calc.nonReactiveRows.length} non-reactive
           </div>
         </div>
@@ -8400,7 +9980,7 @@
       const productStatus = calc.productMode === "from reactants"
         ? "calculated"
         : streamDataStatusLabel(calc.product?.status);
-      const residualStatus = calc.stoichReady ? "calculated" : "estimated";
+      const residualStatus = calc.stoichReady && calc.conversionStatus !== "assumed" ? "calculated" : "estimated";
       const closureStatus = calc.massClosure?.status === "closed"
         ? "calculated"
         : calc.massClosure?.status === "open"
@@ -8413,25 +9993,45 @@
         </span>
       `;
       return `
-        <div class="conversion-data-quality" aria-label="Conversion data provenance">
-          ${item("Product", productStatus, calc.productMode === "from reactants"
-            ? "Product amount is calculated from reagent quantities, MW, and coefficients."
-            : "Product amount uses the selected outlet stream data status.")}
-          ${item("Yield", calc.yieldStatus, calc.hasYieldCondition
-            ? "Yield/conversion was entered on this reaction condition."
-            : "No yield/conversion was entered; the popup is using the default assumption until edited.")}
-          ${item("Residuals", residualStatus, calc.stoichReady
-            ? "Residual reagents are calculated from molar stoichiometry and MW."
-            : "Residual reagents are estimated by applying the same conversion percentage to each reactive input.")}
-          ${item("Closure", closureStatus, calc.massClosure?.note || "Mass-closure status for the reactive subset.")}
-        </div>
+        <details class="conversion-data-quality-details">
+          <summary>
+            <span>Data provenance</span>
+            <small>reported, calculated and assumed values</small>
+          </summary>
+          <div class="conversion-data-quality" aria-label="Conversion data provenance">
+            ${item("Product", productStatus, calc.productMode === "from reactants"
+              ? "Product amount is calculated from reagent quantities, MW, and coefficients."
+              : "Product amount uses the selected outlet stream data status.")}
+            ${item("Yield", calc.yieldStatus, calc.hasYieldCondition
+              ? "Reaction yield was entered on this reaction condition."
+              : calc.yieldStatus === "calculated"
+                ? "Yield is calculated from conversion multiplied by selectivity."
+                : "No reaction yield was entered; the popup is using the default assumption until edited.")}
+            ${item("Conversion", calc.conversionStatus, calc.conversionStatus === "reported"
+              ? "Reactant conversion was entered separately from product yield."
+              : calc.conversionStatus === "calculated"
+                ? "Reactant conversion is inferred from actual product moles and limiting-reagent capacity."
+                : calc.conversionStatus === "estimated"
+                  ? "Reactant conversion is an estimated model input."
+                  : "Conversion is an explicit screening assumption or temporarily defaults to yield.")}
+            ${item("Selectivity", calc.selectivityStatus, calc.selectivityStatus === "reported"
+              ? "Reaction selectivity was entered explicitly."
+              : calc.selectivityStatus === "estimated"
+                ? "Reaction selectivity is an estimated model input."
+                : "Selectivity is an explicit screening assumption or defaults to 100% until edited.")}
+            ${item("Residuals", residualStatus, calc.stoichReady
+              ? "Residual reagents are calculated from molar stoichiometry and MW."
+              : "Residual reagents are estimated by applying the same conversion percentage to each reactive input.")}
+            ${item("Closure", closureStatus, calc.massClosure?.note || "Mass-closure status for the reactive subset.")}
+          </div>
+        </details>
       `;
     }
 
     function conversionAdvancedControlsHtml(calc) {
       if (!calc.product) return "";
       const product = calc.product;
-      const shouldOpen = calc.productMode === "from reactants" || calc.balanceMethod === "stoichiometric" || !calc.canCalculateFromReactants;
+      const shouldOpen = !calc.stoichReady && (calc.productMode === "from reactants" || calc.balanceMethod === "stoichiometric");
       const productCapacity = Number.isFinite(calc.productCapacityFromReactants)
         ? `max ${formatNumber(calc.productCapacityFromReactants)} ${calc.product.unit || calc.fallbackUnit}`
         : "optional MW and coefficients";
@@ -8442,13 +10042,9 @@
             <small>${escapeHtml(calc.stoichReady ? productCapacity : "optional MW and coefficients")}</small>
           </summary>
           <div class="conversion-advanced-grid">
-            <label title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">
-              <span class="label">Balance method ${conversionInfoIcon(conversionBalanceMethodTooltip(calc.balanceMethod))}</span>
-              <select id="conversionBalanceMethod" title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">${conversionBalanceMethodOptions(calc.balanceMethod)}</select>
-            </label>
             <label>
               <span class="label">Product coeff ${conversionInfoIcon("Stoichiometric coefficient for the selected product. Example: A + B -> 2P uses 2.")}</span>
-              <input data-conversion-reagent-stoich="${escapeAttr(product.id)}" value="${escapeAttr(product.stoichCoeff || "1")}" title="Stoichiometric coefficient for the selected product.">
+              <input data-conversion-reagent-stoich="${escapeAttr(product.id)}" value="${escapeAttr(product.stoichCoeff || "")}" placeholder="required" title="Stoichiometric coefficient for the selected product.">
             </label>
             <label>
               <span class="label">Product MW ${conversionInfoIcon("Molecular weight in g/mol for the selected product. Needed when calculating product amount from reactants or converting molar product basis to mass.")}</span>
@@ -8465,40 +10061,16 @@
       `;
     }
 
-    function conversionYieldSliderHtml(calc) {
-      const unit = calc.product?.unit || calc.fallbackUnit;
-      return `
-        <div class="conversion-yield-control">
-          <div class="conversion-yield-control-head">
-            <span>Actual production from yield</span>
-            <strong>${formatNumber(calc.productMade)} ${escapeHtml(unit)}</strong>
-          </div>
-          <input type="range" min="0" max="100" step="1" id="conversionPercentSlider" value="${calc.percent}" title="Move yield/conversion and the produced amount/residual streams update immediately.">
-          <div class="conversion-yield-track" aria-hidden="true">
-            <span class="made" style="width:${Math.max(0, Math.min(100, calc.percent))}%"></span>
-            <span class="missed" style="width:${Math.max(0, Math.min(100, calc.leftoverPercent))}%"></span>
-          </div>
-          <div class="conversion-yield-control-foot">
-            <span>${formatNumber(calc.percent)}% product side</span>
-            <span>${formatNumber(calc.leftoverPercent)}% unreacted reagent side</span>
-          </div>
-        </div>
-      `;
-    }
-
     function conversionReagentTableHtml(calc) {
       if (!calc.inputRows.length) return `<div class="mfa-empty">No input streams yet.</div>`;
       return `
         <div class="conversion-reagent-table">
           <div class="conversion-reagent-row header">
             <span>Input</span>
-            <span>Category</span>
-            <span>Initial</span>
-            <span>Coeff</span>
-            <span>MW</span>
-            <span>${calc.stoichReady ? "Initial mol" : "Used"}</span>
-            <span>${calc.stoichReady ? "Unreacted mol" : "Unreacted"}</span>
-            <span>MFA kg</span>
+            <span>Reaction role</span>
+            <span>Feed basis</span>
+            <span>Coefficient &amp; MW</span>
+            <span>Calculated at conversion</span>
           </div>
           ${calc.inputRows.map(row => {
             const unit = row.stream.unit || "kg";
@@ -8507,34 +10079,48 @@
               ? `${formatNumber(kgValue)} kg`
               : "needs MW/density";
             const kgTip = row.nonReactive
-              ? "Non-reactive input: tracked for MFA/Lutze, but excluded from reaction conversion."
+              ? "Non-reactive input: tracked in the material inventory, but excluded from reaction conversion."
               : Number.isFinite(row.leftoverKg)
-                ? "This is the mass-equivalent residual amount written to MFA/Lutze when saved."
+                ? "This is the mass-equivalent residual amount saved in the material inventory."
                 : "Add MW for mol/kmol units, or density for volume units, to convert this residual to kg.";
             return `
               <div class="conversion-reagent-row ${row.nonReactive ? "non-reactive" : ""}">
-                <strong class="conversion-stream-name">
+                <strong class="conversion-stream-name conversion-reagent-name">
                   <span>${escapeHtml(row.stream.name || "(unnamed input)")}</span>
                   ${streamDataStatusBadgeHtml(row.stream.status, "Status of this input amount/property evidence.")}
                 </strong>
-                <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagent/reactant enters the reaction stoichiometry. Solvents, catalysts, auxiliaries, and inerts are tracked but not consumed by conversion.">
-                  ${streamReactionRoleOptions(row.reactionRole || streamReactionRole(row.stream))}
-                </select>
-                <span>${formatNumber(row.qty)} ${escapeHtml(unit)}</span>
-                ${row.nonReactive
-                  ? `<span class="muted small" title="Not used in the reaction extent.">n/a</span>`
-                  : `<input data-conversion-reagent-stoich="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.stoichCoeff || row.coeff || "1")}" title="Stoichiometric coefficient for this reagent.">`}
-                <div class="conversion-mw-cell">
-                  <input data-conversion-reagent-mw="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.mw || "")}" placeholder="MW" title="Molecular weight in g/mol. Used to convert mol/kmol residuals into kg.">
-                  <button type="button" class="mini-button compact" data-conversion-fetch-mw="${escapeAttr(row.stream.id)}" title="Fetch MW and optional pure-component properties from PubChem.">Fetch</button>
+                <div class="conversion-reagent-cell" data-field-label="Reaction role">
+                  <select data-conversion-input-reaction-role="${escapeAttr(row.stream.id)}" title="Only reagents enter the stoichiometry; the rest is tracked, not consumed">
+                    ${streamReactionRoleOptions(row.reactionRole || streamReactionRole(row.stream))}
+                  </select>
                 </div>
-                ${row.nonReactive
-                  ? `<span class="muted small">not consumed</span>`
-                  : `<span>${calc.stoichReady ? formatNumber(row.initialMol) : `${formatNumber(row.used)} ${escapeHtml(unit)}`}</span>`}
-                ${row.nonReactive
-                  ? `<span class="muted small">passes through</span>`
-                  : `<span class="${row.limiting ? "limiting" : ""}">${calc.stoichReady ? `${formatNumber(row.leftoverMol)} mol${row.limiting ? " · limiting" : ""}` : `${formatNumber(row.leftover)} ${escapeHtml(unit)}`}</span>`}
-                <span class="conversion-mass-equivalent" title="${escapeAttr(kgTip)}">${escapeHtml(kgText)}</span>
+                <div class="conversion-reagent-cell conversion-feed-basis" data-field-label="Feed basis">
+                  <strong>${formatNumber(row.qty)} ${escapeHtml(unit)}</strong>
+                  ${!row.nonReactive && Number.isFinite(row.initialMol) ? `<small>${formatNumber(row.initialMol)} mol</small>` : ""}
+                  ${Number.isFinite(row.initialKg) && unit.toLowerCase() !== "kg" ? `<small>${formatNumber(row.initialKg)} kg</small>` : ""}
+                </div>
+                <div class="conversion-reagent-cell conversion-stoich-editor" data-field-label="Stoichiometry">
+                  <label>
+                    <small>Coeff</small>
+                    ${row.nonReactive
+                      ? `<span class="muted small" title="Not used in the reaction extent.">n/a</span>`
+                      : `<input data-conversion-reagent-stoich="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.stoichCoeff || "")}" placeholder="required" title="Stoichiometric coefficient for this reagent.">`}
+                  </label>
+                  <label>
+                    <small>MW (g/mol)</small>
+                    <div class="conversion-mw-cell">
+                      <input data-conversion-reagent-mw="${escapeAttr(row.stream.id)}" value="${escapeAttr(row.stream.mw || "")}" placeholder="MW" title="Molecular weight in g/mol. Used to convert mol/kmol residuals into kg.">
+                      <button type="button" class="mini-button compact" data-conversion-fetch-mw="${escapeAttr(row.stream.id)}" title="Fetch MW and optional pure-component properties from PubChem.">Fetch</button>
+                    </div>
+                  </label>
+                </div>
+                <div class="conversion-reagent-cell conversion-reaction-balance" data-field-label="Calculated at conversion">
+                  ${row.nonReactive
+                    ? `<span class="muted small">Not consumed; passes through</span>`
+                    : `<span><small>Consumed</small>${Number.isFinite(row.usedKg) ? `${formatNumber(row.usedKg)} kg` : `${formatNumber(row.used)} ${escapeHtml(unit)}`}</span>
+                       <b aria-hidden="true">&rarr;</b>
+                       <span class="${row.limiting ? "limiting" : ""}" title="${escapeAttr(kgTip)}"><small>Unreacted</small>${escapeHtml(kgText)}${row.limiting ? `<small>limiting reagent</small>` : ""}</span>`}
+                </div>
               </div>
             `;
           }).join("")}
@@ -8570,10 +10156,9 @@
           unit: writesKg ? "kg" : row.stream.unit || "kg",
           secondary,
           sourceStreamId: row.stream.id,
-          staged: calc.detail.stagedResidualStreamIds.includes(row.stream.id),
           status: writesKg ? "calculated" : "estimated",
           note: writesKg
-            ? `${formatNumber(residualFraction * 100)}% of the unreacted residual remains as individual MFA/Lutze reagent streams; chemical properties stay linked to the input reagent.`
+            ? `${formatNumber(residualFraction * 100)}% of this unreacted component remains in the shared reaction effluent; chemical properties stay linked to the input reagent.`
             : "Add MW/density to convert this residual to kg before saving."
         });
       });
@@ -8587,7 +10172,7 @@
           unit: hasKg ? "kg" : row.stream.unit || "kg",
           secondary: hasKg && (row.stream.unit || "").toLowerCase() !== "kg" ? `${formatNumber(row.qty)} ${row.stream.unit || ""} original` : "",
           status: streamDataStatusLabel(row.stream.status),
-          note: `${streamReactionRoleLabel(row.reactionRole)} is excluded from reaction stoichiometry and kept for MFA/Lutze recovery or separation.`
+          note: `${streamReactionRoleLabel(row.reactionRole)} is excluded from reaction stoichiometry and kept in the material inventory for recovery or separation.`
         });
       });
       calc.byproductRows.forEach(row => {
@@ -8615,52 +10200,53 @@
               <span class="conversion-preview-type">${escapeHtml(row.type)}</span>
               <strong class="conversion-stream-name">
                 <span>${escapeHtml(row.name)}</span>
-                ${streamDataStatusBadgeHtml(row.status, "Status of this simulated stream before it is written to MFA/Lutze.")}
+                ${streamDataStatusBadgeHtml(row.status, "Status of this calculated component before it is saved to the material inventory.")}
               </strong>
               <span class="conversion-preview-amount">${formatNumber(row.quantity)} ${escapeHtml(row.unit)}${row.secondary ? `<small>${escapeHtml(row.secondary)}</small>` : ""}</span>
               <small>${escapeHtml(row.note)}</small>
-              ${row.type === "Residual" ? `
-                <button type="button" class="mini-button" data-stage-conversion-residual="${escapeAttr(row.sourceStreamId)}" ${row.staged ? "disabled" : ""} title="Add this simulated residual to the staged reagent list below.">
-                  ${row.staged ? "Added" : "+ Reagent"}
-                </button>
-              ` : `<span></span>`}
             </div>
           `).join("")}
         </div>
       `;
     }
 
-    function conversionStagedResidualsHtml(calc) {
-      const rows = stagedConversionResidualRows(calc);
-      if (!rows.length) return "";
+    function conversionNavigationHtml(calc, activeView) {
+      const inputsNeedAttention = calc.balanceMethod === "stoichiometric" && calc.stoichGaps.length > 0;
+      const tabs = [
+        { id: "performance", step: "1", label: "Performance", meta: calc.product ? "product set" : "needs product" },
+        { id: "inputs", step: inputsNeedAttention ? "!" : "2", label: "Reaction inputs", meta: inputsNeedAttention ? `${calc.stoichGaps.length} required field${calc.stoichGaps.length === 1 ? "" : "s"}` : `${calc.reactants.length}/${calc.inputs.length} reactive`, attention: inputsNeedAttention },
+        { id: "outputs", step: "3", label: "Review & save", meta: `${conversionPreviewRows(calc).length} streams` }
+      ];
       return `
-        <div class="conversion-staged-residuals">
-          <div class="conversion-staged-head">
-            <strong>Residual reagents to save</strong>
-            <span class="muted small">Review these before writing them to MFA/Lutze.</span>
-          </div>
-          <div class="conversion-staged-list">
-            ${rows.map(row => {
-              const writesKg = Number.isFinite(row.leftoverKg);
-              const residualFraction = calc.unroutedResidualFraction ?? 1;
-              const amount = writesKg
-                ? `${formatNumber(row.leftoverKg * residualFraction)} kg`
-                : `${formatNumber(row.leftover * residualFraction)} ${row.stream.unit || "kg"}`;
-              const original = writesKg && (row.stream.unit || "").toLowerCase() !== "kg"
-                ? `from ${formatNumber(row.leftover * residualFraction)} ${row.stream.unit || ""}`
-                : `${formatNumber(residualFraction * 100)}% unrouted; same chemical properties as the input reagent`;
-              return `
-                <div class="conversion-staged-row">
-                  <span class="conversion-preview-type residual">Reagent</span>
-                  <strong>unreacted ${escapeHtml(row.stream.name || "reactant")}</strong>
-                  <span>${escapeHtml(amount)}</span>
-                  <small>${escapeHtml(original)}</small>
-                  <button type="button" class="mini-button" data-remove-staged-conversion-residual="${escapeAttr(row.stream.id)}">Remove</button>
-                </div>
-              `;
-            }).join("")}
-          </div>
-          <button type="button" class="primary small-primary" id="saveStagedConversionResiduals">Save residual reagents</button>
+        <nav class="conversion-navigation" aria-label="Conversion workflow">
+          ${tabs.map(tab => `
+            <button type="button" class="conversion-nav-button ${activeView === tab.id ? "active" : ""} ${tab.attention ? "needs-attention" : ""}" data-conversion-view="${escapeAttr(tab.id)}" aria-current="${activeView === tab.id ? "step" : "false"}">
+              <span>${tab.step}</span>
+              <strong>${escapeHtml(tab.label)}</strong>
+              <small>${escapeHtml(tab.meta)}</small>
+            </button>
+          `).join("")}
+        </nav>
+      `;
+    }
+
+    function conversionAutomaticProductHtml(calc) {
+      if (!calc.product || calc.productMode !== "from reactants") return "";
+      const unit = calc.product.unit || calc.fallbackUnit;
+      if (!calc.canCalculateFromReactants) {
+        return `
+          <button type="button" class="conversion-auto-product needs-attention" data-conversion-view="inputs">
+            <span aria-hidden="true">!</span>
+            <strong>Product calculation needs reaction-input data</strong>
+            <small>Open Reaction inputs and complete amount, coefficient and MW.</small>
+          </button>
+        `;
+      }
+      return `
+        <div class="conversion-auto-product ready" aria-live="polite">
+          <span class="conversion-auto-product-formula">Stoichiometric maximum <strong>${formatNumber(calc.productQty)} ${escapeHtml(unit)}</strong></span>
+          <span aria-hidden="true">&rarr;</span>
+          <span class="conversion-auto-product-result">At ${formatNumber(calc.percent)}% yield <strong>${formatNumber(calc.productMade)} ${escapeHtml(unit)}</strong></span>
         </div>
       `;
     }
@@ -8676,18 +10262,41 @@
       }
       ensureBlockConditionFields(block);
       const calc = conversionCalculationModel(block);
-      const { detail, percent, inputs, reactants, outputs, product, productMode, productBasisSource, productQty, productMade, productShortfall, pooledLeftover, residualPoolUnit, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
+      const { detail, percent, conversionPercent, selectivityPercent, inputs, reactants, outputs, product, productMode, productBasisSource, productQty, productMade, productShortfall, pooledLeftover, residualPoolUnit, byproductRows, wastePercent, wasteMass, fallbackUnit } = calc;
       const validationIssues = conversionValidationIssues(calc);
       const hasBlockingIssues = conversionHasBlockingIssues(validationIssues);
       const productEntryQuantity = conversionProductEntryQuantity(product, productMode, detail);
+      const activeView = ["performance", "inputs", "outputs"].includes(state.conversionView) ? state.conversionView : "performance";
+      const stepContext = activeView === "performance"
+        ? "Define product basis and reaction performance"
+        : activeView === "inputs"
+          ? "Confirm reaction roles and coefficients"
+          : "Review effluent components before saving";
 
       body.innerHTML = `
         <div class="conversion-modal-body">
+          ${conversionNavigationHtml(calc, activeView)}
           ${conversionIssuesHtml(validationIssues)}
+          <div class="conversion-step-actions">
+            <span>${calc.balanceMethod === "stoichiometric" && calc.stoichGaps.length && activeView !== "inputs"
+              ? `<button type="button" class="conversion-attention-link" data-conversion-view="inputs">! Complete Reaction inputs</button>`
+              : stepContext}</span>
+            <div>
+              ${activeView !== "performance" ? `<button type="button" data-conversion-view="${activeView === "outputs" ? "inputs" : "performance"}">Back</button>` : ""}
+              ${activeView === "performance" ? `<button type="button" class="primary" data-conversion-view="inputs">Continue</button>` : ""}
+              ${activeView === "inputs" ? `<button type="button" class="primary" data-conversion-view="outputs">Continue</button>` : ""}
+              ${activeView === "outputs" ? `<button class="primary" id="conversionApplyBalance" title="Saves the reviewed product and reaction-effluent components to the material inventory." ${!hasBlockingIssues && (reactants.length || product) ? "" : "disabled"}>Save reaction balance</button>` : ""}
+            </div>
+          </div>
+          ${activeView === "performance" ? `
           <div class="conversion-section conversion-basis-section">
             <div class="conversion-section-head">
-              <span>Reaction yield basis ${conversionInfoIcon("Bind product amount and yield here. This reference drives product, residual reagent, and Lutze preview calculations.")}</span>
+              <span>Reaction performance basis ${conversionInfoIcon("Product yield determines produced amount; conversion determines reactant residuals; selectivity checks their consistency.")}</span>
               <div class="conversion-product-tools">
+                <label class="conversion-balance-method" title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">
+                  <span>Method</span>
+                  <select id="conversionBalanceMethod" title="${escapeAttr(conversionBalanceMethodTooltip(calc.balanceMethod))}">${conversionBalanceMethodOptions(calc.balanceMethod)}</select>
+                </label>
               ${outputs.length ? `
                 <select id="conversionProductSelect" title="Choose which outlet is the main product for this reaction balance.">
                   ${outputs.map(stream => `<option value="${escapeAttr(stream.id)}" ${product && stream.id === product.id ? "selected" : ""}>${escapeHtml(stream.name || stream.id)}</option>`).join("")}
@@ -8697,56 +10306,86 @@
               </div>
             </div>
             ${product ? `
-              <div class="conversion-basis-grid">
-                <label>
-                  <span class="label">Reference amount ${conversionInfoIcon(productModeTooltip(productMode))}</span>
-                  <input type="number" min="0" step="0.001" id="conversionProductQuantity" value="${escapeAttr(productEntryQuantity)}" title="${escapeAttr(productModeTooltip(productMode))}" ${productMode === "from reactants" ? `placeholder="calculated from reagents"` : ""}>
+              <div class="conversion-basis-grid ${productMode === "from reactants" ? "automatic" : ""}">
+                <label class="conversion-field-amount">
+                  <span class="label">${productMode === "from reactants" ? "Theoretical product" : "Reference amount"} ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                  <input type="number" min="0" step="0.001" id="conversionProductQuantity" value="${escapeAttr(productMode === "from reactants" && calc.canCalculateFromReactants ? formatNumber(productQty) : productEntryQuantity)}" title="${escapeAttr(productModeTooltip(productMode))}" ${productMode === "from reactants" ? `placeholder="calculated from inputs" readonly aria-readonly="true"` : ""}>
                 </label>
-                <label>
+                <label class="conversion-field-unit">
                   <span class="label">Unit</span>
                   <input type="text" id="conversionProductUnit" value="${escapeAttr(product.unit || fallbackUnit)}" placeholder="kg" title="Product unit. g, kg, t, mol, and kmol are understood when MW is available.">
                 </label>
-                <label>
-                  <span class="label">Yield / conversion ${conversionInfoIcon("Percentage associated with the selected product amount. It also determines residual reagents.")}</span>
+                <label class="conversion-field-yield">
+                  <span class="label">Yield ${conversionInfoIcon("Product obtained relative to the selected theoretical product basis.")}</span>
                   <div class="conversion-percent-controls">
-                    <input type="number" min="0" max="100" step="1" id="conversionPercentNumber" value="${percent}" title="Conversion/yield percentage associated with the product basis.">
+                    <input type="number" min="0" max="100" step="1" id="conversionPercentNumber" value="${percent}" title="Product yield associated with the selected theoretical basis.">
                     <span class="unit-badge">%</span>
                   </div>
                 </label>
-                <label class="conversion-mode-field" title="${escapeAttr(productModeTooltip(productMode))}">
-                  <span class="label">Known datum ${conversionInfoIcon(productModeTooltip(productMode))}</span>
-                  <select id="conversionProductMode" title="${escapeAttr(productModeTooltip(productMode))}">${conversionProductModeOptions(calc.requestedProductMode, calc.canCalculateFromReactants)}</select>
+                <label class="conversion-field-conversion">
+                  <span class="label">Conversion ${conversionInfoIcon("Fraction of the limiting reactant consumed. This value determines every unreacted reagent residual.")}</span>
+                  <div class="conversion-percent-controls">
+                    <input type="number" min="0" max="100" step="1" id="reactionConversionPercent" value="${conversionPercent}" title="Limiting-reactant conversion used for stoichiometric consumption and residual streams.">
+                    <span class="unit-badge">%</span>
+                  </div>
                 </label>
+                <label class="conversion-field-selectivity">
+                  <span class="label">Selectivity ${conversionInfoIcon("Fraction of converted limiting reactant directed to the selected main product. Yield cannot exceed conversion multiplied by selectivity.")}</span>
+                  <div class="conversion-percent-controls">
+                    <input type="number" min="0" max="100" step="1" id="reactionSelectivityPercent" value="${selectivityPercent}" title="Selectivity toward the selected main product.">
+                    <span class="unit-badge">%</span>
+                  </div>
+                </label>
+                ${conversionConsistencyWarningHtml(percent, conversionPercent, selectivityPercent)}
+                ${calc.balanceMethod === "stoichiometric"
+                  ? `<div class="conversion-mode-field conversion-fixed-mode"><span class="label">Product amount basis</span><strong>Calculated from reaction inputs</strong></div>`
+                  : `<label class="conversion-mode-field" title="${escapeAttr(productModeTooltip(productMode))}">
+                      <span class="label">Product amount basis ${conversionInfoIcon(productModeTooltip(productMode))}</span>
+                      <select id="conversionProductMode" title="${escapeAttr(productModeTooltip(productMode))}">${conversionProductModeOptions(calc.requestedProductMode, calc.canCalculateFromReactants)}</select>
+                    </label>`}
                 <div class="conversion-mode-help" title="${escapeAttr(productModeTooltip(productMode))}">${escapeHtml(productModeHelpText(productMode, percent))}</div>
               </div>
+              ${conversionAutomaticProductHtml(calc)}
+              ${conversionScaledEquivalentHtml(calc, productQty, percent)}
+              ${reactionDefinitionHtml(calc)}
               ${conversionYieldBasisStatementHtml(calc, productEntryQuantity)}
               ${conversionAnalysisHtml(calc)}
               ${conversionDataQualityHtml(calc)}
-              ${conversionYieldSliderHtml(calc)}
               ${conversionAdvancedControlsHtml(calc)}
             ` : `<div class="muted small">No output stream to treat as the product yet. Add one here or in MFA/streams.</div>`}
           </div>
+          ` : ""}
 
+          ${activeView === "inputs" ? `
           <div class="conversion-section">
-            <div class="conversion-section-head">Reaction inputs ${conversionInfoIcon("Classify inputs before balancing. Only reagent/reactant enters stoichiometric conversion; solvent, catalyst, auxiliary, and inert streams stay non-reactive.")}${!inputs.length ? ` <span class="muted small">(no input streams yet)</span>` : ""}</div>
+            <div class="conversion-section-head"><span>Reaction inputs ${conversionInfoIcon("Classify inputs before balancing. Only reagent/reactant enters stoichiometric conversion; solvent, catalyst, auxiliary, and inert streams stay non-reactive.")}${!inputs.length ? ` <span class="muted small">(no input streams yet)</span>` : ""}</span></div>
             ${conversionReagentTableHtml(calc)}
           </div>
+          ` : ""}
 
+          ${activeView === "outputs" ? `
+          <div class="conversion-apply-bar">
+            <div>
+              <strong>Material inventory update</strong>
+              <span>${escapeHtml(detail.lastGeneratedSummary || "Writes the actual product and calculated reaction-effluent components to the material inventory.")}</span>
+            </div>
+            ${detail.lastAppliedAt && block.groupId ? `<button type="button" id="reviewReactionSeparation">Review separation in LUTZE</button>` : ""}
+          </div>
           <div class="conversion-section">
-            <div class="conversion-section-head">Co/byproducts & residual outlets <span class="muted small">(unconverted reagent pool: ${pooledLeftover.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}; unrouted: ${wastePercent}%)</span></div>
+            <div class="conversion-section-head">Optional outlets &amp; residual allocation <span class="muted small">(unconverted reagent pool: ${pooledLeftover.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}; not assigned to a named outlet: ${wastePercent}%)</span></div>
             <div class="conversion-summary-bar">
               ${byproductRows.filter(row => row.subtractsResidualWaste).map((row, i) => `<span class="conversion-bar-seg byproduct" style="width:${pooledLeftover ? (row.mass / pooledLeftover * 100) : 0}%; background:${byproductColor(i)}" title="${escapeAttr(row.name || "residual outlet")}: ${row.mass.toFixed(2)} ${escapeAttr(row.unit || fallbackUnit)}"></span>`).join("")}
-              <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Unrouted residual: ${wasteMass.toFixed(2)} ${escapeAttr(residualPoolUnit || fallbackUnit)}"></span>
+              <span class="conversion-bar-seg waste" style="width:${pooledLeftover ? (wasteMass / pooledLeftover * 100) : 100}%" title="Unallocated residual fraction: ${wasteMass.toFixed(2)} ${escapeAttr(residualPoolUnit || fallbackUnit)}"></span>
             </div>
             <div class="conversion-byproduct-rows">
               ${detail.byproducts.map((bp, i) => `
                 <div class="conversion-byproduct-row">
                   <span class="conversion-byproduct-swatch" style="background:${byproductColor(i)}"></span>
-                  <input type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name" title="Name a real byproduct, co-product, or named residual outlet. Leave blank if no such stream exists.">
-                  <select data-conversion-byproduct-role="${i}" title="Choose whether this outlet is a formed byproduct, useful co-product, or residual purge/recovery stream.">
+                  <input class="conversion-outlet-name" type="text" data-conversion-byproduct-name="${i}" value="${escapeAttr(bp.name)}" placeholder="residual byproduct / coproduct name" title="Name a real byproduct or residual outlet, or leave blank">
+                  <select class="conversion-outlet-role" data-conversion-byproduct-role="${i}" title="Choose whether this outlet is a formed byproduct, useful co-product, or residual purge/recovery stream.">
                     ${optionHtml(bp.basis === "generated by stoichiometry" ? ["byproduct", "coproduct"] : ["byproduct", "coproduct", "residual"], bp.role)}
                   </select>
-                  <select data-conversion-byproduct-basis="${i}" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">
+                  <select class="conversion-outlet-basis" data-conversion-byproduct-basis="${i}" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">
                     ${conversionOutletBasisOptions(bp.basis)}
                   </select>
                   ${bp.basis === "generated by stoichiometry"
@@ -8755,42 +10394,59 @@
                         <input type="number" min="0" step="0.001" data-conversion-byproduct-mw="${i}" value="${escapeAttr(bp.mw)}" placeholder="MW" title="Molecular weight in g/mol for this generated byproduct/co-product.">
                       </div>`
                     : bp.basis === "actual"
-                      ? `<input type="number" min="0" step="0.001" data-conversion-byproduct-amount="${i}" value="${escapeAttr(bp.amount)}" placeholder="amount" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`
-                      : `<input type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}" placeholder="%" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`}
-                  <input type="text" data-conversion-byproduct-unit="${i}" value="${escapeAttr(bp.unit || (bp.basis === "generated by stoichiometry" ? "kg" : fallbackUnit))}" placeholder="${escapeAttr(bp.basis === "generated by stoichiometry" ? "kg" : fallbackUnit)}" title="Unit for this named outlet.">
+                      ? `<input class="conversion-outlet-value" type="number" min="0" step="0.001" data-conversion-byproduct-amount="${i}" value="${escapeAttr(bp.amount)}" placeholder="amount" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`
+                      : `<input class="conversion-outlet-value" type="number" min="0" max="100" step="1" data-conversion-byproduct-percent="${i}" value="${escapeAttr(bp.percent)}" placeholder="%" title="${escapeAttr(conversionOutletBasisTooltip(bp.basis))}">`}
+                  <input class="conversion-outlet-unit" type="text" data-conversion-byproduct-unit="${i}" value="${escapeAttr(bp.unit || (bp.basis === "generated by stoichiometry" ? "kg" : fallbackUnit))}" placeholder="${escapeAttr(bp.basis === "generated by stoichiometry" ? "kg" : fallbackUnit)}" title="Unit for this named outlet.">
                   <span class="conversion-byproduct-mass muted small">${Number.isFinite(byproductRows[i].mass) ? `${formatNumber(byproductRows[i].mass)} ${escapeHtml(byproductRows[i].unit || fallbackUnit)}` : "needs data"}</span>
-                  <button type="button" class="mini-button" data-remove-conversion-byproduct="${i}" title="Remove this optional named outlet from the conversion preview.">Remove</button>
+                  <button type="button" class="mini-button conversion-outlet-remove" data-remove-conversion-byproduct="${i}" title="Remove this optional named outlet from the conversion preview.">Remove</button>
                 </div>
               `).join("")}
               <div class="conversion-byproduct-row conversion-byproduct-row-waste">
                 <span class="conversion-byproduct-swatch waste"></span>
-                <span class="muted small">Unrouted residual</span>
-                <span class="muted small">${wastePercent}% stays as individual unreacted streams</span>
+                <span class="muted small">Unallocated residual fraction</span>
+                <span class="muted small">${wastePercent}% remains as reaction-effluent components</span>
                 <span class="conversion-byproduct-mass muted small">${wasteMass.toFixed(2)} ${escapeHtml(residualPoolUnit || fallbackUnit)}</span>
               </div>
             </div>
-            <button type="button" class="mini-button" id="addConversionByproduct" title="Add a named byproduct, co-product, or residual outlet only when it is known or intentionally modeled.">+ Add outlet/byproduct</button>
+            <button type="button" class="mini-button" id="addConversionByproduct" title="Add a byproduct or residual outlet only when it is known or modelled">+ Add named outlet</button>
           </div>
 
           <div class="conversion-section conversion-preview-section">
             <div class="conversion-section-head">
-              <span>Simulated streams before apply</span>
-              <button type="button" class="mini-button" id="stageAllConversionResiduals" ${calc.reactantRows.some(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0) ? "" : "disabled"} title="Stage all simulated unreacted reagents below before saving them to MFA/Lutze.">Add residual reagents</button>
+              <span>Reaction effluent composition</span>
+            </div>
+            <div class="reaction-effluent-definition">
+              <label>
+                <span class="label">Effluent / mixture name</span>
+                <input id="reactionEffluentName" value="${escapeAttr(detail.effluentName || "reaction mixture")}" placeholder="reaction mixture">
+              </label>
+              <span>Components remain part of this shared process effluent until a downstream separation assigns physical outlets.</span>
             </div>
             ${conversionPreviewTableHtml(calc)}
-            ${conversionStagedResidualsHtml(calc)}
           </div>
+          ` : ""}
 
-          <div class="row between" style="margin-top:12px">
-            <span class="muted small">${escapeHtml(detail.lastGeneratedSummary || "Changes save automatically. Press Balance & Create Streams to write residuals into MFA and Lutze.")}</span>
-            <button class="primary" id="conversionApplyBalance" title="Writes the previewed product, individual unreacted reagents, and named outlets into MFA/Lutze." ${!hasBlockingIssues && (reactants.length || product) ? "" : "disabled"}>Balance &amp; Create Streams</button>
-            <button class="primary" id="conversionModalDone">Done</button>
-          </div>
         </div>
       `;
 
-      $("conversionPercentSlider")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
-      $("conversionPercentNumber")?.addEventListener("input", event => updateConversionPercent(block, event.target.value));
+      body.querySelectorAll("[data-conversion-view]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.conversionView = button.dataset.conversionView;
+          renderConversionModal();
+        });
+      });
+
+      $("conversionPercentNumber")?.addEventListener("change", event => updateConversionPercent(block, event.target.value, event.target));
+      $("reactionConversionPercent")?.addEventListener("change", event => updateReactionPerformanceValue(block, "conversionPercent", event.target.value, event.target));
+      $("reactionSelectivityPercent")?.addEventListener("change", event => updateReactionPerformanceValue(block, "selectivityPercent", event.target.value, event.target));
+      $("reactionEquation")?.addEventListener("input", event => {
+        ensureConversionDetail(block).reactionEquation = event.target.value;
+        renderExport();
+      });
+      $("reactionEffluentName")?.addEventListener("input", event => {
+        ensureConversionDetail(block).effluentName = event.target.value;
+        renderExport();
+      });
       $("conversionProductMode")?.addEventListener("change", event => {
         const detail = ensureConversionDetail(block);
         detail.productAmountMode = event.target.value;
@@ -8806,15 +10462,13 @@
         renderConversionModal();
       });
       $("conversionBalanceMethod")?.addEventListener("change", event => {
-        const detail = ensureConversionDetail(block);
-        detail.balanceMethod = event.target.value;
-        invalidateAiRefine();
+        setConversionBalanceMethod(block, event.target.value);
         renderConversionModal();
         renderExport();
       });
-      $("conversionProductQuantity")?.addEventListener("input", event => {
+      $("conversionProductQuantity")?.addEventListener("change", event => {
         setConversionProductQuantity(block, event.target.value);
-        renderConversionModalKeepingFocus(event.target);
+        renderConversionModalAfterCommit(event.target);
         renderExport();
       });
       $("conversionProductUnit")?.addEventListener("input", event => {
@@ -8845,7 +10499,7 @@
         renderExport();
       });
       body.querySelectorAll("[data-conversion-byproduct-name]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductName);
           ensureConversionDetail(block).byproducts[i].name = event.target.value;
           invalidateAiRefine();
@@ -8858,34 +10512,32 @@
           stream.reactionRole = event.target.value;
           stream.reactionRoleManual = true;
           if (stream.reactionRole !== "reactant") stream.stoichCoeff = "";
-          ensureConversionDetail(block).stagedResidualStreamIds = ensureConversionDetail(block).stagedResidualStreamIds
-            .filter(id => conversionReactantStreams(block).some(item => item.id === id));
           invalidateAiRefine();
           renderConversionModal();
           renderExport();
         });
       });
       body.querySelectorAll("[data-conversion-reagent-stoich]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const stream = findStreamById(event.target.dataset.conversionReagentStoich);
           if (!stream) return;
           stream.stoichCoeff = event.target.value;
           invalidateAiRefine();
         });
-        input.addEventListener("change", () => {
-          renderConversionModal();
+        input.addEventListener("change", event => {
+          renderConversionModalAfterCommit(event.target);
           renderExport();
         });
       });
       body.querySelectorAll("[data-conversion-reagent-mw]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const stream = findStreamById(event.target.dataset.conversionReagentMw);
           if (!stream) return;
           stream.mw = event.target.value;
           invalidateAiRefine();
         });
-        input.addEventListener("change", () => {
-          renderConversionModal();
+        input.addEventListener("change", event => {
+          renderConversionModalAfterCommit(event.target);
           renderExport();
         });
       });
@@ -8930,22 +10582,6 @@
           }
         });
       });
-      $("stageAllConversionResiduals")?.addEventListener("click", () => {
-        stageAllConversionResiduals(block);
-      });
-      body.querySelectorAll("[data-stage-conversion-residual]").forEach(button => {
-        button.addEventListener("click", () => {
-          stageConversionResidual(block, button.dataset.stageConversionResidual);
-        });
-      });
-      body.querySelectorAll("[data-remove-staged-conversion-residual]").forEach(button => {
-        button.addEventListener("click", () => {
-          removeStagedConversionResidual(block, button.dataset.removeStagedConversionResidual);
-        });
-      });
-      $("saveStagedConversionResiduals")?.addEventListener("click", () => {
-        saveStagedConversionResiduals(block);
-      });
       body.querySelectorAll("[data-conversion-byproduct-role]").forEach(input => {
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductRole);
@@ -8979,35 +10615,35 @@
         });
       });
       body.querySelectorAll("[data-conversion-byproduct-percent]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductPercent);
           ensureConversionDetail(block).byproducts[i].percent = event.target.value;
           invalidateAiRefine();
-          renderConversionModal();
+          renderConversionModalAfterCommit(event.target);
         });
       });
       body.querySelectorAll("[data-conversion-byproduct-amount]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductAmount);
           ensureConversionDetail(block).byproducts[i].amount = event.target.value;
           invalidateAiRefine();
-          renderConversionModal();
+          renderConversionModalAfterCommit(event.target);
         });
       });
       body.querySelectorAll("[data-conversion-byproduct-stoich]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductStoich);
           ensureConversionDetail(block).byproducts[i].stoichCoeff = event.target.value;
           invalidateAiRefine();
-          renderConversionModal();
+          renderConversionModalAfterCommit(event.target);
         });
       });
       body.querySelectorAll("[data-conversion-byproduct-mw]").forEach(input => {
-        input.addEventListener("input", event => {
+        input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductMw);
           ensureConversionDetail(block).byproducts[i].mw = event.target.value;
           invalidateAiRefine();
-          renderConversionModal();
+          renderConversionModalAfterCommit(event.target);
         });
       });
       body.querySelectorAll("[data-conversion-byproduct-unit]").forEach(input => {
@@ -9033,9 +10669,10 @@
       $("conversionApplyBalance")?.addEventListener("click", () => {
         applyConversionBalanceStreams(block);
       });
-      $("conversionModalDone")?.addEventListener("click", () => {
+      $("reviewReactionSeparation")?.addEventListener("click", () => {
+        const groupId = block.groupId;
         closeConversionModal();
-        renderAll();
+        if (groupId) openLutzeReactionSeparation(groupId);
       });
       body.querySelectorAll(".info-dot").forEach(dot => {
         dot.addEventListener("click", event => {
@@ -9088,6 +10725,20 @@
       }
     }
 
+    function renderConversionModalAfterCommit(committedTarget = null) {
+      const body = $("conversionModalBody");
+      const focusable = body ? Array.from(body.querySelectorAll("input, select, button, [tabindex]")) : [];
+      const targetIndex = committedTarget ? focusable.indexOf(committedTarget) : -1;
+      const fallbackTarget = targetIndex >= 0 ? focusable[targetIndex + 1] || null : null;
+      setTimeout(() => {
+        const currentBody = $("conversionModalBody");
+        const active = document.activeElement;
+        if (currentBody && active && currentBody.contains(active)) renderConversionModalKeepingFocus(active);
+        else if (fallbackTarget) renderConversionModalKeepingFocus(fallbackTarget);
+        else renderConversionModal();
+      }, 0);
+    }
+
     function openSeparationSimulator(groupId) {
       const group = groupModel(groupId);
       if (!group) return;
@@ -9124,6 +10775,21 @@
       state.activeSeparationSimulatorMode = "full";
     }
 
+    function separationSimulatorModeSwitchHtml(groupId, mode) {
+      return `
+        <div class="sep-mode-switch" role="tablist" aria-label="Separation screening depth">
+          <button role="tab" aria-selected="${mode === "pathway"}" class="${mode === "pathway" ? "active" : ""}" data-sep-sim-mode="pathway" data-sep-group="${escapeAttr(groupId)}">
+            <strong>Basic</strong>
+            <span>Lutze/Garg pathway screening</span>
+          </button>
+          <button role="tab" aria-selected="${mode === "full"}" class="${mode === "full" ? "active" : ""}" data-sep-sim-mode="full" data-sep-group="${escapeAttr(groupId)}">
+            <strong>Advanced</strong>
+            <span>Diagnostic tabs: balance, substances, pairs, workup</span>
+          </button>
+        </div>
+      `;
+    }
+
     function renderSeparationSimulatorModal() {
       const modal = $("separationSimulatorModal");
       const body = $("separationSimulatorBody");
@@ -9138,22 +10804,23 @@
       const model = separationSimulatorModel(group);
       const readiness = separationSimulatorReadiness(model);
       const pathwayMode = state.activeSeparationSimulatorMode === "pathway";
+      const pathway = pathwayMode ? separationPathwayModel(group, model) : null;
       const title = $("separationSimulatorTitle");
       const eyebrow = $("separationSimulatorEyebrow");
-      if (title) title.textContent = pathwayMode ? "Lutze Reaction-Separation" : "Separation Simulator";
-      if (eyebrow) eyebrow.textContent = pathwayMode ? "Substance pathway simulation" : "Optional KB3.1 sandbox";
+      if (title) title.textContent = pathwayMode ? "Basic Lutze/Garg Screening" : "Advanced Separation Sandbox";
+      if (eyebrow) eyebrow.textContent = pathwayMode ? "Guided pathway mode" : "Diagnostic mode";
       const tabs = pathwayMode
         ? [
-          ["pathway", "Simulation"],
-          ["substances", "Substances"]
+          ["substances", "Mixture & objective"],
+          ["pathway", "Pathways"]
         ]
         : [
-          ["balance", "1. Reaction Balance"],
-          ["substances", "2. Substances"],
-          ["binary", "3. Binary Screening"],
-          ["workup", "4. Workup Plan"],
-          ["pathway", "5. Pathway Sandbox"],
-          ["suggestions", "6. Suggestions"]
+          ["balance", "Balance"],
+          ["substances", "Components"],
+          ["binary", "Pair screening"],
+          ["workup", "Workup"],
+          ["pathway", "Pathway"],
+          ["suggestions", "Suggestions"]
         ];
       body.innerHTML = `
         <div class="sep-sim-topline">
@@ -9161,22 +10828,29 @@
             <div class="label">Group ${escapeHtml(group.id)}</div>
             <strong>${escapeHtml(group.task || "unassigned task")}</strong>
           </div>
-          <div class="mfa-summary-strip">
-            <span class="pill">${model.substances.length} substances</span>
-            <span class="pill ${readiness.quantifiedCount === model.substances.length && model.substances.length ? "green" : "warn"}">${readiness.quantifiedCount}/${model.substances.length} quantified</span>
-            <span class="pill blue">${model.pairs.length} pairs</span>
-            <span class="pill ${readiness.actionableCount ? "green" : "warn"}">${readiness.actionableCount} actionable</span>
-            <span class="pill">A1.1 + KB3.1</span>
+          ${pathwayMode ? "" : `
+            <div class="mfa-summary-strip">
+                <span class="pill">${model.substances.length} substances</span>
+                <span class="pill ${readiness.quantifiedCount === model.substances.length && model.substances.length ? "green" : "warn"}">${readiness.quantifiedCount}/${model.substances.length} quantified</span>
+                <span class="pill blue">${model.pairs.length} pairs</span>
+                <span class="pill ${readiness.actionableCount ? "green" : "warn"}">${readiness.actionableCount} actionable</span>
+                <span class="pill" title="Screened by binary pair comparison (paper method A1.1) and property triggers (KB3.1)">pairs + properties</span>
+            </div>
+          `}
+        </div>
+        ${separationSimulatorModeSwitchHtml(group.id, pathwayMode ? "pathway" : "full")}
+        ${pathwayMode ? "" : `
+          <div class="sep-sim-status ${escapeAttr(readiness.status)}">
+            <strong>${escapeHtml(readiness.title)}</strong>
+            <span>${escapeHtml(readiness.message)}</span>
           </div>
-        </div>
-        <div class="sep-sim-status ${escapeAttr(readiness.status)}">
-          <strong>${escapeHtml(readiness.title)}</strong>
-          <span>${escapeHtml(readiness.message)}</span>
-        </div>
-        ${paperComplianceBadgeHtml(model)}
-        <div class="sep-sim-tabs" role="tablist" aria-label="Separation simulator tabs">
-          ${tabs.map(([id, label]) => `<button class="sep-sim-tab ${simulator.tab === id ? "active" : ""}" data-sep-sim-tab="${id}">${label}</button>`).join("")}
-        </div>
+          ${paperComplianceBadgeHtml(model)}
+        `}
+        ${pathwayMode ? separationProcessTrackHtml(group.id, simulator, model, pathway) : `
+          <div class="sep-sim-tabs" role="tablist" aria-label="Separation simulator tabs">
+            ${tabs.map(([id, label]) => `<button class="sep-sim-tab ${simulator.tab === id ? "active" : ""}" data-sep-sim-tab="${id}">${label}</button>`).join("")}
+          </div>
+        `}
         ${simulator.tab === "balance" ? reactionBalanceHtml(group, model)
             : simulator.tab === "substances" ? separationSubstancesHtml(group, model)
               : simulator.tab === "binary" ? separationBinaryHtml(group, model)
@@ -9185,6 +10859,29 @@
                     : separationSuggestionsHtml(group, model)}
       `;
       bindSeparationSimulatorControls(body, group.id);
+    }
+
+    function separationProcessTrackHtml(groupId, simulator, model, pathway) {
+      // A separation task with no reaction of its own starts from the mixture that enters it:
+      // step 1 says so instead of asking for reaction data that does not exist.
+      const separationOnly = !groupHasReaction(groupModel(groupId) || ensureGroup(groupId));
+      const reactionReady = separationOnly
+        ? model.substances.length >= 2
+        : Number.isFinite(pathway?.balance?.conversion) && Boolean(pathway?.mainProduct);
+      const mixtureReady = model.substances.length >= 2 && model.substances.every(item => item.fate !== "unknown");
+      const applied = Boolean(simulator.pathway.appliedAt);
+      const marker = ready => ready ? "&#10003;" : "";
+      const firstStep = separationOnly
+        ? `<span class="${reactionReady ? "complete" : "pending"}" title="No reaction in this task: the screening starts from the inlet mixture"><em>1</em><strong>Feed mixture</strong><small>${reactionReady ? "from upstream" : "needs streams"}</small></span>`
+        : `<span class="${reactionReady ? "complete" : "pending"}"><em>1</em><strong>Reaction</strong><small>${marker(reactionReady) || "needs data"}</small></span>`;
+      return `
+        <nav class="sep-process-track" aria-label="Reaction to scale-up workflow">
+          ${firstStep}
+          <button class="${simulator.tab === "substances" ? "active" : ""} ${mixtureReady ? "complete" : "pending"}" data-sep-sim-tab="substances"><em>2</em><strong>Mixture</strong><small>${marker(mixtureReady) || "needs data"}</small></button>
+          <button class="${simulator.tab === "pathway" ? "active" : ""} ${pathway?.complete ? "complete" : "pending"}" data-sep-sim-tab="pathway"><em>3</em><strong>Pathway</strong><small>${marker(pathway?.complete) || "draft"}</small></button>
+          <button class="${applied ? "complete" : "pending"}" data-open-scale-from-separation="${escapeAttr(groupId)}" ${applied ? "" : "disabled"}><em>4</em><strong>Scale-up</strong><small>${applied ? "ready" : "apply first"}</small></button>
+        </nav>
+      `;
     }
 
     function separationSimulatorReadiness(model) {
@@ -9204,26 +10901,20 @@
         </span>
       `;
       return `
-        <div class="paper-compliance-badge" aria-label="Paper method compliance">
+        <div class="paper-compliance-badge" aria-label="Method coverage">
           <div class="paper-compliance-head">
             <div>
-              <span class="label">Method Guard</span>
-              <strong>${guardStatus === "active" ? "Gated suggestions active" : "Waiting for gated route"}</strong>
+              <span class="label">Method Coverage</span>
+              <strong>${guardStatus === "active" ? "Screening candidates available" : "Waiting for sufficient evidence"}</strong>
             </div>
-            <span class="pill ${guardStatus === "active" ? "green" : "warn"}">${guardStatus === "active" ? `${gated.length} safe to test` : "not ready"}</span>
-          </div>
-          <div class="paper-compliance-guard">
-            <span title="Only phase/phenomena-compatible KB3.1 routes can be tried.">gated routes only</span>
-            <span title="The main flowsheet changes only after Apply Pathway.">manual apply</span>
-            <span title="Editing a previous branch discards only downstream draft steps.">branch-safe edit</span>
-            <span title="Current score is a screening score; EI ranking requires mass and energy balance.">EI not final</span>
+            <span class="pill ${guardStatus === "active" ? "green" : "warn"}">${guardStatus === "active" ? `${gated.length} eligible for screening` : "not ready"}</span>
           </div>
           <div class="paper-compliance-items">
-            ${item("A1.1 binary matrix", hasPairs ? "done" : "waiting", hasPairs ? `${model.pairs.length} binary pair comparisons generated.` : "At least two substances are needed.")}
-            ${item("KB3.1 PBB screen", kb31.length ? "partial" : "waiting", kb31.length ? `${kb31.length} PBB trigger(s) found from available properties.` : "No KB3.1 trigger yet.")}
-            ${item("Feasibility gate", gated.length ? "done" : "waiting", gated.length ? `${gated.length} route(s) passed phase/phenomena checks.` : "No route has passed the gate yet.")}
-            ${item("KB3.2 unit translation", translated.length ? "partial" : "waiting", translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No translated unit candidates yet.")}
-            ${item("EI ranking", "not implemented", "Enthalpy Index ranking requires mass and energy balance data.")}
+            ${item("Pair comparison", hasPairs ? "done" : "waiting", `${hasPairs ? `${model.pairs.length} binary pair comparisons generated.` : "At least two substances are needed."} Paper method A1.1, binary matrix.`)}
+            ${item("Property triggers", kb31.length ? "partial" : "waiting", `${kb31.length ? `${kb31.length} separation trigger(s) found from the available properties.` : "No property trigger yet."} Paper method KB3.1, phenomena-based building-block screen.`)}
+            ${item("Phase check", gated.length ? "done" : "waiting", `${gated.length ? `${gated.length} route(s) passed the phase and phenomena checks.` : "No route has passed the phase check yet."} Only compatible routes can be tried; the main flowsheet changes only when a pathway is applied.`)}
+            ${item("Unit candidates", translated.length ? "partial" : "waiting", `${translated.length ? `${translated.length} route(s) translated to candidate unit operations.` : "No unit candidates yet."} Paper method KB3.2, unit-operation translation.`)}
+            ${item("Energy ranking", "needs balance data", "Ranking by Enthalpy Index needs mass and energy balance data; until then the order is a screening priority, not an energy result.")}
           </div>
         </div>
       `;
@@ -9269,22 +10960,41 @@
     }
 
     function inferredSeparationSubstances(group) {
-      const ignored = /^(reaction mixture|crude reaction mixture|organic phase|aqueous phase|aqueous layer|organic layer|crude product|purified product|treated effluent|neutralized aqueous effluent|aqueous waste|column bottoms|heavies|uncaptured voc|wash water|water content|spent sieves|condensed solvent|recovered voc|heated reaction feed|reflux-ready reaction solution|reactor organic phase before cooling|cooled reactor organic phase|water-washed organic\/aqueous dispersion|washed organic phase|dried organic phase|octocrylene-rich distillation feed|crude cyclohexane recovery feed)$/i;
+      return memoInPass("inferredSeparationSubstances", group?.id || group, () => inferredSeparationSubstancesUncached(group));
+    }
+
+    function inferredSeparationSubstancesUncached(group) {
+      // A stream name is a mixture or a process stream rather than a substance when its wording
+      // says so ("organic phase", "crude reaction mixture", "product-rich distillation feed").
+      // Judged by these words instead of by a fixed list of the octocrylene case's stream names.
+      const ignored = /\b(mixture|phase|layer|feed|effluent|waste|bottoms|heavies|solution|dispersion|crude|spent|filtrate|slurry|solvent|voc|content|residue)\b|-rich\b|^(crude |purified |final )?product$/i;
       const candidates = [];
+      const roleOptions = { separationOnly: !groupHasReaction(group), targetProduct: state.scaleBasis?.targetProduct || "" };
+      const groupKey = String(group.id || "").trim().toUpperCase();
       substanceSourceBlocksForGroup(group).forEach(block => {
         ensureBlockFlowFields(block);
+        const upstream = block.groupId !== group.id;
         (block.streams || []).forEach(stream => {
+          // For a separation task the feed is what the upstream units send out, not what was
+          // charged into them: only upstream outlets count, and only those routed here when a
+          // destination is declared. A reaction task keeps the whole reactor content as before.
+          if (roleOptions.separationOnly && upstream) {
+            if (stream.role !== "output") return;
+            const destination = String(stream.destinationGroup || "").trim().toUpperCase();
+            if (destination && destination !== groupKey) return;
+          }
           const name = cleanSubstanceName(stream.name);
           if (!name || ignored.test(name)) return;
-          const residual = isUnreactedOrResidualName(stream.name);
+          const residualOf = cleanSubstanceName(stream.residualOf);
+          const residual = Boolean(residualOf) || isUnreactedOrResidualName(stream.name);
           candidates.push({
             name,
-            role: inferSubstanceRole(stream),
+            role: inferSubstanceRole(stream, roleOptions),
             phase: stream.phase || "unknown",
             fate: inferSubstanceFate(stream),
             quantity: String(stream.quantity || ""),
             unit: String(stream.unit || ""),
-            residualOf: residual ? name : "",
+            residualOf: residual ? residualOf || name : "",
             residualSourceId: residual ? stream.id || "" : "",
             chemicalKey: canonicalChemicalKey(name),
             source: `${block.id}/${stream.id || stream.role || "stream"}`,
@@ -9364,6 +11074,7 @@
     }
 
     function mergeCandidateQuantityByChemicalState(current, candidate, candidateOutletQuantity = false) {
+      if (current.reactionGenerated && !candidate.residualOf) return;
       if (candidate.residualOf) {
         current.quantity = candidate.quantity || current.quantity;
         current.unit = candidate.unit || current.unit;
@@ -9421,11 +11132,11 @@
       const b = parseStreamQuantity(bQty);
       if (!String(aQty || "").trim()) return { quantity: String(bQty || ""), unit: String(bUnit || "") };
       if (!String(bQty || "").trim()) return { quantity: String(aQty || ""), unit: String(aUnit || "") };
-      if (aUnit && bUnit && aUnit === bUnit && Number.isFinite(a) && Number.isFinite(b)) {
-        return { quantity: formatNumber(a + b), unit: aUnit };
-      }
       if (String(aQty).trim() === String(bQty).trim() && String(aUnit || "") === String(bUnit || "")) {
         return { quantity: String(aQty || ""), unit: String(aUnit || "") };
+      }
+      if (aUnit && bUnit && aUnit === bUnit && Number.isFinite(a) && Number.isFinite(b)) {
+        return { quantity: formatNumber(a + b), unit: aUnit };
       }
       return {
         quantity: `${String(aQty || "").trim()} ${String(aUnit || "").trim()} + ${String(bQty || "").trim()} ${String(bUnit || "").trim()}`.replace(/\s+/g, " ").trim(),
@@ -9441,15 +11152,7 @@
       return blocksInOrder().filter(block => groupIds.has(block.groupId));
     }
 
-    function cleanSubstanceName(value) {
-      const raw = String(value || "").toLowerCase();
-      if (raw.includes("cyclohexane")) return "cyclohexane";
-      if (raw.includes("octocrylene")) return "octocrylene";
-      if (raw.includes("benzophenone")) return "benzophenone";
-      if (raw.includes("2-ethylhexyl cyanoacetate")) return "2-ethylhexyl cyanoacetate";
-      if (raw.includes("ammonium acetate")) return "ammonium acetate";
-      if (raw.includes("water")) return "water";
-      if (/charged reaction|reaction feed|reaction mixture|reaction solution|organic phase|aqueous phase|organic\/aqueous dispersion|distillation feed|recovery feed|crude reaction|washed organic|dried organic|effluent/.test(raw)) return "";
+    function stripSubstanceQualifiers(value) {
       return String(value || "")
         .replace(/\([^)]*\)/g, "")
         .replace(/\b(crude|purified|recovered|condensed|unreacted|residual|vapor|rich|loss|purge|mixture|condensate|final|reactor|decanter|to vent)\b/gi, "")
@@ -9457,18 +11160,268 @@
         .trim();
     }
 
-    function inferSubstanceRole(stream) {
+    function substanceNamePattern(name) {
+      return new RegExp(`(^|[^a-z0-9])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`);
+    }
+
+    // Substances this project has declared - streams carrying a PubChem CID, a molar mass, or a
+    // reaction/substance role - are the canonical vocabulary, longest name first. A longer stream
+    // name that contains one ("recovered cyclohexane (98%)") maps to it. This used to be a fixed
+    // list of the octocrylene case's five substances, so any other protocol fell through to
+    // generic word-stripping and its recycle, product and reactant streams never lined up.
+    // One row per substance across the project. Properties belong to a substance, not to a
+    // stream: the biodiesel case carries the same six substances on some sixty streams, and a
+    // molar mass typed on one of them reached none of the others. The table reads every stream,
+    // reports where the same substance carries two different values, and writes a value entered
+    // here to every stream of that substance and to the screening substances that share its key.
+    const projectSubstanceFields = [
+      { id: "mw", label: "MW", unit: "g/mol", lutze: true },
+      { id: "tb", label: "Tb", unit: "K", lutze: true },
+      { id: "tm", label: "Tm", unit: "K", lutze: true },
+      { id: "pvap", label: "Pvap", unit: "Pa", lutze: true },
+      { id: "pvapTemperature", label: "Pvap T", unit: "K" },
+      { id: "density", label: "Density", unit: "kg/m3" },
+      { id: "solubilityParameter", label: "Sol. par.", unit: "" },
+      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol" },
+      { id: "pubchemCid", label: "CID", unit: "" }
+    ];
+
+    function projectSubstanceEntries() {
+      const entries = new Map();
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        const name = String(stream.name || "").trim();
+        if (!name) return;
+        const key = canonicalChemicalKey(name);
+        if (!key) return;
+        if (!entries.has(key)) entries.set(key, { key, name, streams: [], blockIds: [] });
+        const entry = entries.get(key);
+        entry.streams.push({ block, stream });
+        if (!entry.blockIds.includes(block.id)) entry.blockIds.push(block.id);
+      }));
+      return entries;
+    }
+
+    function projectSubstanceTableModel() {
+      return memoInPass("projectSubstanceTable", undefined, () => {
+        const rows = [];
+        projectSubstanceEntries().forEach(entry => {
+          const fields = {};
+          const conflicts = [];
+          projectSubstanceFields.forEach(def => {
+            const values = [...new Set(entry.streams.map(({ stream }) => String(stream[def.id] || "").trim()).filter(Boolean))];
+            fields[def.id] = { value: values[0] || "", values, conflict: values.length > 1 };
+            if (values.length > 1) conflicts.push(def.id);
+          });
+          rows.push({
+            key: entry.key,
+            name: entry.name,
+            streamCount: entry.streams.length,
+            blockIds: entry.blockIds,
+            fields,
+            conflicts,
+            identified: Boolean(fields.mw.value || fields.pubchemCid.value),
+            lutzeComplete: projectSubstanceFields.filter(def => def.lutze).every(def => fields[def.id].value),
+            provenance: weakestProvenance(entry.streams.map(({ stream }) => stream.status))
+          });
+        });
+        return rows.sort((a, b) => b.streamCount - a.streamCount || a.name.localeCompare(b.name));
+      });
+    }
+
+    function applyProjectSubstanceProperty(key, field, value) {
+      const text = String(value ?? "").trim();
+      let touched = 0;
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        if (canonicalChemicalKey(stream.name) !== key) return;
+        if (String(stream[field] || "").trim() !== text) touched += 1;
+        stream[field] = text;
+      }));
+      Object.values(state.groups).forEach(group => {
+        (group.separationSimulator?.substances || []).forEach(substance => {
+          if (substanceChemicalKey(substance) !== key && canonicalChemicalKey(substance.name) !== key) return;
+          substance[field] = text;
+        });
+      });
+      return touched;
+    }
+
+    function projectSubstancesSummaryText(rows) {
+      if (!rows.length) return "No substances declared yet.";
+      const conflicts = rows.filter(row => row.conflicts.length).length;
+      const ready = rows.filter(row => row.lutzeComplete).length;
+      return `${rows.length} substance${rows.length === 1 ? "" : "s"} · ${ready} with MW, Tb, Tm and Pvap${conflicts ? ` · ${conflicts} with conflicting values` : ""}`;
+    }
+
+    function projectSubstancesTableHtml(rows) {
+      if (!rows.length) return `<div class="mfa-empty">Declare streams with substance names first; every substance then gets one row here.</div>`;
+      const cell = (row, def) => {
+        const field = row.fields[def.id];
+        const title = field.conflict
+          ? `${def.label}: differs between streams (${field.values.join(" | ")}). Pick one below or type a value; it is written to every stream of ${row.name}.`
+          : `${def.label}${def.unit ? ` (${def.unit})` : ""} for every stream of ${row.name}`;
+        return `
+          <td class="${field.conflict ? "conflict" : ""}">
+            <input data-substance-field="${escapeAttr(def.id)}" data-substance-key="${escapeAttr(row.key)}" value="${escapeAttr(field.value)}" placeholder="${escapeAttr(def.unit || "-")}" title="${escapeAttr(title)}" inputmode="decimal">
+            ${field.conflict ? `<div class="substance-conflict">${field.values.map(value => `<button type="button" data-unify-substance="${escapeAttr(row.key)}" data-unify-field="${escapeAttr(def.id)}" data-unify-value="${escapeAttr(value)}" title="Use ${escapeAttr(value)} on every stream">${escapeHtml(value)}</button>`).join("")}</div>` : ""}
+          </td>`;
+      };
+      return `
+        <div class="substance-table-wrap">
+          <table class="substance-table">
+            <thead>
+              <tr>
+                <th>Substance</th>
+                <th title="Streams carrying this substance, and the blocks they belong to">Streams</th>
+                ${projectSubstanceFields.map(def => `<th title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr class="${row.conflicts.length ? "has-conflict" : ""}">
+                  <td class="substance-name"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
+                  <td class="num" title="${escapeAttr(row.blockIds.join(", "))}">${row.streamCount}<small>${escapeHtml(row.blockIds.slice(0, 4).join(" "))}${row.blockIds.length > 4 ? " …" : ""}</small></td>
+                  ${projectSubstanceFields.map(def => cell(row, def)).join("")}
+                  <td><button type="button" class="mini-button" data-fetch-substance-pubchem="${escapeAttr(row.key)}" title="Fetch MW, boiling and melting points, vapour pressure, density and CID from PubChem and write them to every stream of ${escapeAttr(row.name)}">PubChem</button></td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="muted small">A value typed here is written to every stream of the substance and to the Lutze screening; a cell marked amber carries two different values on different streams.</div>
+      `;
+    }
+
+    function renderProjectSubstances() {
+      const root = $("projectSubstances");
+      const summary = $("projectSubstancesSummary");
+      if (!root || !summary) return;
+      const rows = projectSubstanceTableModel();
+      summary.textContent = projectSubstancesSummaryText(rows);
+      const card = $("projectSubstancesCard");
+      // The table is drawn only while the card is open: one row per substance is cheap, but a
+      // closed card does not need it on every pass.
+      if (card && !card.open) {
+        root.innerHTML = "";
+        return;
+      }
+      root.innerHTML = projectSubstancesTableHtml(rows);
+      root.querySelectorAll("[data-substance-field][data-substance-key]").forEach(input => {
+        input.addEventListener("change", () => {
+          pushUndo();
+          applyProjectSubstanceProperty(input.dataset.substanceKey, input.dataset.substanceField, input.value);
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-unify-substance][data-unify-field][data-unify-value]").forEach(button => {
+        button.addEventListener("click", () => {
+          pushUndo();
+          applyProjectSubstanceProperty(button.dataset.unifySubstance, button.dataset.unifyField, button.dataset.unifyValue);
+          invalidateAiRefine();
+          renderAll();
+        });
+      });
+      root.querySelectorAll("[data-fetch-substance-pubchem]").forEach(button => {
+        button.addEventListener("click", async () => {
+          await fetchPubChemForSubstance(button.dataset.fetchSubstancePubchem, button);
+        });
+      });
+    }
+
+    async function fetchPubChemForSubstance(key, button = null) {
+      if (typeof lookupPubChem !== "function" || typeof applyPubChemLookup !== "function") return;
+      const entry = projectSubstanceEntries().get(key);
+      if (!entry) return;
+      const lookupName = entry.streams.map(({ stream }) => streamPubChemLookupName(stream)).find(Boolean) || entry.name;
+      const previousText = button?.textContent;
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Fetching...";
+      }
+      try {
+        const data = await lookupPubChem(lookupName);
+        if (!data.ok) {
+          await alertModal(data.error || `PubChem did not resolve "${lookupName}". Give one of its streams a clearer PubChem lookup name.`);
+          return;
+        }
+        pushUndo();
+        entry.streams.forEach(({ block, stream }) => {
+          applyPubChemLookup(stream, data);
+          if (stream.status === "missing") stream.status = "estimated";
+          syncLegacyStreamLists(block);
+        });
+        Object.values(state.groups).forEach(group => {
+          (group.separationSimulator?.substances || []).forEach(substance => {
+            if (substanceChemicalKey(substance) === key || canonicalChemicalKey(substance.name) === key) applyPubChemLookup(substance, data);
+          });
+        });
+        invalidateAiRefine();
+        renderAll();
+      } catch (error) {
+        await alertModal(`PubChem lookup failed: ${error.message}`);
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = previousText || "PubChem";
+        }
+      }
+    }
+
+    function projectSubstanceVocabulary() {
+      const names = new Set();
+      state.blocks.forEach(block => (block.streams || []).forEach(stream => {
+        const declared = [stream.pubchemCid, stream.mw, stream.reactionRole, stream.substanceRole]
+          .some(field => String(field || "").trim());
+        if (!declared) return;
+        const name = stripSubstanceQualifiers(stream.name).toLowerCase();
+        if (name && !/\b(mixture|phase|layer|feed|effluent|solution|dispersion|waste|residue)\b/.test(name)) names.add(name);
+      }));
+      return Array.from(names).sort((a, b) => b.length - a.length);
+    }
+
+    function cleanSubstanceName(value) {
+      const raw = String(value || "").toLowerCase();
+      const canonical = projectSubstanceVocabulary().find(name => substanceNamePattern(name).test(raw));
+      if (canonical) return canonical;
+      if (/\bwater\b/.test(raw) && !/wastewater/.test(raw)) return "water";
+      if (/charged reaction|reaction feed|reaction mixture|reaction solution|organic phase|aqueous phase|organic\/aqueous dispersion|distillation feed|recovery feed|crude reaction|washed organic|dried organic|effluent/.test(raw)) return "";
+      return stripSubstanceQualifiers(value);
+    }
+
+    function inferSubstanceRole(stream, options = {}) {
+      const explicitRole = String(stream?.substanceRole || "").trim().toLowerCase();
+      if (["product", "solvent", "reactant", "byproduct", "catalyst", "auxiliary", "impurity", "coproduct"].includes(explicitRole)) {
+        // A declared reactant that reaches a separation task is a leftover to remove.
+        return options.separationOnly && explicitRole === "reactant" ? "impurity" : explicitRole;
+      }
       const reactionRole = streamReactionRole(stream);
       if (reactionRole === "solvent") return "solvent";
       if (reactionRole === "catalyst") return "catalyst";
       if (["auxiliary", "inert"].includes(reactionRole)) return "auxiliary";
+      if (options.separationOnly) {
+        if (reactionRole === "reactant") return "impurity";
+        // No reaction in this task, so nothing is a reactant: the product is what the scale-up
+        // target names (or what leaves with fate "product"), residuals and anything leaving as
+        // waste or vent are impurities to remove, fresh charges are separating agents.
+        const name = String(stream.name || "").trim().toLowerCase();
+        const target = String(options.targetProduct || "").trim().toLowerCase();
+        if (target && name && (name === target || name.includes(target))) return "product";
+        if (stream.fate === "product") return "product";
+        if (["recovered solvent", "recycled input"].includes(stream.fate)) return "solvent";
+        if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "impurity";
+        if (["wastewater", "solid waste", "purge", "loss", "vent", "unreacted reagent"].includes(stream.fate) || stream.role === "waste") return "impurity";
+        if (/solvent/.test(`${stream.name || ""} ${stream.note || ""}`.toLowerCase())) return "solvent";
+        if (stream.fate === "fresh input") return "auxiliary";
+        return "unknown";
+      }
       if (reactionRole === "reactant" && stream.role === "input") return "reactant";
-      if (isUnreactedOrResidualName(stream.name)) return "reactant";
+      if (stream.residualOf || isUnreactedOrResidualName(stream.name)) return "reactant";
       const text = `${stream.name || ""} ${stream.fate || ""} ${stream.note || ""}`.toLowerCase();
-      if (/catalyst|nh4oac|ammonium acetate/.test(text)) return "catalyst";
-      if (/solvent|cyclohexane/.test(text)) return "solvent";
+      if (/catalyst/.test(text)) return "catalyst";
+      if (/solvent/.test(text)) return "solvent";
       if (/water|by[- ]?product|condensation/.test(text)) return "byproduct";
-      if (/product|octocrylene/.test(text)) return "product";
+      if (/product/.test(text)) return "product";
       if (stream.role === "input") return "reactant";
       if (stream.role === "waste") return "impurity";
       return "unknown";
@@ -9476,6 +11429,10 @@
 
     function inferSubstanceFate(stream) {
       const fate = String(stream.fate || "").toLowerCase();
+      // A co-product is recovered as its own stream; "product" here means the stream the
+      // screening retains. An unreacted reagent leaving a reactor is recovered and recycled.
+      if (fate.includes("co-product") || fate.includes("coproduct")) return "recover";
+      if (fate.includes("unreacted")) return "recycle";
       if (fate.includes("product")) return "product";
       if (fate.includes("recover")) return "recycle";
       if (fate.includes("recycle")) return "recycle";
@@ -9486,6 +11443,10 @@
     }
 
     function separationSimulatorModel(group) {
+      return memoInPass("separationSimulatorModel", group?.id || group, () => separationSimulatorModelUncached(group));
+    }
+
+    function separationSimulatorModelUncached(group) {
       return separationCore.separationSimulatorModel(ensureGroup(group.id).separationSimulator, streamPhases);
     }
 
@@ -9564,11 +11525,16 @@
               <div class="muted small">Quantities come from streams. PubChem only assists property completion; user-entered values are kept.</div>
             </div>
             <div class="sep-lookup-actions">
-              <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync From Streams</button>
-              <button data-pubchem-autofill="${escapeAttr(group.id)}" title="Fetch basic PubChem properties for all named substances">Autofill PubChem</button>
-              <button data-load-sep-demo="${escapeAttr(group.id)}" title="Replace simulator input with a two-component cyclohexane/octocrylene demo">Load Simple Demo</button>
-              <button data-load-methylbenzene-demo="${escapeAttr(group.id)}" title="Load a four-component reaction-separation demo with three residual reagents">3-Reagent Demo</button>
-              <button class="primary" data-add-sep-substance="${escapeAttr(group.id)}">Add Substance</button>
+              <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync streams</button>
+              <button data-pubchem-autofill="${escapeAttr(group.id)}" title="Fetch basic PubChem properties for all named substances">Autofill properties</button>
+              <details class="sep-toolbar-menu">
+                <summary>Examples</summary>
+                <div>
+                  <button data-load-sep-demo="${escapeAttr(group.id)}" title="Replace simulator input with a two-component cyclohexane/octocrylene demo">Simple mixture</button>
+                  <button data-load-methylbenzene-demo="${escapeAttr(group.id)}" title="Load a balanced reaction-separation example with three residual reagents">3-reagent reaction</button>
+                </div>
+              </details>
+              <button class="primary" data-add-sep-substance="${escapeAttr(group.id)}">+ Substance</button>
             </div>
             <div class="sep-lookup-summary ${escapeAttr(lookup.status)}">
               <strong>${escapeHtml(lookup.status === "idle" ? "Property source" : lookup.status)}</strong>
@@ -9599,6 +11565,7 @@
           tb: "353.9",
           tm: "279.7",
           pvap: "13000",
+          pvapTemperature: "298.15",
           solubilityParameter: "16.8",
           molarVolume: "108.7",
           molecularDiameter: "0.60",
@@ -9619,6 +11586,7 @@
           tb: "480",
           tm: "280",
           pvap: "10",
+          pvapTemperature: "298.15",
           solubilityParameter: "19.2",
           molarVolume: "310",
           molecularDiameter: "1.25",
@@ -9649,8 +11617,12 @@
           role: "reactant",
           phase: "L",
           fate: "recover",
-          quantity: "1.00",
+          quantity: "0.100",
           unit: "kg",
+          reactionFeedQuantity: "1.00",
+          reactionFeedUnit: "kg",
+          residualOf: "benzyl alcohol",
+          residualSourceId: "B1-S1",
           stoichCoeff: "1",
           source: "3-reagent demo",
           pubchemCid: "244",
@@ -9659,17 +11631,22 @@
           canonicalSmiles: "C1=CC=C(C=C1)CO",
           xlogp: "1.1",
           exactMass: "108.0575",
-          propertySource: "demo values for method testing",
+          propertySource: "PubChem identity; curated thermophysical screening estimates at 298.15 K",
+          propertyStatus: "estimated",
           thermalSensitivity: "low",
           mw: "108.14",
           tb: "478.15",
           tm: "258.15",
           pvap: "13",
+          pvapTemperature: "298.15",
+          pvapTemperatureUnit: "K",
           solubilityParameter: "24.8",
           molarVolume: "103.8",
+          vdwVolume: "95.5",
+          criticalTemp: "720",
           molecularDiameter: "0.62",
           kineticDiameter: "0.62",
-          note: "Residual benzyl alcohol after 90% yield; close-boiling/affinity-sensitive recovery candidate."
+          note: "Residual benzyl alcohol after 90% conversion; close-boiling/affinity-sensitive recovery candidate."
         }),
         normalizeSeparationSubstance({
           id: "CS2",
@@ -9677,8 +11654,12 @@
           role: "reactant",
           phase: "L",
           fate: "recover",
-          quantity: "0.95",
+          quantity: "0.100",
           unit: "kg",
+          reactionFeedQuantity: "0.95",
+          reactionFeedUnit: "kg",
+          residualOf: "acetic anhydride",
+          residualSourceId: "B1-S2",
           stoichCoeff: "1",
           source: "3-reagent demo",
           pubchemCid: "7918",
@@ -9687,14 +11668,19 @@
           canonicalSmiles: "CC(=O)OC(=O)C",
           xlogp: "-0.3",
           exactMass: "102.0317",
-          propertySource: "demo values for method testing",
+          propertySource: "PubChem identity; curated thermophysical screening estimates at 298.15 K",
+          propertyStatus: "estimated",
           thermalSensitivity: "medium",
           mw: "102.09",
           tb: "412.95",
           tm: "200.15",
           pvap: "520",
+          pvapTemperature: "298.15",
+          pvapTemperatureUnit: "K",
           solubilityParameter: "20.3",
           molarVolume: "94.5",
+          vdwVolume: "82.7",
+          criticalTemp: "569",
           molecularDiameter: "0.54",
           kineticDiameter: "0.54",
           note: "Residual acylating reagent; more volatile than product and recover/purge candidate."
@@ -9705,8 +11691,12 @@
           role: "reactant",
           phase: "L",
           fate: "recover",
-          quantity: "1.10",
+          quantity: "0.258",
           unit: "kg",
+          reactionFeedQuantity: "1.10",
+          reactionFeedUnit: "kg",
+          residualOf: "triethylamine",
+          residualSourceId: "B1-S3",
           stoichCoeff: "1",
           source: "3-reagent demo",
           pubchemCid: "8471",
@@ -9715,14 +11705,19 @@
           canonicalSmiles: "CCN(CC)CC",
           xlogp: "1.4",
           exactMass: "101.1204",
-          propertySource: "demo values for method testing",
+          propertySource: "PubChem identity; curated thermophysical screening estimates at 298.15 K",
+          propertyStatus: "estimated",
           thermalSensitivity: "low",
           mw: "101.19",
           tb: "362.25",
           tm: "158.35",
           pvap: "7200",
+          pvapTemperature: "298.15",
+          pvapTemperatureUnit: "K",
           solubilityParameter: "18.7",
           molarVolume: "139.0",
+          vdwVolume: "105.5",
+          criticalTemp: "535.6",
           molecularDiameter: "0.68",
           kineticDiameter: "0.68",
           note: "Volatile base/reagent residue; should be proposed early for recovery."
@@ -9733,8 +11728,9 @@
           role: "product",
           phase: "L",
           fate: "product",
-          quantity: "",
+          quantity: "1.250",
           unit: "kg",
+          reactionGenerated: true,
           stoichCoeff: "1",
           source: "3-reagent demo",
           pubchemCid: "8785",
@@ -9743,60 +11739,95 @@
           canonicalSmiles: "CC(=O)OCC1=CC=CC=C1",
           xlogp: "1.96",
           exactMass: "150.0681",
-          propertySource: "demo values for method testing",
+          propertySource: "PubChem identity; curated thermophysical screening estimates at 298.15 K",
+          propertyStatus: "estimated",
           thermalSensitivity: "medium",
           mw: "150.18",
           tb: "485.95",
           tm: "221.15",
           pvap: "20",
+          pvapTemperature: "298.15",
+          pvapTemperatureUnit: "K",
           solubilityParameter: "19.1",
           molarVolume: "148.0",
+          vdwVolume: "128.5",
+          criticalTemp: "698",
           molecularDiameter: "0.72",
           kineticDiameter: "0.72",
-          note: "Main product. Product mass is calculated from limiting reagent and conversion/yield."
+          note: "Main product. Product mass is calculated from limiting reagent and reaction yield."
+        }),
+        normalizeSeparationSubstance({
+          id: "CS5",
+          name: "triethylammonium acetate",
+          role: "byproduct",
+          phase: "L",
+          fate: "waste",
+          quantity: "1.342",
+          unit: "kg",
+          reactionGenerated: true,
+          stoichCoeff: "1",
+          source: "balanced 3-reagent demo",
+          pubchemCid: "11073729",
+          pubchemUrl: "https://pubchem.ncbi.nlm.nih.gov/compound/11073729",
+          molecularFormula: "C8H19NO2",
+          canonicalSmiles: "CC[NH+](CC)CC.CC(=O)[O-]",
+          exactMass: "161.1416",
+          propertySource: "PubChem identity and MW; remaining thermophysical values and liquid phase split are explicit screening assumptions",
+          propertyStatus: "assumption",
+          thermalSensitivity: "high",
+          mw: "161.24",
+          tb: "decomposes before boiling",
+          tm: "255.15",
+          pvap: "0.001",
+          pvapTemperature: "298.15",
+          pvapTemperatureUnit: "K",
+          solubilityParameter: "28",
+          molarVolume: "155",
+          vdwVolume: "140",
+          criticalTemp: "not applicable to ionic salt screening",
+          molecularDiameter: "0.82",
+          kineticDiameter: "0.82",
+          note: "Stoichiometric acid-capture byproduct. The demo assumes a separable polar salt-rich liquid phase; verify equilibrium, water content, and temperature experimentally."
         })
       ];
       simulator.reactionBalance = normalizeReactionBalance({
         conversionPercent: "90",
-        basis: "yield",
+        selectivityPercent: "100",
+        yieldPercent: "90",
+        basis: "conversion",
         limiting: "CS1",
         mainProductId: "CS4",
-        note: "Three-reagent demo for pathway testing: benzyl acetate product formed from limiting benzyl alcohol; residual reagents are separated sequentially."
+        note: "Balanced demo: benzyl alcohol + acetic anhydride + triethylamine -> benzyl acetate + triethylammonium acetate. The salt-rich phase behavior remains a screening assumption."
+      });
+      const screeningPair = (relativeVolatility, note, overrides = {}) => ({
+        relativeVolatility,
+        azeotrope: "unknown",
+        pressureSensitive: "unknown",
+        miscibilityGap: "unknown",
+        eutectic: "unknown",
+        ...overrides,
+        note
       });
       simulator.pairInsights = {
-        [separationPairKey("CS1", "CS4")]: {
-          relativeVolatility: "1.4",
-          azeotrope: "no",
-          pressureSensitive: "no",
-          miscibilityGap: "no",
-          eutectic: "no",
-          note: "Benzyl alcohol/product is a close-boiling residue pair; affinity or careful polishing may be needed."
-        },
-        [separationPairKey("CS2", "CS4")]: {
-          relativeVolatility: "6",
-          azeotrope: "no",
-          pressureSensitive: "no",
-          miscibilityGap: "no",
-          eutectic: "no",
-          note: "Acetic anhydride is more volatile than benzyl acetate."
-        },
-        [separationPairKey("CS3", "CS4")]: {
-          relativeVolatility: "25",
-          azeotrope: "no",
-          pressureSensitive: "no",
-          miscibilityGap: "no",
-          eutectic: "no",
-          note: "Triethylamine is the most volatile residual reagent and should usually be recovered early."
-        }
+        [separationPairKey("CS1", "CS2")]: screeningPair("40", "Screening volatility ratio from Pvap values reported at the same 298.15 K basis; verify binary VLE."),
+        [separationPairKey("CS1", "CS3")]: screeningPair("554", "Triethylamine is substantially more volatile than benzyl alcohol at the common 298.15 K screening basis."),
+        [separationPairKey("CS1", "CS4")]: screeningPair("1.54", "Benzyl alcohol/product is close-boiling; affinity or careful product polishing may be needed."),
+        [separationPairKey("CS1", "CS5")]: screeningPair("not applicable", "Ionic salt is treated as non-volatile; phase behavior with benzyl alcohol remains unverified."),
+        [separationPairKey("CS2", "CS3")]: screeningPair("13.85", "Screening Pvap ratio at 298.15 K favors triethylamine removal before acetic anhydride."),
+        [separationPairKey("CS2", "CS4")]: screeningPair("26", "Acetic anhydride is more volatile than benzyl acetate at the common 298.15 K screening basis."),
+        [separationPairKey("CS2", "CS5")]: screeningPair("not applicable", "Salt volatility is negligible; acetic-anhydride/salt phase equilibrium still requires verification."),
+        [separationPairKey("CS3", "CS4")]: screeningPair("360", "Triethylamine is the most volatile residual reagent and should usually be recovered early."),
+        [separationPairKey("CS3", "CS5")]: screeningPair("not applicable", "Free-base/salt speciation and phase equilibrium require experimental confirmation."),
+        [separationPairKey("CS4", "CS5")]: screeningPair("not applicable", "Demo assumption: benzyl acetate and the polar salt-rich liquid form separable phases. Verify LLE, water content, and temperature experimentally.", { miscibilityGap: "yes" })
       };
       simulator.lookupSummary = normalizeLookupSummary({
         status: "done",
-        message: "Loaded three-reagent reaction-separation demo with product and residual reagent properties.",
+        message: "Loaded a balanced three-reactant reaction with main product, stoichiometric salt byproduct, and residual-reagent properties.",
         lastUpdated: new Date().toISOString()
       });
-      simulator.pathway = { steps: [], selectedStepId: "", appliedAt: "" };
+      simulator.pathway = { steps: [], viewMode: "guided", selectedStepId: "", appliedAt: "" };
       simulator.tab = "pathway";
-      simulator.notes = "Three-reagent demo loaded: residual triethylamine, acetic anhydride, and benzyl alcohol separated from benzyl acetate.";
+      simulator.notes = "Balanced three-reactant demo loaded. The triethylammonium acetate L-L split is deliberately marked as a screening assumption, not verified equilibrium data.";
     }
 
     function loadMethylbenzeneSeparationDemo(groupId) {
@@ -9805,41 +11836,64 @@
 
     function separationSubstanceRowHtml(groupId, substance) {
       const s = normalizeSeparationSubstance(substance);
+      const completedProperties = separationPurePropertyDefs.filter(def => String(s[def.id] || "").trim()).length;
+      const totalProperties = separationPurePropertyDefs.length;
+      const propertyTone = completedProperties === totalProperties ? "green" : completedProperties ? "blue" : "warn";
       return `
         <article class="sep-substance-card">
           <div class="sep-card-head">
             <input data-sep-sub-field="name" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.name)}" placeholder="compound name">
             <div class="sep-card-actions">
               <button data-fetch-pubchem="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" title="Fetch basic molecular properties from PubChem">Fetch</button>
-              <button class="delete-stream" data-remove-sep-substance="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" title="Remove substance">x</button>
+              <button class="delete-stream" data-remove-sep-substance="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" title="Remove substance" aria-label="Remove substance">&times;</button>
             </div>
           </div>
           ${separationSubstanceBadgesHtml(s)}
-          <div class="sep-substance-meta">
+          <div class="sep-substance-core">
             <label><span class="label">Role</span><select data-sep-sub-field="role" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(separationSubstanceRoles, s.role)}</select></label>
             <label><span class="label">Phase</span><select data-sep-sub-field="phase" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${phaseOptionHtml(s.phase)}</select></label>
-            <label><span class="label">Fate</span><select data-sep-sub-field="fate" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(separationSubstanceFates, s.fate)}</select></label>
-            <label><span class="label">Quantity</span><input data-sep-sub-field="quantity" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.quantity)}" placeholder="amount"></label>
-            <label><span class="label">Unit</span><input data-sep-sub-field="unit" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.unit)}" placeholder="kg, mol..."></label>
-            <label><span class="label">Stoich</span><input data-sep-sub-field="stoichCoeff" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.stoichCoeff)}" placeholder="1"></label>
-            <label><span class="label">Thermal</span><select data-sep-sub-field="thermalSensitivity" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(separationThermalOptions, s.thermalSensitivity)}</select></label>
+            <label><span class="label">Destination</span><select data-sep-sub-field="fate" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(separationSubstanceFates, s.fate)}</select></label>
+            <label class="sep-quantity-field"><span class="label">Quantity</span><span><input data-sep-sub-field="quantity" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.quantity)}" placeholder="amount"><input data-sep-sub-field="unit" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.unit)}" placeholder="unit"></span></label>
           </div>
-          <div class="sep-property-grid">
-            ${separationPurePropertyDefs.map(def => `
-              <label class="sep-property-cell">
-                <span class="label">${escapeHtml(def.label)}${def.unit ? ` <em>${escapeHtml(def.unit)}</em>` : ""}</span>
-                <input data-sep-sub-field="${escapeAttr(def.id)}" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s[def.id])}" placeholder="${escapeAttr(def.thresholdLabel)}">
-              </label>
-            `).join("")}
-          </div>
-          ${s.source || s.pubchemCid || s.molecularFormula ? `<div class="sep-source-line">
-            ${s.source ? `<span>Stream: ${escapeHtml(s.source)}</span>` : ""}
-            ${s.pubchemCid ? `<span class="pubchem">PubChem CID: ${escapeHtml(s.pubchemCid)}</span>` : ""}
-            ${s.molecularFormula ? `<span>Formula: ${escapeHtml(s.molecularFormula)}</span>` : ""}
-            ${s.xlogp ? `<span>XLogP: ${escapeHtml(s.xlogp)}</span>` : ""}
-            ${s.propertySource ? `<span>Source: ${escapeHtml(s.propertySource)}</span>` : ""}
-          </div>` : ""}
-          <input data-sep-sub-field="note" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.note)}" placeholder="source, assumption, property method...">
+          <details class="sep-substance-advanced">
+            <summary>
+              <span>Advanced properties</span>
+              <span class="pill ${propertyTone}">${completedProperties}/${totalProperties} screening values</span>
+            </summary>
+            <div class="sep-substance-advanced-body">
+              <div class="sep-substance-meta">
+                <label><span class="label">Stoichiometric coefficient</span><input data-sep-sub-field="stoichCoeff" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.stoichCoeff)}" placeholder="1"></label>
+                <label><span class="label">Thermal sensitivity</span><select data-sep-sub-field="thermalSensitivity" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(separationThermalOptions, s.thermalSensitivity)}</select></label>
+              </div>
+              <div class="sep-property-grid">
+                ${separationPurePropertyDefs.map(def => `
+                  <label class="sep-property-cell">
+                    <span class="label">${escapeHtml(def.label)}${def.unit ? ` <em>${escapeHtml(def.unit)}</em>` : ""}</span>
+                    <input data-sep-sub-field="${escapeAttr(def.id)}" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s[def.id])}" placeholder="${escapeAttr(def.thresholdLabel)}">
+                  </label>
+                `).join("")}
+                <label class="sep-property-cell">
+                  <span class="label">Pvap measurement T</span>
+                  <div class="condition-value-row">
+                    <input data-sep-sub-field="pvapTemperature" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.pvapTemperature)}" placeholder="e.g. 298.15">
+                    <select data-sep-sub-field="pvapTemperatureUnit" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(["K", "C", "F"], s.pvapTemperatureUnit)}</select>
+                  </div>
+                </label>
+              </div>
+              <div class="sep-substance-meta">
+                <label><span class="label">Property evidence</span><select data-sep-sub-field="propertyStatus" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}">${optionHtml(["unknown", "reported", "experimental", "database", "estimated", "assumption"], s.propertyStatus)}</select></label>
+                <label><span class="label">Property source</span><input data-sep-sub-field="propertySource" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.propertySource)}" placeholder="source, DOI, database, or method"></label>
+              </div>
+              ${s.source || s.pubchemCid || s.molecularFormula ? `<div class="sep-source-line">
+                ${s.source ? `<span>Stream: ${escapeHtml(s.source)}</span>` : ""}
+                ${s.pubchemCid ? `<span class="pubchem">PubChem CID: ${escapeHtml(s.pubchemCid)}</span>` : ""}
+                ${s.molecularFormula ? `<span>Formula: ${escapeHtml(s.molecularFormula)}</span>` : ""}
+                ${s.xlogp ? `<span>XLogP: ${escapeHtml(s.xlogp)}</span>` : ""}
+                ${s.propertySource ? `<span>Source: ${escapeHtml(s.propertySource)}</span>` : ""}
+              </div>` : ""}
+              <label><span class="label">Notes</span><input data-sep-sub-field="note" data-sep-sub-id="${escapeAttr(s.id)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(s.note)}" placeholder="source, assumption, property method..."></label>
+            </div>
+          </details>
         </article>
       `;
     }
@@ -9849,9 +11903,8 @@
       const key = substanceChemicalKey(substance);
       const badges = [];
       if (residualOf) {
-        badges.push(`<span class="pill warn">unreacted residual</span>`);
+        badges.push(`<span class="pill warn">unreacted residual · recover or purge</span>`);
         badges.push(`<span class="pill blue">same properties as ${escapeHtml(residualOf)}</span>`);
-        badges.push(`<span class="pill green">separate, recover or purge</span>`);
       } else if (key && key !== canonicalChemicalKey(substance.name)) {
         badges.push(`<span class="pill blue">properties linked to ${escapeHtml(key)}</span>`);
       }
@@ -9861,6 +11914,12 @@
     function reactionBalanceHtml(group, model) {
       const result = reactionBalanceModel(group, model);
       const balance = result.balance;
+      const linkedReactionBlock = (group.blocks || []).find(block => {
+        const hasReaction = (block.phenomena || []).some(code => code.startsWith("R("));
+        return hasReaction && (block.conversionDetail || block.conditions?.conversion_yield);
+      });
+      const usesLinkedReactionBalance = Boolean(linkedReactionBlock && balance.basis === "conversion");
+      const linkedDisabled = usesLinkedReactionBalance ? "disabled" : "";
       const reactantOptions = ["auto", ...result.rows.filter(row => row.role === "reactant").map(row => row.id)];
       const productRows = result.rows.filter(row => row.role === "product" || row.role === "coproduct");
       const productOptions = ["auto", ...productRows.map(row => row.id)];
@@ -9868,21 +11927,30 @@
         <section class="modal-section">
           <div>
             <div class="label">Reaction Balance</div>
-            <div class="muted small">Select the main product, add co-products if needed, then conversion/yield estimates unreacted residuals for waste or recovery handling.</div>
+            <div class="muted small">Conversion determines residual reactants. Selectivity or yield determines the main-product estimate; these values are not interchangeable.</div>
           </div>
+          ${usesLinkedReactionBalance ? `
+            <div class="sep-balance-source">
+              <span><strong>Linked to ${escapeHtml(linkedReactionBlock.id)}</strong> Values are read-only here so reaction assumptions have one source.</span>
+              <button type="button" data-edit-linked-reaction="${escapeAttr(linkedReactionBlock.id)}">Edit Reaction Balance</button>
+            </div>
+          ` : ""}
           <div class="sep-balance-controls">
-            <label><span class="label">Conversion / yield %</span><input data-reaction-balance-field="conversionPercent" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.conversionPercent)}" placeholder="auto from group, e.g. 90"></label>
-            <label><span class="label">Basis</span><select data-reaction-balance-field="basis" data-sep-group="${escapeAttr(group.id)}">${optionHtml(["conversion", "yield", "assumption"], balance.basis)}</select></label>
-            <label><span class="label">Limiting reagent</span><select data-reaction-balance-field="limiting" data-sep-group="${escapeAttr(group.id)}">${optionHtml(reactantOptions, balance.limiting || "auto")}</select></label>
-            <label><span class="label">Main product</span><select data-reaction-balance-field="mainProductId" data-sep-group="${escapeAttr(group.id)}">${reactionProductOptionHtml(productOptions, productRows, balance.mainProductId || "auto")}</select></label>
+            <label><span class="label">Conversion %</span><input data-reaction-balance-field="conversionPercent" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.conversionPercent)}" placeholder="reactant converted" ${linkedDisabled}></label>
+            <label><span class="label">Selectivity %</span><input data-reaction-balance-field="selectivityPercent" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.selectivityPercent)}" placeholder="to main product" ${linkedDisabled}></label>
+            <label><span class="label">Yield %</span><input data-reaction-balance-field="yieldPercent" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.yieldPercent)}" placeholder="optional reported yield" ${linkedDisabled}></label>
+            <label><span class="label">Limiting reagent</span><select data-reaction-balance-field="limiting" data-sep-group="${escapeAttr(group.id)}" ${linkedDisabled}>${optionHtml(reactantOptions, balance.limiting || "auto")}</select></label>
+            <label><span class="label">Main product</span><select data-reaction-balance-field="mainProductId" data-sep-group="${escapeAttr(group.id)}" ${linkedDisabled}>${reactionProductOptionHtml(productOptions, productRows, balance.mainProductId || "auto")}</select></label>
           </div>
-          <div class="sep-balance-product-actions">
+          ${usesLinkedReactionBalance ? "" : `<div class="sep-balance-product-actions">
             <button type="button" data-add-reaction-product="${escapeAttr(group.id)}">+ Add Main Product</button>
             <button type="button" data-add-reaction-coproduct="${escapeAttr(group.id)}">+ Add Co-product</button>
             <span class="muted small">${productRows.length ? `${productRows.length} product-like substance${productRows.length === 1 ? "" : "s"} available` : "No product selected yet; add one or sync from output streams."}</span>
-          </div>
+          </div>`}
           <div class="sep-result-summary">
-            <span><strong>${Number.isFinite(result.conversion) ? `${formatNumber(result.conversion * 100)}%` : "missing"}</strong> conversion/yield</span>
+            <span><strong>${Number.isFinite(result.conversion) ? `${formatNumber(result.conversion * 100)}%` : "missing"}</strong> conversion</span>
+            <span><strong>${Number.isFinite(result.selectivity) ? `${formatNumber(result.selectivity * 100)}%` : "missing"}</strong> selectivity</span>
+            <span><strong>${Number.isFinite(result.yield) ? `${formatNumber(result.yield * 100)}%` : "missing"}</strong> yield</span>
             <span><strong>${result.limiting ? escapeHtml(result.limiting.name) : "missing"}</strong> limiting reagent</span>
             <span><strong>${result.mainProduct ? escapeHtml(result.mainProduct.name) : "missing"}</strong> main product</span>
             <span><strong>${result.status}</strong> balance status</span>
@@ -9895,7 +11963,9 @@
                 <strong>Unreacted residuals</strong>
                 <span class="muted small">${escapeHtml(formatResidualSummary(result))}</span>
               </div>
-              <button type="button" class="primary-mini" data-apply-residual-waste="${escapeAttr(group.id)}">Apply as waste/recovery streams</button>
+              ${usesLinkedReactionBalance
+                ? `<span class="muted small">Save these components from the linked Reaction Balance.</span>`
+                : `<button type="button" class="primary-mini" data-save-residual-components="${escapeAttr(group.id)}">Save residual components to MFA</button>`}
             </div>
           ` : ""}
           <div class="sep-balance-table">
@@ -9905,20 +11975,20 @@
                   <strong>${escapeHtml(row.name)}</strong>
                   <span class="muted small">${escapeHtml(row.role)} · stoich ${escapeHtml(row.stoich || "-")}</span>
                 </div>
-                <span>${formatReactionMass(row.initialMassKg)}</span>
-                <span>${formatReactionMass(row.finalMassKg)}</span>
+                <span>${formatReactionMass(row.initialMassKg, row.confidence)}</span>
+                <span>${formatReactionMass(row.finalMassKg, row.confidence)}</span>
                 <span class="pill ${row.confidence === "estimated" ? "blue" : "warn"}">${escapeHtml(row.confidence)}</span>
                 <span class="muted small">${escapeHtml(row.basis)}</span>
               </div>
             `).join("")}
           </div>
-          <label><span class="label">Balance note</span><input data-reaction-balance-field="note" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.note)}" placeholder="stoichiometry assumption, excess reagent, selectivity note..."></label>
+          <label><span class="label">Balance note</span><input data-reaction-balance-field="note" data-sep-group="${escapeAttr(group.id)}" value="${escapeAttr(balance.note)}" placeholder="stoichiometry assumption, excess reagent, selectivity note..." ${linkedDisabled}></label>
         </section>
       `;
     }
 
-    function formatReactionMass(value) {
-      return Number.isFinite(value) ? `${formatNumber(value)} kg` : "missing";
+    function formatReactionMass(value, status = "estimated") {
+      return Number.isFinite(value) ? quantityTextByProvenance(value, status, "kg") : "missing";
     }
 
     function reactionProductOptionHtml(options, rows, selected) {
@@ -9933,7 +12003,7 @@
       const percent = Number.isFinite(result.conversion) ? formatNumber(Math.max(0, 100 - result.conversion * 100)) : "unknown";
       const parts = result.residualRows
         .slice(0, 3)
-        .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg)}`);
+        .map(row => `${row.name}: ${formatReactionMass(row.finalMassKg, row.confidence)}`);
       return `${percent}% unconverted basis; ${parts.join(", ")}${result.residualRows.length > 3 ? "..." : ""}`;
     }
 
@@ -9946,7 +12016,7 @@
         <div class="sep-recognition-grid">
           ${reactionBalanceRecognitionColumnHtml("Main Product", mainProductRows, "product", "selected product basis")}
           ${reactionBalanceRecognitionColumnHtml("Co-products / Byproducts", [...coproductRows, ...byproductRows], "byproduct", "formed or removed separately")}
-          ${reactionBalanceRecognitionColumnHtml("Reactants", reactantRows, "reactant", "unconverted fraction can become waste/recovery")}
+          ${reactionBalanceRecognitionColumnHtml("Reactants", reactantRows, "reactant", "unconverted fraction remains in the reaction effluent")}
         </div>
       `;
     }
@@ -9963,8 +12033,8 @@
     function reactionBalanceRecognitionItemHtml(row) {
       const isResidual = row.role === "reactant" && Number.isFinite(row.finalMassKg) && row.finalMassKg > 0.000001;
       const amount = isResidual
-        ? `${formatReactionMass(row.finalMassKg)} unreacted`
-        : `${formatReactionMass(row.finalMassKg)} final`;
+        ? `${formatReactionMass(row.finalMassKg, row.confidence)} unreacted`
+        : `${formatReactionMass(row.finalMassKg, row.confidence)} final`;
       return `
         <div class="sep-recognition-item role-${escapeAttr(row.role)}">
           <div>
@@ -10032,7 +12102,7 @@
       return outputs[0]?.phase || "";
     }
 
-    function applyReactionResidualWasteStreams(groupId) {
+    function saveReactionResidualComponents(groupId) {
       const group = groupModel(groupId);
       if (!group?.blocks?.length) return;
       const result = reactionBalanceModel(group);
@@ -10042,19 +12112,20 @@
       ensureBlockFlowFields(target);
       result.residualRows.forEach(row => {
         const name = `unreacted ${row.name}`;
-        const existing = target.streams.some(stream => stream.role === "waste" && stream.name.trim().toLowerCase() === name.toLowerCase());
+        const existing = target.streams.some(stream => stream.role === "output" && stream.name.trim().toLowerCase() === name.toLowerCase());
         if (existing) return;
-        const stream = createStream("waste", {
+        const stream = createStream("output", {
           id: nextStreamId(target),
           name,
           quantity: formatNumber(row.finalMassKg),
           unit: "kg",
           phase: row.phase || "unknown",
           status: "calculated",
-          timing: "waste purge",
-          fate: "waste",
+          timing: "in-process intermediate",
+          fate: "intermediate",
+          destinationGroup: reactionWorkupGroupId(target),
           scalingMode: "per batch",
-          note: `Auto-generated from reaction balance: ${Number.isFinite(result.conversion) ? formatNumber(result.conversion * 100) : "unknown"}% conversion/yield leaves residual ${row.name}. Treat as waste or recovery candidate.`
+          note: `Saved by the user from the LUTZE reaction context: ${Number.isFinite(result.conversion) ? formatNumber(result.conversion * 100) : "unknown"}% conversion leaves residual ${row.name} in the reaction effluent. Assign recovery or disposal during downstream separation.`
         });
         target.streams.push(stream);
       });
@@ -10087,7 +12158,7 @@
                   </div>
                 </div>
               </article>
-            `).join("") : `<div class="mfa-empty">Add roles, quantities, MW, and conversion/yield to generate a preliminary workup sequence.</div>`}
+            `).join("") : `<div class="mfa-empty">Add roles, quantities, MW, conversion, and yield/selectivity to generate a preliminary workup sequence.</div>`}
           </div>
         </section>
       `;
@@ -10108,7 +12179,7 @@
     }
 
     function separationBinaryRowHtml(groupId, pair) {
-      const shownRatios = ["mw", "tb", "tm", "pvap", "solubilityParameter", "molecularDiameter"]
+      const shownRatios = ["mw", "tb", "tm", "pvap", "solubilityParameter", "molecularDiameter", "vdwVolume", "criticalTemp"]
         .map(id => {
           const def = separationPurePropertyDefs.find(item => item.id === id);
           return `<span class="pill ${Number.isFinite(pair.ratios[id]) ? "blue" : ""}">${escapeHtml(def.label)} ${escapeHtml(formatRatio(pair.ratios[id]))}</span>`;
@@ -10119,6 +12190,9 @@
           <div class="sep-binary-head">
             <strong>${escapeHtml(pair.a.name)} / ${escapeHtml(pair.b.name)}</strong>
             <span>${shownRatios}</span>
+          </div>
+          <div class="predictor-missing">
+            <span class="pill ${pair.propertyChecks?.pvap?.comparable ? "green" : "warn"}">${escapeHtml(pair.propertyChecks?.pvap?.reason || "Pvap comparison condition missing")}</span>
           </div>
           <div class="sep-binary-inputs">
             <label><span class="label">Relative volatility</span><input data-sep-pair-field="relativeVolatility" data-sep-pair-key="${escapeAttr(pair.key)}" data-sep-group="${escapeAttr(groupId)}" value="${escapeAttr(pair.insights.relativeVolatility)}" placeholder="alpha"></label>
@@ -10137,7 +12211,7 @@
               <article class="sep-route-card ${escapeAttr(variant.level)}">
                 <div class="sep-route-card-head">
                   <strong>${escapeHtml(variant.title)}</strong>
-                  <span class="pill ${variant.level === "supported" ? "green" : variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(variant.level)} · ${escapeHtml(formatMathScore(variant.score))}</span>
+                  <span class="pill ${variant.level === "matched" ? "green" : variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(separationEvidenceLabel(variant.level))}</span>
                 </div>
                 <div class="sep-route-mini-flow" aria-label="Route preview">
                   <span>${escapeHtml(groupId)}</span>
@@ -10204,17 +12278,11 @@
       return separationCore.routeVariantBehavior(variant);
     }
 
-    function formatMathScore(score) {
-      const value = Number(score);
-      return Number.isFinite(value) && value > 0 ? `screening ${Math.round(value)}/100` : "screening pending";
-    }
-
     function binaryMathSummaryHtml(variant) {
       const comparisons = Array.isArray(variant.comparisons) ? variant.comparisons.filter(item => item && item.label).slice(0, 4) : [];
       if (!comparisons.length) return "";
       return `
         <div class="binary-math-summary">
-          <span class="binary-math-score">${escapeHtml(formatMathScore(variant.score))}</span>
           ${comparisons.map(comparison => `
             <span class="binary-math-chip ${comparison.met ? "met" : "weak"}" title="${escapeAttr(comparison.basis || "binary comparison")}">
               ${escapeHtml(comparison.label)} ${escapeHtml(formatMathValue(comparison.value))} ${escapeHtml(comparison.operator || ">=")} ${escapeHtml(formatMathValue(comparison.threshold))}
@@ -10227,6 +12295,7 @@
     function pbbTranslationSummaryHtml(item) {
       const pbbs = Array.isArray(item.pbb) && item.pbb.length ? item.pbb : Array.isArray(item.principlePbbs) ? item.principlePbbs : [];
       const units = Array.isArray(item.unitCandidates) ? item.unitCandidates.slice(0, 4) : [];
+      const sourceClasses = [...new Set(units.map(candidate => candidate.sourceClass).filter(Boolean))];
       if (!pbbs.length && !units.length && !item.possibleOutletPhase && !item.agentAdded) return "";
       return `
         <div class="sep-paper-chain">
@@ -10239,6 +12308,7 @@
             <span>${units.length ? units.map(candidate => `<span class="pill green" title="${escapeAttr([candidate.source, candidate.feedPhase ? `feed ${candidate.feedPhase}` : "", candidate.outletPhase ? `outlet ${candidate.outletPhase}` : ""].filter(Boolean).join("; "))}">${escapeHtml(candidate.name)}</span>`).join("") : `<span class="pill warn">translation pending</span>`}</span>
           </div>
           <div>
+            ${sourceClasses.map(sourceClass => `<span class="pill ${sourceClass === "paper-derived" ? "green" : "warn"}">${escapeHtml(sourceClass)}</span>`).join("")}
             ${item.possibleOutletPhase ? `<span class="pill">outlet ${escapeHtml(item.possibleOutletPhase)}</span>` : ""}
             ${item.agentAdded ? `<span class="pill">agent ${escapeHtml(item.agentAdded)}</span>` : ""}
             ${item.translationBasis ? `<span class="pill">${escapeHtml(item.translationBasis)}</span>` : ""}
@@ -10261,11 +12331,10 @@
       const pbb = (variant.pbb || []).length ? `KB3.1 selected ${variant.pbb.join(", ")}` : "KB3.1 PBB selection pending";
       const candidates = (variant.unitCandidates || []).map(item => item.name).filter(Boolean);
       const translation = candidates.length ? `KB3.2 maps this PBB set to ${candidates.slice(0, 4).join(", ")}` : "KB3.2 unit translation pending";
-      const scoreText = Number(variant.score) > 0 ? `screening score ${Math.round(Number(variant.score))}/100` : "screening score pending";
       const drivers = routeNarrativeDrivers(variant);
       const missing = (variant.missing || []).length ? ` Remaining checks: ${(variant.missing || []).join("; ")}.` : "";
       const prefix = stepIndex ? `Separation step ${stepIndex}` : "Proposed separation";
-      return `${prefix}: use ${unit} to separate ${separated} from ${retained} in ${groupId}. Method trace: ${pbb} for binary pair ${pair.a.name} / ${pair.b.name}${drivers ? ` because ${drivers}` : ""}; ${translation}. ${scoreText}. EI ranking is not calculated here and requires mass and energy balance data.${missing}`;
+      return `${prefix}: use ${unit} to separate ${separated} from ${retained} in ${groupId}. Method trace: ${pbb} for binary pair ${pair.a.name} / ${pair.b.name}${drivers ? ` because ${drivers}` : ""}; ${translation}. KB3.1 evidence status: ${variant.level || "review"}. EI ranking is not available until mass and energy balance data are supplied.${missing}`;
     }
 
     function preferredSeparatedName(pair, variant) {
@@ -10306,34 +12375,6 @@
       };
     }
 
-    function routeFeedNameForSplit(split, fallback = "mixture") {
-      const components = [...(split?.separated || []), ...(split?.retained || [])];
-      const names = components.map(item => item.name).filter(Boolean);
-      return names.length ? `${names.join(" / ")} mixture` : fallback;
-    }
-
-    function routeRetainedName(split) {
-      const names = (split?.retained || []).map(item => item.name).filter(Boolean);
-      if (!names.length) return "retained stream";
-      if (names.length === 1) return `${names[0]} retained stream`;
-      return `${names.join(" / ")} retained mixture`;
-    }
-
-    function routeQuantityForSubstances(substances) {
-      const rows = (substances || []).filter(item => String(item.quantity || "").trim());
-      if (!rows.length) return { quantity: "", unit: "" };
-      const units = new Set(rows.map(item => String(item.unit || "").trim()).filter(Boolean));
-      if (units.size === 1) {
-        const unit = Array.from(units)[0];
-        const values = rows.map(item => conversionNumber(item.quantity));
-        if (values.every(value => Number.isFinite(value))) {
-          return { quantity: formatNumber(values.reduce((sum, value) => sum + value, 0)), unit };
-        }
-      }
-      if (rows.length === 1) return { quantity: rows[0].quantity, unit: rows[0].unit || "" };
-      return { quantity: rows.map(item => `${item.quantity} ${item.unit || ""}`.trim()).join(" + "), unit: "" };
-    }
-
     function routeOutletMeta(variant) {
       const title = String(variant.title || "").toLowerCase();
       if (/volatility|thermal|distill|evapor|flash|v-l/.test(title)) {
@@ -10344,42 +12385,85 @@
       return { separatedLabel: "separated stream", retainedLabel: "retained mixture", separatedPhase: "unknown", retainedPhase: "unknown" };
     }
 
+    function routeComponentStream(role, item, id, options = {}) {
+      const branch = options.branch || "feed";
+      const routePhase = item.phase && item.phase !== "unknown" ? item.phase : options.phase;
+      // The sandbox's substance fates ("waste", "recover", "recycle", "keep with mixture") are not
+      // stream fates; createStream used to fall back to "intermediate" for them, so a separated
+      // waste fraction never became a waste row. Map them, and give a waste fraction the waste role
+      // so the flowsheet draws it as a boundary outlet and the LCI bridge classifies it.
+      const substanceFate = item.fate && item.fate !== "unknown" ? String(item.fate).toLowerCase() : "";
+      const aqueous = /water|brine|aqueous|wastewater/i.test(String(item.name || ""));
+      const mappedFate = substanceFate === "waste"
+        ? (routePhase === "V" ? "vent" : routePhase === "S" ? "solid waste" : aqueous ? "wastewater" : "purge")
+        : substanceFate === "recover" || substanceFate === "recycle"
+          ? (item.role === "solvent" ? "recovered solvent" : "intermediate")
+          : substanceFate === "keep with mixture"
+            ? "intermediate"
+            : substanceFate;
+      const fate = role === "input"
+        ? "intermediate"
+        : mappedFate
+          ? mappedFate
+          : branch === "retained" && item.role === "product" ? "product" : "intermediate";
+      if (role === "output" && ["vent", "solid waste", "wastewater", "purge"].includes(fate)) role = "waste";
+      const sourceTrace = item.source ? ` Original evidence: ${item.source}.` : "";
+      const branchText = branch === "separated"
+        ? "separated branch"
+        : branch === "retained"
+          ? "retained branch for the next separation step"
+          : `component feed from ${options.fromGroupId || "the preceding task"}`;
+      return createStream(role, {
+        id,
+        name: item.name || "unnamed component",
+        quantity: item.quantity || "",
+        unit: item.unit || "kg",
+        phase: routePhase || "unknown",
+        status: "proposed",
+        fate,
+        scalingMode: "per batch",
+        stoichCoeff: item.stoichCoeff || "",
+        pubchemQuery: item.name || "",
+        note: `${options.narrative || "Lutze/Garg pathway proposal"} Component tracked individually on the ${branchText}.${sourceTrace}`,
+        ...streamChemicalPropertyPayloadWithDensity(item)
+      });
+    }
+
+    function routeFeedStreamsForSplit(split, blockId, fromGroupId, narrative = "") {
+      const components = [...(split?.separated || []), ...(split?.retained || [])];
+      const seen = new Set();
+      return components
+        .filter(item => {
+          const key = item?.id || substanceChemicalKey(item);
+          if (!item?.name || !key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((item, index) => routeComponentStream("input", item, `${blockId}-S${index + 1}`, {
+            branch: "feed",
+            fromGroupId,
+            narrative
+          }));
+    }
+
     function routeVariantOutputStreams(pair, variant, blockId, narrative = "", split = null) {
       const resolvedSplit = split || expandedRouteSplit(pair, variant, [pair.a, pair.b], null);
       const meta = routeOutletMeta(variant);
       const streams = [];
       resolvedSplit.separated.forEach((item, index) => {
-        streams.push(createStream("output", {
-          id: `${blockId}-S${index + 2}`,
-          name: `${item.name} ${meta.separatedLabel}`,
-          quantity: item.quantity || "",
-          unit: item.unit || "",
+        streams.push(routeComponentStream("output", item, `${blockId}-O${index + 1}`, {
+          branch: "separated",
           phase: meta.separatedPhase,
-          status: "proposed",
-          fate: item.fate && item.fate !== "unknown" ? item.fate : "intermediate",
-          note: narrative || `Route variant output for ${item.name}; confirm recovery, purity, and destination.`,
-          ...streamChemicalPropertyPayloadWithDensity(item)
+          narrative
         }));
       });
-      if (resolvedSplit.retained.length) {
-        const retainedQuantity = routeQuantityForSubstances(resolvedSplit.retained);
-        const retainedPureProperties = resolvedSplit.retained.length === 1
-          ? streamChemicalPropertyPayloadWithDensity(resolvedSplit.retained[0])
-          : {};
-        streams.push(
-          createStream("output", {
-            id: `${blockId}-S${streams.length + 2}`,
-            name: `${routeRetainedName(resolvedSplit)} ${meta.retainedLabel}`,
-            quantity: retainedQuantity.quantity,
-            unit: retainedQuantity.unit,
-            phase: meta.retainedPhase,
-            status: "proposed",
-            fate: resolvedSplit.retained.some(item => item.fate === "product") ? "product" : "intermediate",
-            note: narrative || `Retained mixture for the next separation step: ${resolvedSplit.retained.map(item => item.name).join(", ")}.`,
-            ...retainedPureProperties
-          })
-        );
-      }
+      resolvedSplit.retained.forEach((item, index) => {
+        streams.push(routeComponentStream("output", item, `${blockId}-O${streams.length + 1}`, {
+          branch: "retained",
+          phase: meta.retainedPhase,
+          narrative
+        }));
+      });
       return streams;
     }
 
@@ -10437,14 +12521,7 @@
         conditionUnits: {},
         conditionsEditing: false,
         streams: [
-          createStream("input", {
-            id: `${newBlockId}-S1`,
-            name: `${routeFeedNameForSplit(split)} from ${groupId}`,
-            phase: "mixture",
-            status: "proposed",
-            fate: "intermediate",
-            note: narrative
-          }),
+          ...routeFeedStreamsForSplit(split, newBlockId, groupId, narrative),
           ...routeVariantOutputStreams(pair, variant, newBlockId, narrative, split)
         ]
       });
@@ -10475,195 +12552,218 @@
 
     function separationPathwayHtml(group, model) {
       const path = separationPathwayModel(group, model);
-      const readiness = separationSimulatorReadiness(model);
+      const status = pathwayStatusPresentation(path);
+      const viewMode = path.pathway.viewMode;
       return `
         <section class="modal-section pathway-sandbox">
-          <div class="pathway-head">
+          <div class="pathway-context">
             <div>
-              <div class="label">Lutze Reaction-Separation Sandbox</div>
-              <div class="muted small">Draft alternative separation pathways from the post-reaction mixture. The main flowsheet changes only after Apply Pathway.</div>
+              <span class="label">Separation objective</span>
+              <strong>Retain ${escapeHtml(path.mainProduct?.name || "a product to be selected")}</strong>
             </div>
-            <div class="sep-unit-actions">
-              <button data-sync-sep-substances="${escapeAttr(group.id)}">Sync Substances</button>
-              <button data-pubchem-autofill="${escapeAttr(group.id)}">Fetch PubChem</button>
-              <button data-pathway-undo="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Undo Last</button>
-              <button data-pathway-reset="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Reset</button>
-              <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.steps.length && path.editIndex < 0 ? "" : "disabled"}>Apply Pathway to Main Flowsheet</button>
+            <div class="pathway-context-meta">
+              <span>${model.substances.length} components</span>
+              <span>${Math.round(path.outcome.destinationCoverage * 100)}% destinations assigned</span>
+              <button data-sep-sim-tab="substances">Edit mixture</button>
             </div>
           </div>
-          <div class="sep-sim-status ${escapeAttr(readiness.status)}">
-            <strong>${escapeHtml(path.mainProduct ? `Main product: ${path.mainProduct.name}` : "Main product not selected")}</strong>
-            <span>${escapeHtml(path.active.length ? `${path.active.length} component${path.active.length === 1 ? "" : "s"} remain in the draft mixture.` : "No active mixture components remain.")}</span>
+          <div class="pathway-mode-switch" role="tablist" aria-label="Pathway creation mode">
+            <button role="tab" aria-selected="${viewMode === "guided"}" class="${viewMode === "guided" ? "active" : ""}" data-pathway-mode="guided" data-sep-group="${escapeAttr(group.id)}">
+              <strong>Candidate pathways</strong>
+              <span>Screened with KB3.1/KB3.2</span>
+            </button>
+            <button role="tab" aria-selected="${viewMode === "manual"}" class="${viewMode === "manual" ? "active" : ""}" data-pathway-mode="manual" data-sep-group="${escapeAttr(group.id)}">
+              <strong>Build step by step</strong>
+              <span>Choose each separation yourself</span>
+            </button>
           </div>
-          ${pathwayStepperHtml(path, readiness)}
-          ${pathwayRouteReferenceHtml(group.id, path)}
-          <div class="pathway-layout">
-            <div class="pathway-canvas-panel">
-              <div class="pathway-canvas">
-                ${pathwayCanvasHtml(group, path)}
-              </div>
-              ${pathwaySelectedStepHtml(path)}
-            </div>
-            <div class="pathway-options-panel">
-              <div class="condition-family-head">
-                <span>${path.editIndex >= 0 ? "Replacement Moves" : "Next Separation Moves"}</span>
-                <span class="pill">${path.nextOptions.length}</span>
-              </div>
-              ${path.editIndex >= 0 ? `<div class="sep-sim-status partial"><strong>Editing from step ${path.editIndex + 1}</strong><span>Choosing a route here replaces this branch and discards ${path.discardedSteps.length} downstream step${path.discardedSteps.length === 1 ? "" : "s"}.</span></div>` : ""}
-              ${path.nextOptions.length ? path.nextOptions.map(option => pathwayOptionCardHtml(group.id, option)).join("") : `
-                <div class="mfa-empty">
-                  ${path.active.length <= 1 ? "Pathway is reduced to one main stream. Apply it or reset to test another route." : "No route can be drawn yet. Sync substances, fetch PubChem properties, then complete binary data for azeotrope/miscibility where needed."}
-                </div>
-              `}
-            </div>
-          </div>
-          <details class="pathway-secondary-details">
-            <summary>Advanced data: Binary matrix and balance details</summary>
-            <div class="pathway-advanced-actions">
-              <button data-sep-sim-tab="balance">Reaction balance</button>
-              <button data-sep-sim-tab="binary">Binary data</button>
-            </div>
-            <div class="pathway-balance-strip">
-              ${reactionBalanceRecognitionHtml(path.balance)}
-            </div>
-            ${pathwayPairPriorityHtml(path)}
-          </details>
+          ${viewMode === "manual"
+            ? pathwayManualBuilderHtml(group, path, status)
+            : pathwayRecommendedHtml(group.id, path, status)}
         </section>
       `;
     }
 
-    function pathwayStepperHtml(path, readiness) {
-      const hasTarget = Boolean(path.mainProduct);
-      const hasMixture = path.active.length > 0 || path.steps.length > 0;
-      const hasPairs = path.pairPriorities.length > 0;
-      const hasNextRoute = path.nextOptions.length > 0;
-      const hasPreview = path.steps.length > 0;
-      const canApply = path.steps.length > 0 && path.editIndex < 0;
-      const activeIndex = path.editIndex >= 0
-        ? 4
-        : !hasTarget
-          ? 1
-          : !hasMixture
-            ? 2
-            : !hasPairs && !hasPreview
-              ? 3
-              : !hasNextRoute && !hasPreview
-                ? 4
-                : !hasPreview
-                  ? 4
-                  : canApply
-                    ? 6
-                    : 5;
-      const steps = [
-        { id: 1, label: "Target", done: hasTarget, note: hasTarget ? path.mainProduct.name : "select product" },
-        { id: 2, label: "Mixture", done: hasMixture, note: hasMixture ? `${path.active.length} active` : "sync substances" },
-        { id: 3, label: "Binary pairs", done: hasPairs || hasPreview, note: hasPairs ? `${path.pairPriorities.length} ranked` : "needs data" },
-        { id: 4, label: "Next route", done: hasPreview, note: hasNextRoute ? `${path.nextOptions.length} options` : readiness.status },
-        { id: 5, label: "Preview", done: hasPreview, note: hasPreview ? `${path.steps.length} step${path.steps.length === 1 ? "" : "s"}` : "try a route" },
-        { id: 6, label: "Apply", done: Boolean(path.pathway.appliedAt), note: canApply ? "ready" : "not ready" }
-      ];
+    function pathwayRecommendedHtml(groupId, path, status) {
       return `
-        <div class="pathway-stepper" aria-label="Lutze simulation workflow">
-          ${steps.map(step => `
-            <div class="pathway-step ${step.done ? "done" : ""} ${activeIndex === step.id ? "active" : ""}">
-              <span class="pathway-step-dot">${step.id}</span>
-              <span class="pathway-step-text">
-                <strong>${escapeHtml(step.label)}</strong>
-                <small>${escapeHtml(step.note || "")}</small>
-              </span>
-            </div>
-          `).join("")}
-        </div>
-      `;
-    }
-
-    function pathwayRouteReferenceHtml(groupId, path) {
-      const selected = path.steps.find(step => step.id === path.pathway.selectedStepId) || path.steps[path.steps.length - 1];
-      const option = path.nextOptions[0] || null;
-      if (path.editIndex >= 0 && path.editingStep) {
-        return `
-          <div class="pathway-route-reference">
-            <div class="pathway-route-reference-main">
-              <span class="label">Editing Branch From Step ${path.editIndex + 1}</span>
-              <strong>${escapeHtml(path.editingStep.unit || path.editingStep.title || "selected separation route")}</strong>
-              <span class="muted small">Pick a replacement route below. The mixture is recalculated from before this step.</span>
-            </div>
-            <div class="pathway-route-reference-meta">
-              <span class="pill warn">${path.discardedSteps.length} step${path.discardedSteps.length === 1 ? "" : "s"} will be replaced</span>
-              <button data-pathway-cancel-edit="${escapeAttr(groupId)}">Cancel Edit</button>
-            </div>
-            ${pbbTranslationSummaryHtml(path.editingStep)}
-          </div>
-        `;
-      }
-      if (!selected && !option) {
-        return `
-          <div class="pathway-route-reference empty">
+        <div class="pathway-mode-panel">
+          <div class="pathway-mode-head">
             <div>
-              <span class="label">Route Reference</span>
-              <strong>No candidate route yet</strong>
+              <strong>Screened candidate pathways</strong>
+              <span>${path.alternatives.length ? `${path.alternatives.length} complete alternatives generated in the background` : status.detail}</span>
             </div>
-            <span class="muted small">Complete substances, phases and binary data to unlock a gated route.</span>
+            <span class="pill ${path.alternatives.length ? "green" : "warn"}">${path.alternatives.length ? "screening ready" : escapeHtml(status.label)}</span>
           </div>
-        `;
-      }
-      if (selected) {
-        return `
-          <div class="pathway-route-reference">
-            <div class="pathway-route-reference-main">
-              <span class="label">Selected Route Reference</span>
-              <strong>${escapeHtml(selected.unit || selected.title || "selected separation route")}</strong>
-              <span class="muted small">${escapeHtml(selected.separated.map(item => item.name).join(", ") || "target pending")} separated; ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "remaining mixture")} retained.</span>
-            </div>
-            <div class="pathway-route-reference-meta">
-              <span class="pill green">${escapeHtml(formatMathScore(selected.score))}</span>
-              ${selected.possibleOutletPhase ? `<span class="pill">outlet ${escapeHtml(selected.possibleOutletPhase)}</span>` : ""}
-              ${selected.agentAdded ? `<span class="pill">agent ${escapeHtml(selected.agentAdded)}</span>` : ""}
-            </div>
-            ${pbbTranslationSummaryHtml(selected)}
-          </div>
-        `;
-      }
-      return `
-        <div class="pathway-route-reference">
-          <div class="pathway-route-reference-main">
-            <span class="label">Recommended Next Route</span>
-            <strong>${escapeHtml(option.unit || option.variant.title)}</strong>
-            <span class="muted small">${escapeHtml(option.pairLabel)} · separate ${escapeHtml(option.separated.map(item => item.name).join(", "))}; retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
-          </div>
-          <div class="pathway-route-reference-meta">
-            <span class="pill ${option.variant.level === "supported" ? "green" : "blue"}">${escapeHtml(option.variant.level)} · ${escapeHtml(formatMathScore(option.variant.score))}</span>
-            <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">Try Route</button>
-          </div>
-          ${pbbTranslationSummaryHtml(option.variant)}
+          <details class="pathway-method-note">
+            <summary>Screening basis</summary>
+            <span>Only phase-compatible routes that trigger KB3.1 thresholds are included. The cards compare evidence coverage, missing inputs, MSA use, and thermal exposure. They are candidates, not a final paper ranking: EI requires mass and energy balance data.</span>
+          </details>
+          ${pathwayAlternativesHtml(groupId, path)}
         </div>
       `;
     }
 
-    function pathwayPairPriorityHtml(path) {
+    function pathwayManualBuilderHtml(group, path, status) {
+      const showAll = Boolean(state.expandedPathwayOptions[group.id]);
+      const visibleOptions = showAll ? path.nextOptions : path.nextOptions.slice(0, 3);
+      const hiddenOptions = Math.max(0, path.nextOptions.length - visibleOptions.length);
       return `
-        <div class="sep-route-variants">
-          <div class="sep-route-title">
-            <strong>Binary Pair Priority</strong>
-            <span class="muted small">All active pairwise comparisons ranked before drawing the next separation.</span>
-            <span class="pill">${path.pairPriorities.length} pairs</span>
+        <div class="pathway-mode-panel">
+          <div class="pathway-mode-head">
+            <div>
+              <strong>Build step by step</strong>
+              <span>${path.steps.length} selected · ${path.active.length} components in the product-rich stream</span>
+            </div>
+            <div class="sep-unit-actions">
+              <button data-pathway-undo="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Undo</button>
+              <button data-pathway-reset="${escapeAttr(group.id)}" ${path.steps.length ? "" : "disabled"}>Reset</button>
+              <button class="primary" data-pathway-apply="${escapeAttr(group.id)}" ${path.canApply ? "" : "disabled"}>Apply pathway</button>
+            </div>
           </div>
-          ${path.pairPriorities.length ? path.pairPriorities.map((item, index) => `
-            <article class="sep-route-card ${escapeAttr(item.level)}">
-              <div class="sep-route-card-head">
-                <strong>${index + 1}. ${escapeHtml(item.pairLabel)}</strong>
-                <span class="pill ${item.priority === "high" ? "green" : item.priority === "medium" ? "blue" : "warn"}">${escapeHtml(item.priority)} · ${escapeHtml(formatMathScore(item.score))}</span>
+          <div class="sep-sim-status ${escapeAttr(status.tone)}">
+            <strong>${escapeHtml(status.label)}</strong>
+            <span>${escapeHtml(status.detail)}</span>
+          </div>
+          <div class="pathway-layout">
+            <div class="pathway-canvas-panel">
+              <div class="pathway-canvas">${pathwayCanvasHtml(group, path)}</div>
+              ${pathwaySelectedStepHtml(path)}
+            </div>
+            <div class="pathway-options-panel">
+              <div class="condition-family-head">
+                <span>${path.editIndex >= 0 ? "Replace with" : "Choose the next separation"}</span>
+                <span class="pill">${path.nextOptions.length}</span>
               </div>
-              <div class="predictor-reason">${escapeHtml(item.bestRoute ? `Prioritize ${item.bestRoute}${item.bestUnit ? ` via ${item.bestUnit}` : ""}. ${item.reason}` : item.reason)}</div>
-              ${pbbTranslationSummaryHtml(item)}
-              <div class="predictor-missing">
-                ${item.mainProductPair ? `<span class="pill green">main-product pair</span>` : `<span class="pill">secondary pair</span>`}
-                ${item.drivers.slice(0, 3).map(driver => `<span class="pill blue">${escapeHtml(driver)}</span>`).join("")}
-                ${item.missing.slice(0, 3).map(missing => `<span class="pill warn">${escapeHtml(missing)}</span>`).join("")}
-              </div>
-            </article>
-          `).join("") : `<div class="mfa-empty">No active binary pairs remain.</div>`}
+              ${path.editIndex >= 0 ? `<div class="sep-sim-status partial"><strong>Editing step ${path.editIndex + 1}</strong><span>The selected route and ${Math.max(0, path.discardedSteps.length - 1)} later step${path.discardedSteps.length === 2 ? "" : "s"} will be replaced.</span><button data-pathway-cancel-edit="${escapeAttr(group.id)}">Cancel</button></div>` : ""}
+              ${visibleOptions.length ? visibleOptions.map(option => pathwayOptionCardHtml(group.id, option)).join("") : `
+                <div class="mfa-empty">${path.active.length <= 1 ? "The product-rich stream is resolved. Apply the pathway or reset it." : "No eligible next separation candidate. Review mixture phases and property evidence."}</div>
+              `}
+              ${path.nextOptions.length > 3 ? `<button class="pathway-options-toggle" data-toggle-pathway-options="${escapeAttr(group.id)}">${showAll ? "Show top 3" : `Show ${hiddenOptions} more candidates`}</button>` : ""}
+            </div>
+          </div>
+          ${path.steps.length ? pathwayImpactPreviewHtml(path) : ""}
         </div>
+      `;
+    }
+
+    // A blocked screening names the missing properties and substances. The outcome checks
+    // ("cyclohexane: still present but assigned to recycle") describe a pathway that has no steps
+    // yet, which is the consequence, not the cause.
+    // Yield, conversion and selectivity are the three numbers the framework's reaction stage
+    // rests on, so they sit side by side and their one constraint is checked as you type: the
+    // yield cannot exceed conversion x selectivity. They used to hide in a collapsed
+    // "Residual assumptions" row in the stoichiometric mode.
+    function conversionConsistencyWarningHtml(yieldPercent, conversionPercent, selectivityPercent) {
+      const y = Number(yieldPercent);
+      const c = Number(conversionPercent);
+      const s = Number(selectivityPercent);
+      if (![y, c, s].every(Number.isFinite)) return "";
+      const ceiling = c * s / 100;
+      if (y <= ceiling + 1e-9) return "";
+      return `<div class="conversion-mode-help conversion-consistency-warning">Yield ${formatNumber(y)}% exceeds conversion x selectivity = ${formatNumber(Math.round(ceiling * 100) / 100)}%. Lower the yield, or raise conversion or selectivity.</div>`;
+    }
+
+    // The same reaction at the scale-up target, so the lab balance and the industrial batch are
+    // one screen apart instead of two panels apart.
+    function conversionScaledEquivalentHtml(calc, productQty, yieldPercent) {
+      if (typeof scaleModel !== "function") return "";
+      const targetKg = parseStreamQuantity(scaleModel()?.target?.kgPerBatch);
+      const theoreticalKg = parseStreamQuantity(productQty);
+      const y = parseStreamQuantity(yieldPercent);
+      if (!Number.isFinite(targetKg) || targetKg <= 0 || !Number.isFinite(theoreticalKg) || theoreticalKg <= 0) return "";
+      const labProductKg = theoreticalKg * (Number.isFinite(y) ? y : 100) / 100;
+      if (!(labProductKg > 0)) return "";
+      const factor = targetKg / labProductKg;
+      return `<div class="conversion-mode-help">At the scale-up target this batch makes ${formatDisplayNumber(targetKg)} kg of product: every reagent charge and residual below scales by ${formatDisplayNumber(factor)}.</div>`;
+    }
+
+    function pathwayMissingEvidenceText(path) {
+      const gaps = path.propertyGaps || {};
+      const parts = [];
+      const list = names => names.length > 4 ? `${names.slice(0, 4).join(", ")} and ${names.length - 4} more` : names.join(", ");
+      if ((gaps.tb || []).length) parts.push(`boiling point (Tb) for ${list(gaps.tb)}`);
+      if ((gaps.pvap || []).length) parts.push(`vapour pressure (Pvap) for ${list(gaps.pvap)}`);
+      if ((gaps.tm || []).length) parts.push(`melting point (Tm) for ${list(gaps.tm)}`);
+      if (!parts.length && (path.missingEvidence || []).length) {
+        return `Binary evidence missing: ${path.missingEvidence.slice(0, 3).map(item => `${item.pair}: ${item.missing.join(", ")}`).join("; ")}.`;
+      }
+      if (!parts.length) return "";
+      return `Missing ${parts.join("; ")}. Use Autofill properties in Mixture, or enter values under Advanced properties.`;
+    }
+
+    function pathwayStatusPresentation(path) {
+      const missingText = pathwayMissingEvidenceText(path);
+      const labels = {
+        not_started: ["Define mixture objective", "Add a main product and assign a destination to each substance.", "partial"],
+        in_progress: ["Pathway in progress", `${path.active.length} components remain; ${path.unresolved.length} outcome check${path.unresolved.length === 1 ? "" : "s"} unresolved.`, "partial"],
+        blocked_missing_data: ["Blocked by missing property data", missingText || path.unresolved.join("; ") || "Complete phases, destinations, and binary evidence.", "blocked"],
+        blocked_no_route: ["No eligible next route", path.unresolved.join("; ") || "The current evidence does not justify another separation move.", "blocked"],
+        complete: ["Complete screening pathway", "Every substance has a declared destination and the product-rich stream is resolved.", "ready"],
+        applied: ["Pathway applied", "This screened pathway has been written to the main flowsheet.", "ready"]
+      };
+      const [label, detail, tone] = labels[path.status] || labels.in_progress;
+      return { label, detail, tone };
+    }
+
+    function pathwayAlternativesHtml(groupId, path) {
+      return `
+        <div class="pathway-alternative-grid">
+          ${path.alternatives.length ? path.alternatives.map((item, index) => pathwayAlternativeCardHtml(groupId, item, index, path)).join("") : `
+            <div class="mfa-empty">No complete pathway can be generated from the current evidence. Open Mixture &amp; objective to complete phases, destinations, and property data.</div>
+          `}
+        </div>
+      `;
+    }
+
+    function pathwayAlternativeCardHtml(groupId, alternative, index, path) {
+      const m = alternative.metrics;
+      const substanceNames = new Map((path?.balance?.rows || []).map(row => [row.id, row.name]));
+      const sequence = alternative.steps.map(step => ({
+        unit: step.unit || step.title,
+        separated: (step.separatedIds || []).map(id => substanceNames.get(id)).filter(Boolean).join(", ")
+      })).filter(item => item.unit);
+      const profileNotes = {
+        evidence: "Highest share of route-ready KB3.1 screens, then fewer missing property inputs.",
+        msa: "Fewest steps requiring a mass-separating agent, then stronger KB3.1 coverage.",
+        "thermal-proxy": "Fewest distillation, evaporation, or flash steps. This is an operation-name proxy, not a temperature or degradation calculation.",
+        alternative: "Another complete pathway that passes the current phase and KB3.1 gates."
+      };
+      return `
+        <article class="pathway-alternative-card">
+          <div class="sep-route-card-head">
+            <div><span class="label">Option ${index + 1}</span><strong>${escapeHtml(alternative.label)}</strong></div>
+            <span class="pill ${alternative.status === "complete" ? "green" : "warn"}">${m.stepCount} step${m.stepCount === 1 ? "" : "s"}</span>
+          </div>
+          <span class="muted small">${escapeHtml(profileNotes[alternative.profile] || "Evidence-based pathway draft.")}</span>
+          <div class="pathway-alternative-sequence">${sequence.map((step, stepIndex) => `<span><em>${stepIndex + 1}</em><span><strong>${escapeHtml(step.unit)}</strong><small>${step.separated ? `Remove ${escapeHtml(step.separated)}` : "Separation target to verify"}</small></span></span>`).join("")}</div>
+          <div class="pathway-metric-grid">
+            <span title="Route-ready: threshold and phase/evidence gate passed; not equipment validation"><strong>${m.routeReadySteps}/${m.stepCount} route-ready</strong>${m.partialSteps ? ` · ${m.partialSteps} threshold-only review` : ""}</span>
+            <span title="Property, phase, or equilibrium inputs explicitly missing from the selected route rules."><strong>${m.missingChecks}</strong> missing property inputs</span>
+            <span title="Steps requiring an added mass-separating agent such as a solvent or entrainer."><strong>${m.addedAgentSteps}</strong> MSA steps</span>
+            <span title="Counts thermal-separation operation names only; no temperature or degradation calculation"><strong>${m.thermalOperationSteps}</strong> thermal operations / ${m.thermalExposureProxySteps} exposure proxy</span>
+          </div>
+          ${alternative.outcome.unresolved.length ? `<div class="muted small">Unresolved: ${escapeHtml(alternative.outcome.unresolved.slice(0, 3).join("; "))}</div>` : ""}
+          <button class="primary-mini" data-pathway-use-alternative="${escapeAttr(alternative.id)}" data-sep-group="${escapeAttr(groupId)}">Use as editable draft</button>
+        </article>
+      `;
+    }
+
+    function pathwayImpactPreviewHtml(path) {
+      const stepCount = path.steps.length;
+      return `
+        <section class="pathway-stage-panel">
+          <div class="condition-family-head">
+            <span>Flowsheet impact</span>
+            <span class="pill ${path.canApply ? "green" : "warn"}">${path.canApply ? "ready" : "not ready"}</span>
+          </div>
+          <div class="pathway-impact-grid">
+            <span><strong>${stepCount}</strong> separator group${stepCount === 1 ? "" : "s"}</span>
+            <span><strong>${stepCount * 2}</strong> principal outlets</span>
+            <span><strong>${stepCount ? stepCount + 1 : 0}</strong> expected connections</span>
+            <span><strong>${path.unresolved.length}</strong> unresolved checks</span>
+          </div>
+          <div class="muted small">Application creates proposed groups and preserves KB3.1/KB3.2 evidence. Equipment sizing, split fractions, recovery, energy, and EI remain to be verified.</div>
+        </section>
       `;
     }
 
@@ -10675,7 +12775,7 @@
           <span class="muted small">${path.balance.status === "estimated" ? "reaction balance estimated" : "complete balance inputs first"}</span>
         </div>
         ${path.steps.map((step, index) => `
-          <div class="pathway-arrow">-></div>
+          <div class="pathway-arrow">&rarr;</div>
           <button class="pathway-node separator ${path.pathway.selectedStepId === step.id ? "selected" : ""} ${path.pathway.editFromStepId === step.id ? "editing" : ""}" data-pathway-select-step="${escapeAttr(step.id)}" data-sep-group="${escapeAttr(group.id)}">
             <span class="pill">${index + 1}</span>
             <strong>${escapeHtml(step.unit || step.title || "separation route")}</strong>
@@ -10685,9 +12785,9 @@
             ${step.separated.map(item => `<span class="pill green">${escapeHtml(item.name)} separated</span>`).join("") || `<span class="pill warn">separation target pending</span>`}
           </div>
         `).join("")}
-        <div class="pathway-arrow">-></div>
+        <div class="pathway-arrow">&rarr;</div>
         <div class="pathway-node residue">
-          <strong>${path.active.length <= 1 ? "Final active stream" : "Remaining mixture"}</strong>
+          <strong>${path.complete ? "Resolved product-rich stream" : "Unresolved mixture"}</strong>
           <span class="muted small">${path.active.map(item => item.name).join(", ") || "empty"}</span>
         </div>
       `;
@@ -10702,7 +12802,7 @@
         <div class="pathway-info-panel">
           <strong>${escapeHtml(selected.title || selected.unit || "Selected route")}</strong>
           <span class="muted small">Unit: ${escapeHtml(selected.unit || "not fixed")}</span>
-          <span class="muted small">Screening score: ${escapeHtml(formatMathScore(selected.score))}</span>
+          <span class="muted small">KB3.1 evidence: ${escapeHtml(selected.evidenceLevel || "review")}.</span>
           <span class="muted small">Separates: ${escapeHtml(selected.separated.map(item => item.name).join(", ") || "pending")}</span>
           <span class="muted small">Retains: ${escapeHtml(selected.retained.map(item => item.name).join(", ") || "pending")}</span>
           ${pbbTranslationSummaryHtml(selected)}
@@ -10720,19 +12820,21 @@
       return `
         <article class="pathway-option-card ${escapeAttr(option.variant.level)}">
           <div class="sep-route-card-head">
-            <strong>${escapeHtml(option.unit || option.variant.title)}</strong>
-            <span class="pill ${option.variant.level === "supported" ? "green" : option.variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(option.variant.level)} · ${escapeHtml(formatMathScore(option.variant.score))}</span>
+            <div><strong>${escapeHtml(option.unit || option.variant.title)}</strong><span>Remove ${escapeHtml(option.separated.map(item => item.name).join(", "))}</span></div>
+            <span class="pill ${option.variant.level === "matched" ? "green" : option.variant.level === "partial" ? "blue" : "warn"}">${escapeHtml(separationEvidenceLabel(option.variant.level))}</span>
           </div>
-          <div class="muted small">${escapeHtml(option.pairLabel)}</div>
           <div class="pathway-option-target">
-            <span class="pill green">separate ${escapeHtml(option.separated.map(item => item.name).join(", "))}</span>
-            <span class="pill blue">retain ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
+            <span><strong>Retain</strong> ${escapeHtml(option.retained.map(item => item.name).join(", "))}</span>
           </div>
-          <div class="predictor-missing">
-            ${option.variant.pbb.slice(0, 4).map(code => `<span class="pill blue">${escapeHtml(code)}</span>`).join("")}
-            ${option.variant.drivers.slice(0, 2).map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
-          </div>
-          <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">${replacing ? "Replace From Here" : "Try This Route"}</button>
+          <details class="pathway-option-evidence">
+            <summary>Evidence details · ${escapeHtml(option.pairLabel)}</summary>
+            <div class="muted small">Split direction: ${escapeHtml(option.directionConfidence)}. Review phase enrichment and recovery before application.</div>
+            <div class="predictor-missing">
+              ${option.variant.pbb.slice(0, 4).map(code => `<span class="pill blue">${escapeHtml(code)}</span>`).join("")}
+              ${option.variant.drivers.slice(0, 2).map(driver => `<span class="pill green">${escapeHtml(driver)}</span>`).join("")}
+            </div>
+          </details>
+          <button class="primary-mini" data-pathway-try-option="${escapeAttr(option.id)}" data-sep-group="${escapeAttr(groupId)}">${replacing ? "Replace from here" : "Use this step"}</button>
         </article>
       `;
     }
@@ -10749,27 +12851,34 @@
       if (replacing) {
         simulator.pathway.steps = simulator.pathway.steps.slice(0, path.editIndex);
       }
-      const step = {
-        id: `PW${Date.now().toString(36)}${simulator.pathway.steps.length + 1}`,
-        pairKey: option.pairKey,
-        routeId: option.routeId,
-        title: option.variant.title,
-        unit: option.unit,
-        separatedIds: option.separated.map(item => item.id),
-        retainedIds: option.retained.map(item => item.id),
-        drivers: option.variant.drivers,
-        missing: option.variant.missing,
-        pbb: option.variant.pbb || [],
-        possibleOutletPhase: option.variant.possibleOutletPhase || "",
-        agentAdded: option.variant.agentAdded || "",
-        translationBasis: option.variant.translationBasis || "",
-        unitCandidates: option.variant.unitCandidates || [],
-        score: option.variant.score,
-        note: option.variant.graphPreview
-      };
+      const step = separationCore.pathwayStepFromOption(option, `PW${Date.now().toString(36)}${simulator.pathway.steps.length + 1}`);
       simulator.pathway.steps.push(step);
       simulator.pathway.selectedStepId = step.id;
+      simulator.pathway.selectedAlternativeId = "";
       simulator.pathway.editFromStepId = "";
+      simulator.pathway.viewMode = "manual";
+      simulator.tab = "pathway";
+      renderSeparationSimulatorModal();
+      renderExport();
+    }
+
+    function usePathwayAlternative(groupId, alternativeId) {
+      const group = groupModel(groupId);
+      if (!group) return;
+      const path = separationPathwayModel(group);
+      const alternative = path.alternatives.find(item => item.id === alternativeId);
+      if (!alternative) return;
+      pushUndo();
+      const simulator = ensureGroup(groupId).separationSimulator;
+      simulator.pathway.steps = alternative.steps.map((step, index) => ({
+        ...step,
+        id: `PW${Date.now().toString(36)}${index + 1}`
+      }));
+      simulator.pathway.selectedStepId = simulator.pathway.steps.at(-1)?.id || "";
+      simulator.pathway.selectedAlternativeId = alternativeId;
+      simulator.pathway.editFromStepId = "";
+      simulator.pathway.appliedAt = "";
+      simulator.pathway.viewMode = "manual";
       simulator.tab = "pathway";
       renderSeparationSimulatorModal();
       renderExport();
@@ -10781,6 +12890,7 @@
       pushUndo();
       simulator.pathway.steps.pop();
       simulator.pathway.selectedStepId = simulator.pathway.steps.length ? simulator.pathway.steps[simulator.pathway.steps.length - 1].id : "";
+      simulator.pathway.selectedAlternativeId = "";
       simulator.pathway.editFromStepId = "";
       simulator.tab = "pathway";
       renderSeparationSimulatorModal();
@@ -10793,6 +12903,7 @@
       pushUndo();
       simulator.pathway.steps = [];
       simulator.pathway.selectedStepId = "";
+      simulator.pathway.selectedAlternativeId = "";
       simulator.pathway.editFromStepId = "";
       simulator.pathway.appliedAt = "";
       simulator.tab = "pathway";
@@ -10813,6 +12924,13 @@
       renderSeparationSimulatorModal();
     }
 
+    function setPathwayViewMode(groupId, mode) {
+      const simulator = ensureGroup(groupId).separationSimulator;
+      simulator.pathway.viewMode = mode === "manual" ? "manual" : "guided";
+      simulator.pathway.editFromStepId = "";
+      renderSeparationSimulatorModal();
+    }
+
     function applyPathwayToMainFlowsheet(groupId) {
       const sourceGroup = groupModel(groupId);
       if (!sourceGroup) return;
@@ -10820,17 +12938,20 @@
       const path = separationPathwayModel(sourceGroup, model);
       if (!path.steps.length) return;
       if (path.editIndex >= 0) return;
+      if (!path.canApply) return;
+      const resolvedSteps = path.steps.map(step => {
+        const pair = model.pairs.find(item => item.key === step.pairKey);
+        const variant = pair ? binaryRouteVariants(groupId, pair).find(item => item.id === step.routeId && item.selectable !== false) : null;
+        return { step, pair, variant };
+      });
+      if (resolvedSteps.some(item => !item.pair || !item.variant)) return;
       pushUndo();
       const sourceState = ensureGroup(groupId);
       const outgoing = state.links.filter(link => resolvedEndpointId(link.from) === groupId);
       state.links = state.links.filter(link => resolvedEndpointId(link.from) !== groupId);
       let previousGroupId = groupId;
       let lastGroupId = groupId;
-      path.steps.forEach((step, index) => {
-        const pair = model.pairs.find(item => item.key === step.pairKey);
-        if (!pair) return;
-        const variant = binaryRouteVariants(groupId, pair).find(item => item.id === step.routeId);
-        if (!variant) return;
+      resolvedSteps.forEach(({ step, pair, variant }, index) => {
         const newGroupId = nextGroupId();
         const newBlockId = nextBlockId();
         const newGroup = ensureGroup(newGroupId, "separation");
@@ -10839,12 +12960,17 @@
           retained: step.retained?.length ? step.retained : step.retainedIds.map(id => model.substances.find(item => item.id === id)).filter(Boolean)
         };
         const narrative = lutzeRouteNarrative(sourceGroup.id, pair, variant, split, index + 1);
-        newGroup.task = `${step.title || variant.title}: ${pair.a.name} / ${pair.b.name}`;
+        // Named by what leaves and what stays, not by the screening pair that justified it:
+        // "Liquid-liquid split: glycerol + sodium hydroxide from methyl oleate".
+        const retainedMain = split.retained.find(item => item.role === "product") || split.retained[0];
+        newGroup.task = `${String(step.title || variant.title).replace(/ route$/i, "")}: ${split.separated.map(item => item.name).join(" + ")}${retainedMain ? ` from ${retainedMain.name}` : ""}`;
         newGroup.selectedUnit = step.unit || (variant.units || []).find(unit => unit !== "Review candidate unit") || "";
         newGroup.selectionBasis = [
-          `Applied from Lutze Reaction-Separation pathway for ${sourceGroup.id}.`,
+          `Applied from Lutze/Garg separation screening pathway for ${sourceGroup.id}.`,
           narrative,
           step.drivers.length ? `Drivers: ${step.drivers.join("; ")}.` : "",
+          step.methodSources.length ? `Method coverage: ${step.methodSources.join("; ")}.` : "",
+          `Split direction confidence: ${step.directionConfidence}.`,
           step.missing.length ? `Missing checks: ${step.missing.join("; ")}.` : "No high-priority missing checks recorded in the pathway."
         ].filter(Boolean).join(" ");
         newGroup.schedule = { ...scheduleDefaults(), notes: `Draft pathway separator ${index + 1}; verify equipment sizing and mass split before scale-up.` };
@@ -10865,14 +12991,7 @@
           conditionUnits: {},
           conditionsEditing: false,
           streams: [
-            createStream("input", {
-              id: `${newBlockId}-S1`,
-              name: `${routeFeedNameForSplit(split)} pathway feed from ${previousGroupId}`,
-              phase: "mixture",
-              status: "proposed",
-              fate: "intermediate",
-              note: narrative
-            }),
+            ...routeFeedStreamsForSplit(split, newBlockId, previousGroupId, narrative),
             ...routeVariantOutputStreams(pair, variant, newBlockId, narrative, split)
           ]
         });
@@ -10914,7 +13033,7 @@
           </div>
           <div class="sep-result-summary">
             <span><strong>${readiness.actionableCount}</strong> gated route theories</span>
-            <span><strong>${readiness.supportedCount}</strong> supported</span>
+            <span><strong>${readiness.routeReadyCount}</strong> route-ready screens</span>
             <span><strong>${blocked.length}</strong> waiting/rejected</span>
           </div>
           <div class="sep-suggestions">
@@ -10955,15 +13074,19 @@
       return separationCore.suggestionLevelRank(level);
     }
 
+    function separationEvidenceLabel(level) {
+      return { matched: "KB threshold matched", partial: "review required", hypothesis: "hypothesis", blocked: "blocked" }[level] || level;
+    }
+
     function separationSuggestionCardHtml(groupId, item) {
       const units = item.units.length ? item.units : ["add data before selecting a unit"];
       const selectable = item.selectable !== false;
       const status = item.eligibility || item.level;
       return `
-        <article class="predictor-row ${item.level === "supported" ? "keep" : item.level === "blocked" || !selectable ? "reject" : "weak"}">
+        <article class="predictor-row ${item.level === "matched" ? "keep" : item.level === "blocked" || !selectable ? "reject" : "weak"}">
           <div class="predictor-row-top">
             <strong>${escapeHtml(item.label)}</strong>
-            <span class="pill ${item.level === "supported" ? "green" : item.level === "blocked" || !selectable ? "warn" : "blue"}">${escapeHtml(status)} · ${escapeHtml(formatMathScore(item.score))}</span>
+            <span class="pill ${item.level === "matched" ? "green" : item.level === "blocked" || !selectable ? "warn" : "blue"}">${escapeHtml(status)}</span>
           </div>
           <div class="predictor-reason">${escapeHtml(item.note)}</div>
           <div class="predictor-meta">
@@ -10988,6 +13111,16 @@
     }
 
     function bindSeparationSimulatorControls(root, groupId) {
+      root.querySelectorAll("[data-sep-sim-mode]").forEach(button => {
+        button.addEventListener("click", () => {
+          const mode = button.dataset.sepSimMode === "full" ? "full" : "pathway";
+          const simulator = ensureGroup(button.dataset.sepGroup || groupId).separationSimulator;
+          state.activeSeparationSimulatorMode = mode;
+          if (mode === "pathway" && !["substances", "pathway"].includes(simulator.tab)) simulator.tab = "pathway";
+          if (mode === "full" && !simulator.tab) simulator.tab = "balance";
+          renderSeparationSimulatorModal();
+        });
+      });
       root.querySelectorAll("[data-sep-sim-tab]").forEach(button => {
         button.addEventListener("click", () => {
           ensureGroup(groupId).separationSimulator.tab = button.dataset.sepSimTab;
@@ -11067,11 +13200,37 @@
       root.querySelectorAll("[data-add-reaction-coproduct]").forEach(button => {
         button.addEventListener("click", () => addReactionProductSubstance(button.dataset.addReactionCoproduct, "coproduct"));
       });
-      root.querySelectorAll("[data-apply-residual-waste]").forEach(button => {
-        button.addEventListener("click", () => applyReactionResidualWasteStreams(button.dataset.applyResidualWaste));
+      root.querySelectorAll("[data-save-residual-components]").forEach(button => {
+        button.addEventListener("click", () => saveReactionResidualComponents(button.dataset.saveResidualComponents));
+      });
+      root.querySelectorAll("[data-edit-linked-reaction]").forEach(button => {
+        button.addEventListener("click", () => {
+          const blockId = button.dataset.editLinkedReaction;
+          closeSeparationSimulator();
+          openConversionModal(blockId);
+        });
       });
       root.querySelectorAll("[data-pathway-try-option]").forEach(button => {
         button.addEventListener("click", () => tryPathwayRoute(button.dataset.sepGroup, button.dataset.pathwayTryOption));
+      });
+      root.querySelectorAll("[data-pathway-mode]").forEach(button => {
+        button.addEventListener("click", () => setPathwayViewMode(button.dataset.sepGroup, button.dataset.pathwayMode));
+      });
+      root.querySelectorAll("[data-toggle-pathway-options]").forEach(button => {
+        button.addEventListener("click", () => {
+          const targetGroupId = button.dataset.togglePathwayOptions;
+          state.expandedPathwayOptions[targetGroupId] = !state.expandedPathwayOptions[targetGroupId];
+          renderSeparationSimulatorModal();
+        });
+      });
+      root.querySelectorAll("[data-open-scale-from-separation]").forEach(button => {
+        button.addEventListener("click", () => {
+          closeSeparationSimulator();
+          openScalePanel();
+        });
+      });
+      root.querySelectorAll("[data-pathway-use-alternative]").forEach(button => {
+        button.addEventListener("click", () => usePathwayAlternative(button.dataset.sepGroup, button.dataset.pathwayUseAlternative));
       });
       root.querySelectorAll("[data-pathway-undo]").forEach(button => {
         button.addEventListener("click", () => undoPathwayRoute(button.dataset.pathwayUndo));
@@ -11088,7 +13247,13 @@
       root.querySelectorAll("[data-pathway-apply]").forEach(button => {
         button.addEventListener("click", async () => {
           const groupId = button.dataset.pathwayApply;
-          if (!(await confirmModal(`Apply this Lutze Reaction-Separation pathway after ${groupId}? This creates new separator groups in the main flowsheet.`))) return;
+          const path = separationPathwayModel(groupModel(groupId));
+          if (!path.canApply) {
+            await alertModal(`This pathway is ${path.status.replaceAll("_", " ")}. Resolve every substance destination before applying it.`);
+            return;
+          }
+          const impact = `${path.steps.length} separator group${path.steps.length === 1 ? "" : "s"}, ${path.steps.length * 2} principal outlets, and about ${path.steps.length + 1} connections`;
+          if (!(await confirmModal(`Apply this complete Lutze/Garg screening pathway after ${groupId}? It creates ${impact}. Split fractions, sizing, energy, and EI still require verification.`))) return;
           applyPathwayToMainFlowsheet(groupId);
         });
       });
@@ -11169,17 +13334,31 @@
       return matchesForGroup(group).some(candidate => candidate.task === "separation" || candidate.task.includes("separation"));
     }
 
+    function groupHasReaction(group) {
+      const phen = new Set(group?.phenomena || []);
+      const groupText = [
+        group?.task,
+        ...(group?.blocks || []).map(block => `${block.task || ""} ${block.text || ""}`)
+      ].join(" ").toLowerCase();
+      return [...phen].some(code => code.startsWith("R(")) || /react|reaction|synth|condensation|reactor/.test(groupText);
+    }
+
+    // A reaction task screens its post-reaction mixture. A separation task with no reaction of
+    // its own (extraction, drying, evaporation, recovery column) screens the mixture that enters
+    // it: the binary screening works per pair of substances and needs no balance. Its gate is a
+    // separation phenomenon plus at least two substances, own streams and upstream outlets
+    // included; a cooling-only or feed-preparation task still gets nothing.
     function postReactionSeparationSupportApplies(group, model = separationSimulatorModel(group)) {
       const phen = new Set(group.phenomena || []);
-      const groupText = [
-        group.task,
-        ...(group.blocks || []).map(block => `${block.task || ""} ${block.text || ""}`)
-      ].join(" ").toLowerCase();
-      const hasReaction = [...phen].some(code => code.startsWith("R(")) || /react|reaction|synth|condensation|reactor/.test(groupText);
-      const hasSeparationEvidence = [...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("));
-      const hasChemicalMixture = model.substances.length >= 2;
+      const hasReaction = groupHasReaction(group);
+      const unitWording = `${group.task || ""} ${group.selectedUnit || ""}`.toLowerCase();
+      const hasSeparationEvidence = [...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("))
+        || /distill|evaporat|\bdry|extraction|decanter|filtration|crystalliz|absorption|membrane|strip|flash|column|separation/.test(unitWording);
+      const mixtureSize = Math.max(model.substances.length, inferredSeparationSubstances(group).length);
+      const hasChemicalMixture = mixtureSize >= 2;
       const hasReactionFates = model.substances.some(item => ["product", "byproduct", "impurity"].includes(item.role));
-      return hasReaction && (hasSeparationEvidence || hasChemicalMixture || hasReactionFates);
+      if (hasReaction) return hasSeparationEvidence || hasChemicalMixture || hasReactionFates;
+      return hasSeparationEvidence && hasChemicalMixture;
     }
 
     function propertySeparationPredictorModel(group) {
@@ -11639,21 +13818,22 @@
     }
 
     function renderPhenomenaGrid(block) {
-      if (block) sanitizeBlockPhenomena(block);
       const container = $("phenomenaGridSection");
       if (!container) return;
       const expanded = Boolean(state.phenomenaGridExpanded);
 
       if (!expanded) {
         const assigned = block ? block.phenomena : [];
+        const conflicts = new Set(phenomenaPhaseConflicts(block));
         container.innerHTML = `
           <div class="phen-summary-head">
             <div class="label">Phenomena On This Block</div>
             <button class="mini-button" data-toggle-phenomena-grid="true">Edit phenomena</button>
           </div>
           <div class="phen-summary-chips">
-            ${assigned.length ? assigned.map(phenomenonPill).join("") : `<span class="muted small">No phenomena assigned yet.</span>`}
+            ${assigned.length ? assigned.map(code => conflicts.has(code) ? phenomenonConflictPill(code, block) : phenomenonPill(code)).join("") : `<span class="muted small">No phenomena assigned yet.</span>`}
           </div>
+          ${conflicts.size ? `<div class="phen-conflict-note">${conflicts.size} phenomen${conflicts.size === 1 ? "on has" : "a have"} no matching stream phase on this block. Hover a marked code for what to add or remove.</div>` : ""}
         `;
         container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
           button.addEventListener("click", () => {
@@ -11664,11 +13844,14 @@
         return;
       }
 
-      const options = availablePhenomenaForBlock(block);
+      const conflicts = phenomenaPhaseConflicts(block);
+      const options = [...availablePhenomenaForBlock(block), ...conflicts];
       const phaseContext = block ? blockPhaseContext(block) : null;
       const phaseHint = block && !phaseContext.hasKnown
         ? `<div class="muted small" style="margin-bottom:6px">Add stream phases to filter Lutze-compatible phenomena.</div>`
-        : "";
+        : conflicts.length
+          ? `<div class="phen-conflict-note">${conflicts.join(", ")}: assigned but no matching stream phase is declared. Declare the phase or click the code to remove it.</div>`
+          : "";
       container.innerHTML = `
         <div class="phen-summary-head">
           <div class="label">Phenomena On This Block</div>
@@ -11676,7 +13859,7 @@
         </div>
         ${phaseHint}
         <div class="phen-grid">
-          ${options.map(phen => phenomenonOptionButton(phen, block?.phenomena.includes(phen), !block)).join("")}
+          ${options.map(phen => phenomenonOptionButton(phen, block?.phenomena.includes(phen), !block, conflicts.includes(phen) ? phenomenonConflictTip(phen, block) : "")).join("")}
         </div>
       `;
       container.querySelectorAll("[data-toggle-phenomena-grid]").forEach(button => {
@@ -11690,7 +13873,8 @@
           const block = selectedBlock();
           if (!block) return;
           const phen = button.dataset.phen;
-          if (!phenomenonCompatibleWithPhase(phen, blockPhaseContext(block))) return;
+          // An incompatible code can always be removed; it just cannot be added.
+          if (!block.phenomena.includes(phen) && !phenomenonCompatibleWithPhase(phen, blockPhaseContext(block))) return;
           block.phenomena = block.phenomena.includes(phen)
             ? block.phenomena.filter(item => item !== phen)
             : [...block.phenomena, phen];
@@ -11856,7 +14040,7 @@
         root.className = "step-flow-inspector empty";
         applyStepFlowEditorSize(root, false);
         root.innerHTML = `
-          <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+          <span class="step-flag" data-step-flag="4"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span><span class="step-flag-note"></span></span>
           <div>Select a block to edit quantified MFA, or click Open Group on a group to see summed MFA, conditions, and unit alternatives.</div>
         `;
         return;
@@ -11871,7 +14055,7 @@
         <div class="step-flow-resize-handle" data-step-flow-resize title="Drag up or down to resize this editor over the flowchart"></div>
         <div class="step-flow-head">
           <div>
-            <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+            <span class="step-flag" data-step-flag="4"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span><span class="step-flag-note"></span></span>
             <div class="label">Step MFA Editor</div>
             <strong>${escapeHtml(block.id)}</strong>
             <span class="pill">${escapeHtml(block.behavior)}</span>
@@ -11940,11 +14124,14 @@
         });
       });
       root.querySelectorAll("[data-remove-stream]").forEach(button => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
           const current = selectedBlock();
           if (!current) return;
+          const stream = current.streams.find(item => item.id === button.dataset.removeStream);
+          const label = stream?.name?.trim() || "this stream";
+          if (!(await confirmModal(`Remove "${label}"? This deletes its quantity, phase, and any linked data.`))) return;
           pushUndo();
-          current.streams = current.streams.filter(stream => stream.id !== button.dataset.removeStream);
+          current.streams = current.streams.filter(item => item.id !== button.dataset.removeStream);
           syncLegacyStreamLists(current);
           renderAll();
         });
@@ -12011,6 +14198,9 @@
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
         button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
       });
+      root.querySelectorAll("[data-open-separation-simulator]").forEach(button => {
+        button.addEventListener("click", () => openSeparationSimulator(button.dataset.openSeparationSimulator));
+      });
       restoreStepFlowStreamViewport(streamViewport);
     }
 
@@ -12020,7 +14210,7 @@
       if (!group) return "";
       const model = separationSimulatorModel(group);
       if (!postReactionSeparationSupportApplies(group, model)) return "";
-      return lutzeReactionSeparationLaunchHtml(group, model);
+      return lutzeReactionSeparationLaunchHtml(group);
     }
 
     function renderGroupAggregateStepInspector(root, group) {
@@ -12029,6 +14219,7 @@
       const conditions = aggregateGroupConditions(group);
       const separationModel = separationSimulatorModel(group);
       const showPostReactionSupport = postReactionSeparationSupportApplies(group, separationModel);
+      const propertiesHtml = groupPropertiesPanelHtml(group);
       const mfaCount = mfa.reduce((sum, roleGroup) => sum + roleGroup.items.length, 0);
       const taskEditBlock = groupTaskEditBlock(group);
       const taskEditBlockLabel = taskEditBlock ? `new rows are stored on ${taskEditBlock.id}` : "no source block available";
@@ -12038,17 +14229,17 @@
         <div class="step-flow-resize-handle" data-step-flow-resize title="Drag up or down to resize this editor over the flowchart"></div>
         <div class="step-flow-head">
           <div>
-            <span class="step-flag"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span></span>
+            <span class="step-flag" data-step-flag="4"><span class="step-flag-num">4</span><span class="step-flag-label">Network &amp; MFA</span><span class="step-flag-note"></span></span>
             <div class="label">Group Aggregate View</div>
             <strong>${escapeHtml(group.id)}</strong>
-            <span class="pill blue">${escapeHtml(group.task)}</span>
+            <span class="drawer-head-task">${escapeHtml(group.task)}</span>
           </div>
           <div class="mfa-summary-strip">
-            <span class="pill">${group.blocks.length} blocks</span>
-            <span class="pill blue">${mfaCount} MFA groups</span>
-            <span class="pill warn">${conditions.length} conditions</span>
+            <span class="drawer-head-counts">${group.blocks.length} block${group.blocks.length === 1 ? "" : "s"} · ${mfaCount} material row${mfaCount === 1 ? "" : "s"} · ${conditions.length} condition${conditions.length === 1 ? "" : "s"}</span>
             <span class="drawer-head-phenomena drawer-head-phenomena-inline">
-              ${group.phenomena.map(p => phenomenonPill(p)).join("") || `<span class="muted small">No phenomena assigned.</span>`}
+              ${group.phenomena.length
+                ? `<span class="drawer-head-counts">Phenomena:</span> ${group.phenomena.map(p => phenomenonCode(p)).join(`<span class="drawer-head-counts"> · </span>`)}`
+                : `<span class="muted small">No phenomena assigned.</span>`}
             </span>
           </div>
         </div>
@@ -12071,7 +14262,7 @@
               <section class="mfa-section role-${escapeAttr(roleGroup.role)}">
                 <div class="mfa-section-head">
                   <strong>${escapeHtml(streamSectionMeta(roleGroup.role).title)}</strong>
-                  <span class="pill">${roleGroup.items.length}</span>
+                  <span class="mfa-count">${roleGroup.items.length}</span>
                 </div>
                 <div class="mfa-rows">
                   ${roleGroup.items.length
@@ -12081,54 +14272,27 @@
               </section>
             `).join("")}
           </div>
-          <div class="condition-panel group-drawer-panel">
-            <div class="condition-head">
-              <strong>Group Condition Profile</strong>
-              <span class="muted small">composite values, editable when needed</span>
-            </div>
-            <div class="condition-body">
-              ${groupConditionProfileHtml(group, conditions)}
-            </div>
-          </div>
-          ${showPostReactionSupport ? `
-            <div class="group-drawer-section-label post-reaction-support-label">
-              <div>
-                <strong>Lutze Reaction-Separation</strong>
-                <span>Run the substance-separation sandbox only when you want to test post-reaction pathway variants.</span>
+          <details class="group-drawer-details" open>
+            <summary>
+              <span><strong>Conditions</strong><small>Composite operating profile</small></span>
+              <span class="mfa-count">${conditions.length} values</span>
+            </summary>
+            <div class="condition-panel group-drawer-panel">
+              <div class="condition-body">
+                ${groupConditionProfileHtml(group, conditions)}
+                ${groupTimeConcurrencyHtml(group)}
               </div>
             </div>
-            ${lutzeReactionSeparationLaunchHtml(group, separationModel)}
-          ` : ""}
+          </details>
+          <details class="group-drawer-details">
+            <summary>
+              <span><strong>Properties & Screening</strong><small>Open when needed for equipment, energy, or safety</small></span>
+            </summary>
+            <div class="group-drawer-details-body">${propertiesHtml}</div>
+          </details>
+          ${showPostReactionSupport ? lutzeReactionSeparationLaunchHtml(group) : ""}
         </div>
       `;
-      root.querySelectorAll("[data-group-task-aggregate]").forEach(input => {
-        input.addEventListener("input", () => {
-          ensureGroup(input.dataset.groupTaskAggregate).task = input.value;
-          invalidateAiRefine();
-          renderGroupFlow();
-          renderStepAuditPanel();
-          renderExport();
-        });
-        input.addEventListener("change", renderAll);
-      });
-      root.querySelectorAll("[data-review-lutze]").forEach(button => {
-        button.addEventListener("click", () => {
-          const group = groupModel(button.dataset.reviewLutze);
-          if (!group) return;
-          const target = group.blocks.find(block => !(block.phenomena || []).length) || group.blocks[0];
-          if (target) {
-            state.selectedBlockId = target.id;
-            state.selectedGroupId = group.id;
-            state.selectedIds = [target.id];
-          } else {
-            state.selectedBlockId = null;
-            state.selectedGroupId = group.id;
-            state.selectedIds = [];
-          }
-          setInspectorTab("inspect");
-          renderAll();
-        });
-      });
       root.querySelectorAll("[data-suggest-unit-operation]").forEach(button => {
         button.addEventListener("click", () => {
           const target = ensureGroup(button.dataset.suggestUnitOperation);
@@ -12162,14 +14326,14 @@
           renderAll();
         });
       });
-      root.querySelectorAll("[data-selection-basis]").forEach(input => {
-        input.addEventListener("change", () => {
-          ensureGroup(input.dataset.selectionBasis).selectionBasis = input.value.trim();
-          renderExport();
-        });
-      });
       root.querySelectorAll("[data-open-lutze-reaction-separation]").forEach(button => {
         button.addEventListener("click", () => openLutzeReactionSeparation(button.dataset.openLutzeReactionSeparation));
+      });
+      root.querySelectorAll("[data-open-separation-simulator]").forEach(button => {
+        button.addEventListener("click", () => openSeparationSimulator(button.dataset.openSeparationSimulator));
+      });
+      root.querySelectorAll("[data-open-task-timetable]").forEach(button => {
+        button.addEventListener("click", () => openTaskTimetable(button.dataset.openTaskTimetable));
       });
       bindGroupPropertiesControls(root, group.id);
       root.querySelectorAll("[data-edit-group-conditions]").forEach(button => {
@@ -12307,17 +14471,13 @@
       const hasReaction = (block.phenomena || []).some(code => code.startsWith("R(")) || Boolean(block.conditions?.conversion_yield);
       if (!hasReaction) return "";
       const value = String(block.conditions?.conversion_yield || "").trim();
-      const label = value ? `Edit conversion ${value}%` : "Set conversion";
+      const label = value ? `Reaction balance · ${value}% yield` : "Define reaction balance";
       return `<button type="button" class="conversion-quick-button" data-open-conversion-modal="${escapeAttr(block.id)}">${escapeHtml(label)}</button>`;
     }
 
     function conditionCollapsedChipHtml(block, item) {
       if (item.kind === "conversion") {
-        return `
-          <button type="button" class="condition-chip condition-chip-button" data-open-conversion-modal="${escapeAttr(block.id)}" title="Edit conversion, product, byproducts, and residual waste split">
-            <strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}
-          </button>
-        `;
+        return `<span class="condition-chip"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}</span>`;
       }
       return `<span class="condition-chip"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(formatConditionValue(item))}</span>`;
     }
@@ -12377,10 +14537,14 @@
       if (family.id === "thermal") return codes.some(isThermalPhenomenon);
       if (family.id === "pressure") return codes.some(isVaporPressurePhenomenon);
       if (family.id === "reaction") return codes.some(code => code.startsWith("R("));
-      if (family.id === "contact") return codes.some(isContactOrTransferPhenomenon);
-      if (family.id === "ll-separation") return codes.some(isLiquidLiquidPhenomenon);
-      if (family.id === "solid-separation") return codes.some(isSolidLiquidPhenomenon);
-      if (family.id === "phase-separation") return codes.some(code => code.startsWith("PS(") || code.startsWith("PCh(") || code.startsWith("PT("));
+      if (family.id === "contact") {
+        if (["contact_time", "contact_device", "agitation_note"].includes(prompt.id)) {
+          return codes.some(code => code.startsWith("PC(") || code.startsWith("2phM("));
+        }
+        if (prompt.id === "transfer_endpoint") return codes.some(code => code.startsWith("PT("));
+        if (["phase_change_time", "phase_change_fraction"].includes(prompt.id)) return codes.some(code => code.startsWith("PCh("));
+      }
+      if (["ll-separation", "solid-separation", "phase-separation"].includes(family.id)) return false;
       if (family.id === "split") return phenomena.has("SD");
       if (family.id === "waste") return codes.some(code => code.startsWith("PS(") || code.startsWith("PC("));
       return false;
@@ -12396,18 +14560,6 @@
 
     function isVaporPressurePhenomenon(code) {
       return ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)", "ES(P)", "ES(E)"].includes(code);
-    }
-
-    function isContactOrTransferPhenomenon(code) {
-      return code.startsWith("PC(") || code.startsWith("PT(") || code.startsWith("2phM(");
-    }
-
-    function isLiquidLiquidPhenomenon(code) {
-      return ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)", "PT(MLL)"].includes(code);
-    }
-
-    function isSolidLiquidPhenomenon(code) {
-      return ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code);
     }
 
     function conditionFamilyForPrompt(prompt) {
@@ -12495,7 +14647,7 @@
       if (prompt.disabled) {
         return `
           <label class="condition-edit-card condition-edit-card-disabled">
-            <div class="label">${escapeHtml(prompt.label)} <span class="pill">coming soon</span></div>
+            <div class="label">${escapeHtml(prompt.label)} <span class="pill">documented only</span></div>
             <div class="condition-input-row">
               <input value="${escapeAttr(value)}" placeholder="${escapeAttr(prompt.placeholder)}" disabled title="${escapeAttr(prompt.hint || "")}">
               ${conditionUnitControlHtml(prompt, unit)}
@@ -12528,15 +14680,6 @@
 
     function defaultConditionUnit(prompt) {
       return prompt.defaultUnit || prompt.unit || "";
-    }
-
-    function conditionLabelHtml(item) {
-      return `
-        <article class="condition-label-card" data-condition-label="${escapeAttr(item.id)}" title="Right-click to edit conditions">
-          <strong>${escapeHtml(item.label)}</strong>
-          <span>${escapeHtml(formatConditionValue(item))}</span>
-        </article>
-      `;
     }
 
     function updateConditionField(event) {
@@ -12597,8 +14740,8 @@
             <span class="stream-field-label">Material / stream</span>
             <div class="stream-name-row">
               <input data-stream-field="name" data-stream-id="${sid}" value="${escapeAttr(stream.name)}" placeholder="${escapeAttr(placeholder)}" autocomplete="off">
-              <button type="button" class="mini-button" data-fetch-stream-pubchem="${sid}" title="Fetch optional pure-component properties for Lutze/scale-up support">PubChem</button>
             </div>
+            ${upstreamSuggestionRailHtml(block, stream, suggestionRole)}
             ${streamSuggestionRailHtml(block, stream, suggestionRole)}
             ${streamPubChemSuggestionRailHtml(stream)}
           </label>
@@ -12637,21 +14780,28 @@
           ${["recycled input", "recovered solvent"].includes(stream.fate) ? `
             <label class="stream-field">
               <span class="stream-field-label">Recovery %</span>
-              <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="e.g. 98" inputmode="decimal" title="Fraction of this stream actually recovered/recycled - used by the Recycle / fate summary (Scale-Up tab) to compute recovered vs. lost mass.">
+              <input data-stream-field="recoveryPercent" data-stream-id="${sid}" value="${escapeAttr(stream.recoveryPercent)}" placeholder="e.g. 98" inputmode="decimal" title="Fraction recovered or recycled; feeds the recycle and fate summary">
             </label>
           ` : ""}
           ${stream.fate === "purge" ? `
             <label class="stream-field">
               <span class="stream-field-label">Purge %</span>
-              <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="e.g. 5" inputmode="decimal" title="Fraction of the loop purged here - used by the Recycle / fate summary (Scale-Up tab) to compute purge mass.">
+              <input data-stream-field="purgePercent" data-stream-id="${sid}" value="${escapeAttr(stream.purgePercent)}" placeholder="e.g. 5" inputmode="decimal" title="Fraction of the loop purged here; feeds the recycle and fate summary">
             </label>
           ` : ""}
           <label class="stream-field">
             <span class="stream-field-label">Data status</span>
             <select data-stream-field="status" data-stream-id="${sid}">${optionHtml(streamDataStatuses, stream.status)}</select>
           </label>
+          <label class="stream-field span-2">
+            <span class="stream-field-label">Quantity source</span>
+            <input data-stream-field="source" data-stream-id="${sid}" value="${escapeAttr(stream.source)}" placeholder="standard, regulation, paper or DOI behind this number">
+          </label>
           <details class="stream-advanced stream-chemical span-2" ${hasChemical ? "open" : ""}>
-            <summary>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</summary>
+            <summary>
+              <span>Chemical properties for Lutze / sizing${hasChemical ? " •" : ""}</span>
+              <button type="button" class="mini-button" data-fetch-stream-pubchem="${sid}" title="Fetch optional pure-component properties for Lutze/scale-up support">PubChem</button>
+            </summary>
             <div class="stream-advanced-grid">
               <label class="stream-field">
                 <span class="stream-field-label">Thermal sensitivity</span>
@@ -12718,6 +14868,71 @@
               data-pubchem-suggestion-name="${escapeAttr(item.name)}"
               title="${escapeAttr(item.formula ? `Formula ${item.formula}` : item.source || "PubChem candidate")}">
               ${escapeHtml(item.name)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    // What enters a block has to come from somewhere. If the network says G1 feeds G2, then G2's
+    // inputs are most likely G1's outlets, so they are offered directly instead of being retyped -
+    // retyping is where names drift apart and quietly break the material balance downstream. Only
+    // outputs are offered, not wastes: a stream routed to treatment is not feeding the next task.
+    function upstreamOutletSuggestions(block, role) {
+      if (role !== "input" || !block) return [];
+      const target = resolvedEndpointId(block.id);
+      if (!target) return [];
+      const upstreamIds = [...new Set(state.links
+        .filter(link => resolvedEndpointId(link.to) === target && resolvedEndpointId(link.from) !== target)
+        .map(link => resolvedEndpointId(link.from)))];
+      if (!upstreamIds.length) return [];
+      const alreadyDeclared = new Set((block.streams || [])
+        .filter(item => item.role === "input")
+        .map(item => String(item.name || "").trim().toLowerCase())
+        .filter(Boolean));
+      const suggestions = [];
+      upstreamIds.forEach(sourceId => {
+        const grouped = blocksForGroup(sourceId);
+        const sourceBlocks = grouped.length ? grouped : state.blocks.filter(item => item.id === sourceId);
+        sourceBlocks.forEach(sourceBlock => {
+          ensureBlockFlowFields(sourceBlock);
+          (sourceBlock.streams || []).forEach(candidate => {
+            if (candidate.role !== "output") return;
+            const name = String(candidate.name || "").trim();
+            const key = name.toLowerCase();
+            if (!name || alreadyDeclared.has(key)) return;
+            if (suggestions.some(item => item.name.toLowerCase() === key)) return;
+            suggestions.push({
+              name,
+              quantity: candidate.quantity,
+              unit: candidate.unit,
+              phase: candidate.phase,
+              sourceId,
+              reason: `Outlet of ${sourceId} (${sourceBlock.id}), which feeds this block`
+            });
+          });
+        });
+      });
+      return suggestions.slice(0, 8);
+    }
+
+    function upstreamSuggestionRailHtml(block, stream, role) {
+      const suggestions = upstreamOutletSuggestions(block, role);
+      if (!suggestions.length) return "";
+      const sources = [...new Set(suggestions.map(item => item.sourceId))].join(", ");
+      return `
+        <div class="stream-suggestion-rail upstream" aria-label="Outlets of the blocks feeding this one">
+          <span>From ${escapeHtml(sources)}</span>
+          ${suggestions.map(item => `
+            <button type="button" class="stream-suggestion-chip upstream"
+              data-apply-stream-suggestion="${escapeAttr(stream.id)}"
+              data-suggestion-name="${escapeAttr(item.name)}"
+              data-suggestion-quantity="${escapeAttr(item.quantity || "")}"
+              data-suggestion-unit="${escapeAttr(item.unit || "")}"
+              data-suggestion-phase="${escapeAttr(item.phase || "")}"
+              title="${escapeAttr(`${item.reason}. Click to pre-fill this editable row; save it only after checking.`)}">
+              <span class="stream-suggestion-name">${escapeHtml(item.name)}</span>
+              ${item.quantity ? `<span class="stream-suggestion-meta">${escapeHtml(item.quantity)} ${escapeHtml(item.unit || "")}</span>` : ""}
             </button>
           `).join("")}
         </div>
@@ -13099,6 +15314,43 @@
       return !String(stream.quantity || "").trim() || !hasMassUnit;
     }
 
+    // A pass-through row repeats a quantity that is cited where it originates (ammonium acetate
+    // carried from the reactor to the wash). Show the origin's citation instead of copying it into
+    // every row, so a correction still lands in one place. Rows of the same substance and phase are
+    // matched first; a substance cited for several reasons (a combined vent) shows each of them.
+    function streamDisplaySource(stream) {
+      const own = String(stream?.source || "").trim();
+      if (own) return { text: own, inheritedFrom: [] };
+      const key = String(stream?.name || "").trim().toLowerCase();
+      if (!key) return { text: "", inheritedFrom: [] };
+      const collect = samePhaseOnly => {
+        const found = new Map();
+        state.blocks.forEach(block => (block.streams || []).forEach(other => {
+          const text = String(other.source || "").trim();
+          if (!text || String(other.name || "").trim().toLowerCase() !== key) return;
+          if (samePhaseOnly && (other.phase || "unknown") !== (stream.phase || "unknown")) return;
+          if (!found.has(text)) found.set(text, new Set());
+          found.get(text).add(block.id);
+        }));
+        return found;
+      };
+      const samePhase = collect(true);
+      const matches = samePhase.size ? samePhase : collect(false);
+      const entries = [...matches.entries()].slice(0, 3);
+      const inheritedFrom = [...new Set(entries.flatMap(([, ids]) => [...ids]))];
+      // One inherited source is shown whole. Several are each cut to their leading citation: the
+      // shared hover tip has a fixed height, and three full citations overflow it and get clipped.
+      // The complete reasoning stays on the rows where each quantity originates.
+      if (entries.length > 1) {
+        const head = text => text.length <= 190 ? text : `${text.slice(0, 190).replace(/\s+\S*$/, "")}...`;
+        return {
+          text: `${entries.map(([text]) => head(text)).join("\n\n")}\n\nFull reasoning on the rows at ${inheritedFrom.join(", ")}.`,
+          inheritedFrom
+        };
+      }
+      return { text: entries.map(([text]) => text).join("\n\n"), inheritedFrom };
+    }
+
     function streamLabelHtml(stream, block = null) {
       const title = stream.name.trim() || "Untitled stream";
       const amount = [stream.quantity, stream.unit].filter(Boolean).join(" ") || "quantity missing";
@@ -13107,11 +15359,13 @@
       const reactionRoleBadge = stream.role === "input"
         ? `<span class="pill blue" title="Reaction role used by conversion balance">${escapeHtml(streamReactionRoleLabel(streamReactionRole(stream)))}</span>`
         : "";
+      const cited = streamDisplaySource(stream);
+      const citedFrom = cited.inheritedFrom.length ? ` (cited at ${cited.inheritedFrom.join(", ")})` : "";
       return `
         <article class="mfa-label-card role-${escapeAttr(streamTone(stream))}" data-stream-label="${escapeAttr(stream.id)}" title="Right-click to edit this stream">
           <div class="mfa-label-top">
             <strong>${escapeHtml(title)}</strong>
-            <span class="pill ${stream.status === "missing" ? "warn" : "blue"}">${escapeHtml(stream.status)}</span>
+            <span class="pill ${stream.status === "missing" ? "warn" : "blue"}${cited.text ? " tip cited" : ""}"${cited.text ? ` data-tip="${escapeAttr(`${stream.status} quantity${citedFrom}\n\nSource: ${cited.text}`)}"` : ""}>${escapeHtml(stream.status)}${cited.text ? " &#9432;" : ""}</span>
           </div>
           <div class="mfa-label-meta">
             <span>${escapeHtml(amount)}</span>
@@ -13124,6 +15378,7 @@
           ${stream.recoveryPercent || stream.purgePercent || stream.loopId ? `<div class="mfa-label-meta">${stream.recoveryPercent ? `<span>recovery ${escapeHtml(stream.recoveryPercent)}%</span>` : ""}${stream.purgePercent ? `<span>purge ${escapeHtml(stream.purgePercent)}%</span>` : ""}${stream.loopId ? `<span>loop ${escapeHtml(stream.loopId)}</span>` : ""}</div>` : ""}
           ${propertyBadges}
           ${stream.note.trim() ? `<div class="mfa-label-note">${escapeHtml(stream.note)}</div>` : ""}
+          ${cited.text ? `<div class="mfa-label-source tip" data-tip="${escapeAttr(`Source for this quantity${citedFrom}\n\n${cited.text}`)}">${cited.inheritedFrom.length ? `Source${escapeHtml(citedFrom)}: ` : "Source: "}${escapeHtml(cited.text)}</div>` : ""}
           ${canCopyToOutput ? `<div class="mfa-label-actions"><button type="button" class="mini-button" data-copy-input-stream-to-output="${escapeAttr(stream.id)}">Use as output</button></div>` : ""}
         </article>
       `;
@@ -13160,13 +15415,6 @@
         : value === "increases with scale" || value === "equipment dependent" ? "blue"
         : "green";
       return `<span class="pill ${tone}" title="Time vs. scale">${escapeHtml(value)}</span>`;
-    }
-
-    function scheduleOperationClassOptionHtml(selected) {
-      return scheduleOperationClassOptions.map(value => {
-        const label = value === "auto" ? "Auto" : operationScaleProfile(value).label;
-        return `<option value="${escapeAttr(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
-      }).join("");
     }
 
     function updateStreamField(event) {
@@ -13208,10 +15456,7 @@
       }
       if (event.target.dataset.streamField === "reactionRole" && stream.reactionRole !== "reactant") {
         stream.stoichCoeff = "";
-        ensureConversionDetail(current).stagedResidualStreamIds = ensureConversionDetail(current).stagedResidualStreamIds
-          .filter(id => conversionReactantStreams(current).some(item => item.id === id));
       }
-      if (event.target.dataset.streamField === "phase") sanitizeBlockPhenomena(current);
       syncLegacyStreamLists(current);
       renderExport();
       renderGroupFlow();
@@ -13221,49 +15466,6 @@
       block.inputs = streamNames(block, "input");
       block.outputs = streamNames(block, "output");
       block.wastes = streamNames(block, "waste");
-    }
-
-    function renderGroupAlternatives(group) {
-      if (!$("groupAlternatives")) return;
-      if (!group) {
-        $("groupAlternatives").innerHTML = `<span class="muted">No group selected.</span>`;
-        return;
-      }
-      const readiness = groupUnitSuggestionReadiness(group);
-      if (!readiness.ready) {
-        $("groupAlternatives").innerHTML = `
-          <div class="mfa-empty tip" data-tip="${escapeAttr(unitOperationGateTooltip(readiness, group))}">
-            Unit-operation suggestions are locked until ${escapeHtml(readiness.missing.join(", ") || "task data")} are complete.
-          </div>
-        `;
-        return;
-      }
-      const candidates = unitOperationCandidatesForGroup(group).slice(0, 6);
-      const basisNote = group.selectedUnit && candidates.length > 1 ? `
-        <div class="muted small" style="margin-top:6px">
-          ${group.selectionBasis
-            ? `Selection basis: "${escapeHtml(group.selectionBasis)}"`
-            : `Multiple candidates fit — open the group aggregate view above to record why ${escapeHtml(group.selectedUnit)} was chosen.`}
-        </div>
-      ` : "";
-      $("groupAlternatives").innerHTML = `
-        <div class="unit-suggest-result-head">
-          <strong>Data-Based Unit Operation Suggestions</strong>
-          <span class="muted small">${readiness.lutzeReady ? "after Lutze review" : "pre-Lutze"}</span>
-        </div>
-        ${candidates.length ? candidates.map(candidate => `
-          <button class="alt-button tip ${group.selectedUnit === candidate.name ? "selected" : ""}" data-inspector-unit="${escapeAttr(candidate.name)}" data-tip="${escapeAttr(alternativeReason(candidate))}">
-            ${escapeHtml(candidate.name)}
-            <span class="pill ${candidate.preliminary ? "warn" : candidate.sameTask ? "blue" : "green"}">${candidate.preliminary ? "pre-Lutze" : candidate.sameTask ? "same task" : "Lutze fit"}</span>
-          </button>
-        `).join("") : `<span class="muted">No candidates match the completed task data.</span>`}
-      ` + basisNote;
-      document.querySelectorAll("[data-inspector-unit]").forEach(button => {
-        button.addEventListener("click", () => {
-          ensureGroup(group.id).selectedUnit = button.dataset.inspectorUnit;
-          renderAll();
-        });
-      });
     }
 
     function applyBehavior(behavior) {
@@ -13443,7 +15645,6 @@
       state.blocks = state.blocks.filter(block => !removedIds.has(block.id));
       state.links = state.links.filter(link => !removedIds.has(link.from) && !removedIds.has(link.to));
       removedGroups.forEach(groupId => cleanupGroupIfEmpty(groupId));
-      sanitizeBlockPhenomena(target);
       syncLegacyStreamLists(target);
       state.selectedBlockId = target.id;
       state.selectedIds = [target.id];
@@ -13911,14 +16112,18 @@
       canvas.style.width = `${board.width}px`;
       canvas.style.height = `${board.height}px`;
       svg.outerHTML = renderLinksSvg(board, Boolean(state.drag));
+      bindLinkRemovalHandlers(canvas);
     }
 
     function scheduleDragRender() {
       if (boardDragFrame) return;
-      boardDragFrame = requestAnimationFrame(() => {
+      boardDragFrame = requestAnimationFrame(timestamp => {
         boardDragFrame = null;
         updateDraggedNodePosition();
-        redrawBoardLinksOnly();
+        if (timestamp - boardDragLinkPaintAt >= 50) {
+          boardDragLinkPaintAt = timestamp;
+          redrawBoardLinksOnly();
+        }
       });
     }
 
@@ -13954,13 +16159,14 @@
         cancelAnimationFrame(boardDragFrame);
         boardDragFrame = null;
       }
+      boardDragLinkPaintAt = 0;
       state.drag = null;
       $("groupFlow")?.classList.remove("board-dragging");
       if (moved) renderGroupFlow();
     }
 
     function boardPanBlockedTarget(target) {
-      return target?.closest?.("[data-block-card], [data-group-box], [data-draft-box], [data-connect-handle], button, input, textarea, select, summary, details, .context-menu, .step-flow-inspector");
+      return target?.closest?.("[data-block-card], [data-group-box], [data-draft-box], [data-connect-handle], [data-link-index], button, input, textarea, select, summary, details, .context-menu, .step-flow-inspector");
     }
 
     function startBoardPan(event) {
@@ -14424,8 +16630,9 @@
       if (!flow.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
-      const delta = Math.max(-140, Math.min(140, event.deltaY));
-      const factor = Math.exp(-delta * 0.012);
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? flow.clientHeight : 1);
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
+      const factor = Math.exp(-normalized * 0.16);
       setZoom(state.zoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 
@@ -14494,7 +16701,7 @@
       const collapsed = $("appMain").classList.contains("inspector-collapsed");
       const button = $("toggleInspector");
       button.textContent = collapsed ? "‹" : "›";
-      button.setAttribute("aria-label", collapsed ? "Show Phenomena/Group panel" : "Hide Phenomena/Group panel");
+      button.setAttribute("aria-label", collapsed ? "Show Phenomena panel" : "Hide Phenomena panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
     }
 
@@ -14512,7 +16719,22 @@
 
     function setInspectorTab(tab) {
       state.activeInspectorTab = ["inspect", "heuristics", "scale"].includes(tab) ? tab : "inspect";
+      if (state.activeInspectorTab === "scale" && !$("appMain").classList.contains("protocol-collapsed")) {
+        $("appMain").classList.add("protocol-collapsed");
+        updateProtocolToggleIcon();
+      }
       renderInspectorTabs();
+      withRenderPass(() => {
+        if (state.activeInspectorTab === "heuristics") {
+          renderHeuristicsPanel();
+          refreshReviewPanels();
+        } else if (state.activeInspectorTab === "scale") {
+          renderScaleBasisPanel();
+        }
+      });
+      if (window.innerWidth <= 1240 && ["heuristics", "scale"].includes(state.activeInspectorTab)) {
+        requestAnimationFrame(() => $("inspectorPanel")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }
     }
 
     function openScalePanel() {
@@ -14537,587 +16759,28 @@
       $("scalePanelTab").hidden = active !== "scale";
     }
 
-    const workflowSteps = [
-      { id: 1, name: "Blocks", paperName: "Block building", tab: "inspect" },
-      { id: 2, name: "Phenomena", paperName: "Phenomena definition", tab: "inspect" },
-      { id: 3, name: "Unit Ops", paperName: "Unit operation deduction", tab: "inspect" },
-      { id: 4, name: "Network", paperName: "Network establishment", tab: "inspect" },
-      { id: 5, name: "Heuristics", paperName: "Heuristic rules application", tab: "heuristics" },
-      { id: 6, name: "Schedule", paperName: "Preliminary scheduling", tab: "scale" }
-    ];
-
-    function blockExpectsStreams(block) {
-      const phenomena = block.phenomena || [];
-      if (!phenomena.length) return true;
-      return !phenomena.every(code => code.startsWith("ES(") || code.startsWith("M(") || code.startsWith("2phM"));
-    }
-
-    function blockHasAssignedPurpose(block) {
-      const behavior = String(block.behavior || "").trim();
-      return Boolean(behavior) && behavior !== "unassigned";
-    }
-
-    function workflowStepStatuses() {
-      const blocks = blocksInOrder();
-      const groupIds = groupIdsInTextOrder();
-      const groups = groupIds.map(groupId => groupModel(groupId));
-
-      const statuses = {};
-      const set = (id, status, hint) => { statuses[id] = { status, hint }; };
-
-      if (!blocks.length) {
-        set(1, "todo", "Select protocol text and create the first block.");
-      } else {
-        const missingPurpose = blocks.filter(block => !blockHasAssignedPurpose(block));
-        const missingOutputs = blocks.filter(block => {
-          if (!blockExpectsStreams(block)) return false;
-          const counts = streamCounts(block);
-          return !counts.output;
-        });
-        if (missingPurpose.length || missingOutputs.length) {
-          const parts = [];
-          if (missingPurpose.length) parts.push(`${missingPurpose.length} block${missingPurpose.length === 1 ? "" : "s"} without a purpose preset`);
-          if (missingOutputs.length) parts.push(`${missingOutputs.length} material block${missingOutputs.length === 1 ? "" : "s"} without output stream`);
-          set(1, "partial", parts.join("; ") + ".");
-        } else {
-          set(1, "done", `${blocks.length} blocks with purpose and required output streams.`);
-        }
-      }
-
-      if (!blocks.length) {
-        set(2, "todo", "Create blocks first, then assign phenomena.");
-      } else {
-        const missingPhen = blocks.filter(block => !(block.phenomena || []).length);
-        if (missingPhen.length === blocks.length) {
-          set(2, "todo", "Assign at least 1-2 phenomena per block (paper Table 3).");
-        } else if (missingPhen.length) {
-          set(2, "partial", `${missingPhen.length} block${missingPhen.length === 1 ? "" : "s"} without phenomena.`);
-        } else {
-          set(2, "done", "Every block has phenomena assigned.");
-        }
-      }
-
-      if (!groups.length) {
-        set(3, "todo", "Combine blocks into task groups, then pick unit operations.");
-      } else {
-        const missingUnit = groups.filter(group => !group.selectedUnit || !group.task || group.task === "unassigned");
-        const incompatibleUnit = groups.filter(group => group.selectedUnit && !selectedUnitSupportedByEvidence(group));
-        if (missingUnit.length === groups.length) {
-          set(3, "todo", "Assign a task and select a unit operation for each group.");
-        } else if (missingUnit.length) {
-          set(3, "partial", `${missingUnit.length} group${missingUnit.length === 1 ? "" : "s"} without task or selected unit.`);
-        } else if (incompatibleUnit.length) {
-          set(3, "partial", `${incompatibleUnit.length} selected unit${incompatibleUnit.length === 1 ? "" : "s"} not supported by the current phenomena/task evidence.`);
-        } else {
-          set(3, "done", `${groups.length} groups with selected unit operations.`);
-        }
-      }
-
-      const ungrouped = blocks.filter(block => !block.groupId);
-      if (!groups.length) {
-        set(4, "todo", "Group blocks and connect them with arrows to close the network.");
-      } else {
-        const linkedIds = new Set();
-        state.links.forEach(link => { linkedIds.add(link.from); linkedIds.add(link.to); });
-        const unconnected = groupIds.filter(groupId => groups.length > 1 && !linkedIds.has(groupId));
-        const closureIssues = networkClosureModel();
-        if (ungrouped.length || unconnected.length) {
-          const parts = [];
-          if (ungrouped.length) parts.push(`${ungrouped.length} draft block${ungrouped.length === 1 ? "" : "s"} not in a group`);
-          if (unconnected.length) parts.push(`${unconnected.length} group${unconnected.length === 1 ? "" : "s"} without arrows (try Auto-Connect)`);
-          set(4, "partial", parts.join("; ") + ".");
-        } else if (closureIssues.length) {
-          set(4, "partial", `${closureIssues.length} outlet${closureIssues.length === 1 ? "" : "s"} not closed — try Auto-Connect or draw the missing arrow.`);
-        } else {
-          set(4, "done", "Network closed: every outlet routed, recycles connected, product outlet present.");
-        }
-      }
-
-      const heuristics = heuristicReviewModel();
-      const decisions = state.heuristicDecisions || {};
-      const decided = heuristics.triggered.filter(item => decisions[item.id]?.decision).length;
-      if (!heuristics.triggered.length) {
-        set(5, blocks.length ? "todo" : "todo", "No heuristic rules triggered yet. Add phenomena, phases, and conditions.");
-      } else if (decided < heuristics.triggered.length) {
-        set(5, decided ? "partial" : "todo", `${decided}/${heuristics.triggered.length} triggered rules decided (accept/reject/override).`);
-      } else {
-        set(5, "done", `All ${heuristics.triggered.length} triggered rules decided.`);
-      }
-
-      const basis = state.scaleBasis || {};
-      const missingDuration = groups.filter(group => !parseStreamQuantity(group.schedule?.durationH));
-      if (!groups.length || !basis.targetAmount) {
-        set(6, "todo", "Define the scale-up basis (target amount, schedule) and task durations.");
-      } else if (missingDuration.length) {
-        set(6, "partial", `${missingDuration.length} group${missingDuration.length === 1 ? "" : "s"} without duration for the Gantt.`);
-      } else {
-        set(6, "done", "Scale basis and task durations defined. Review schedule balance in Scale-Up tab.");
-      }
-
-      return statuses;
-    }
-
-    function renderWorkflowStepper() {
-      const root = $("workflowStepper");
-      if (!root) return;
-      const statuses = workflowStepStatuses();
-      root.innerHTML = workflowSteps.map(step => {
-        const info = statuses[step.id] || { status: "todo", hint: "" };
-        return `
-          <button class="workflow-step ${info.status}" data-workflow-step="${step.id}" title="${escapeAttr(`Step ${step.id}. ${step.paperName} — ${info.hint}`)}">
-            <span class="workflow-step-marker">${info.status === "done" ? "✓" : step.id}</span>
-            <span class="workflow-step-name">${escapeHtml(step.name)}</span>
-          </button>
-        `;
-      }).join(`<span class="workflow-step-arrow">→</span>`);
-      const firstOpen = workflowSteps.find(step => (statuses[step.id] || {}).status !== "done");
-      const hintTarget = firstOpen || workflowSteps[workflowSteps.length - 1];
-      const hintInfo = statuses[hintTarget.id] || { hint: "" };
-      root.insertAdjacentHTML("beforeend", `
-        <span class="workflow-stepper-hint">
-          <strong>Step ${hintTarget.id}. ${escapeHtml(hintTarget.paperName)}:</strong> ${escapeHtml(hintInfo.hint || "")}
-        </span>
-      `);
-    }
-
-    function dataReadinessModel() {
-      const blocks = blocksInOrder();
-      const groupIds = groupIdsInTextOrder();
-      const groups = groupIds.map(groupId => groupModel(groupId));
-      const allStreams = blocks.flatMap(block => block.streams || []);
-      const hasCondition = (block, ids) => ids.some(id => String(block.conditions?.[id] || "").trim());
-      const blocksWith = predicate => blocks.filter(predicate);
-      const phen = block => block.phenomena || [];
-      const conditionText = block => Object.values(block.conditions || {}).map(value => String(value || "")).join(" ");
-      const hasAnyTimeEvidence = block => hasCondition(block, ["holding_time", "mixing_time", "thermal_ramp", "contact_time", "reaction_time", "phase_change_time", "settling_time", "residence_time"]);
-
-      const reactionBlocks = blocksWith(block => phen(block).some(code => code.startsWith("R(")));
-      const thermalBlocks = blocksWith(block => phen(block).some(code => code === "ES(H)" || code === "ES(C)"));
-      const mixingBlocks = blocksWith(block => phen(block).some(code => code.startsWith("M(") || code.startsWith("2phM")));
-      const pressureRelevantCodes = new Set(["ES(P)", "ES(E)", "PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"]);
-      const pressureBlocks = blocksWith(block =>
-        phen(block).some(code => pressureRelevantCodes.has(code))
-        && /vacuum|pressure|mbar|mmhg|\bbar\b|distill|evaporat|flash|short-path|thin-film/i.test(`${block.text || ""} ${conditionText(block)}`)
-      );
-
-      const item = (name, level, ok, note) => ({ name, level, ok, note });
-
-      const synthesis = [
-        item("Reaction type and objective", "critical",
-          !blocks.length ? false : reactionBlocks.length > 0 || groups.some(group => /react|synth|precip/i.test(group.task || "")),
-          reactionBlocks.length ? `${reactionBlocks.length} block(s) carry reaction phenomena.` : "No block carries a reaction phenomenon yet."),
-        item("Stoichiometry", "important", null,
-          "Not machine-checkable: confirm a balanced or semi-balanced reaction is recorded in block notes."),
-        item("Yield / conversion", "important",
-          blocks.length ? reactionBlocks.every(block => hasCondition(block, ["conversion_yield"])) && reactionBlocks.length > 0 : false,
-          "Record conversion/yield on each reaction block (conversion_yield condition)."),
-        item("Input materials (identity + quantity)", "critical",
-          blocks.length ? allStreams.some(s => s.role === "input") && allStreams.filter(s => s.role === "input").every(s => String(s.quantity || "").trim() && String(s.unit || "").trim()) : false,
-          "Declare fresh inputs with quantity and unit; intermediates flow implicitly between linked blocks."),
-        item("Output materials (products, by-products, wastes)", "critical",
-          blocks.length ? blocks.filter(blockExpectsStreams).every(block => (block.streams || []).some(s => s.role === "output")) : false,
-          "Every material-handling block needs at least one output stream."),
-        item("Solvents / auxiliaries (identity and role)", "important", null,
-          "Not machine-checkable: confirm solvents and auxiliaries appear as named input streams."),
-        item("Phase of each stream", "critical",
-          allStreams.length ? allStreams.every(s => String(s.phase || "").trim() && s.phase !== "unknown") : false,
-          "Assign solid/liquid/vapor phase to every stream."),
-        item("Phase changes observed", "important",
-          blocks.length ? blocks.some(block => phen(block).some(code => code.startsWith("PT(") || code.startsWith("PCh") || code.startsWith("PS("))) : false,
-          "No phase-transition/change/separation phenomena assigned yet — check evaporation, crystallization, splits."),
-        item("Temperature", "important",
-          thermalBlocks.length ? thermalBlocks.every(block => hasCondition(block, ["target_temperature", "holding_temperature", "initial_temperature"])) : blocks.length > 0,
-          "Blocks with heating/cooling need a temperature value or range."),
-        item("Pressure (if relevant)", "optional",
-          pressureBlocks.length ? pressureBlocks.every(block => hasCondition(block, ["target_pressure", "initial_pressure"])) : true,
-          "Vacuum, distillation, evaporation, flash, or pressure-changing blocks should record pressure or pressure-control evidence."),
-        item("Time evidence in protocol blocks", "important",
-          blocks.length ? blocks.some(hasAnyTimeEvidence) : false,
-          "Record protocol-level time evidence where it exists; Gantt durations are checked separately in Scale-Up."),
-        item("Agitation / mixing", "important",
-          mixingBlocks.length ? mixingBlocks.every(block => hasCondition(block, ["mixing_time", "agitation_speed", "agitation_note"])) : blocks.length > 0,
-          "Blocks with mixing phenomena need a qualitative mixing descriptor.")
-      ];
-
-      const processes = [
-        item("Sequence of steps (ordered blocks)", "critical",
-          blocks.length > 0 && blocks.every(block => block.groupId),
-          "Create blocks for the whole protocol and assign each to a task group."),
-        item("Step purpose (reaction / separation / purification)", "critical",
-          blocks.length ? blocks.every(blockHasAssignedPurpose) : false,
-          "Give every block a behavior preset that states its purpose."),
-        item("Endpoints (observable cues)", "important",
-          blocks.length ? blocks.every(block => {
-            const codes = phen(block);
-            const needsReactionEvidence = codes.some(code => code.startsWith("R("));
-            const needsTransferEvidence = codes.some(code => code.startsWith("PT("));
-            if (!needsReactionEvidence && !needsTransferEvidence) return true;
-            return (!needsReactionEvidence || hasCondition(block, ["conversion_yield"])) && (!needsTransferEvidence || hasCondition(block, ["transfer_endpoint"]));
-          }) : false,
-          "Reaction blocks should record conversion/yield; transfer blocks should record an observable completion cue."),
-        item("Dominant phenomena per step (>= 1-2 per block)", "critical",
-          blocks.length ? blocks.every(block => phen(block).length >= 1) : false,
-          "Assign at least one phenomenon per block (paper Table 3)."),
-        item("Multiphase indication", "important",
-          blocks.length ? blocks.some(block => phen(block).some(code => code.includes("2ph") || code.startsWith("PC(") || code.startsWith("PS("))) || (allStreams.length > 0 && allStreams.every(s => (s.phase || "L") === (allStreams[0]?.phase || "L"))) : false,
-          "If two phases coexist anywhere, mark two-phase mixing/contact/separation phenomena."),
-        item("Task definition per group", "critical",
-          groups.length ? groups.every(group => group.task && group.task !== "unassigned") : false,
-          "Name the task of every group (reaction, washing, purification...)."),
-        item("Candidate unit operations (>= 1 per task)", "critical",
-          groups.length ? groups.every(group => group.selectedUnit || (groupUnitSuggestionReadiness(group).ready && unitOperationCandidatesForGroup(group).length)) : false,
-          "Complete task MFA, phases, and conditions before accepting candidate unit operations.")
-      ];
-
-      const categories = [
-        { name: "Step 1. Protocol data", items: synthesis },
-        { name: "Step 2-3. Phenomena and unit tasks", items: processes }
-      ];
-      const flat = categories.flatMap(category => category.items);
-      const missingCritical = flat.filter(entry => entry.level === "critical" && entry.ok === false).length;
-      const missingImportant = flat.filter(entry => entry.level === "important" && entry.ok === false).length;
-      const confirmCount = flat.filter(entry => entry.ok === null).length;
-      return { categories, missingCritical, missingImportant, confirmCount };
-    }
-
-    function renderDataReadiness() {
-      const summary = $("dataReadinessSummary");
-      const panel = $("dataReadinessPanel");
-      if (!summary || !panel) return;
-      const model = dataReadinessModel();
-      const parts = [];
-      if (model.missingCritical) parts.push(`${model.missingCritical} critical missing`);
-      if (model.missingImportant) parts.push(`${model.missingImportant} important missing`);
-      if (model.confirmCount) parts.push(`${model.confirmCount} to confirm manually`);
-      summary.textContent = parts.length ? parts.join(", ") + "." : "All checkable items covered.";
-      summary.className = model.missingCritical ? "small readiness-summary critical" : model.missingImportant ? "small readiness-summary important" : "small readiness-summary ok";
-      panel.hidden = !state.showDataReadiness;
-      $("toggleReadiness").textContent = state.showDataReadiness ? "Hide" : "Details";
-      if (!state.showDataReadiness) return;
-      panel.innerHTML = model.categories.map(category => `
-        <div class="readiness-category">
-          <div class="label">${escapeHtml(category.name)}</div>
-          ${category.items.map(entry => `
-            <div class="readiness-row ${entry.level} ${entry.ok === true ? "ok" : entry.ok === false ? "missing" : "confirm"}">
-              <span class="readiness-mark">${entry.ok === true ? "✓" : entry.ok === false ? "✕" : "?"}</span>
-              <span class="readiness-name">${escapeHtml(entry.name)}</span>
-              <span class="readiness-level">${entry.level}</span>
-              <span class="readiness-note">${escapeHtml(entry.note)}</span>
-            </div>
-          `).join("")}
-        </div>
-      `).join("");
-    }
-
-    function buildLcaBridge(blocks, groups, scale, recycle, energyBridge) {
-      const entries = lcaStreamEntries(blocks, groups);
-      const product = lcaReferenceProduct(entries, scale);
-      const foregroundProcesses = groups.map(group => lcaForegroundProcess(group, entries));
-      const externalInputs = entries.filter(entry => entry.lcaRole === "technosphere_input").map(lcaExchange);
-      const internalFlows = entries.filter(entry => entry.lcaRole.startsWith("internal_") || entry.lcaRole === "foreground_intermediate").map(lcaExchange);
-      const emissions = entries.filter(entry => entry.lcaRole === "emission_to_air" || entry.lcaRole === "emission_unclassified").map(lcaExchange);
-      const wasteTreatments = entries.filter(entry => entry.lcaRole === "wastewater_treatment" || entry.lcaRole === "solid_waste_treatment" || entry.lcaRole === "purge_treatment" || entry.lcaRole === "waste_treatment_unclassified").map(lcaExchange);
-      const mappingCandidates = lcaMappingCandidates([...externalInputs, ...emissions, ...wasteTreatments]);
-      const issues = lcaBridgeIssues(product, entries, mappingCandidates, energyBridge);
-      return {
-        schemaVersion: "lca-bridge-v0.1",
-        status: "draft_mapping_only",
-        purpose: "Intermediate export for building a foreground LCA model. This is not openLCA JSON-LD yet.",
-        openLcaCompatibility: {
-          directImport: false,
-          reason: "openLCA needs its own JSON-LD/IPC objects with database UUIDs, flow types, units, providers, and locations.",
-          nextStep: "Use mappingCandidates to choose openLCA/ecoinvent flows, then generate openLCA JSON-LD or push through openLCA IPC."
-        },
-        namePolicy: {
-          rawNamePreserved: true,
-          canonicalNameIsSuggestion: true,
-          internalMixturesAreNotMappedToEcoinvent: true,
-          finalMappingRequiresManualDatasetChoice: true
-        },
-        referenceProduct: product,
-        foregroundProcesses,
-        externalInputs,
-        internalFlows,
-        emissions,
-        wasteTreatments,
-        utilityPlaceholders: lcaUtilityPlaceholders(energyBridge),
-        recycleSummary: recycle,
-        mappingCandidates,
-        readiness: {
-          canStartOpenLcaMapping: Boolean(product && mappingCandidates.length),
-          issueCount: issues.length,
-          issues
-        }
-      };
-    }
-
-    function lcaStreamEntries(blocks, groups) {
-      const groupById = new Map(groups.map(group => [group.groupId, group]));
-      const producedKeys = new Set();
-      blocks.forEach(block => {
-        (block.streams || [])
-          .filter(stream => stream.role === "output" && stream.name)
-          .forEach(stream => producedKeys.add(lcaNameKey(stream.name)));
-      });
-      return blocks.flatMap(block => (block.streams || []).filter(stream => stream.name).map(stream => {
-        const group = groupById.get(block.groupId) || {};
-        const nameInfo = lcaCanonicalName(stream.name);
-        const amount = lcaAmount(stream);
-        const entry = {
-          id: `${block.id}:${stream.id}`,
-          blockId: block.id,
-          groupId: block.groupId || "",
-          processName: block.groupId ? `${block.groupId} - ${group.task || "unassigned task"}` : `${block.id} - draft block`,
-          task: group.task || "",
-          selectedUnit: group.selectedUnit || "",
-          streamId: stream.id,
-          streamRole: stream.role,
-          rawName: stream.name,
-          canonicalName: nameInfo.name,
-          canonicalSource: nameInfo.source,
-          amount,
-          phase: stream.phase,
-          phaseLabel: stream.phaseLabel,
-          fate: stream.fate,
-          destinationGroup: stream.destinationGroup || "",
-          status: stream.status,
-          note: stream.note || "",
-          lcaRole: lcaRoleForStream(stream, producedKeys)
-        };
-        return {
-          ...entry,
-          openLcaHint: lcaOpenLcaHint(entry),
-          candidateQueries: lcaCandidateQueries(entry)
-        };
-      }));
-    }
-
-    function lcaNameKey(name) {
-      return String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
-    }
-
-    function lcaCanonicalName(name) {
-      const raw = lcaNameKey(name);
-      const rules = [
-        [/methylbenzene|toluene/, "toluene"],
-        [/cyclohexane/, "cyclohexane"],
-        [/benzaldehyde/, "benzaldehyde"],
-        [/benzophenone/, "benzophenone"],
-        [/2-ethylhexyl cyanoacetate/, "2-ethylhexyl cyanoacetate"],
-        [/ammonium acetate/, "ammonium acetate"],
-        [/molecular sieves|sieve 4a|sieves 4a/, "molecular sieve, zeolite 4A"],
-        [/wash water|water of condensation|\bwater\b/, "water"],
-        [/wastewater|aqueous waste|treated effluent/, "wastewater"],
-        [/uncaptured voc|voc/, "volatile organic compounds"],
-        [/heavy residue|column bottoms|heavies|organic residue/, "organic residues"]
-      ];
-      const match = rules.find(([pattern]) => pattern.test(raw));
-      if (match) return { name: match[1], source: "rule" };
-      const cleaned = raw
-        .replace(/\b(crude|purified|recovered|residual|charged|product-rich|rich|liquid|vapor|condensate|mixture|phase|stream)\b/g, " ")
-        .replace(/\b(to vent|loss|purge|waste|final output|in-process intermediate)\b/g, " ")
-        .replace(/[()/,-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      return { name: cleaned || String(name || "").trim(), source: cleaned && cleaned !== raw ? "cleaned_name" : "raw_name" };
-    }
-
-    function lcaAmount(stream) {
-      const numeric = parseStreamQuantity(stream.quantity);
-      const kg = massToKg(stream.quantity, stream.unit);
-      return {
-        value: Number.isFinite(numeric) ? numeric : null,
-        unit: stream.unit || "",
-        kg: Number.isFinite(kg) ? kg : null,
-        basis: String(stream.unit || "").includes("/kg product") ? "per kg product" : "as entered",
-        status: Number.isFinite(numeric) ? (Number.isFinite(kg) ? "mass_kg_convertible" : "numeric_non_mass_or_relative") : "missing_or_non_numeric"
-      };
-    }
-
-    function lcaRoleForStream(stream, producedKeys) {
-      const fate = String(stream.fate || "").toLowerCase();
-      const role = stream.role;
-      const producedInternally = producedKeys.has(lcaNameKey(stream.name));
-      if (role === "input") {
-        if (["recycled input", "recovered solvent"].includes(fate)) return "internal_recycle_input";
-        if (fate === "intermediate" || producedInternally) return "internal_input";
-        return "technosphere_input";
-      }
-      if (role === "output") {
-        if (fate === "product") return "reference_product";
-        if (["recovered solvent", "recycled input", "recover", "recycle"].includes(fate)) return "internal_recycle_output";
-        if (fate === "intermediate") return "foreground_intermediate";
-        return "foreground_output_unclassified";
-      }
-      if (fate === "vent") return "emission_to_air";
-      if (fate === "wastewater") return "wastewater_treatment";
-      if (fate === "solid waste") return "solid_waste_treatment";
-      if (fate === "purge" || fate === "loss") return "purge_treatment";
-      return role === "waste" ? "waste_treatment_unclassified" : "unclassified";
-    }
-
-    function lcaOpenLcaHint(entry) {
-      if (entry.lcaRole === "emission_to_air" || entry.lcaRole === "emission_unclassified") {
-        return { flowType: "ELEMENTARY_FLOW", compartment: "air", providerNeeded: false };
-      }
-      if (entry.lcaRole.includes("waste") || entry.lcaRole.includes("treatment") || entry.lcaRole === "purge_treatment") {
-        return { flowType: "WASTE_FLOW", providerNeeded: true };
-      }
-      return { flowType: "PRODUCT_FLOW", providerNeeded: entry.lcaRole === "technosphere_input" };
-    }
-
-    function lcaCandidateQueries(entry) {
-      const name = entry.canonicalName || entry.rawName;
-      if (entry.lcaRole === "technosphere_input") {
-        return [`market for ${name}`, `${name} production`, name];
-      }
-      if (entry.lcaRole === "wastewater_treatment") {
-        return ["treatment of wastewater, average", "wastewater treatment"];
-      }
-      if (entry.lcaRole === "solid_waste_treatment") {
-        return [`treatment of spent ${name}`, `treatment of ${name}`];
-      }
-      if (entry.lcaRole === "purge_treatment" || entry.lcaRole === "waste_treatment_unclassified") {
-        return [`treatment of ${name}`, `market for waste ${name}`];
-      }
-      if (entry.lcaRole === "emission_to_air") {
-        return [`${name}, emission to air`, name];
-      }
-      return [];
-    }
-
-    function lcaExchange(entry) {
-      return {
-        id: entry.id,
-        groupId: entry.groupId,
-        blockId: entry.blockId,
-        processName: entry.processName,
-        rawName: entry.rawName,
-        canonicalName: entry.canonicalName,
-        canonicalSource: entry.canonicalSource,
-        amount: entry.amount,
-        phase: entry.phase,
-        fate: entry.fate,
-        lcaRole: entry.lcaRole,
-        openLcaHint: entry.openLcaHint,
-        candidateQueries: entry.candidateQueries,
-        destinationGroup: entry.destinationGroup,
-        status: entry.status,
-        note: entry.note
-      };
-    }
-
-    function lcaForegroundProcess(group, entries) {
-      const processEntries = entries.filter(entry => entry.groupId === group.groupId);
-      return {
-        processId: group.groupId,
-        processName: `${group.groupId} - ${group.task || "unassigned task"}`,
-        task: group.task,
-        selectedUnit: group.selectedUnit || "",
-        blocks: group.blocks,
-        phenomena: group.phenomena,
-        openLcaType: "foreground_process",
-        exchanges: processEntries.map(lcaExchange)
-      };
-    }
-
-    function lcaReferenceProduct(entries, scale) {
-      const products = entries.filter(entry => entry.lcaRole === "reference_product");
-      const preferred = products.find(entry => lcaNameKey(entry.rawName) === lcaNameKey(scale?.basis?.targetProduct)) || products[products.length - 1] || null;
-      if (!preferred) return null;
-      return {
-        rawName: preferred.rawName,
-        canonicalName: preferred.canonicalName,
-        amount: preferred.amount,
-        groupId: preferred.groupId,
-        blockId: preferred.blockId,
-        targetProductFromScaleBasis: scale?.basis?.targetProduct || "",
-        openLcaHint: { flowType: "PRODUCT_FLOW", providerNeeded: false }
-      };
-    }
-
-    function lcaMappingCandidates(exchanges) {
-      const byKey = new Map();
-      exchanges.forEach(exchange => {
-        const key = `${exchange.lcaRole}||${exchange.canonicalName}`;
-        if (!byKey.has(key)) {
-          byKey.set(key, {
-            canonicalName: exchange.canonicalName,
-            lcaRole: exchange.lcaRole,
-            openLcaHint: exchange.openLcaHint,
-            candidateQueries: exchange.candidateQueries,
-            occurrences: []
-          });
-        }
-        byKey.get(key).occurrences.push({
-          groupId: exchange.groupId,
-          blockId: exchange.blockId,
-          rawName: exchange.rawName,
-          amount: exchange.amount
-        });
-      });
-      return Array.from(byKey.values()).map(candidate => ({
-        ...candidate,
-        mappingStatus: "unmapped",
-        selectedOpenLcaFlowId: "",
-        selectedProviderId: "",
-        selectedLocation: ""
-      }));
-    }
-
-    function lcaUtilityPlaceholders(energyBridge) {
-      return (energyBridge || []).map(event => ({
-        groupId: event.groupId,
-        task: event.task,
-        eventType: event.eventType,
-        dataStatus: event.dataStatus,
-        massBasis: event.massBasis,
-        missing: event.missing,
-        lcaRole: "utility_placeholder",
-        mappingStatus: "needs utility calculation and provider mapping",
-        candidateQueries: lcaUtilityQueries(event.eventType)
-      }));
-    }
-
-    function lcaUtilityQueries(eventType) {
-      if (/cooling|condensation/i.test(eventType)) return ["market for cooling water", "cooling energy"];
-      if (/heating|evaporation|drying/i.test(eventType)) return ["market for heat, district or industrial", "steam production", "natural gas burned in industrial furnace"];
-      if (/mixing|vacuum|pressure/i.test(eventType)) return ["market for electricity, medium voltage", "electricity supply"];
-      return ["market for electricity, medium voltage"];
-    }
-
-    function lcaBridgeIssues(product, entries, mappingCandidates, energyBridge) {
-      const issues = [];
-      if (!product) issues.push("No reference product stream with fate 'product' was found.");
-      const missingAmounts = entries.filter(entry => ["technosphere_input", "reference_product", "emission_to_air", "wastewater_treatment", "solid_waste_treatment", "purge_treatment"].includes(entry.lcaRole) && entry.amount.status === "missing_or_non_numeric");
-      if (missingAmounts.length) issues.push(`${missingAmounts.length} LCA-relevant stream(s) have missing or non-numeric amounts.`);
-      const nonMass = entries.filter(entry => ["technosphere_input", "reference_product", "emission_to_air", "wastewater_treatment", "solid_waste_treatment", "purge_treatment"].includes(entry.lcaRole) && entry.amount.value !== null && entry.amount.kg === null);
-      if (nonMass.length) issues.push(`${nonMass.length} LCA-relevant stream(s) are not directly convertible to kg.`);
-      if (mappingCandidates.length) issues.push(`${mappingCandidates.length} external/waste/emission mapping candidate(s) still need openLCA/ecoinvent dataset choices.`);
-      const energyMissing = (energyBridge || []).filter(event => event.missing?.length);
-      if (energyMissing.length) issues.push(`${energyMissing.length} energy/utility placeholder(s) need duty calculation before LCA inventory export.`);
-      return issues;
-    }
-
-    // Project JSON export functions moved to static/export.js, loaded before this file.
+    // Project export, import, snapshots, and autosave live in static/export.js, which is loaded
+    // before this file (see app.py).
 
     function renderAll() {
-      state.blocks.forEach(block => {
-        ensureBlockFlowFields(block);
-        ensureBlockConditionFields(block);
-        if (typeof block.notes !== "string") block.notes = "";
-        sanitizeBlockPhenomena(block);
+      withRenderPass(() => {
+        state.blocks.forEach(block => {
+          ensureBlockFlowFields(block);
+          ensureBlockConditionFields(block);
+          if (typeof block.notes !== "string") block.notes = "";
+        });
+        renderAnnotatedText();
+        renderLinkControls();
+        renderGroupFlow();
+        renderStepFlowInspector();
+        renderInspector();
+        renderContextMenuOptions();
+        renderInspectorTabs();
+        renderWorkflowStepper();
+        renderDataReadiness();
+        renderSeparationSimulatorModal();
       });
-      renderAnnotatedText();
-      renderLinkControls();
-      renderGroupFlow();
-      renderStepFlowInspector();
-      renderInspector();
-      renderContextMenuOptions();
-      renderInspectorTabs();
-      renderWorkflowStepper();
-      renderDataReadiness();
-      renderSeparationSimulatorModal();
+      if (typeof scheduleProjectAutosave === "function") scheduleProjectAutosave();
     }
 
     function escapeHtml(value) {
@@ -15162,6 +16825,18 @@
       if (state.blocks.length) pushUndo();
       loadTripleReactantExampleProject();
     });
+    $("loadBiodieselCase")?.addEventListener("click", async () => {
+      closeLoadExampleMenu();
+      if (state.blocks.length && !(await confirmModal("Load the biodiesel transesterification case? This replaces all current blocks, groups, and arrows."))) return;
+      if (state.blocks.length) pushUndo();
+      loadBiodieselExampleProject();
+    });
+    $("loadBiodieselLutzeCase")?.addEventListener("click", async () => {
+      closeLoadExampleMenu();
+      if (state.blocks.length && !(await confirmModal("Load the biodiesel reaction alone, to build the separation train with the Lutze screening? This replaces all current blocks, groups, and arrows."))) return;
+      if (state.blocks.length) pushUndo();
+      loadBiodieselExampleProject({ reactionOnly: true });
+    });
 
     // Auto-Connect and the arrow list/removal used to live in a left-column "Board" sub-tab that
     // was easy to miss (buried under Protocol, the default tab) - moved into the main board
@@ -15182,40 +16857,57 @@
       // which made this listener think the click landed outside and closed the menu it was in.
       if (!$("connectionsMenu").hidden && !event.composedPath().some(el => el.classList?.contains("header-dropdown"))) closeConnectionsMenu();
     });
-    function currentTheme() {
-      const saved = document.documentElement.getAttribute("data-theme");
-      if (saved === "dark" || saved === "light") return saved;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    function closeWorkMenu() {
+      $("workMenu").hidden = true;
+      $("workMenuToggle").setAttribute("aria-expanded", "false");
     }
-    function applyThemeToggleIcon() {
-      $("themeToggle").textContent = currentTheme() === "dark" ? "☾" : "☀";
-    }
-    $("themeToggle").addEventListener("click", () => {
-      const next = currentTheme() === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      try { localStorage.setItem("theme", next); } catch (e) {}
-      applyThemeToggleIcon();
+    // Wires the "File ▾" menu (id="workMenuToggle"/"workMenu", kept from before the label was renamed
+    // — Save Snapshot, Restore Autosave, Import JSON, Export JSON, LCI Excel) to their implementations.
+    // saveLocalProjectSnapshot, restoreAutosavedProject, importProjectJsonFile, handleSavedProjectListClick,
+    // and renderSavedWorkMenu are NOT defined in this file — they live in static/project_persistence.js
+    // (loaded before this file, see app.py), along with the autosave-on-edit logic.
+    $("workMenuToggle")?.addEventListener("click", () => {
+      const willOpen = $("workMenu").hidden;
+      $("workMenu").hidden = !willOpen;
+      $("workMenuToggle").setAttribute("aria-expanded", String(willOpen));
+      if (willOpen) renderSavedWorkMenu();
     });
-    applyThemeToggleIcon();
+    document.addEventListener("click", event => {
+      if (!$("workMenu").hidden && !event.composedPath().some(el => el.classList?.contains("work-dropdown"))) closeWorkMenu();
+    });
+    $("saveLocalProject")?.addEventListener("click", () => {
+      saveLocalProjectSnapshot();
+      renderSavedWorkMenu();
+    });
+    $("restoreAutosaveProject")?.addEventListener("click", restoreAutosavedProject);
+    $("importJsonProject")?.addEventListener("click", () => $("importJsonFile")?.click());
+    $("importJsonFile")?.addEventListener("change", importProjectJsonFile);
+    $("savedProjectList")?.addEventListener("click", handleSavedProjectListClick);
     updateProtocolToggleIcon();
     updateInspectorToggleIcon();
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
+    $("projectSubstancesCard")?.addEventListener("toggle", () => renderProjectSubstances());
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
     });
+    $("toggleLcaReadiness")?.addEventListener("click", () => {
+      state.showLcaReadiness = !state.showLcaReadiness;
+      renderDataReadiness();
+    });
     $("workflowStepper").addEventListener("click", event => {
+      const decision = event.target.closest("[data-decision]");
+      if (decision) {
+        goToDecision(decision.dataset.decision);
+        return;
+      }
       const button = event.target.closest("[data-workflow-step]");
       if (!button) return;
       const step = workflowSteps.find(item => item.id === Number(button.dataset.workflowStep));
       if (!step) return;
-      if ($("appMain").classList.contains("inspector-collapsed")) {
-        $("appMain").classList.remove("inspector-collapsed");
-        updateInspectorToggleIcon();
-      }
-      setInspectorTab(step.tab);
+      goToWorkflowStep(step);
       renderWorkflowStepper();
     });
     $("createBlockSide").addEventListener("click", createBlockFromSelection);
@@ -15227,6 +16919,8 @@
       state.blocks = [];
       state.groups = {};
       state.links = [];
+      // A cleared project starts from the generic basis, not from the example's 750 t/yr target.
+      state.scaleBasis = scaleBasisDefaults();
       state.draftPos = { x: 24, y: 24 };
       state.connectingFrom = null;
       state.focusEndpoint = null;
@@ -15239,19 +16933,60 @@
       renderAll();
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
-    $("openTutorial").addEventListener("click", () => openTutorial());
+    $("exportLciExcel")?.addEventListener("click", downloadLciExcel);
+    const closeTutorialMenu = () => {
+      $("tutorialMenu").hidden = true;
+      $("tutorialMenuToggle").setAttribute("aria-expanded", "false");
+    };
+    $("tutorialMenuToggle").addEventListener("click", () => {
+      const willOpen = $("tutorialMenu").hidden;
+      $("tutorialMenu").hidden = !willOpen;
+      $("tutorialMenuToggle").setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", event => {
+      if (!$("tutorialMenu").hidden && !event.composedPath().some(el => el.classList?.contains("tutorial-dropdown"))) closeTutorialMenu();
+    });
+    $("openQuickTutorial").addEventListener("click", () => {
+      closeTutorialMenu();
+      state.tutorialFull = false;
+      openTutorial(0);
+    });
+    $("openFullTutorial").addEventListener("click", () => {
+      closeTutorialMenu();
+      state.tutorialFull = true;
+      openTutorial(0);
+    });
     $("tutorialSkip").addEventListener("click", closeTutorial);
+    // renderTutorialStep is async and awaits each step's action. Called bare, a
+    // rejecting action leaves the index already advanced while the card still shows
+    // the previous step and no error surfaces anywhere - indistinguishable from
+    // "the tutorial will not go past step N". Roll the index back and say so.
+    const goToTutorialStep = async (nextIndex, fallbackIndex) => {
+      state.tutorialIndex = nextIndex;
+      try {
+        await renderTutorialStep();
+      } catch (error) {
+        console.error("Tutorial step failed to render", error);
+        state.tutorialIndex = fallbackIndex;
+        await renderTutorialStep().catch(() => {});
+        await alertModal("This tutorial step could not be prepared. Use Back, or close and reopen the tutorial.");
+      }
+    };
     $("tutorialPrev").addEventListener("click", () => {
-      state.tutorialIndex = Math.max(0, state.tutorialIndex - 1);
-      renderTutorialStep();
+      const current = state.tutorialIndex;
+      goToTutorialStep(tutorialPrevIndex(current), current);
     });
     $("tutorialNext").addEventListener("click", () => {
-      if (state.tutorialIndex >= tutorialSteps.length - 1) {
+      if (tutorialIsLastIndex(state.tutorialIndex)) {
         closeTutorial();
         return;
       }
-      state.tutorialIndex += 1;
-      renderTutorialStep();
+      const current = state.tutorialIndex;
+      goToTutorialStep(tutorialNextIndex(current), current);
+    });
+    $("tutorialMode")?.addEventListener("click", () => {
+      state.tutorialFull = !state.tutorialFull;
+      goToTutorialStep(state.tutorialIndex, state.tutorialIndex);
     });
     $("tutorialOverlay").addEventListener("click", event => {
       if (event.target === $("tutorialOverlay")) closeTutorial();
@@ -15270,44 +17005,94 @@
     $("conversionModal")?.addEventListener("click", event => {
       if (event.target === $("conversionModal")) { closeConversionModal(); renderAll(); }
     });
+    $("closeGanttModal")?.addEventListener("click", closeGanttModal);
+    $("ganttModal")?.addEventListener("click", event => {
+      if (event.target === $("ganttModal")) closeGanttModal();
+    });
+    $("closeTaskTimetableModal")?.addEventListener("click", closeTaskTimetable);
+    $("taskTimetableModal")?.addEventListener("click", event => {
+      if (event.target === $("taskTimetableModal")) closeTaskTimetable();
+    });
+    function closeFlowsheetOptionsMenu() {
+      if (!$("flowsheetOptionsMenu")) return;
+      $("flowsheetOptionsMenu").hidden = true;
+      $("flowsheetOptionsToggle")?.setAttribute("aria-expanded", "false");
+    }
+    $("flowsheetOptionsToggle")?.addEventListener("click", () => {
+      const menu = $("flowsheetOptionsMenu");
+      if (!menu) return;
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      $("flowsheetOptionsToggle")?.setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", event => {
+      if (!$("flowsheetOptionsMenu") || $("flowsheetOptionsMenu").hidden) return;
+      if (!event.composedPath().some(el => el.classList?.contains("flowsheet-options-dropdown"))) closeFlowsheetOptionsMenu();
+    });
     $("flowsheetEditableMode").addEventListener("click", () => {
-      state.flowsheetMode = "editable";
+      closeFlowsheetOptionsMenu();
       renderFlowsheetModal();
     });
     $("fitFlowsheetView").addEventListener("click", () => {
       state.flowsheetFit = !state.flowsheetFit;
+      state.flowsheetZoom = 1;
+      closeFlowsheetOptionsMenu();
       renderFlowsheetModal();
     });
-    $("flowsheetShowStreamLabels")?.addEventListener("change", event => {
-      state.flowsheetShowStreamLabels = event.target.checked;
-      renderFlowsheetModal();
-    });
-    $("flowsheetShowAuxiliaryArrows")?.addEventListener("change", event => {
-      state.flowsheetShowAuxiliaryArrows = event.target.checked;
-      renderFlowsheetModal();
-    });
-    $("flowsheetShowUnitDetails")?.addEventListener("change", event => {
-      state.flowsheetShowUnitDetails = event.target.checked;
-      renderFlowsheetModal();
-    });
-    if ($("flowsheetTechnicalMode")) {
-      $("flowsheetTechnicalMode").addEventListener("click", () => {
-        state.flowsheetMode = "technical";
-        renderFlowsheetModal();
-      });
+    $("flowsheetZoomOut")?.addEventListener("click", () => setFlowsheetZoom(state.flowsheetZoom / 1.25));
+    $("flowsheetZoomIn")?.addEventListener("click", () => setFlowsheetZoom(state.flowsheetZoom * 1.25));
+    $("flowsheetZoomReadout")?.addEventListener("click", resetFlowsheetZoom);
+    $("flowsheetHost")?.addEventListener("wheel", handleFlowsheetWheel, { passive: false });
+    $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
+    $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    // "?" buttons: the long explanations for an area, readable in a modal instead of hover.
+    function openHelpModal(topicKey) {
+      const registry = globalThis.ProcessUpscalingHelp || {};
+      const keys = topicKey === "inspector" ? ["phenomena", "mfa", "heuristics", "scale"] : [topicKey];
+      const sections = keys.map(key => registry[key]).filter(Boolean);
+      const body = $("helpModalBody");
+      const title = $("helpModalTitle");
+      if (!body) return;
+      if (title) title.textContent = sections.length === 1 ? sections[0].title : "Help";
+      body.innerHTML = sections.length ? sections.map(section => `
+        <section class="help-section">
+          ${sections.length > 1 ? `<h3>${escapeHtml(section.title)}</h3>` : ""}
+          ${section.items.map(item => `
+            <article class="help-topic">
+              <strong>${escapeHtml(item.title)}</strong>
+              <p>${escapeHtml(item.body)}</p>
+            </article>
+          `).join("")}
+        </section>
+      `).join("") : `<div class="mfa-empty">No help text for this area yet.</div>`;
+      $("helpModal").hidden = false;
     }
-    $("downloadFlowsheet").addEventListener("click", downloadFlowsheetSvg);
-    $("resetFlowsheetLayout").addEventListener("click", () => {
-      pushUndo();
-      groupIdsInTextOrder().forEach(groupId => {
-        const groupState = ensureGroup(groupId);
-        delete groupState.flowsheetX;
-        delete groupState.flowsheetY;
-        delete groupState.flowsheetLayoutVersion;
+    function closeHelpModal() {
+      const modal = $("helpModal");
+      if (modal) modal.hidden = true;
+    }
+    document.querySelectorAll("[data-help-topic]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        openHelpModal(button.dataset.helpTopic);
       });
-      state.flowsheetFit = true;
+    });
+    $("closeHelpModal")?.addEventListener("click", closeHelpModal);
+    $("helpModal")?.addEventListener("click", event => { if (event.target === $("helpModal")) closeHelpModal(); });
+    $("flowsheetBasisSelect")?.addEventListener("change", event => {
+      state.flowsheetBasis = event.target.value;
       renderFlowsheetModal();
     });
+    $("flowsheetStreamTableToggle")?.addEventListener("change", event => {
+      state.flowsheetShowStreamTable = event.target.checked;
+      renderFlowsheetModal();
+    });
+    $("downloadFlowsheet").addEventListener("click", () => {
+      closeFlowsheetOptionsMenu();
+      downloadFlowsheetSvg();
+    });
+    $("downloadFlowsheetPptx")?.addEventListener("click", downloadFlowsheetPptx);
     $("flowsheetModal").addEventListener("click", event => {
       if (event.target === $("flowsheetModal")) closeFlowsheetModal();
     });
@@ -15334,7 +17119,10 @@
       });
     });
     $("runExternalAiRefine").addEventListener("click", runExternalAiRefine);
-    $("resetView").addEventListener("click", resetView);
+    $("resetView").addEventListener("click", () => {
+      resetView();
+      document.querySelector(".board-view-dropdown")?.removeAttribute("open");
+    });
     $("autoLayout").addEventListener("click", autoLayoutGroups);
     $("toggleCompact").addEventListener("click", () => {
       state.boardCompact = !state.boardCompact;
@@ -15343,10 +17131,17 @@
       pendingBoardReflow = true;
       renderAll();
     });
-    $("boardCenter").addEventListener("click", centerSelection);
+    const closeBoardViewMenu = () => document.querySelector(".board-view-dropdown")?.removeAttribute("open");
+    $("boardCenter").addEventListener("click", () => {
+      centerSelection();
+      closeBoardViewMenu();
+    });
     $("zoomOut").addEventListener("click", () => setZoom(state.zoom / 1.35));
     $("zoomIn").addEventListener("click", () => setZoom(state.zoom * 1.35));
-    $("zoomFit").addEventListener("click", fitBoard);
+    $("zoomFit").addEventListener("click", () => {
+      fitBoard();
+      closeBoardViewMenu();
+    });
     $("toggleInspector").addEventListener("click", toggleInspector);
     $("toggleProtocolPanel").addEventListener("click", toggleProtocolPanel);
     $("stepFlowInspector").addEventListener("pointerdown", startStepEditorResize);
@@ -15395,15 +17190,17 @@
       if (!block) return;
       block.text = event.target.value;
       invalidateAiRefine();
-      renderGroupFlow();
-      renderStepAuditPanel();
-      renderExport();
+      // The board only shows an excerpt of this text; redraw it once the typing pauses.
+      deferRender("groupFlow", () => withRenderPass(() => {
+        renderGroupFlow();
+        renderExport();
+      }));
     });
     $("groupTask")?.addEventListener("input", event => {
       const group = selectedGroup();
       if (!group) return;
       ensureGroup(group.id).task = event.target.value;
-      renderAll();
+      deferRender("all", renderAll);
     });
 
     $("ctxCombine").addEventListener("click", () => {
@@ -15507,6 +17304,14 @@
           renderAll();
           return;
         }
+        if (!$("ganttModal").hidden) {
+          closeGanttModal();
+          return;
+        }
+        if (!$("taskTimetableModal").hidden) {
+          closeTaskTimetable();
+          return;
+        }
         if (!$("flowsheetModal").hidden) {
           closeFlowsheetModal();
           return;
@@ -15542,6 +17347,9 @@
     document.addEventListener("mouseover", showHoverTip);
     document.addEventListener("mousemove", moveHoverTip);
     document.addEventListener("mouseout", hideHoverTip);
+    document.addEventListener("pointermove", dragMove);
+    document.addEventListener("pointerup", dragEnd);
+    document.addEventListener("pointercancel", dragEnd);
     document.addEventListener("mousemove", dragMove);
     document.addEventListener("mouseup", dragEnd);
     document.addEventListener("pointermove", boardPanMove);
@@ -15555,7 +17363,13 @@
     document.addEventListener("mousemove", connectDragMove);
     document.addEventListener("mouseup", connectDragEnd);
 
-    loadBaseExampleProject();
-    if (window.location.hash === "#flowsheet") {
-      requestAnimationFrame(openFlowsheetModal);
-    }
+    (async function bootProject() {
+      const restored = typeof maybeRestoreAutosavedProject === "function"
+        ? await maybeRestoreAutosavedProject()
+        : false;
+      if (!restored) loadBaseExampleProject();
+      renderSavedWorkMenu();
+      if (window.location.hash === "#flowsheet") {
+        requestAnimationFrame(openFlowsheetModal);
+      }
+    })();
