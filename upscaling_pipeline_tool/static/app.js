@@ -453,6 +453,7 @@
 
     const undoStack = [];
     let boardDragFrame = null;
+    let boardDragLinkPaintAt = 0;
     let boardReflowDepth = 0;
     // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
     // Compact/Detailed toggle) - NOT on every render. It was previously unconditional, which meant
@@ -16115,10 +16116,13 @@
 
     function scheduleDragRender() {
       if (boardDragFrame) return;
-      boardDragFrame = requestAnimationFrame(() => {
+      boardDragFrame = requestAnimationFrame(timestamp => {
         boardDragFrame = null;
         updateDraggedNodePosition();
-        redrawBoardLinksOnly();
+        if (timestamp - boardDragLinkPaintAt >= 50) {
+          boardDragLinkPaintAt = timestamp;
+          redrawBoardLinksOnly();
+        }
       });
     }
 
@@ -16154,6 +16158,7 @@
         cancelAnimationFrame(boardDragFrame);
         boardDragFrame = null;
       }
+      boardDragLinkPaintAt = 0;
       state.drag = null;
       $("groupFlow")?.classList.remove("board-dragging");
       if (moved) renderGroupFlow();
@@ -16624,8 +16629,9 @@
       if (!flow.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
-      const delta = Math.max(-140, Math.min(140, event.deltaY));
-      const factor = Math.exp(-delta * 0.012);
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? flow.clientHeight : 1);
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
+      const factor = Math.exp(-normalized * 0.16);
       setZoom(state.zoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 

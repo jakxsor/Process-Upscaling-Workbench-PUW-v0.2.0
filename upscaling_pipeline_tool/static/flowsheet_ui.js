@@ -262,8 +262,9 @@
       if (!host || !host.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
-      const delta = Math.max(-140, Math.min(140, event.deltaY));
-      const factor = Math.exp(-delta * 0.012);
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? host.clientHeight : 1);
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
+      const factor = Math.exp(-normalized * 0.16);
       setFlowsheetZoom(state.flowsheetZoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 
@@ -318,8 +319,11 @@
           document.addEventListener("mouseup", onUp);
         });
         unitGroup.addEventListener("click", () => {
+          if (state.selectedFlowsheetGroupId === groupId) return;
           state.selectedFlowsheetGroupId = groupId;
-          renderFlowsheetModal();
+          host.querySelectorAll(".flowsheet-unit.selected").forEach(unit => unit.classList.remove("selected"));
+          unitGroup.classList.add("selected");
+          renderFlowsheetDetailsPanel();
         });
         unitGroup.addEventListener("dblclick", async event => {
           event.preventDefault();
