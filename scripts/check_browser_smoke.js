@@ -116,6 +116,23 @@ const measureBoard = () => {
       assert(zoomed.zoom > board.zoom, "Zoom in should increase the board zoom");
       await page.evaluate(() => { const menu = document.querySelector(".board-view-dropdown"); if (menu) menu.open = false; });
 
+      // Focus mode must give the process map the workspace instead of merely changing a button.
+      const normalMapWidth = await page.$eval(".workflow-panel", el => el.getBoundingClientRect().width);
+      await page.click("#focusBoard");
+      await page.waitForTimeout(500);
+      const focused = await page.evaluate(() => ({
+        classes: document.getElementById("appMain").className,
+        pressed: document.getElementById("focusBoard").getAttribute("aria-pressed"),
+        mapWidth: document.querySelector(".workflow-panel").getBoundingClientRect().width
+      }));
+      assert(/protocol-collapsed/.test(focused.classes) && /inspector-collapsed/.test(focused.classes), `Focus mode should collapse both side panels, got: ${focused.classes}`);
+      assert.strictEqual(focused.pressed, "true", "Focus control should expose its pressed state");
+      assert(focused.mapWidth > normalMapWidth + 300, `Focus mode should materially widen the map, from ${normalMapWidth}px to ${focused.mapWidth}px`);
+      await page.click("#focusBoard");
+      await page.waitForTimeout(300);
+      const restoredClasses = await page.$eval("#appMain", el => el.className);
+      assert(!/protocol-collapsed|inspector-collapsed/.test(restoredClasses), `Exiting focus should restore both side panels, got: ${restoredClasses}`);
+
       // Inventory readiness is on screen, not only in the export.
       const lci = await page.$eval("#lcaReadinessSummary", el => el.textContent.trim());
       assert(/input/.test(lci), `Inventory readiness summary should report inputs, got: ${lci}`);

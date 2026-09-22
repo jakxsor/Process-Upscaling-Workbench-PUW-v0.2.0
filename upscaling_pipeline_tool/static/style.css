@@ -8392,3 +8392,700 @@
     }
 
     .mfa-count { font-size: 11px; color: var(--muted); }
+
+    /* -----------------------------------------------------------------------
+       Workbench hierarchy refresh
+
+       The process map is the primary working surface. Protocol and inspector
+       remain available as contextual rails, while chrome, borders, and status
+       decoration are deliberately quieter. No workflow behavior changes here.
+       ----------------------------------------------------------------------- */
+
+    :root {
+      --bg: #eef2f3;
+      --panel: #ffffff;
+      --ink: #172127;
+      --ink-2: #2d3a42;
+      --ink-3: #42525c;
+      --muted: #6b7982;
+      --line: #d9e1e4;
+      --accent: #087f73;
+      --accent-soft: #e4f3f0;
+      --blue: #315f9f;
+      --blue-soft: #edf3f9;
+      --green: #2f7548;
+      --green-soft: #e9f4ed;
+      --orange: #996200;
+      --orange-soft: #fff3dc;
+      --red: #ad3d3d;
+      --red-soft: #f9e7e7;
+      --info-blue-soft: #f5f8fa;
+      --info-warm-soft: #fffaf1;
+      --info-pink-soft: #fdf4f4;
+      --zone-protocol-soft: #f8faf9;
+      --zone-board-soft: #f7faf9;
+      --zone-inspector-soft: #f8f9fa;
+    }
+
+    body {
+      background: var(--bg);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      transition: border-color 120ms ease, background-color 120ms ease,
+        color 120ms ease, box-shadow 120ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: #afbec5;
+      background-color: #f8fafb;
+    }
+
+    button.primary:hover:not(:disabled),
+    button.flowsheet-view-button:hover:not(:disabled) {
+      border-color: var(--accent);
+      background-color: #076f65;
+      filter: none;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid rgba(49, 95, 159, 0.28);
+      outline-offset: 2px;
+    }
+
+    header {
+      min-height: 60px;
+      padding: 9px 14px;
+      gap: 16px;
+      border-bottom-color: #cfd9dd;
+      box-shadow: 0 1px 0 rgba(23, 33, 39, 0.03);
+    }
+
+    .brand {
+      gap: 10px;
+      min-width: 250px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 7px;
+      background: #0b6f68;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    }
+
+    header h1 {
+      font-size: 17px;
+      font-weight: 750;
+    }
+
+    header .subtitle {
+      margin-top: 2px;
+      color: #61717a;
+    }
+
+    header > .row {
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+    }
+
+    header > .row button {
+      min-height: 34px;
+      white-space: nowrap;
+    }
+
+    #openFlowsheet {
+      min-width: 126px;
+    }
+
+    .workflow-stepper {
+      min-height: 44px;
+      flex-wrap: nowrap;
+      gap: 0;
+      padding: 0 14px;
+      overflow-x: auto;
+      border-bottom-color: #cfd9dd;
+      scrollbar-width: thin;
+    }
+
+    .workflow-step {
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 0 11px;
+      gap: 7px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .workflow-step:hover:not(:disabled) {
+      border-bottom-color: #b7c5cb;
+      background: #f7f9fa;
+      color: var(--ink);
+    }
+
+    .workflow-step-marker {
+      width: 19px;
+      height: 19px;
+      background: #edf1f3;
+      color: #667680;
+    }
+
+    .workflow-step.done {
+      border-color: transparent;
+      color: var(--ink-2);
+      background: transparent;
+    }
+
+    .workflow-step.done .workflow-step-marker {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .workflow-step.partial {
+      border-color: var(--orange);
+      color: var(--ink);
+      background: transparent;
+    }
+
+    .workflow-step.partial .workflow-step-marker {
+      background: var(--orange-soft);
+      color: var(--orange);
+      box-shadow: inset 0 0 0 1px rgba(153, 98, 0, 0.24);
+    }
+
+    .workflow-step-arrow {
+      display: none;
+    }
+
+    .workflow-stepper-hint {
+      margin-left: auto;
+      padding: 0 4px 0 18px;
+      white-space: nowrap;
+    }
+
+    .decision-strip {
+      align-self: stretch;
+      margin-left: auto;
+      gap: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    .decision-chip {
+      min-height: 43px;
+      max-width: 210px;
+      padding: 5px 12px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-left: 3px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .decision-chip:hover,
+    .decision-chip:focus-visible {
+      background: #f7f9fa;
+      box-shadow: none;
+    }
+
+    .decision-chip-label {
+      letter-spacing: 0.04em;
+    }
+
+    main {
+      grid-template-columns: minmax(220px, 242px) minmax(520px, 1fr) minmax(340px, 366px);
+      gap: 8px;
+      height: calc(100vh - 112px);
+      height: calc(100dvh - 112px);
+      min-height: 560px;
+      padding: 8px;
+    }
+
+    main.scale-focused {
+      grid-template-columns: minmax(190px, 220px) minmax(420px, 1fr) minmax(430px, 500px);
+    }
+
+    main.heuristic-focused {
+      grid-template-columns: minmax(200px, 225px) minmax(440px, 1fr) minmax(390px, 450px);
+    }
+
+    main.inspector-collapsed {
+      grid-template-columns: minmax(220px, 242px) minmax(0, 1fr) 42px;
+    }
+
+    main.protocol-collapsed {
+      grid-template-columns: 42px minmax(0, 1fr) minmax(340px, 366px);
+    }
+
+    main.protocol-collapsed.scale-focused {
+      grid-template-columns: 42px minmax(420px, 1fr) minmax(430px, 500px);
+    }
+
+    main.protocol-collapsed.heuristic-focused {
+      grid-template-columns: 42px minmax(440px, 1fr) minmax(390px, 450px);
+    }
+
+    main > .panel {
+      height: 100%;
+      min-height: 0;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      border-color: #d4dde1;
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(23, 33, 39, 0.025);
+    }
+
+    .panel-head {
+      flex: 0 0 auto;
+      border-bottom-color: #d8e0e3;
+    }
+
+    .panel-body {
+      min-height: 0;
+    }
+
+    #protocolPanel .panel-body,
+    #inspectorPanel .panel-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .source-panel-head {
+      min-height: 56px;
+      padding: 8px;
+      align-items: center;
+      background: var(--zone-protocol-soft);
+    }
+
+    .source-panel-head h2,
+    .workflow-panel .panel-head h2 {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .workflow-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-color: #cbd7db;
+    }
+
+    .workflow-panel .panel-head {
+      min-height: 52px;
+      padding: 7px 10px;
+      background: var(--zone-board-soft);
+    }
+
+    .workflow-panel .panel-body {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      gap: 7px;
+      min-height: 0;
+      padding: 8px;
+    }
+
+    .workflow-title-stack {
+      gap: 1px;
+    }
+
+    .panel-context {
+      color: var(--muted);
+      font-size: 10.5px;
+      line-height: 1.2;
+    }
+
+    .workflow-view-tools {
+      flex-wrap: nowrap;
+    }
+
+    .workflow-view-tools button,
+    .board-view-dropdown > summary {
+      min-height: 28px;
+    }
+
+    .workflow-view-tools .board-focus-button {
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+      color: var(--ink-3);
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .workflow-view-tools .board-focus-button.active,
+    .workflow-view-tools .board-focus-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .group-flow {
+      flex: 1 1 auto;
+      min-height: 360px;
+      max-height: none;
+      margin-bottom: 0;
+      border-color: #ccd9de;
+      border-radius: 5px;
+      background: #f4f8f9;
+      box-shadow: inset 0 1px 2px rgba(23, 33, 39, 0.025);
+    }
+
+    .board-canvas {
+      background-color: #f4f8f9;
+      background-image:
+        linear-gradient(90deg, rgba(66, 82, 92, 0.065) 1px, transparent 1px),
+        linear-gradient(rgba(66, 82, 92, 0.065) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(8, 127, 115, 0.09) 1px, transparent 1px),
+        linear-gradient(rgba(8, 127, 115, 0.09) 1px, transparent 1px);
+    }
+
+    .board-step-flag {
+      margin: 0;
+      box-shadow: none;
+    }
+
+    .step-flow-inspector {
+      flex: 0 0 auto;
+      margin-top: 0;
+      border-radius: 5px;
+    }
+
+    .step-flag {
+      border-color: #d3dde1;
+      background: #f8fafb;
+      box-shadow: none;
+    }
+
+    .step-flag.done {
+      border-color: #c6dfd6;
+      background: #f0f8f5;
+    }
+
+    .step-flag.partial {
+      border-color: #ead7ab;
+      background: #fff9ed;
+    }
+
+    .card {
+      border-color: #dbe3e6;
+      border-radius: 6px;
+      box-shadow: none;
+    }
+
+    .empty {
+      border-color: #ced9de;
+      border-radius: 6px;
+      background: #f8fafb;
+    }
+
+    .annotated-block {
+      padding: 11px 20px 5px 7px;
+      border: 1px solid #cbdedb;
+      border-left: 3px solid #69aaa3;
+      border-radius: 5px;
+      background: #f3faf8;
+    }
+
+    .annotated-block.selected {
+      border-color: #d5aa58;
+      border-left-color: var(--orange);
+      background: #fff8e9;
+      box-shadow: 0 0 0 2px rgba(153, 98, 0, 0.10);
+    }
+
+    .annotated-block.primary-selected {
+      border-color: #8eafd0;
+      border-left-color: var(--blue);
+      background: #f1f6fb;
+      box-shadow: 0 0 0 2px rgba(49, 95, 159, 0.10);
+    }
+
+    .group-box {
+      border-width: 1px;
+      border-color: #c8d4d9;
+      border-radius: 7px;
+      box-shadow: 0 3px 10px rgba(23, 33, 39, 0.07);
+    }
+
+    .group-box:hover {
+      border-color: #91a7b0;
+      box-shadow: 0 5px 14px rgba(23, 33, 39, 0.10);
+    }
+
+    .group-box.active {
+      border-color: var(--accent);
+      background: var(--panel);
+      box-shadow: 0 0 0 3px rgba(8, 127, 115, 0.16), 0 8px 20px rgba(23, 33, 39, 0.12);
+    }
+
+    .group-box.active::before {
+      left: -6px;
+      width: 3px;
+      background: var(--accent);
+    }
+
+    #inspectorPanel .panel-head {
+      min-height: 54px;
+      padding: 8px;
+      background: var(--zone-inspector-soft);
+    }
+
+    #inspectorPanel .panel-head .panel-tabs {
+      gap: 2px;
+      padding: 2px;
+      border-color: #d7e0e4;
+      border-radius: 6px;
+      background: #edf2f4;
+    }
+
+    #inspectorPanel .panel-head .panel-tab {
+      min-height: 30px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    #inspectorPanel .panel-tab.active {
+      color: var(--ink);
+      background: var(--panel);
+      box-shadow: 0 1px 3px rgba(23, 33, 39, 0.12);
+    }
+
+    #inspectorPanel .panel-tab[data-inspector-tab="heuristics"].active {
+      color: var(--orange);
+      background: var(--panel);
+    }
+
+    #inspectorPanel .panel-tab[data-inspector-tab="scale"].active {
+      color: var(--accent);
+      background: var(--panel);
+    }
+
+    .eye-button {
+      min-width: 30px;
+      width: 30px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .eye-button:hover:not(:disabled) {
+      border-color: #d0dce0;
+      background: var(--panel);
+      color: var(--ink);
+    }
+
+    .help-button {
+      margin-left: 4px;
+      border-color: #ccd8dd;
+      background: transparent;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1240px) {
+      main {
+        grid-template-columns: minmax(205px, 222px) minmax(470px, 1fr) minmax(320px, 340px);
+      }
+
+      main.scale-focused {
+        grid-template-columns: minmax(180px, 205px) minmax(390px, 1fr) minmax(400px, 450px);
+      }
+
+      main.heuristic-focused {
+        grid-template-columns: minmax(185px, 210px) minmax(400px, 1fr) minmax(360px, 410px);
+      }
+
+      main.inspector-collapsed {
+        grid-template-columns: minmax(205px, 222px) minmax(0, 1fr) 42px;
+      }
+
+      main.protocol-collapsed {
+        grid-template-columns: 42px minmax(0, 1fr) minmax(320px, 340px);
+      }
+
+      main.protocol-collapsed.scale-focused {
+        grid-template-columns: 42px minmax(390px, 1fr) minmax(400px, 450px);
+      }
+
+      main.protocol-collapsed.heuristic-focused {
+        grid-template-columns: 42px minmax(400px, 1fr) minmax(360px, 410px);
+      }
+
+      main.protocol-collapsed.inspector-collapsed {
+        grid-template-columns: 42px minmax(0, 1fr) 42px;
+      }
+
+      main.protocol-collapsed #protocolPanel,
+      main.inspector-collapsed #inspectorPanel {
+        display: flex;
+      }
+
+      .group-flow {
+        min-height: 360px;
+        max-height: none;
+      }
+
+      .text-surface {
+        max-height: 48vh;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      main,
+      main.scale-focused,
+      main.heuristic-focused,
+      main.protocol-collapsed,
+      main.inspector-collapsed,
+      main.protocol-collapsed.scale-focused,
+      main.protocol-collapsed.heuristic-focused,
+      main.protocol-collapsed.inspector-collapsed {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+        min-height: calc(100vh - 110px);
+      }
+
+      main > .panel {
+        height: auto;
+      }
+
+      #protocolPanel .panel-body,
+      #inspectorPanel .panel-body {
+        overflow: visible;
+      }
+
+      .workflow-panel {
+        min-height: 650px;
+      }
+
+      .group-flow {
+        min-height: 470px;
+      }
+
+      .workflow-stepper {
+        flex-wrap: wrap;
+        overflow: visible;
+      }
+
+      .decision-strip {
+        flex-basis: 100%;
+        width: 100%;
+        margin-left: 0;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .decision-chip {
+        flex: 1 1 0;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      header {
+        padding: 8px;
+      }
+
+      header > .row {
+        flex-wrap: wrap;
+      }
+
+      .workflow-stepper {
+        position: sticky;
+        top: 0;
+        z-index: 220;
+        min-height: 42px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 0 8px;
+        box-shadow: 0 2px 7px rgba(23, 33, 39, 0.08);
+      }
+
+      .workflow-step {
+        min-height: 42px;
+        padding: 0 9px;
+      }
+
+      .decision-strip,
+      .workflow-stepper-hint {
+        display: none;
+      }
+
+      main {
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .panel {
+        border-radius: 5px;
+      }
+
+      .workflow-panel {
+        min-height: 72vh;
+      }
+
+      .workflow-panel .panel-head {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .workflow-view-tools {
+        width: auto;
+        margin-left: auto;
+      }
+
+      .group-flow {
+        min-height: 58vh;
+      }
+
+      #protocolPanel .panel-body {
+        max-height: 72vh;
+        overflow-y: auto;
+      }
+
+      #inspectorPanel .panel-head {
+        position: sticky;
+        top: 42px;
+        z-index: 30;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .brand {
+        min-width: 0;
+      }
+
+      header > .row {
+        flex-wrap: initial;
+      }
+
+      .workflow-panel .panel-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .workflow-view-tools {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .panel-context {
+        display: block;
+      }
+
+      #inspectorPanel .panel-head .panel-tab {
+        font-size: 10.5px;
+      }
+    }

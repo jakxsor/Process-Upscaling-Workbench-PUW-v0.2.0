@@ -16524,6 +16524,7 @@
       button.textContent = collapsed ? "›" : "‹";
       button.setAttribute("aria-label", collapsed ? "Show protocol panel" : "Hide protocol panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+      updateBoardFocusControl();
     }
 
     function updateInspectorToggleIcon() {
@@ -16532,6 +16533,18 @@
       button.textContent = collapsed ? "‹" : "›";
       button.setAttribute("aria-label", collapsed ? "Show Phenomena panel" : "Hide Phenomena panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+      updateBoardFocusControl();
+    }
+
+    function updateBoardFocusControl() {
+      const button = $("focusBoard");
+      if (!button) return;
+      const main = $("appMain");
+      const focused = main.classList.contains("protocol-collapsed") && main.classList.contains("inspector-collapsed");
+      button.classList.toggle("active", focused);
+      button.setAttribute("aria-pressed", focused ? "true" : "false");
+      button.setAttribute("aria-label", focused ? "Exit process map focus" : "Focus process map");
+      button.title = focused ? "Exit focus: restore both side panels" : "Focus map: hide both side panels";
     }
 
     function toggleInspector() {
@@ -16542,6 +16555,16 @@
     function toggleProtocolPanel() {
       $("appMain").classList.toggle("protocol-collapsed");
       updateProtocolToggleIcon();
+    }
+
+    function toggleBoardFocus() {
+      const main = $("appMain");
+      const focused = main.classList.contains("protocol-collapsed") && main.classList.contains("inspector-collapsed");
+      main.classList.toggle("protocol-collapsed", !focused);
+      main.classList.toggle("inspector-collapsed", !focused);
+      updateProtocolToggleIcon();
+      updateInspectorToggleIcon();
+      requestAnimationFrame(() => requestAnimationFrame(() => fitBoard()));
     }
 
     // Tutorial (guided tour) functions moved to static/tutorial.js, loaded before this file.
@@ -16970,6 +16993,7 @@
       fitBoard();
       closeBoardViewMenu();
     });
+    $("focusBoard").addEventListener("click", toggleBoardFocus);
     $("toggleInspector").addEventListener("click", toggleInspector);
     $("toggleProtocolPanel").addEventListener("click", toggleProtocolPanel);
     $("stepFlowInspector").addEventListener("pointerdown", startStepEditorResize);

@@ -189,7 +189,8 @@ APP_HTML = r"""<!doctype html>
     <section class="panel workflow-panel">
       <div class="panel-head">
         <div class="workflow-title-stack">
-          <h2>Blocks, Tasks & Network</h2>
+          <h2>Process Map</h2>
+          <span class="panel-context">Blocks, tasks and material links</span>
         </div>
         <div class="workflow-view-tools" aria-label="Board view controls">
           <button class="help-button" data-help-topic="board" title="Help for the board" aria-label="Help for the board">?</button>
@@ -201,6 +202,7 @@ APP_HTML = r"""<!doctype html>
               <div id="linkSummary"></div>
             </div>
           </div>
+          <button id="focusBoard" class="board-focus-button" aria-pressed="false" aria-label="Focus process map" title="Focus map: hide both side panels">⛶</button>
           <details class="header-dropdown board-view-dropdown">
             <summary title="Center, fit, reset, or zoom the process board">View</summary>
             <div class="header-dropdown-menu board-view-menu">
