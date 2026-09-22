@@ -22,7 +22,7 @@
       if (/reactor/.test(name)) return "reactor";
       if (/distillation|evaporat|dry|extraction|decanter|filtration|crystalliz|absorption|membrane|strip|flash|column/.test(name)) return "separation";
       if (/wwt|waste|abatement|scrubber|neutraliz|carbon/.test(name)) return "waste";
-      if (/exchanger|condenser|cooler|heater|utility/.test(name)) return "utility";
+      if (/exchanger|condens|cooler|heater|utility/.test(name)) return "utility";
       if (/tank|vessel|storage|silo|feed/.test(name)) return "storage";
       const opClass = inferGroupOperationClass(group);
       if (opClass === "reaction_kinetic") return "reactor";
@@ -37,7 +37,9 @@
       if (category === "reactor") return "reactor";
       if (category === "storage") return "tank";
       if (category === "waste") return "waste_treatment";
-      if (/exchanger|condenser|cooler|heater/.test(name)) return "heat_exchanger";
+      // "condens" as a stem, not just the noun "condenser": "condensation" and "condensing" name
+      // the same duty and are the more common way to phrase a partial-condenser/knockback task.
+      if (/exchanger|condens|cooler|heater/.test(name)) return "heat_exchanger";
       if (category === "utility") return "utility_box";
       if (/mixer.?settler|decanter|liquid.?liquid extraction/.test(name)) return "mixer_settler";
       if (/thin.?film|wiped.?film|evaporat/.test(name)) return "evaporator";
@@ -455,7 +457,14 @@
     function flowsheetStreamsLabel(streams, tag = "") {
       const list = (streams || []).filter(stream => String(stream?.name || "").trim());
       if (!list.length) return tag;
-      const primary = list.reduce((best, stream) => {
+      // The heaviest component is usually the solvent, not what a reader wants to track: on the
+      // octocrylene case every main-train arrow read "cyclohexane" because the 1 kg product is
+      // outweighed by ~3 kg of carrier solvent at every stage. When the declared target product is
+      // one of the candidates, it leads the label regardless of mass; a waste, vent or recycle loop
+      // never carries the product, so this is a no-op there.
+      const targetProduct = String(state.scaleBasis?.targetProduct || "").trim().toLowerCase();
+      const productMatch = targetProduct ? list.find(stream => String(stream.name || "").toLowerCase().includes(targetProduct)) : null;
+      const primary = productMatch || list.reduce((best, stream) => {
         const kg = flowsheetStreamKg(stream).kg;
         const bestKg = flowsheetStreamKg(best).kg;
         return (Number.isFinite(kg) ? kg : -Infinity) > (Number.isFinite(bestKg) ? bestKg : -Infinity) ? stream : best;
@@ -1280,7 +1289,11 @@
         const from = model.byId.get(link.from);
         const to = model.byId.get(link.to);
         if (!from || !to) return "";
-        const laneKey = `${Math.min(from.stageRow, to.stageRow)}:${Math.max(from.stageRow, to.stageRow)}:${link.kind}`;
+        // One shared counter per row pair, not per (row pair, kind): a recovery loop and a waste
+        // loop between the same two rows used to both land on lane 0 - same offset, identical
+        // label position, one line and its tag printed exactly on top of the other. Kind still
+        // decides color and dash via flowsheetAuxStyle below; only the lane index is now shared.
+        const laneKey = `${Math.min(from.stageRow, to.stageRow)}:${Math.max(from.stageRow, to.stageRow)}`;
         const laneIndex = auxLaneCounter.get(laneKey) || 0;
         auxLaneCounter.set(laneKey, laneIndex + 1);
         const style = flowsheetAuxStyle(link.kind);
