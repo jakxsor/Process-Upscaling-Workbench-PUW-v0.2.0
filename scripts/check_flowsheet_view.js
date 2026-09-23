@@ -14,7 +14,7 @@ const flowsheetUiSource = fs.readFileSync("upscaling_pipeline_tool/static/flowsh
 assert(flowsheetSource.includes("translate(36, ${drawingHeight - 70})"), "Flowsheet legend should sit higher than the bottom border");
 assert(appHtml.includes("flowsheet.css") && appHtml.includes("flowsheet_ui.js"), "Flowsheet view should load split CSS and UI modules");
 assert(appHtml.includes("flowsheet-layer-controls"), "Flowsheet layer toggles should live in the compact layer-control row");
-assert(appHtml.includes("flowsheetCleanPreset") && appHtml.includes("flowsheetAuditPreset"), "Flowsheet view should expose Clean/Audit presets");
+assert(appHtml.includes("flowsheetCleanPreset") && appHtml.includes("flowsheetDetailedPreset"), "Flowsheet view should expose Clean/Detailed presets");
 assert(appHtml.includes("flowsheetDetailsPanel"), "Flowsheet view should include the click-through details panel");
 assert(!appHtml.includes("flowsheetTechnicalMode") && !appHtml.includes("Technical PFD"), "Technical PFD should not be exposed in the flowsheet options");
 assert(!appHtml.includes("resetFlowsheetLayout") && !appHtml.includes("Reset Layout"), "Reset Layout should not be exposed in the flowsheet options");
@@ -74,6 +74,24 @@ const byGroup = Object.fromEntries(baseModel.groups.map(group => [group.id, grou
   assert(byGroup[id].stageRow > 0, id + " should render in a service lane below the main process row");
   assert(byGroup[id].x >= byGroup.G2.x, id + " should not be shoved to the feed side of the flowsheet");
 });
+
+// G7's task names its duty "condensation", not "condenser"; the subcategory match must catch the
+// noun form and the verbal form alike, or it falls back to the plain-rectangle generic symbol.
+assert.strictEqual(byGroup.G7.subcategory, "heat_exchanger", "A unit named by its condensation duty should still draw as a heat exchanger, got " + byGroup.G7.subcategory);
+
+// The main-train label used to name whichever component was heaviest - cyclohexane, the solvent,
+// on every arrow - instead of the product a reader is actually tracking through the process.
+const mainTrainLabel = flowsheetProcessLabelText(byGroup.G2, byGroup.G3);
+assert(mainTrainLabel.includes("octocrylene"), "A main-train connector carrying the declared target product should name it, got: " + mainTrainLabel);
+
+// Two auxiliary loops from the same unit into the same service row (a recovery loop and a waste
+// loop) used to share lane 0 because the lane counter was keyed by (row pair, kind): same offset,
+// same label position, one printed on top of the other.
+const auxSvgResult = buildFlowsheetSvg();
+const recoveryPoints = auxSvgResult.geometry["G2->G8:recovery"];
+const wastePoints = auxSvgResult.geometry["G2->G9:waste"];
+assert(recoveryPoints && wastePoints, "Both the G2 recovery loop and the G2 waste loop should have routed geometry");
+assert(Math.abs(recoveryPoints[1].y - wastePoints[1].y) >= 20, "A recovery loop and a waste loop from the same unit must not share a lane: recovery y=" + recoveryPoints[1].y + ", waste y=" + wastePoints[1].y);
 state.links = [];
 state.flowsheetShowAuxiliaryArrows = false;
 state.flowsheetShowUnitDetails = false;

@@ -513,19 +513,38 @@
       if (toggle) toggle.textContent = state.showDataReadiness ? "Hide" : "Details";
       renderDataProvenance();
       if (!state.showDataReadiness) return;
-      panel.innerHTML = model.categories.map(category => `
-        <div class="readiness-category">
-          <div class="label">${escapeHtml(category.name)}</div>
-          ${category.items.map(entry => `
-            <div class="readiness-row ${entry.level} ${entry.ok === true ? "ok" : entry.ok === false ? "missing" : "confirm"}">
-              <span class="readiness-mark">${entry.ok === true ? "✓" : entry.ok === false ? "✕" : "?"}</span>
-              <span class="readiness-name">${escapeHtml(entry.name)}</span>
-              <span class="readiness-level">${entry.level}</span>
-              <span class="readiness-note">${escapeHtml(entry.note)}</span>
-            </div>
-          `).join("")}
+      // A row that already passed does not need to be read; only what still needs a decision does.
+      // Each category leads with those, critical first, and folds the passed rows behind one line
+      // instead of interleaving twenty rows of mixed severity and status.
+      const severityRank = { critical: 0, important: 1, optional: 2 };
+      const row = entry => `
+        <div class="readiness-row ${entry.level} ${entry.ok === true ? "ok" : entry.ok === false ? "missing" : "confirm"}">
+          <span class="readiness-mark">${entry.ok === true ? "✓" : entry.ok === false ? "✕" : "?"}</span>
+          <span class="readiness-name">${escapeHtml(entry.name)}</span>
+          <span class="readiness-level">${entry.level}</span>
+          <span class="readiness-note">${escapeHtml(entry.note)}</span>
         </div>
-      `).join("");
+      `;
+      panel.innerHTML = model.categories.map(category => {
+        const attention = category.items
+          .filter(entry => entry.ok !== true)
+          .sort((a, b) => (severityRank[a.level] ?? 9) - (severityRank[b.level] ?? 9));
+        const done = category.items.filter(entry => entry.ok === true);
+        return `
+          <div class="readiness-category">
+            <div class="label">${escapeHtml(category.name)}<span class="readiness-tally">${done.length}/${category.items.length} confirmed</span></div>
+            ${attention.length
+              ? attention.map(row).join("")
+              : `<div class="muted small readiness-all-clear">Nothing to review here.</div>`}
+            ${done.length ? `
+              <details class="readiness-done-fold">
+                <summary>Show ${done.length} confirmed</summary>
+                ${done.map(row).join("")}
+              </details>
+            ` : ""}
+          </div>
+        `;
+      }).join("");
     }
 
     // Inventory (LCI) readiness on screen. buildLcaBridge() already derives the reference product,

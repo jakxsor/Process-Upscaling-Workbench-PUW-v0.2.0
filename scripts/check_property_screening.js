@@ -9,44 +9,32 @@ const source = fs.readFileSync(appPath, "utf8");
 
 const checks = [
   {
-    label: "optional screen UI wording",
-    pattern: /Optional Property-Based Separation Screen/
+    label: "operating basis UI wording",
+    pattern: /Operating Basis/
   },
   {
-    label: "minimal qualitative mode",
-    pattern: /Minimal qualitative/
+    label: "group panel separates pure and binary evidence",
+    pattern: /Pure-component and binary data stay in Substances or Lutze\/Garg/
   },
   {
-    label: "binary-ratio mode option",
-    pattern: /value="binaryRatio"/
+    label: "aggregate predictor disabled",
+    pattern: /function separationPredictorApplies\(_group\) \{\s*return false;/
   },
   {
-    label: "binary-ratio safeguard issue",
-    pattern: /Binary-ratio screen needs component properties/
+    label: "scale-up uses Lutze component volatility evidence",
+    pattern: /component volatility or VLE evidence in Lutze/
   },
   {
-    label: "algorithm mode exported",
-    pattern: /algorithmMode: mode/
+    label: "scale-up uses Lutze binary phase-split evidence",
+    pattern: /binary phase-split evidence in Lutze/
   },
   {
-    label: "screening basis exported",
-    pattern: /screeningBasis: propertyScreeningBasis/
+    label: "component evidence helper",
+    pattern: /function groupHasComponentPropertyEvidence/
   },
   {
-    label: "threshold set exported",
-    pattern: /thresholdSet: mode === "binaryRatio"/
-  },
-  {
-    label: "component pairs exported",
-    pattern: /componentPairs: inferredComponentPairsForGroup/
-  },
-  {
-    label: "property source requirement exported",
-    pattern: /sourceRequired: Boolean/
-  },
-  {
-    label: "screening limitation visible",
-    pattern: /Screening only, not final equipment design/
+    label: "binary evidence helper",
+    pattern: /function groupHasBinaryInsightEvidence/
   }
 ];
 

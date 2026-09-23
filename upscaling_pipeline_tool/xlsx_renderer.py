@@ -158,7 +158,7 @@ def _coverage_rows(project: dict[str, Any], exchanges: list[dict[str, Any]]) -> 
         ("Mapping candidates", len(mapping_candidates), "Rows requiring manual openLCA/ecoinvent dataset choice."),
         ("Utility placeholders", len(utility_placeholders), "Energy/utility rows that need duty calculation before final LCI."),
         ("Readiness issues", len(readiness_issues) if isinstance(readiness_issues, list) else 0, "Blocking or caution items from the LCI bridge."),
-        ("Rule checks", len(rule_checks), "Deterministic process checks included for audit context."),
+        ("Rule checks", len(rule_checks), "Deterministic process checks included for review context."),
     ]
     rows = [["Metric", "Value", "Interpretation"]]
     rows.extend([list(item) for item in metrics])

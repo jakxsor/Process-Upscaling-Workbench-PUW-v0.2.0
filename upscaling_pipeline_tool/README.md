@@ -116,7 +116,7 @@ static/app.js       Client-side tool logic
 static/examples.js  Built-in case-study examples and normalized protocol text
 static/export.js    JSON persistence and export logic
 static/flowsheet.js Built-in editable flowsheet model/SVG renderer
-static/heuristic_rules.js Auditable process-heuristic checklist data
+static/heuristic_rules.js Deterministic process-heuristic checklist data
 static/lca_bridge.js LCI/openLCA bridge model generation
 static/process_catalogs.js Phenomena, behaviour presets, and unit-operation catalog
 static/workflow_readiness.js Workflow progress and data-readiness metrics

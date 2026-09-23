@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite the repository and the associated methodology paper."
 title: "Process Upscaling Workbench"
 type: software
-repository-code: "https://github.com/jakxsor/upscaling-pipeline-tool"
+repository-code: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0"
 license: MIT
 version: "0.2.0"
 # Zenodo mints a DOI when a GitHub release is published; add it here as
@@ -20,7 +20,7 @@ authors:
     given-names: "M."
 abstract: >-
   Local browser-based implementation of a phenomena-based scale-up workflow for
-  translating laboratory synthesis protocols into traceable process blocks,
+  translating laboratory synthesis protocols into structured process blocks,
   task groups, material-flow assumptions, unit-operation candidates, optional
   post-reaction separation screening, and preliminary scale-up checks.
 preferred-citation:

@@ -258,14 +258,10 @@
     ];
 
     const propertyPromptCatalog = [
-      { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "°C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
-      { id: "vapor_pressure", label: "Vapor pressure", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "mbar", placeholder: "at operating T", reason: "Clarifies vacuum operation, vent load, and volatile losses." },
-      { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
-      { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
-      { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
       { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
-      { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed only when mixing, residence volume, settling, or equipment sizing depends on volume rather than just mass." },
-      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." }
+      { id: "density", label: "Bulk density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Mixture-level value used when residence volume, settling, or equipment sizing depends on volume rather than just mass." },
+      { id: "viscosity", label: "Bulk viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Mixture-level value for scale-sensitive mixing, pumping, mass transfer, emulsions, slurry handling, or phase disengagement." },
+      { id: "degradation_temperature", label: "Thermal limit", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "lowest relevant limit", reason: "Group-level ceiling used to flag thermal exposure. Volatility still belongs to pure-component and binary Lutze/Garg evidence." }
     ];
 
     const separationCore = globalThis.ProcessUpscalingSeparationCore;
@@ -391,7 +387,7 @@
         confidence: "rough"
       },
       ruleChecks: [],
-      aiRefine: null,
+      processCheck: null,
       heuristicDecisions: {},
       showDataReadiness: false,
       showConnections: false,
@@ -399,6 +395,7 @@
       stepEditorHeight: 165,
       groupStepEditorHeight: 400,
       boardCompact: false,
+      substanceTableShowAll: false,
       pendingSplitGroupId: null,
       processRuleOptions: {
         sequence: true,
@@ -437,7 +434,7 @@
       zoom: 0.78,
       draftPos: { x: 24, y: 24 },
       focusEndpoint: null,
-      flowsheetViewPreset: "audit",
+      flowsheetViewPreset: "detailed",
       selectedFlowsheetGroupId: "",
       flowsheetFit: true,
       flowsheetZoom: 1,
@@ -455,12 +452,14 @@
     let boardDragFrame = null;
     let boardDragLinkPaintAt = 0;
     let boardReflowDepth = 0;
-    // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
-    // Compact/Detailed toggle) - NOT on every render. It was previously unconditional, which meant
-    // finishing an ordinary manual drag (also just a renderGroupFlow() call) could immediately
-    // shove the box the user just placed far away from where they dropped it, if that position
-    // happened to overlap a taller box above it. Manual placement should never be overridden.
-    let pendingBoardReflow = false;
+    // resolveGroupVerticalOverlaps() runs after every renderGroupFlow() by default, since any
+    // group box's content (unit picker expanding, alternatives, phenomena) can grow between
+    // renders and needs the row below pushed clear of it. The one exception is finishing an
+    // ordinary manual drag (also just a renderGroupFlow() call): dragEnd() arms this flag first so
+    // that render skips the reflow once, otherwise dropping a box somewhere that overlaps a taller
+    // box above it would immediately shove the box the user just placed away from where they
+    // dropped it. Manual placement should never be overridden.
+    let suppressBoardReflow = false;
     let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
@@ -506,7 +505,7 @@
       state.selectedGroupId = null;
       state.selectedIds = [];
       state.connectingFrom = null;
-      state.aiRefine = null;
+      state.processCheck = null;
       const source = $("sourceInput");
       if (source) source.value = state.text;
       renderAll();
@@ -840,7 +839,7 @@
       state.focusEndpoint = groupId || block.id;
       hideTextSelectionMenu();
       hideGroupMenu();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -1573,7 +1572,7 @@
         G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "SI U2/T1: B2 heat-up, B3 liquid-phase reaction/Dean-Stark removal, and B4 cooling share one reactor", schedule: schedule({ durationH: "20", capacityAmount: "5", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", notes: "The SI states an approximately 20 h U2 bottleneck and a 5 m3 reactor. Its separate 3000 kg batch claim is capacity-inconsistent with 2.5 L/kg cyclohexane: solvent alone is 7.5 m3 before reactants and freeboard." }), properties: {}, propertiesEditing: false, x: 1120, y: 90 },
         G3: { id: "G3", task: "ethyl acetate extraction, aqueous wash, and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "SI protocol and U3: ethyl acetate extraction is named in the cyclohexane route; water/brine contacting is implemented as a mixer-settler train", schedule: schedule({ durationH: "2-3", scaleSensitivity: "increases with scale", notes: "SI range. Ethyl acetate and brine volumes are laboratory-practice estimates (one volume each), not reported." }), properties: {}, propertiesEditing: false, x: 1680, y: 90 },
         G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "SI U4: regenerable fixed-bed 4A molecular sieves replace single-use laboratory drying salts", schedule: schedule({ durationH: "2", scaleSensitivity: "increases with scale", notes: "Estimated, not reported: fixed-bed contact time for about 10 m3 of organic phase per batch (2.9 m3 product + 7.5 m3 cyclohexane) through a 2-3 m3 sieve bed at a liquid hourly space velocity of 2 per hour. Inlet water loading and regeneration demand are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 2240, y: 90 },
-        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "Cyclohexane boiling point stated in SI heuristic closure." } }, propertiesEditing: false, x: 2800, y: 90 },
+        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: {}, propertiesEditing: false, x: 2800, y: 90 },
         G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "SI U6: short-path molecular distillation for a high-boiling, thermally sensitive product", schedule: schedule({ durationH: "3-5", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "SI range and pre-emptive duplication; residence in the evaporator is separately stated as <1 min." }), properties: {}, propertiesEditing: false, x: 3360, y: 90 },
         G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "SI U7: cold-trap condenser plus activated-carbon polishing for U2/U5 VOC vents", schedule: schedule({ durationH: "20", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G1"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: a continuous service that runs for as long as the reactor vents (20 h). Scheduled from the end of feed preparation so that it runs alongside the reaction rather than after the evaporator, which the automatic text-order dependency would assume; it does not add to the plant cycle. Vent flow and capture efficiency are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 1680, y: 520 },
         G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "SI U8: recover cyclohexane from U2/U5 and return it to U1", schedule: schedule({ durationH: "6", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane per batch at a column throughput of about 1 t/h. Recovery target >=98%; column duty, stages and reflux are not reported." }), properties: {}, propertiesEditing: false, x: 2800, y: 520 },
@@ -1621,7 +1620,7 @@
         confidence: "rough"
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       // Nothing is selected on load: the group drawer and the selected-item card stay closed until
       // the user picks something, instead of opening on G2 with its full material editor.
@@ -1758,11 +1757,7 @@
           selectionBasis: "secondary example: salt-phase removal followed by staged recovery of residual reagents from benzyl acetate",
           schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "example dataset" },
           properties: {
-            boiling_point: { value: "89-213", unit: "°C", status: "database", note: "range spans volatile residual triethylamine through benzyl acetate/benzyl alcohol at atmospheric pressure" },
-            vapor_pressure: { value: "temperature dependent", unit: "mbar", status: "assumed", note: "use component vapor pressures at 298.15 K in LUTZE; recalculate at column pressure for design" },
-            azeotrope_risk: { value: "unknown", unit: "", status: "assumed", note: "binary VLE must be verified before selecting a final distillation sequence" },
             degradation_temperature: { value: "180", unit: "°C", status: "assumed", note: "conservative product-side thermal screening limit" },
-            miscibility: { value: "partial", unit: "", status: "assumed", note: "salt-rich/product-rich L-L split is a demo hypothesis requiring experimental LLE confirmation" },
             heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "screening crude-mixture value" },
             density: { value: "960", unit: "kg/m3", status: "assumed", note: "screening crude-mixture density near separation temperature" },
             viscosity: { value: "5", unit: "mPa s", status: "assumed", note: "screening value for settling and pumping checks" }
@@ -1790,7 +1785,7 @@
         condensationWaterMolPerMol: ""
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.selectedIds = [];
@@ -2048,7 +2043,7 @@
         confidence: "rough"
       };
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.selectedIds = [];
@@ -2804,7 +2799,7 @@
       state.selectedIds = [];
       state.connectingFrom = null;
       state.lastSelection = null;
-      state.aiRefine = null;
+      state.processCheck = null;
       state.zoom = 0.78;
       state.draftPos = { x: 24, y: 24 };
       state.focusEndpoint = null;
@@ -2896,7 +2891,7 @@
         state.selectedBlockId = null;
         state.selectedGroupId = null;
         state.selectedIds = [];
-        state.aiRefine = null;
+        state.processCheck = null;
       }
       return offsets;
     }
@@ -3139,7 +3134,7 @@
       state.pendingStepStreamFocusId = stream.id;
       state.pendingStepStreamScrollRole = role;
       syncLegacyStreamLists(target);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -3362,14 +3357,13 @@
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
-      if (pendingBoardReflow) {
-        pendingBoardReflow = false;
-        if (boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
-          boardReflowDepth += 1;
-          renderGroupFlow();
-          boardReflowDepth = 0;
-          return;
-        }
+      const skipReflow = suppressBoardReflow;
+      suppressBoardReflow = false;
+      if (!skipReflow && boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
+        boardReflowDepth += 1;
+        renderGroupFlow();
+        boardReflowDepth = 0;
+        return;
       }
       revealFocusedEndpoint();
     }
@@ -3609,14 +3603,13 @@
       });
     }
 
-    // Detailed (non-compact) group boxes render their full content (block cards, phenomena,
-    // MFA/condition summaries, alternatives) and have no fixed height, unlike compact boxes -
-    // so a box can easily be taller than the fixed row gap used to place the row below it,
-    // making the two rows visually overlap ("attaccati"). Once real heights are known (from
+    // Group boxes (compact or detailed) render content whose height varies - block cards,
+    // phenomena, MFA/condition summaries, alternatives, or (in compact mode) an expanded unit
+    // picker - so a box can easily be taller than the fixed row gap used to place the row below
+    // it, making the two rows visually overlap ("attaccati"). Once real heights are known (from
     // measureNodeHeightsAndRedrawLinks, called just before this), push any box down that a
     // shorter fixed gap left overlapping a taller box directly above it in the same column.
     function resolveGroupVerticalOverlaps() {
-      if (state.boardCompact) return false;
       const ids = groupIdsInTextOrder();
       if (ids.length < 2) return false;
       const gap = 60;
@@ -4318,7 +4311,7 @@
           const value = Math.max(0, conversionNumber(input.value));
           groupState.timeOffsets[input.dataset.timetableStart] = String(value);
           delete groupState.timeConcurrency[input.dataset.timetableStart];
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4333,7 +4326,7 @@
           const value = Math.max(0, conversionNumber(input.value));
           block.conditions[input.dataset.timetableCondition] = value ? String(value) : "";
           block.conditionUnits[input.dataset.timetableCondition] = "h";
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4351,7 +4344,7 @@
           } else {
             delete groupState.timeConcurrency[key];
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -4363,7 +4356,7 @@
           const groupState = ensureGroup(button.dataset.timetableSequential);
           groupState.timeConcurrency = {};
           groupState.timeOffsets = {};
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderTaskTimetableModal();
           renderStepFlowInspector();
           renderScaleBasisPanel();
@@ -6119,7 +6112,7 @@
           const missing = [];
           if (!conditions.settling_time) missing.push("settling time");
           if (!conditions.separation_efficiency) missing.push("separation efficiency");
-          if (!properties.has("miscibility")) missing.push("miscibility");
+          if (!groupHasBinaryInsightEvidence(group, ["miscibilityGap"])) missing.push("binary phase-split evidence in Lutze");
           cards.push(scaleRiskCard(group, "Liquid-liquid scale-up", missing.length ? "high" : "medium", missing, "Check phase disengagement, interface control, emulsion risk, wash/extraction volume, and decanter feasibility."));
         }
         if ([...phenomena].some(code => ["PS(LS)", "PT(LS)", "PC(LS)", "2phM(LS)"].includes(code))) {
@@ -6130,8 +6123,7 @@
         if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
           const missing = [];
           if (!conditions.target_pressure) missing.push("pressure/vacuum basis");
-          if (!properties.has("boiling_point")) missing.push("boiling point");
-          if (!properties.has("vapor_pressure")) missing.push("vapor pressure");
+          if (!groupHasComponentPropertyEvidence(group, ["tb", "pvap"]) && !groupHasBinaryInsightEvidence(group, ["relativeVolatility", "azeotrope", "pressureSensitive"])) missing.push("component volatility or VLE evidence in Lutze");
           if (!properties.has("degradation_temperature")) missing.push("degradation temperature");
           cards.push(scaleRiskCard(group, "Vapor-liquid / solvent-recovery scale-up", missing.length ? "medium" : "low", missing, "Check condenser/reboiler duty, vacuum feasibility, volatile losses, degradation, and solvent recovery route."));
         }
@@ -6244,85 +6236,142 @@
       const fates = new Set(blocks.flatMap(block => block.streams.map(stream => stream.fate)).filter(Boolean));
       const groupConditions = groups.flatMap(group => aggregateGroupConditions(group));
       const properties = new Set(groups.flatMap(group => exportGroupProperties(group).filter(item => item.value || item.note).map(item => item.id)));
+      // Every tag is added through addTag(name, declared, fromText) so a rule card can later say
+      // whether it fired from something the user actually declared (a phenomenon code, a phase or
+      // fate enum, a named condition, a property with a value) or only from a word that happened to
+      // appear in a block's text, a stream's note, or the source protocol - the two are not the same
+      // strength of evidence, and before this they were indistinguishable once merged into one Set.
+      const tags = new Set();
+      const tagProvenance = new Map();
+      const addTag = (tag, declared, fromText) => {
+        if (!declared && !fromText) return;
+        tags.add(tag);
+        const entry = tagProvenance.get(tag) || { declared: false, text: false };
+        entry.declared = entry.declared || Boolean(declared);
+        entry.text = entry.text || Boolean(fromText);
+        tagProvenance.set(tag, entry);
+      };
+
       const hasReaction = [...phenomena].some(code => code.startsWith("R("));
       const hasMixing = [...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("));
       const hasLL = [...phenomena].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"].includes(code)) || phases.has("LL");
       const hasVL = [...phenomena].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "2phM(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)) || phases.has("VL");
       const hasLS = [...phenomena].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)"].includes(code)) || phases.has("LS");
       const hasVS = [...phenomena].some(code => ["PT(VS)", "PS(VS)", "PC(VS)", "2phM(VS)"].includes(code)) || phases.has("VS");
-      const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
+      // Structured half (declared phenomena/phases) kept separate from the text fallback so a tag
+      // reached only via the fallback can be marked as such.
+      const hasVaporDeclared = hasVL || hasVS || phases.has("V");
+      const hasVaporText = /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
+      const hasVapor = hasVaporDeclared || hasVaporText;
       const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
-      const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
-      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
+      const hasSolidDeclared = phases.has("S") || hasLS || hasVS;
+      const hasSolidText = /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
+      const hasSolid = hasSolidDeclared || hasSolidText;
+      const hasVacuumDeclared = groupConditions.some(item => item.id === "target_pressure");
+      const hasVacuumText = /vacuum|reduced pressure|mbar|mmhg/.test(allText);
+      const hasVacuum = hasVacuumDeclared || hasVacuumText;
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
-      const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
+      const hasPurgeDeclared = fates.has("purge") || fates.has("loss") || fates.has("vent");
+      const hasPurgeText = /purge|drag stream|vent|loss/.test(allText);
+      const hasPurge = hasPurgeDeclared || hasPurgeText;
+      // Hazard, exotherm/endotherm, reversibility, and a few others below have no declared field
+      // anywhere in the block/stream schema today - they exist only as prose, so every rule that
+      // depends on them is a wording match by construction. Flagging that (rather than adding a
+      // dozen new declarable fields nobody has asked for yet) is the point of this change.
       const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText);
-      const hasHeatSensitive = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText) || properties.has("degradation_temperature");
+      const hasHeatSensitiveDeclared = properties.has("degradation_temperature");
+      const hasHeatSensitiveText = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText);
+      const hasHeatSensitive = hasHeatSensitiveDeclared || hasHeatSensitiveText;
       const hasReversible = /reversible|equilibrium|dean-stark|water removal|azeotrope|drive.*right|in-situ removal/.test(allText);
       const hasExotherm = /exotherm|heat release|cooling jacket|quench|cold shot/.test(allText);
       const hasEndotherm = /endotherm/.test(allText);
-      const hasCrystallization = [...phenomena].some(code => ["PT(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code)) || /crystal|crystalliz|precipitat/.test(allText);
+      const hasCrystallizationDeclared = [...phenomena].some(code => ["PT(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code));
+      const hasCrystallizationText = /crystal|crystalliz|precipitat/.test(allText);
+      const hasCrystallization = hasCrystallizationDeclared || hasCrystallizationText;
       const hasDrying = /dry|drying|sieve|mgso4|na2so4|moisture|water <|karl/.test(allText);
       const hasAdsorption = /adsorb|activated carbon|carbon bed|molecular sieve|sieve/.test(allText);
-      const hasMembrane = /membrane|pervaporation|permeat|retentate/.test(allText) || [...phenomena].some(code => code.includes("(M"));
+      const hasMembraneDeclared = [...phenomena].some(code => code.includes("(M"));
+      const hasMembraneText = /membrane|pervaporation|permeat|retentate/.test(allText);
+      const hasMembrane = hasMembraneDeclared || hasMembraneText;
       // Fired or hot-oil heating is a wording cue; the temperature itself is read from the declared
       // conditions or from a stated "NNN °C", not from bare numbers that happened to be the case
-      // study's head temperature (and matched "2100 kg" just as well).
+      // study's head temperature (and matched "2100 kg" just as well). A number lifted out of prose
+      // by this regex is still a text match, even though it looks numeric.
       const statedTemperatures = Array.from(allText.matchAll(/(\d{2,3}(?:\.\d+)?)\s*(?:°|deg(?:rees)?)?\s*c\b/g)).map(match => Number(match[1]));
       const conditionTemperatures = groupConditions
         .filter(item => /temperature/.test(String(item.id || "")))
         .map(item => parseStreamQuantity(String(item.value ?? item.text ?? "")))
         .filter(Number.isFinite);
-      const hasHighTemperature = /furnace|fired heat|hot oil|thermal oil/.test(allText)
-        || [...statedTemperatures, ...conditionTemperatures].some(temperature => temperature >= 180);
-      const hasPressureChange = hasVacuum || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText) || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
-      const tags = new Set();
-      if (hasReaction) tags.add("reaction");
-      if (hasMixing) tags.add("mixing");
-      if (hasLL) tags.add("ll").add("liquid_separation");
-      if (hasVL) tags.add("vl").add("liquid_separation");
-      if (hasVapor) tags.add("vapor").add("gas_separation");
-      if (hasLiquid) tags.add("liquid");
-      if (hasSolid) tags.add("solid_particle").add("solids_handling");
-      if (hasLS) tags.add("solid_liquid").add("filtration");
-      if (hasVS) tags.add("vapor_solid");
-      if (hasVacuum) tags.add("vacuum");
-      if (hasRecycle) tags.add("recycle");
-      if (hasPurge) tags.add("purge");
-      if (hasHazard) tags.add("hazard").add("vent");
-      if (hasHeatSensitive) tags.add("heat_sensitive");
-      if (hasReversible) tags.add("reversible").add("separation");
-      if (hasExotherm) tags.add("exotherm").add("cooling");
-      if (hasEndotherm) tags.add("endotherm").add("heating");
-      if (hasCrystallization) tags.add("crystallization");
-      if (hasDrying) tags.add("drying");
-      if (hasAdsorption) tags.add("adsorption");
-      if (hasMembrane) tags.add("membrane");
-      if (hasHighTemperature) tags.add("high_temperature");
-      if (hasPressureChange) tags.add("pressure").add("pressure_reduction");
-      if (hasVapor && hasPressureChange) tags.add("gas_pressure");
-      if (hasLiquid && hasPressureChange) tags.add("liquid_pressure");
-      if (hasVL || /condens|reflux/.test(allText)) tags.add("condensation");
-      if (hasVL || /boil|evapor|reflux/.test(allText)) tags.add("boiling");
-      if ([...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) tags.add("heat_exchange").add("utility");
-      if (/selectiv|yield|conversion|side reaction|byproduct/.test(allText)) tags.add("selectivity");
-      if (groupConditions.length) tags.add("condition");
-      if (/inert|nitrogen|n2|catalyst poison/.test(allText)) tags.add("inert");
-      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) tags.add("valuable");
-      if (/wash|brine|water wash|cake wash/.test(allText)) tags.add("washing");
-      if (/accumul|build[- ]?up/.test(allText)) tags.add("accumulation");
-      if (/classif|particle[- ]?size distribution/.test(allText)) tags.add("classification");
-      if (/size reduction|crush|grind|mill/.test(allText)) tags.add("size_reduction");
-      if (/agglomerat|granulat|pelleti/.test(allText)) tags.add("size_enlargement");
-      if ([...phenomena].some(code => code === "ES(H)")) tags.add("heating");
-      if ([...phenomena].some(code => code === "ES(C)")) tags.add("cooling");
-      return { tags, blocks, groups, phenomena, phases, fates, text: allText, scale };
+      const hasHighTemperatureDeclared = conditionTemperatures.some(temperature => temperature >= 180);
+      const hasHighTemperatureText = /furnace|fired heat|hot oil|thermal oil/.test(allText) || statedTemperatures.some(temperature => temperature >= 180);
+      const hasHighTemperature = hasHighTemperatureDeclared || hasHighTemperatureText;
+      const hasPressureChangeDeclared = hasVacuumDeclared || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
+      const hasPressureChangeText = hasVacuumText || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText);
+      const hasPressureChange = hasPressureChangeDeclared || hasPressureChangeText;
+
+      addTag("reaction", hasReaction, false);
+      addTag("mixing", hasMixing, false);
+      if (hasLL) { addTag("ll", true, false); addTag("liquid_separation", true, false); }
+      if (hasVL) { addTag("vl", true, false); addTag("liquid_separation", true, false); }
+      if (hasVapor) { addTag("vapor", hasVaporDeclared, hasVaporText); addTag("gas_separation", hasVaporDeclared, hasVaporText); }
+      addTag("liquid", hasLiquid, false);
+      if (hasSolid) { addTag("solid_particle", hasSolidDeclared, hasSolidText); addTag("solids_handling", hasSolidDeclared, hasSolidText); }
+      if (hasLS) { addTag("solid_liquid", true, false); addTag("filtration", true, false); }
+      addTag("vapor_solid", hasVS, false);
+      addTag("vacuum", hasVacuumDeclared, hasVacuumText);
+      addTag("recycle", hasRecycle, false);
+      addTag("purge", hasPurgeDeclared, hasPurgeText);
+      if (hasHazard) { addTag("hazard", false, true); addTag("vent", false, true); }
+      addTag("heat_sensitive", hasHeatSensitiveDeclared, hasHeatSensitiveText);
+      if (hasReversible) { addTag("reversible", false, true); addTag("separation", false, true); }
+      if (hasExotherm) { addTag("exotherm", false, true); addTag("cooling", false, true); }
+      if (hasEndotherm) { addTag("endotherm", false, true); addTag("heating", false, true); }
+      addTag("crystallization", hasCrystallizationDeclared, hasCrystallizationText);
+      addTag("drying", false, hasDrying);
+      addTag("adsorption", false, hasAdsorption);
+      addTag("membrane", hasMembraneDeclared, hasMembraneText);
+      addTag("high_temperature", hasHighTemperatureDeclared, hasHighTemperatureText);
+      if (hasPressureChange) { addTag("pressure", hasPressureChangeDeclared, hasPressureChangeText); addTag("pressure_reduction", hasPressureChangeDeclared, hasPressureChangeText); }
+      if (hasVapor && hasPressureChange) addTag("gas_pressure", hasVaporDeclared && hasPressureChangeDeclared, hasVaporText || hasPressureChangeText);
+      if (hasLiquid && hasPressureChange) addTag("liquid_pressure", hasPressureChangeDeclared, hasPressureChangeText);
+      const hasCondensationText = /condens|reflux/.test(allText);
+      if (hasVL || hasCondensationText) addTag("condensation", hasVL, hasCondensationText);
+      const hasBoilingText = /boil|evapor|reflux/.test(allText);
+      if (hasVL || hasBoilingText) addTag("boiling", hasVL, hasBoilingText);
+      addTag("heat_exchange", [...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)), false);
+      addTag("utility", [...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)), false);
+      addTag("selectivity", false, /selectiv|yield|conversion|side reaction|byproduct/.test(allText));
+      addTag("condition", groupConditions.length > 0, false);
+      addTag("inert", false, /inert|nitrogen|n2|catalyst poison/.test(allText));
+      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) {
+        addTag("valuable", fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input"), /valuable|product|solvent/.test(allText));
+      }
+      addTag("washing", false, /wash|brine|water wash|cake wash/.test(allText));
+      addTag("accumulation", false, /accumul|build[- ]?up/.test(allText));
+      addTag("classification", false, /classif|particle[- ]?size distribution/.test(allText));
+      addTag("size_reduction", false, /size reduction|crush|grind|mill/.test(allText));
+      addTag("size_enlargement", false, /agglomerat|granulat|pelleti/.test(allText));
+      addTag("heating", [...phenomena].some(code => code === "ES(H)"), false);
+      addTag("cooling", [...phenomena].some(code => code === "ES(C)"), false);
+      return { tags, tagProvenance, blocks, groups, phenomena, phases, fates, text: allText, scale };
     }
 
     function heuristicRuleCard(rule, ctx) {
       const matchedTags = rule.tags.filter(tag => ctx.tags.has(tag));
-      if (!matchedTags.length || !heuristicRuleIsRelevant(rule, matchedTags, ctx)) return null;
+      if (!matchedTags.length) return null;
+      // usedWording records, for THIS rule's own relevance check, whether a mentions() call was
+      // actually evaluated and returned true - not just whether the rule's case body contains one.
+      // Logical short-circuiting means mentions() in "declaredCheck || mentions(pattern)" never runs
+      // at all once declaredCheck is already true, so this reflects exactly what this match needed.
+      const usedWording = { value: false };
+      if (!heuristicRuleIsRelevant(rule, matchedTags, ctx, usedWording)) return null;
       const evidence = heuristicEvidence(rule, matchedTags, ctx);
+      const textOnlyTags = matchedTags.filter(tag => {
+        const provenance = ctx.tagProvenance?.get(tag);
+        return provenance && provenance.text && !provenance.declared;
+      });
+      const declaredTags = matchedTags.filter(tag => ctx.tagProvenance?.get(tag)?.declared);
+      const wordingOnly = usedWording.value || textOnlyTags.length > 0;
       return {
         id: rule.id,
         area: rule.area,
@@ -6332,14 +6381,22 @@
         triggeredBy: matchedTags,
         evidence,
         recommendation: rule.recommendation,
-        source: rule.source
+        source: rule.source,
+        wordingOnly,
+        textOnlyTags,
+        declaredTags,
+        usedWordingForRelevance: usedWording.value
       };
     }
 
-    function heuristicRuleIsRelevant(rule, matchedTags, ctx) {
+    function heuristicRuleIsRelevant(rule, matchedTags, ctx, usedWording = { value: false }) {
       const has = (...tags) => tags.every(tag => ctx.tags.has(tag));
       const text = ctx.text || "";
-      const mentions = pattern => pattern.test(text);
+      const mentions = pattern => {
+        const hit = pattern.test(text);
+        if (hit) usedWording.value = true;
+        return hit;
+      };
       const hasPhenomenon = pattern => [...ctx.phenomena].some(code => pattern.test(code));
       switch (rule.id) {
         case "H01": return has("hazard", "reaction");
@@ -6506,11 +6563,28 @@
       const text = String(need).toLowerCase();
       if (text.includes("cp")) return values.has("heat_capacity");
       if (text.includes("viscosity")) return values.has("viscosity");
-      if (text.includes("density")) return values.has("density") || values.has("density_difference");
-      if (text.includes("boiling point")) return values.has("boiling_point");
-      if (text.includes("vapor pressure")) return values.has("vapor_pressure");
+      if (text.includes("density")) return values.has("density");
+      if (text.includes("component volatility") || text.includes("vle")) return groupHasComponentPropertyEvidence(group, ["tb", "pvap"]) || groupHasBinaryInsightEvidence(group, ["relativeVolatility", "azeotrope", "pressureSensitive"]);
+      if (text.includes("phase-split") || text.includes("miscibility")) return groupHasBinaryInsightEvidence(group, ["miscibilityGap"]);
       if (text.includes("thermal limit") || text.includes("degradation")) return values.has("degradation_temperature");
       return false;
+    }
+
+    function groupHasComponentPropertyEvidence(group, fields) {
+      const model = separationSimulatorModel(group);
+      if (!model.substances.length) return false;
+      const withEvidence = model.substances.filter(substance =>
+        fields.some(field => String(substance[field] || "").trim())
+      ).length;
+      return withEvidence >= Math.min(2, model.substances.length);
+    }
+
+    function groupHasBinaryInsightEvidence(group, fields) {
+      const model = separationSimulatorModel(group);
+      return model.pairs.some(pair => fields.some(field => {
+        const value = String(pair.insights?.[field] || "").trim().toLowerCase();
+        return value && value !== "unknown" && value !== "not applicable";
+      }));
     }
 
     function scaleSectionHtml(_key, title, gridInnerHtml) {
@@ -6690,7 +6764,7 @@
       root.querySelectorAll("[data-planning-scenario]").forEach(button => {
         button.addEventListener("click", () => {
           ensureScaleBasis().planningScenario = button.dataset.planningScenario;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderScaleBasisPanel();
           renderHeuristicsPanel();
           refreshReviewPanels();
@@ -6764,7 +6838,7 @@
           const ids = new Set(groupState.schedule.predecessorIds);
           if (checkbox.checked) ids.add(predecessorId); else ids.delete(predecessorId);
           groupState.schedule.predecessorIds = Array.from(ids);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderScaleBasisPanel();
         });
       });
@@ -7133,7 +7207,7 @@
     }
 
     function heuristicRulesPanelHtml(heuristics) {
-      const refine = state.aiRefine;
+      const refine = state.processCheck;
       const severityOrder = { high: 0, medium: 1, low: 2 };
       const triggeredRules = [...heuristics.triggered].sort((a, b) =>
         (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3)
@@ -7166,7 +7240,7 @@
           </div>
           ${compactDetailsHtml(
             "Process Rule Check",
-            refine ? aiRefinePanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. This uses the local checker; external AI is optional.</div>`,
+            refine ? processCheckPanelHtml(refine) : `<div class="mfa-empty">Rules have not been applied to the process yet. The check uses the deterministic local rule set.</div>`,
             refine ? refine.topSeverity : "not run",
             Boolean(refine)
           )}
@@ -7211,7 +7285,7 @@
         });
       });
       root.querySelectorAll("[data-open-refine-modal]").forEach(button => {
-        button.addEventListener("click", openAiRefineModal);
+        button.addEventListener("click", openProcessCheckModal);
       });
       root.querySelectorAll("[data-toggle-heuristic-card]").forEach(head => {
         head.addEventListener("click", () => {
@@ -7266,7 +7340,7 @@
       `).join("");
     }
 
-    function aiRefinePanelHtml(refine) {
+    function processCheckPanelHtml(refine) {
       return `
         <div class="rule-card ${escapeAttr(refine.topSeverity)}" style="margin:8px 0">
           <span class="severity-pill">${escapeHtml(refine.topSeverity)}</span>
@@ -7596,12 +7670,18 @@
       const decisionButton = (value, label) => `
         <button class="mini-button heuristic-decision-button ${chosen === value ? "chosen" : ""}" data-heuristic-decision="${escapeAttr(value)}" data-heuristic-rule="${escapeAttr(item.id)}">${label}</button>
       `;
+      // A rule that matched only through wording (a note, a description, the protocol text) is not
+      // the same strength of finding as one matched through a declared phenomenon, phase, fate, or
+      // condition: the word could be incidental. Both still surface - the point is not hiding the
+      // weaker ones, it's not letting them look identical to the stronger ones.
+      const wordingBadge = item.wordingOnly ? `<span class="pill warn tip" data-tip="${escapeAttr(heuristicWordingTip(item))}">wording match</span>` : "";
       return `
         <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""} ${expanded ? "expanded" : "collapsed"}">
           <div class="rule-card-head" data-toggle-heuristic-card="${escapeAttr(item.id)}">
             <span class="severity-pill">${escapeHtml(item.severity)}</span>
             <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
             <span class="muted small rule-card-applies">${escapeHtml(appliesTo)}</span>
+            ${wordingBadge}
             ${chosen
               ? `<span class="pill ${chosen === "accepted" ? "green" : chosen === "rejected" ? "warn" : "blue"}">${escapeHtml(chosen)}</span>`
               : `<span class="pill warn">undecided</span>`}
@@ -7610,6 +7690,7 @@
           ${expanded ? `
             <span>${escapeHtml(item.recommendation)}</span>
             <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
+            ${item.wordingOnly ? `<span class="muted small heuristic-wording-note">${escapeHtml(heuristicWordingTip(item))}</span>` : ""}
             <div class="heuristic-decision-row">
               ${decisionButton("accepted", "Accept")}
               ${decisionButton("rejected", "Reject")}
@@ -7621,6 +7702,13 @@
           ` : ""}
         </div>
       `;
+    }
+
+    function heuristicWordingTip(item) {
+      const parts = [];
+      if (item.textOnlyTags?.length) parts.push(`matched only by wording, not a declared phenomenon/phase/fate/condition: ${item.textOnlyTags.join(", ")}`);
+      if (item.usedWordingForRelevance) parts.push("its relevance check also needed a specific word in the block, stream, or protocol text");
+      return parts.length ? parts.join("; ") + "." : "Matched only through free text.";
     }
 
     function energyBridgeRowHtml(item) {
@@ -7669,14 +7757,14 @@
 
     function updateScaleField(event) {
       ensureScaleBasis();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
       renderExport();
     }
 
     function updateGroupScheduleField(event) {
       const group = ensureGroup(event.target.dataset.scheduleGroup);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       group.schedule[event.target.dataset.scheduleField] = event.target.value;
       if (event.target.dataset.scheduleField === "capacityAmount" && String(event.target.value || "").trim() && !group.schedule.capacityUnit) {
         group.schedule.capacityUnit = suggestedCapacityUnitForGroup(groupModel(group.id) || group);
@@ -7685,7 +7773,7 @@
     }
 
     function rerenderScaleAfterEdit(event) {
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (event.target.dataset.scaleField) {
         ensureScaleBasis();
         state.scaleBasis[event.target.dataset.scaleField] = event.target.value;
@@ -7703,8 +7791,8 @@
       renderExport();
     }
 
-    function invalidateAiRefine() {
-      state.aiRefine = null;
+    function invalidateProcessCheck() {
+      state.processCheck = null;
     }
 
     async function applyScheduleExample() {
@@ -7769,17 +7857,17 @@
       renderExport();
     }
 
-    function runAiRefine(options = currentProcessRuleOptions()) {
+    function runProcessCheck(options = currentProcessRuleOptions()) {
       state.processRuleOptions = { ...state.processRuleOptions, ...options };
       const issues = buildRuleChecks();
       const heuristics = heuristicReviewModel();
       const selectedIssues = filterIssuesByRuleOptions(issues, state.processRuleOptions);
-      const conflicts = aiRefineConflicts(selectedIssues, heuristics, state.processRuleOptions);
+      const conflicts = processCheckConflicts(selectedIssues, heuristics, state.processRuleOptions);
       state.ruleChecks = selectedIssues;
-      state.aiRefine = {
+      state.processCheck = {
         mode: "Local process rule application. This applies the active heuristics to the blocks, grouped MFA, phases, conditions, arrows, scale-up basis, and Gantt data already built.",
         scope: selectedRuleScopeText(state.processRuleOptions),
-        summary: aiRefineSummary(conflicts, heuristics),
+        summary: processCheckSummary(conflicts, heuristics),
         topSeverity: conflicts[0]?.severity || "low",
         conflicts
       };
@@ -7789,25 +7877,25 @@
       renderExport();
     }
 
-    function openAiRefineModal() {
-      const modal = $("aiRefineModal");
+    function openProcessCheckModal() {
+      const modal = $("processCheckModal");
       modal.hidden = false;
       setRuleScopeControls(state.processRuleOptions);
-      runAiRefine(currentProcessRuleOptions());
-      renderAiRefineModal();
+      runProcessCheck(currentProcessRuleOptions());
+      renderProcessCheckModal();
     }
 
-    function closeAiRefineModal() {
-      $("aiRefineModal").hidden = true;
+    function closeProcessCheckModal() {
+      $("processCheckModal").hidden = true;
     }
 
-    function renderAiRefineModal() {
-      const local = $("aiRefineLocalResult");
-      const refine = state.aiRefine;
+    function renderProcessCheckModal() {
+      const local = $("processCheckLocalResult");
+      const refine = state.processCheck;
       if (!local || !refine) return;
       setRuleScopeControls(state.processRuleOptions);
       local.innerHTML = `
-        ${aiRefinePanelHtml(refine)}
+        ${processCheckPanelHtml(refine)}
         ${localProcessCommentaryHtml(refine)}
         ${refine.conflicts.length ? ruleCheckCardsHtml(refine.conflicts.map(item => ({
           severity: item.severity,
@@ -7817,149 +7905,6 @@
           action: item.action
         }))) : `<div class="mfa-empty">No conflicts from selected local process checks.</div>`}
       `;
-    }
-
-    function externalReviewHtml(text) {
-      const parsed = parseMarkdownProblemTable(text);
-      const tableHtml = parsed.length
-        ? externalProblemTableHtml(parsed, "AI Problem Table", "Parsed from the external AI report.")
-        : externalProblemTableHtml((state.aiRefine?.conflicts || []).slice(0, 10).map(processActionRowModel), "Reference Action Table", "The AI response did not contain a readable Markdown problem table, so this table mirrors the local triage while the AI text remains below.");
-      return `
-        ${tableHtml}
-        <div class="external-report-text">${escapeHtml(stripMarkdownProblemTable(text || "No text returned by external API."))}</div>
-      `;
-    }
-
-    function parseMarkdownProblemTable(text) {
-      const lines = String(text || "").split(/\r?\n/);
-      const rows = [];
-      for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i].trim();
-        if (!line.startsWith("|") || !/severity|target|evidence|suggested/i.test(line)) continue;
-        const headers = splitMarkdownTableRow(line).map(normalizeHeader);
-        const separator = lines[i + 1]?.trim() || "";
-        if (!separator.startsWith("|") || !/---/.test(separator)) continue;
-        for (let j = i + 2; j < lines.length; j += 1) {
-          const rowLine = lines[j].trim();
-          if (!rowLine.startsWith("|")) break;
-          const cells = splitMarkdownTableRow(rowLine);
-          if (cells.length < 3) continue;
-          const row = {};
-          headers.forEach((header, index) => {
-            row[header] = cells[index] || "";
-          });
-          rows.push({
-            priority: row.severity || "review",
-            point: row.target || row.problem || row.issue || "Process point",
-            evidence: row.evidence || row["why it matters"] || "",
-            area: row.target || row.area || "External review",
-            rule: row["rule or doubt"] || row.rule || row.doubt || "AI-supported process heuristic",
-            action: row["suggested change"] || row.action || row.recommendation || "Review manually."
-          });
-        }
-        break;
-      }
-      return rows.slice(0, 12);
-    }
-
-    function splitMarkdownTableRow(line) {
-      return line
-        .replace(/^\|/, "")
-        .replace(/\|$/, "")
-        .split("|")
-        .map(cell => cell.trim().replace(/<br\s*\/?>/gi, " "));
-    }
-
-    function normalizeHeader(header) {
-      return String(header || "").toLowerCase().replace(/\*\*/g, "").trim();
-    }
-
-    function externalProblemTableHtml(rows, title, note) {
-      if (!rows.length) return "";
-      return `
-        <div class="external-problem-panel">
-          <div class="process-action-head">
-            <strong>${escapeHtml(title)}</strong>
-            <span class="muted small">${rows.length} point${rows.length === 1 ? "" : "s"}</span>
-          </div>
-          <div class="muted small">${escapeHtml(note)}</div>
-          <div class="external-problem-list">
-            ${rows.map(row => `
-              <article class="external-problem-card ${escapeAttr(String(row.priority).toLowerCase())}">
-                <div class="external-problem-top">
-                  <span class="severity-pill">${escapeHtml(row.priority)}</span>
-                  <strong>${escapeHtml(row.point)}</strong>
-                </div>
-                ${row.evidence ? `<p>${escapeHtml(row.evidence)}</p>` : ""}
-                <div class="external-problem-meta">
-                  <span><b>Area</b>${escapeHtml(row.area)}</span>
-                  <span><b>Rule / doubt</b>${escapeHtml(row.rule)}</span>
-                  <span><b>Proposed change</b>${escapeHtml(row.action)}</span>
-                </div>
-              </article>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }
-
-    function stripMarkdownProblemTable(text) {
-      const lines = String(text || "").split(/\r?\n/);
-      const output = [];
-      let skipping = false;
-      for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i];
-        const trimmed = line.trim();
-        if (!skipping && trimmed.startsWith("|") && /severity|target|evidence|suggested/i.test(trimmed)) {
-          skipping = true;
-          continue;
-        }
-        if (skipping) {
-          if (trimmed.startsWith("|") || /^[-|:\s]+$/.test(trimmed)) continue;
-          skipping = false;
-        }
-        output.push(line);
-      }
-      return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-    }
-
-    function processActionRowModel(issue) {
-      return {
-        priority: issue.severity || "low",
-        point: issue.title || "Process issue",
-        evidence: issue.reason || "",
-        area: processAreaLabel(issue),
-        rule: ruleReferenceLabel(issue),
-        action: issue.action || "Review and update the corresponding process data."
-      };
-    }
-
-    function processAreaLabel(issue) {
-      const scope = issue.scope || inferIssueScope(issue.title || "", issue.target || "", issue.reason || "");
-      const labels = {
-        sequence: "Sequence / arrows",
-        mfa: "MFA streams",
-        phases: "Phases / unit choice",
-        conditions: "Conditions",
-        recycle: "Recycle / purge",
-        scale: "Scale-up / Gantt",
-        general: "Process model"
-      };
-      const target = issue.target ? ` - ${issue.target}` : "";
-      return `${labels[scope] || labels.general}${target}`;
-    }
-
-    function ruleReferenceLabel(issue) {
-      const text = `${issue.title || ""} ${issue.reason || ""}`;
-      const heuristic = text.match(/\bH\d{2}\b/);
-      if (heuristic) return heuristic[0];
-      if (/thermal reversal|temperature handoff|cool|heat/i.test(text)) return "Thermal sequence heuristic";
-      if (/phase|unit.*compatible|alternative/i.test(text)) return "Phase-unit compatibility heuristic";
-      if (/mfa|stream|quantity|material/i.test(text)) return "Material-balance heuristic";
-      if (/recycle|purge|fate|accumul/i.test(text)) return "Recycle/purge closure heuristic";
-      if (/bottleneck|duration|gantt|scale/i.test(text)) return "Scale-up scheduling heuristic";
-      if (/condition|missing|endpoint|yield|conversion/i.test(text)) return "Data-completeness heuristic";
-      return "General process heuristic";
     }
 
     function localProcessCommentaryHtml(refine) {
@@ -7984,47 +7929,6 @@
           </div>
         </div>
       `;
-    }
-
-    async function runExternalAiRefine() {
-      const result = $("externalAiResult");
-      const apiKey = $("aiApiKey").value.trim();
-      const model = $("aiModel").value.trim();
-      const endpoint = $("aiEndpoint").value.trim() || "https://api.openai.com/v1/responses";
-      const reportStyle = $("aiReportStyle")?.value || "commentary_summary";
-      const useWebReferences = $("aiUseWebReferences")?.checked !== false;
-      const options = currentProcessRuleOptions();
-      writeExportNow();
-      result.className = "external-ai-result mfa-empty";
-      const keySource = apiKey ? "temporary popup key" : "server OPENAI_API_KEY if configured";
-      result.textContent = useWebReferences
-        ? `Running external analysis with ${keySource}. Web references can take up to 3 minutes; if web search times out, the server will retry once without web references.`
-        : `Running external analysis with ${keySource}. Web references disabled.`;
-      let project = {};
-      try {
-        project = JSON.parse($("jsonOut").textContent || "{}");
-      } catch {
-        project = { text: state.text, error: "Could not parse export JSON." };
-      }
-      try {
-        const response = await fetch("/api/refine", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ apiKey, model, endpoint, reportStyle, useWebReferences, options, project })
-        });
-        const payload = await response.json();
-        if (!payload.ok) {
-          result.className = "external-ai-result rule-card high";
-          const details = payload.details ? `\n\nDetails: ${JSON.stringify(payload.details, null, 2)}` : "";
-          result.textContent = `${payload.error || "External API analysis failed."}${details}`;
-          return;
-        }
-        result.className = "external-ai-result rule-card low";
-        result.innerHTML = externalReviewHtml(payload.text || "No text returned by external API.");
-      } catch (error) {
-        result.className = "external-ai-result rule-card high";
-        result.textContent = `External API request failed: ${error.message}`;
-      }
     }
 
     function currentProcessRuleOptions() {
@@ -8066,7 +7970,7 @@
       });
     }
 
-    function aiRefineConflicts(issues, heuristics, options = state.processRuleOptions) {
+    function processCheckConflicts(issues, heuristics, options = state.processRuleOptions) {
       const issueConflicts = issues
         .filter(issue => ["high", "medium"].includes(issue.severity) || /conflict|missing|bottleneck|incompatible|scale-sensitive/i.test(`${issue.title} ${issue.reason}`))
         .map(issue => ({
@@ -8114,7 +8018,7 @@
       return /missing|lacks|incomplete|needs data|need data|not reported|no numeric|unspecified|needs? (more )?evidence/i.test(`${item.title || ""} ${item.reason || ""}`);
     }
 
-    function aiRefineSummary(conflicts, heuristics) {
+    function processCheckSummary(conflicts, heuristics) {
       const gaps = conflicts.filter(isDataGapIssue);
       const design = conflicts.filter(item => !isDataGapIssue(item));
       if (design.length || gaps.length) {
@@ -8163,7 +8067,7 @@
         issues.push(ruleIssue("high", "Scale basis incomplete", "A production target needs a numeric reference output or manual basis amount.", "scale-up basis", "Select a reference output block or enter a manual basis amount."));
       }
       if (!model.basis.targetProduct.trim()) {
-        issues.push(ruleIssue("medium", "Target product missing", "Scale propagation is harder to audit without naming the product stream.", "scale-up basis", "Set the target product name."));
+        issues.push(ruleIssue("medium", "Target product missing", "Scale propagation cannot be reviewed clearly without naming the product stream.", "scale-up basis", "Set the target product name."));
       }
       if (model.basis.mode !== "continuous" && model.schedule.method !== "duration_OEE_parallel_units" && !Number.isFinite(parseStreamQuantity(model.basis.batchesPerDay))) {
         issues.push(ruleIssue("medium", "Batch schedule missing", "Batch scale-up requires either batches/day (fallback) or a batch duration with OEE and parallel units (preferred once Gantt data exists) to convert between batch, daily, and annual bases.", "scale-up basis", "Enter batches/day, or add task durations so the duration-based method can take over."));
@@ -8598,6 +8502,8 @@
     function renderGroupProperties(group) {
       const root = $("groupProperties");
       if (!root) return;
+      const summary = $("groupPropertiesSummary");
+      if (summary) summary.textContent = group ? `For ${group.id} only - not the whole project` : "Select a group first";
       root.innerHTML = groupPropertiesPanelHtml(group);
       if (group) bindGroupPropertiesControls(root, group.id);
     }
@@ -8610,7 +8516,7 @@
       const groupState = ensureGroup(group.id);
       const predictorHtml = propertyPredictorPanelHtml(group);
       if (!prompts.length && !predictorHtml) {
-        return `<span class="muted">No property refinement needed for the current phenomena at framework level.</span>`;
+        return `<span class="muted">No operating-basis refinement needed for the current phenomena.</span>`;
       }
       if (groupState.propertiesEditing) {
         const promptGroups = propertyPromptGroups(prompts);
@@ -8619,8 +8525,8 @@
           <section class="property-section">
             <div class="property-section-head">
               <div>
-                <strong>Property Inputs</strong>
-                <span>Fill only values that affect separation, scale-up, energy handoff, or safety.</span>
+                <strong>Operating Basis</strong>
+                <span>One mixture-level value per property, typed in by you - not averaged from Substances. Pure-component and binary data stay in Substances or Lutze/Garg.</span>
               </div>
               <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save</button>
             </div>
@@ -8636,13 +8542,13 @@
         <section class="property-section">
           <div class="property-section-head">
             <div>
-              <strong>Property Inputs</strong>
+              <strong>Operating Basis</strong>
               <span>${values.length}/${prompts.length} filled, ${neededCount} framework-relevant</span>
             </div>
             <button data-edit-properties="${escapeAttr(group.id)}">${values.length ? "Edit" : "Add"}</button>
           </div>
           ${propertyMissingStripHtml(group, prompts)}
-          ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No property data entered yet. The tool will still run, but separation decisions remain lower-confidence.</div>`}
+          ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No bulk operating data entered yet. This does not block Lutze/Garg; separation evidence is handled per substance and per binary pair.</div>`}
         </section>
       `;
     }
@@ -8661,8 +8567,8 @@
         <section class="predictor-card">
           <div class="predictor-head">
             <div>
-              <div class="label">Optional Property-Based Separation Screen</div>
-              <div class="muted small">Screening only, not final equipment design. Use it when multiple separation alternatives remain plausible after the phenomena mapping.</div>
+              <div class="label">Legacy Group-Level Separation Screen</div>
+              <div class="muted small">Compatibility panel for old projects. Multi-component separation evidence should be entered per substance and per binary pair in Lutze/Garg.</div>
             </div>
             <span class="pill ${model.mode === "minimal" ? "blue" : model.mode === "binaryRatio" ? "warn" : ""}">${escapeHtml(stateLabel)}</span>
           </div>
@@ -8743,7 +8649,7 @@
           const predictor = ensureGroup(select.dataset.predictorMode).propertyPredictor;
           predictor.mode = select.value;
           predictor.expanded = select.value === "minimal" || select.value === "binaryRatio" ? true : predictor.expanded;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -8764,7 +8670,7 @@
           } else {
             groupState.alternativeDecisions[name] = { decision: select.value };
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -9556,7 +9462,7 @@
         product.conversionBaseQuantity = "";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return product;
     }
 
@@ -9565,7 +9471,7 @@
       if (!product) return null;
       product.unit = rawValue || "kg";
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return product;
     }
 
@@ -9775,7 +9681,7 @@
       syncLegacyStreamLists(block);
       calc.detail.lastAppliedAt = new Date().toISOString();
       calc.detail.lastGeneratedSummary = `Saved at ${formatNumber(calc.conversionPercent)}% conversion, ${formatNumber(calc.selectivityPercent)}% selectivity, and ${formatNumber(calc.percent)}% yield: ${calc.reactantRows.filter(row => row.leftover * (calc.unroutedResidualFraction ?? 1) > 0).length} residual component(s) and ${calc.byproductRows.filter(row => String(row.name || "").trim() && row.mass > 0).length} co/byproduct component(s).`;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderConversionModal();
       renderStepFlowInspector();
       if (typeof flowsheetUnitCategory === "function") {
@@ -9807,7 +9713,7 @@
         const product = conversionProductStream(block);
         if (product) product.conversionBaseQuantity = "";
       }
-      invalidateAiRefine();
+      invalidateProcessCheck();
       return detail.balanceMethod;
     }
 
@@ -9842,7 +9748,7 @@
       block.conditions.conversion_yield = String(clamped);
       block.conditionUnits.conversion_yield = "%";
       syncGroupReactionBalanceFromConversionBlock(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (target?.type === "range") renderConversionModalKeepingFocus(target);
       else if (target) renderConversionModalAfterCommit(target);
       else renderConversionModal();
@@ -9855,7 +9761,7 @@
       detail[field] = String(Math.max(0, Math.min(100, conversionNumber(rawValue))));
       detail[field === "conversionPercent" ? "conversionStatus" : "selectivityStatus"] = "reported";
       syncGroupReactionBalanceFromConversionBlock(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       target ? renderConversionModalAfterCommit(target) : renderConversionModal();
       renderStepFlowInspector();
       renderExport();
@@ -10458,7 +10364,7 @@
           detail.productBasisQuantity = conversionProductEntryQuantity(product, "theoretical", detail) || product.quantity || "";
           product.conversionBaseQuantity = detail.productBasisQuantity;
         }
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("conversionBalanceMethod")?.addEventListener("change", event => {
@@ -10487,13 +10393,13 @@
         });
         syncLegacyStreamLists(block);
         syncGroupReactionBalanceFromConversionBlock(block);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("addConversionProduct")?.addEventListener("click", () => {
         addConversionProductOutput(block);
         syncGroupReactionBalanceFromConversionBlock(block);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
         renderStepFlowInspector();
         renderExport();
@@ -10502,7 +10408,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductName);
           ensureConversionDetail(block).byproducts[i].name = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
       });
       body.querySelectorAll("[data-conversion-input-reaction-role]").forEach(select => {
@@ -10512,7 +10418,7 @@
           stream.reactionRole = event.target.value;
           stream.reactionRoleManual = true;
           if (stream.reactionRole !== "reactant") stream.stoichCoeff = "";
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
           renderExport();
         });
@@ -10522,7 +10428,7 @@
           const stream = findStreamById(event.target.dataset.conversionReagentStoich);
           if (!stream) return;
           stream.stoichCoeff = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
         input.addEventListener("change", event => {
           renderConversionModalAfterCommit(event.target);
@@ -10534,7 +10440,7 @@
           const stream = findStreamById(event.target.dataset.conversionReagentMw);
           if (!stream) return;
           stream.mw = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
         input.addEventListener("change", event => {
           renderConversionModalAfterCommit(event.target);
@@ -10570,7 +10476,7 @@
             applyPubChemLookup(stream, data);
             stream.status = stream.status === "missing" ? "estimated" : stream.status;
             syncLegacyStreamLists(block);
-            invalidateAiRefine();
+            invalidateProcessCheck();
             renderConversionModal();
             renderStepFlowInspector();
             renderExport();
@@ -10586,7 +10492,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductRole);
           ensureConversionDetail(block).byproducts[i].role = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
@@ -10610,7 +10516,7 @@
             row.stoichCoeff = "";
             row.mw = "";
           }
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
@@ -10618,7 +10524,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductPercent);
           ensureConversionDetail(block).byproducts[i].percent = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10626,7 +10532,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductAmount);
           ensureConversionDetail(block).byproducts[i].amount = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10634,7 +10540,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductStoich);
           ensureConversionDetail(block).byproducts[i].stoichCoeff = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10642,7 +10548,7 @@
         input.addEventListener("change", event => {
           const i = Number(event.target.dataset.conversionByproductMw);
           ensureConversionDetail(block).byproducts[i].mw = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModalAfterCommit(event.target);
         });
       });
@@ -10650,20 +10556,20 @@
         input.addEventListener("input", event => {
           const i = Number(event.target.dataset.conversionByproductUnit);
           ensureConversionDetail(block).byproducts[i].unit = event.target.value;
-          invalidateAiRefine();
+          invalidateProcessCheck();
         });
       });
       body.querySelectorAll("[data-remove-conversion-byproduct]").forEach(button => {
         button.addEventListener("click", () => {
           const i = Number(button.dataset.removeConversionByproduct);
           ensureConversionDetail(block).byproducts.splice(i, 1);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderConversionModal();
         });
       });
       $("addConversionByproduct")?.addEventListener("click", () => {
         ensureConversionDetail(block).byproducts.push({ id: `bp${Date.now().toString(36)}`, name: "", basis: "actual", amount: "", unit: fallbackUnit, role: "byproduct" });
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderConversionModal();
       });
       $("conversionApplyBalance")?.addEventListener("click", () => {
@@ -11179,11 +11085,11 @@
       { id: "tb", label: "Tb", unit: "K", lutze: true },
       { id: "tm", label: "Tm", unit: "K", lutze: true },
       { id: "pvap", label: "Pvap", unit: "Pa", lutze: true },
-      { id: "pvapTemperature", label: "Pvap T", unit: "K" },
       { id: "density", label: "Density", unit: "kg/m3" },
-      { id: "solubilityParameter", label: "Sol. par.", unit: "" },
-      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol" },
-      { id: "pubchemCid", label: "CID", unit: "" }
+      { id: "pvapTemperature", label: "Pvap T", unit: "K", secondary: true },
+      { id: "solubilityParameter", label: "Sol. par.", unit: "", secondary: true },
+      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol", secondary: true },
+      { id: "pubchemCid", label: "CID", unit: "", secondary: true }
     ];
 
     function projectSubstanceEntries() {
@@ -11254,32 +11160,37 @@
 
     function projectSubstancesTableHtml(rows) {
       if (!rows.length) return `<div class="mfa-empty">Declare streams with substance names first; every substance then gets one row here.</div>`;
+      const showAll = Boolean(state.substanceTableShowAll);
+      const secondaryCount = projectSubstanceFields.filter(def => def.secondary).length;
       const cell = (row, def) => {
         const field = row.fields[def.id];
         const title = field.conflict
           ? `${def.label}: differs between streams (${field.values.join(" | ")}). Pick one below or type a value; it is written to every stream of ${row.name}.`
           : `${def.label}${def.unit ? ` (${def.unit})` : ""} for every stream of ${row.name}`;
         return `
-          <td class="${field.conflict ? "conflict" : ""}">
+          <td class="${field.conflict ? "conflict" : ""}${def.secondary ? " substance-col-secondary" : ""}">
             <input data-substance-field="${escapeAttr(def.id)}" data-substance-key="${escapeAttr(row.key)}" value="${escapeAttr(field.value)}" placeholder="${escapeAttr(def.unit || "-")}" title="${escapeAttr(title)}" inputmode="decimal">
             ${field.conflict ? `<div class="substance-conflict">${field.values.map(value => `<button type="button" data-unify-substance="${escapeAttr(row.key)}" data-unify-field="${escapeAttr(def.id)}" data-unify-value="${escapeAttr(value)}" title="Use ${escapeAttr(value)} on every stream">${escapeHtml(value)}</button>`).join("")}</div>` : ""}
           </td>`;
       };
       return `
-        <div class="substance-table-wrap">
+        <div class="substance-table-toolbar">
+          <button type="button" class="mini-button" data-toggle-substance-columns>${showAll ? "Fewer columns" : `${secondaryCount} more columns`}</button>
+        </div>
+        <div class="substance-table-wrap${showAll ? "" : " substance-table-compact"}">
           <table class="substance-table">
             <thead>
               <tr>
-                <th>Substance</th>
+                <th class="substance-col-sticky">Substance</th>
                 <th title="Streams carrying this substance, and the blocks they belong to">Streams</th>
-                ${projectSubstanceFields.map(def => `<th title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
+                ${projectSubstanceFields.map(def => `<th class="${def.secondary ? "substance-col-secondary" : ""}" title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               ${rows.map(row => `
                 <tr class="${row.conflicts.length ? "has-conflict" : ""}">
-                  <td class="substance-name"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
+                  <td class="substance-name substance-col-sticky"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
                   <td class="num" title="${escapeAttr(row.blockIds.join(", "))}">${row.streamCount}<small>${escapeHtml(row.blockIds.slice(0, 4).join(" "))}${row.blockIds.length > 4 ? " …" : ""}</small></td>
                   ${projectSubstanceFields.map(def => cell(row, def)).join("")}
                   <td><button type="button" class="mini-button" data-fetch-substance-pubchem="${escapeAttr(row.key)}" title="Fetch MW, boiling and melting points, vapour pressure, density and CID from PubChem and write them to every stream of ${escapeAttr(row.name)}">PubChem</button></td>
@@ -11292,25 +11203,40 @@
       `;
     }
 
+    function openSubstancesModal() {
+      $("substancesModal").hidden = false;
+      renderProjectSubstances();
+    }
+
+    function closeSubstancesModal() {
+      $("substancesModal").hidden = true;
+    }
+
     function renderProjectSubstances() {
       const root = $("projectSubstances");
       const summary = $("projectSubstancesSummary");
       if (!root || !summary) return;
       const rows = projectSubstanceTableModel();
       summary.textContent = projectSubstancesSummaryText(rows);
-      const card = $("projectSubstancesCard");
-      // The table is drawn only while the card is open: one row per substance is cheap, but a
-      // closed card does not need it on every pass.
-      if (card && !card.open) {
+      const modal = $("substancesModal");
+      // The table is drawn only while the modal is open: one row per substance is cheap, but a
+      // closed modal does not need it on every pass.
+      if (modal && modal.hidden) {
         root.innerHTML = "";
         return;
       }
       root.innerHTML = projectSubstancesTableHtml(rows);
+      root.querySelectorAll("[data-toggle-substance-columns]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.substanceTableShowAll = !state.substanceTableShowAll;
+          renderProjectSubstances();
+        });
+      });
       root.querySelectorAll("[data-substance-field][data-substance-key]").forEach(input => {
         input.addEventListener("change", () => {
           pushUndo();
           applyProjectSubstanceProperty(input.dataset.substanceKey, input.dataset.substanceField, input.value);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -11318,7 +11244,7 @@
         button.addEventListener("click", () => {
           pushUndo();
           applyProjectSubstanceProperty(button.dataset.unifySubstance, button.dataset.unifyField, button.dataset.unifyValue);
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -11356,7 +11282,7 @@
             if (substanceChemicalKey(substance) === key || canonicalChemicalKey(substance.name) === key) applyPubChemLookup(substance, data);
           });
         });
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderAll();
       } catch (error) {
         await alertModal(`PubChem lookup failed: ${error.message}`);
@@ -12059,7 +11985,7 @@
         applyChemicalKey(existing);
         if (role === "product") simulator.reactionBalance.mainProductId = existing.id;
         simulator.tab = "balance";
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderSeparationSimulatorModal();
         renderExport();
         return;
@@ -12078,7 +12004,7 @@
       simulator.substances.push(substance);
       if (role === "product") simulator.reactionBalance.mainProductId = substance.id;
       simulator.tab = "balance";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderSeparationSimulatorModal();
       renderExport();
     }
@@ -12130,7 +12056,7 @@
         target.streams.push(stream);
       });
       syncLegacyStreamLists(target);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -12546,7 +12472,7 @@
       state.focusEndpoint = newGroupId;
       state.activeInspectorTab = "scale";
       closeSeparationSimulator();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -13010,7 +12936,7 @@
       state.selectedIds = [];
       state.focusEndpoint = lastGroupId;
       closeSeparationSimulator();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -13308,7 +13234,7 @@
       if (separationSharedPropertyFields.has(field)) {
         propagateSeparationChemicalProperties(event.target.dataset.sepGroup, substance, field);
       }
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
@@ -13317,21 +13243,19 @@
       const key = event.target.dataset.sepPairKey;
       if (!groupState.separationSimulator.pairInsights[key]) groupState.separationSimulator.pairInsights[key] = {};
       groupState.separationSimulator.pairInsights[key][event.target.dataset.sepPairField] = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
     function updateReactionBalanceField(event) {
       const groupState = ensureGroup(event.target.dataset.sepGroup);
       groupState.separationSimulator.reactionBalance[event.target.dataset.reactionBalanceField] = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderExport();
     }
 
-    function separationPredictorApplies(group) {
-      const phen = new Set(group.phenomena || []);
-      if ([...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("))) return true;
-      return matchesForGroup(group).some(candidate => candidate.task === "separation" || candidate.task.includes("separation"));
+    function separationPredictorApplies(_group) {
+      return false;
     }
 
     function groupHasReaction(group) {
@@ -13645,24 +13569,10 @@
       const phen = new Set(group.phenomena || []);
       const conditions = groupConditionMap(group);
       const text = `${group.task || ""} ${group.text || ""} ${group.selectedUnit || ""}`.toLowerCase();
-      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
+      if (prompt.id === "degradation_temperature") {
         return [...phen].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))
           || Boolean(conditions.target_pressure)
           || /vacuum|evapor|distill|solvent|volatile|reflux|conden/.test(text);
-      }
-      if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
-        return [...phen].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"].includes(code));
-      }
-      if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
-        return [...phen].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code));
-      }
-      if (prompt.id === "separation_selectivity") {
-        return [...phen].some(code => ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"].includes(code))
-          || /membrane|adsorb|affinity|selectiv|extract|wash|drying agent|molecular sieve/.test(text);
-      }
-      if (prompt.id === "separating_agent") {
-        return [...phen].some(code => ["PT(MVL)", "PT(MLL)", "PC(LL)", "PT(LL)", "PS(LL)"].includes(code))
-          || /entrainer|extractant|separating agent|adsorbent|molecular sieve|membrane|extractive|azeotropic/.test(text);
       }
       if (prompt.id === "heat_capacity") {
         return phen.has("ES(H)") || phen.has("ES(C)");
@@ -13672,11 +13582,6 @@
       }
       if (prompt.id === "viscosity") {
         return mixingPhysicalPropertiesNeeded(group) || [...phen].some(code => ["2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)", "PS(LL)", "PS(LS)"].includes(code));
-      }
-      if (prompt.id === "hazard_note") {
-        return Boolean(conditions.target_pressure)
-          || [...phen].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)", "PCh(L->V)"].includes(code))
-          || /hazard|flamm|toxic|corrosive|vacuum|vent|waste|purge/.test(text);
       }
       return true;
     }
@@ -13693,10 +13598,9 @@
     }
 
     function propertyNeedLevel(prompt, group) {
-      if (["heat_capacity", "boiling_point", "vapor_pressure", "azeotrope_risk", "miscibility", "density_difference", "particle_size", "cake_resistance", "separation_selectivity"].includes(prompt.id)) return "needed";
-      if (["separating_agent", "partition_coefficient"].includes(prompt.id)) return "risk";
+      if (prompt.id === "heat_capacity") return "needed";
       if (["density", "viscosity"].includes(prompt.id)) return mixingPhysicalPropertiesNeeded(group) ? "needed" : "optional";
-      if (["degradation_temperature", "emulsion_risk", "hazard_note"].includes(prompt.id)) return "risk";
+      if (prompt.id === "degradation_temperature") return "risk";
       return "optional";
     }
 
@@ -13714,36 +13618,24 @@
       const missing = prompts
         .filter(prompt => propertyNeedLevel(prompt, group) !== "optional" && !propertyHasValue(group, prompt.id))
         .map(prompt => prompt.label);
-      if (!missing.length) return `<div class="property-readiness ok"><strong>Ready</strong><span>Required separation properties are present or inherited from conditions.</span></div>`;
+      if (!missing.length) return `<div class="property-readiness ok"><strong>Ready</strong><span>Required operating-basis values are present or inherited from conditions.</span></div>`;
       return `
         <div class="property-readiness">
-          <strong>Missing for stronger decisions</strong>
+          <strong>Missing operating basis</strong>
           <span>${missing.slice(0, 6).map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}${missing.length > 6 ? `<span class="pill">${missing.length - 6} more</span>` : ""}</span>
         </div>
       `;
     }
 
     function propertyFamilyForPrompt(prompt) {
-      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
-        return { id: "vl", title: "Vapor-Liquid / Volatility" };
-      }
-      if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
-        return { id: "ll", title: "Liquid-Liquid" };
-      }
-      if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
-        return { id: "ls", title: "Solid-Liquid / Solids" };
-      }
-      if (["separation_selectivity", "separating_agent"].includes(prompt.id)) {
-        return { id: "affinity", title: "Affinity / Separating Agent" };
-      }
       if (["heat_capacity", "density", "viscosity"].includes(prompt.id)) {
-        return { id: "physical", title: "Physical / Energy" };
+        return { id: "physical", title: "Bulk Physical / Energy" };
       }
-      return { id: "risk", title: "Risk / Compatibility" };
+      return { id: "risk", title: "Thermal / Compatibility" };
     }
 
     function propertyPromptGroups(prompts) {
-      const order = ["vl", "ll", "ls", "affinity", "physical", "risk"];
+      const order = ["physical", "risk"];
       const byFamily = new Map();
       prompts.forEach(prompt => {
         const family = propertyFamilyForPrompt(prompt);
@@ -13811,7 +13703,7 @@
       const prompt = propertyPromptCatalog.find(item => item.id === event.target.dataset.propertyId);
       if (!prompt) return;
       const current = normalizePropertyValue(group.properties[prompt.id], prompt);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current[event.target.dataset.propertyField] = event.target.value;
       group.properties[prompt.id] = current;
       renderExport();
@@ -13878,7 +13770,7 @@
           block.phenomena = block.phenomena.includes(phen)
             ? block.phenomena.filter(item => item !== phen)
             : [...block.phenomena, phen];
-          invalidateAiRefine();
+          invalidateProcessCheck();
           renderAll();
         });
       });
@@ -14286,7 +14178,7 @@
           </details>
           <details class="group-drawer-details">
             <summary>
-              <span><strong>Properties & Screening</strong><small>Open when needed for equipment, energy, or safety</small></span>
+              <span><strong>Operating Basis</strong><small>Bulk data for sizing, energy, and safety</small></span>
             </summary>
             <div class="group-drawer-details-body">${propertiesHtml}</div>
           </details>
@@ -14395,7 +14287,7 @@
       const noteInput = [...root.querySelectorAll("[data-group-condition-note]")].find(el => el.dataset.groupConditionNote === key);
       const value = valueInput?.value.trim() || "";
       const note = noteInput?.value.trim() || "";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       if (value || note) {
         groupState.conditionOverrides[key] = { value, note };
       } else {
@@ -14686,7 +14578,7 @@
       const current = selectedBlock();
       if (!current) return;
       ensureBlockConditionFields(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current.conditions[event.target.dataset.conditionField] = event.target.value;
       renderExport();
     }
@@ -14695,7 +14587,7 @@
       const current = selectedBlock();
       if (!current) return;
       ensureBlockConditionFields(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       current.conditionUnits[event.target.dataset.conditionUnit] = event.target.value;
       renderExport();
     }
@@ -15111,7 +15003,7 @@
       if (!stream.status || stream.status === "missing") stream.status = "estimated";
       state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15132,7 +15024,7 @@
       delete state.pubchemStreamSuggestions?.[streamId];
       state.pendingStepStreamFocusId = stream.id;
       syncLegacyStreamLists(current);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15201,7 +15093,7 @@
         delete state.pubchemStreamSuggestions?.[streamId];
         state.pendingStepStreamFocusId = stream.id;
         syncLegacyStreamLists(current);
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderStepFlowInspector();
         renderExport();
       } catch (error) {
@@ -15257,7 +15149,7 @@
         state.pendingStepStreamScrollRole = "outlet";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15300,7 +15192,7 @@
         state.pendingStepStreamScrollRole = "outlet";
       }
       syncLegacyStreamLists(block);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderStepFlowInspector();
       renderExport();
     }
@@ -15423,7 +15315,7 @@
       ensureBlockFlowFields(current);
       const stream = current.streams.find(item => item.id === event.target.dataset.streamId);
       if (!stream) return;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       stream[event.target.dataset.streamField] = event.target.value;
       if (event.target.dataset.streamField === "reactionRole") {
         // The user just picked this explicitly - stop the name-driven auto-classifier below from
@@ -15586,7 +15478,7 @@
       cleanupGroupIfEmpty(groupId);
       state.selectedIds = state.selectedIds.filter(id => id !== blockId);
       if (state.selectedBlockId === blockId) state.selectedBlockId = state.selectedIds[0] || null;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15597,7 +15489,7 @@
       const groupId = block.groupId;
       block.groupId = null;
       cleanupGroupIfEmpty(groupId);
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15648,7 +15540,7 @@
       syncLegacyStreamLists(target);
       state.selectedBlockId = target.id;
       state.selectedIds = [target.id];
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -15899,7 +15791,7 @@
       state.selectedIds = [];
       state.focusEndpoint = newGroupIds[0];
       state.activeInspectorTab = "scale";
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -16162,7 +16054,10 @@
       boardDragLinkPaintAt = 0;
       state.drag = null;
       $("groupFlow")?.classList.remove("board-dragging");
-      if (moved) renderGroupFlow();
+      if (moved) {
+        suppressBoardReflow = true;
+        renderGroupFlow();
+      }
     }
 
     function boardPanBlockedTarget(target) {
@@ -16477,7 +16372,7 @@
       block.streams = block.streams.filter(stream => stream.id !== streamId);
       syncLegacyStreamLists(block);
       hideStreamMenu();
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderAll();
     }
 
@@ -16512,7 +16407,6 @@
       });
       if (draftBlocks.length) state.draftPos = { x: 24, y: 90 };
       state.focusEndpoint = ids[0] || null;
-      pendingBoardReflow = true;
       renderAll();
       fitBoard();
     }
@@ -16625,14 +16519,27 @@
       };
     }
 
+    // Shared by the board's wheel-zoom (below) and the flowsheet modal's (flowsheet_ui.js), which
+    // uses the identical formula. WHEEL_ZOOM_MAX_STEP bounds how far a single wheel event can move
+    // the zoom (exp(-0.16) = -14.8%, exp(0.16) = +17.4%); WHEEL_ZOOM_LINEAR_PX is the delta (in CSS
+    // pixels) at which that cap is reached, chosen so the response rate below it - a trackpad's
+    // usual few-pixel-per-event stream - matches the 0.012-per-pixel rate this cap replaced.
+    const WHEEL_ZOOM_MAX_STEP = 0.16;
+    const WHEEL_ZOOM_LINEAR_PX = WHEEL_ZOOM_MAX_STEP / 0.012;
+
     function handleGraphWheel(event) {
       const flow = $("groupFlow");
       if (!flow.contains(event.target)) return;
       if (!(event.ctrlKey || event.metaKey || event.altKey)) return;
       event.preventDefault();
       const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? flow.clientHeight : 1);
-      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / 100, 1);
-      const factor = Math.exp(-normalized * 0.16);
+      // Below WHEEL_ZOOM_LINEAR_PX, respond at WHEEL_ZOOM_RATE per pixel - a trackpad's small
+      // continuous deltas, so it still feels immediate. Above it, the response saturates at the
+      // same maximum per-event step (exp(-WHEEL_ZOOM_MAX_STEP) at most one wheel event can move
+      // the zoom, instead of the old unbounded per-pixel rate letting one large mouse-wheel click
+      // or a fast trackpad fling jump the zoom by 5x in a single event.
+      const normalized = Math.sign(pixels) * Math.min(Math.abs(pixels) / WHEEL_ZOOM_LINEAR_PX, 1);
+      const factor = Math.exp(-normalized * WHEEL_ZOOM_MAX_STEP);
       setZoom(state.zoom * factor, { clientX: event.clientX, clientY: event.clientY });
     }
 
@@ -16695,6 +16602,7 @@
       button.textContent = collapsed ? "›" : "‹";
       button.setAttribute("aria-label", collapsed ? "Show protocol panel" : "Hide protocol panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+      updateBoardFocusControl();
     }
 
     function updateInspectorToggleIcon() {
@@ -16703,6 +16611,18 @@
       button.textContent = collapsed ? "‹" : "›";
       button.setAttribute("aria-label", collapsed ? "Show Phenomena panel" : "Hide Phenomena panel");
       button.setAttribute("aria-pressed", collapsed ? "true" : "false");
+      updateBoardFocusControl();
+    }
+
+    function updateBoardFocusControl() {
+      const button = $("focusBoard");
+      if (!button) return;
+      const main = $("appMain");
+      const focused = main.classList.contains("protocol-collapsed") && main.classList.contains("inspector-collapsed");
+      button.classList.toggle("active", focused);
+      button.setAttribute("aria-pressed", focused ? "true" : "false");
+      button.setAttribute("aria-label", focused ? "Exit process map focus" : "Focus process map");
+      button.title = focused ? "Exit focus: restore both side panels" : "Focus map: hide both side panels";
     }
 
     function toggleInspector() {
@@ -16713,6 +16633,16 @@
     function toggleProtocolPanel() {
       $("appMain").classList.toggle("protocol-collapsed");
       updateProtocolToggleIcon();
+    }
+
+    function toggleBoardFocus() {
+      const main = $("appMain");
+      const focused = main.classList.contains("protocol-collapsed") && main.classList.contains("inspector-collapsed");
+      main.classList.toggle("protocol-collapsed", !focused);
+      main.classList.toggle("inspector-collapsed", !focused);
+      updateProtocolToggleIcon();
+      updateInspectorToggleIcon();
+      requestAnimationFrame(() => requestAnimationFrame(() => fitBoard()));
     }
 
     // Tutorial (guided tour) functions moved to static/tutorial.js, loaded before this file.
@@ -16888,7 +16818,6 @@
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
-    $("projectSubstancesCard")?.addEventListener("toggle", () => renderProjectSubstances());
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
@@ -16929,7 +16858,7 @@
       state.selectedBlockId = null;
       state.selectedGroupId = null;
       state.ruleChecks = [];
-      state.aiRefine = null;
+      state.processCheck = null;
       renderAll();
     });
     $("exportJson").addEventListener("click", downloadProjectJson);
@@ -16996,8 +16925,8 @@
       positionTutorialStep(tutorialSteps[state.tutorialIndex] || tutorialSteps[0]);
     });
     $("refineProject").addEventListener("click", runRuleChecks);
-    $("refineProjectAi").addEventListener("click", openAiRefineModal);
-    $("closeAiRefineModal").addEventListener("click", closeAiRefineModal);
+    $("openProcessCheck").addEventListener("click", openProcessCheckModal);
+    $("closeProcessCheckModal").addEventListener("click", closeProcessCheckModal);
     $("openFlowsheet").addEventListener("click", openFlowsheetModal);
     $("closeFlowsheetModal").addEventListener("click", closeFlowsheetModal);
     $("closeSeparationSimulator")?.addEventListener("click", closeSeparationSimulator);
@@ -17044,7 +16973,7 @@
     $("flowsheetZoomReadout")?.addEventListener("click", resetFlowsheetZoom);
     $("flowsheetHost")?.addEventListener("wheel", handleFlowsheetWheel, { passive: false });
     $("flowsheetCleanPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("clean"));
-    $("flowsheetAuditPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("audit"));
+    $("flowsheetDetailedPreset")?.addEventListener("click", () => applyFlowsheetViewPreset("detailed"));
     // "?" buttons: the long explanations for an area, readable in a modal instead of hover.
     function openHelpModal(topicKey) {
       const registry = globalThis.ProcessUpscalingHelp || {};
@@ -17108,17 +17037,16 @@
       if (event.target === $("splitGroupModal")) closeSplitGroupModal();
     });
     $("rerunLocalRuleApplication").addEventListener("click", () => {
-      runAiRefine(currentProcessRuleOptions());
-      renderAiRefineModal();
+      runProcessCheck(currentProcessRuleOptions());
+      renderProcessCheckModal();
     });
     document.querySelectorAll("[data-rule-scope]").forEach(control => {
       control.addEventListener("change", () => {
         state.processRuleOptions = currentProcessRuleOptions();
-        runAiRefine(state.processRuleOptions);
-        renderAiRefineModal();
+        runProcessCheck(state.processRuleOptions);
+        renderProcessCheckModal();
       });
     });
-    $("runExternalAiRefine").addEventListener("click", runExternalAiRefine);
     $("resetView").addEventListener("click", () => {
       resetView();
       document.querySelector(".board-view-dropdown")?.removeAttribute("open");
@@ -17128,7 +17056,6 @@
       state.boardCompact = !state.boardCompact;
       $("toggleCompact").textContent = state.boardCompact ? "Detailed" : "Compact";
       $("toggleCompact").classList.toggle("primary", state.boardCompact);
-      pendingBoardReflow = true;
       renderAll();
     });
     const closeBoardViewMenu = () => document.querySelector(".board-view-dropdown")?.removeAttribute("open");
@@ -17142,6 +17069,7 @@
       fitBoard();
       closeBoardViewMenu();
     });
+    $("focusBoard").addEventListener("click", toggleBoardFocus);
     $("toggleInspector").addEventListener("click", toggleInspector);
     $("toggleProtocolPanel").addEventListener("click", toggleProtocolPanel);
     $("stepFlowInspector").addEventListener("pointerdown", startStepEditorResize);
@@ -17189,7 +17117,7 @@
       const block = selectedBlock();
       if (!block) return;
       block.text = event.target.value;
-      invalidateAiRefine();
+      invalidateProcessCheck();
       // The board only shows an excerpt of this text; redraw it once the typing pauses.
       deferRender("groupFlow", () => withRenderPass(() => {
         renderGroupFlow();
@@ -17279,9 +17207,17 @@
       const point = state.manualBlockPoint || {};
       createManualBlock(point);
     });
+    $("ctxOpenSubstances").addEventListener("click", () => {
+      hideTextSelectionMenu();
+      openSubstancesModal();
+    });
     $("closePubchemResolve").addEventListener("click", closePubChemResolveModal);
     $("pubchemResolveModal").addEventListener("click", event => {
       if (event.target === $("pubchemResolveModal")) closePubChemResolveModal();
+    });
+    $("closeSubstancesModal").addEventListener("click", closeSubstancesModal);
+    $("substancesModal").addEventListener("click", event => {
+      if (event.target === $("substancesModal")) closeSubstancesModal();
     });
 
     document.addEventListener("keydown", event => {
@@ -17291,8 +17227,12 @@
           closePubChemResolveModal();
           return;
         }
-        if (!$("aiRefineModal").hidden) {
-          closeAiRefineModal();
+        if (!$("substancesModal").hidden) {
+          closeSubstancesModal();
+          return;
+        }
+        if (!$("processCheckModal").hidden) {
+          closeProcessCheckModal();
           return;
         }
         if (!$("separationSimulatorModal").hidden) {

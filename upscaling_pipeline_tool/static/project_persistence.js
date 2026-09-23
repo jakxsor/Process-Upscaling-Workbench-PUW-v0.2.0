@@ -283,10 +283,10 @@
         scaleBasis: project?.scaleUp?.basis || {},
         heuristicDecisions: project?.heuristicDecisions || {},
         ruleChecks: project?.ruleChecks || [],
-        aiRefine: project?.aiRefine || null,
+        processCheck: project?.processCheck || null,
         processRuleOptions: {},
         board: { boardCompact: false, draftPos: { x: 24, y: 24 }, zoom: 0.78 },
-        flowsheet: { viewPreset: "audit", selectedGroupId: "", fit: true, showAuxiliaryArrows: true, showUnitDetails: false, showStreamLabels: true }
+        flowsheet: { viewPreset: "detailed", selectedGroupId: "", fit: true, showAuxiliaryArrows: true, showUnitDetails: false, showStreamLabels: true }
       });
     }
 
@@ -310,12 +310,12 @@
         state.scaleBasis = cloneProjectValue(snapshot.scaleBasis, {});
         state.heuristicDecisions = cloneProjectValue(snapshot.heuristicDecisions, {});
         state.ruleChecks = cloneProjectValue(snapshot.ruleChecks, []);
-        state.aiRefine = cloneProjectValue(snapshot.aiRefine, null);
+        state.processCheck = cloneProjectValue(snapshot.processCheck, null);
         state.processRuleOptions = { ...state.processRuleOptions, ...(snapshot.processRuleOptions || {}) };
         state.boardCompact = Boolean(snapshot.board?.boardCompact);
         state.draftPos = cloneProjectValue(snapshot.board?.draftPos, { x: 24, y: 24 });
         state.zoom = Number.isFinite(snapshot.board?.zoom) ? snapshot.board.zoom : 0.78;
-        state.flowsheetViewPreset = snapshot.flowsheet?.viewPreset || "audit";
+        state.flowsheetViewPreset = snapshot.flowsheet?.viewPreset === "clean" ? "clean" : "detailed";
         state.selectedFlowsheetGroupId = snapshot.flowsheet?.selectedGroupId || "";
         state.flowsheetFit = snapshot.flowsheet?.fit !== false;
         state.flowsheetShowAuxiliaryArrows = snapshot.flowsheet?.showAuxiliaryArrows !== false;

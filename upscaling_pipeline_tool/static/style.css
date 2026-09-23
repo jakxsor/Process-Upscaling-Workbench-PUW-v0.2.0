@@ -67,6 +67,30 @@
       font-size: 12px;
     }
 
+    /* The one branding element in the whole header: a small fixed mark so the tool is
+       recognisable at a glance (a screenshot, a second monitor) without competing with the
+       full name, which stays the primary, readable title next to it. */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
     button, input, select, textarea {
       font: inherit;
     }
@@ -2019,7 +2043,7 @@
     }
 
     .step-flow-inspector.group-aggregate-drawer {
-      bottom: -260px;
+      bottom: 0;
       min-height: 320px;
       max-height: min(900px, calc(100vh - 70px));
       box-shadow: 0 -10px 28px rgba(23, 32, 39, 0.13);
@@ -2302,6 +2326,13 @@
       padding-top: 9px;
       margin-top: 8px;
       border-top: 1px solid var(--line);
+    }
+
+    /* Grid items default to min-width:auto, so a wide child (the substances table, at 700px+
+       of columns) refuses to shrink to the sidebar's ~330px track and bleeds past its edge
+       instead of scrolling within .substance-table-wrap as intended. */
+    .inspector-details-body > * {
+      min-width: 0;
     }
 
     .unit-suggest-gate {
@@ -5480,7 +5511,7 @@
     }
 
     #flowsheetModal,
-    #aiRefineModal,
+    #processCheckModal,
     #splitGroupModal,
     #conversionModal,
     #ganttModal,
@@ -5563,46 +5594,6 @@
       grid-template-columns: minmax(0, 1fr);
       gap: 14px;
       align-items: start;
-    }
-
-    /* The deterministic rule check is the step; the external model is a second opinion. Folded
-       by default so the API form no longer takes half the modal at the same weight as the result. */
-    .external-analysis-details {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--panel);
-      margin-top: 4px;
-    }
-
-    .external-analysis-details > summary {
-      cursor: pointer;
-      padding: 10px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-2);
-      list-style: none;
-    }
-
-    .external-analysis-details > summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .external-analysis-details > summary::before {
-      content: "\25B8";
-      display: inline-block;
-      width: 14px;
-      color: var(--muted);
-    }
-
-    .external-analysis-details[open] > summary::before {
-      content: "\25BE";
-    }
-
-    .external-analysis-details .external-analysis-section {
-      position: static;
-      border: 0;
-      border-top: 1px solid var(--line);
-      border-radius: 0 0 10px 10px;
     }
 
     .modal-column {
@@ -6147,6 +6138,30 @@
     #pubchemResolveModal {
       z-index: 980;
       background: linear-gradient(rgba(15, 23, 32, 0.46), rgba(15, 23, 32, 0.54));
+    }
+
+    #substancesModal {
+      /* Same reasoning as the other modal overrides above: the base .modal-backdrop z-index (80)
+         is lower than the block/group drawer (.step-flow-inspector.resizable, z-index 180). */
+      z-index: 980;
+      background: linear-gradient(rgba(15, 23, 32, 0.46), rgba(15, 23, 32, 0.54));
+    }
+
+    .substances-modal-panel {
+      width: min(720px, calc(100vw - 24px));
+      max-height: calc(100vh - 48px);
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 45px rgba(15, 23, 32, 0.22);
+      overflow: hidden;
+    }
+
+    .substances-modal-panel .modal-body {
+      overflow: auto;
+      padding: 14px 16px;
     }
 
     .pubchem-resolve-grid {
@@ -7039,139 +7054,6 @@
       font-size: 11px;
     }
 
-    .external-settings-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
-    .external-settings-grid label {
-      display: grid;
-      gap: 4px;
-    }
-
-    .external-settings-grid input,
-    .external-settings-grid select {
-      width: 100%;
-    }
-
-    .external-toggle-row {
-      display: flex !important;
-      grid-template-columns: none !important;
-      align-items: center;
-      gap: 8px;
-      min-height: 28px;
-      font-size: 12px;
-      color: var(--ink);
-    }
-
-    .external-toggle-row input {
-      width: auto;
-    }
-
-    .external-ai-result {
-      min-height: 260px;
-      max-height: 46vh;
-      overflow: auto;
-    }
-
-    .external-report-text {
-      white-space: pre-wrap;
-      margin-top: 8px;
-      padding: 9px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      color: var(--ink);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .external-analysis-section {
-      position: sticky;
-      top: 0;
-      align-self: start;
-    }
-
-    .external-problem-panel {
-      display: grid;
-      gap: 8px;
-      margin-bottom: 8px;
-      padding: 9px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-    }
-
-    .external-problem-list {
-      display: grid;
-      gap: 7px;
-    }
-
-    .external-problem-card {
-      display: grid;
-      gap: 6px;
-      padding: 8px;
-      border: 1px solid #dce5ea;
-      border-left: 4px solid var(--blue);
-      border-radius: 8px;
-      background: var(--info-blue-soft);
-    }
-
-    .external-problem-card.high {
-      border-left-color: var(--red);
-      background: var(--info-pink-soft);
-    }
-
-    .external-problem-card.medium {
-      border-left-color: var(--orange);
-      background: var(--info-warm-soft);
-    }
-
-    .external-problem-card.low {
-      border-left-color: var(--green);
-      background: var(--info-blue-soft);
-    }
-
-    .external-problem-top {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      min-width: 0;
-    }
-
-    .external-problem-top strong {
-      min-width: 0;
-      font-size: 12px;
-      line-height: 1.25;
-    }
-
-    .external-problem-card p {
-      margin: 0;
-      color: #324451;
-      font-size: 11px;
-      line-height: 1.35;
-    }
-
-    .external-problem-meta {
-      display: grid;
-      gap: 4px;
-      font-size: 11px;
-      line-height: 1.3;
-    }
-
-    .external-problem-meta span {
-      display: grid;
-      grid-template-columns: 92px minmax(0, 1fr);
-      gap: 6px;
-      color: var(--ink-2);
-    }
-
-    .external-problem-meta b {
-      color: var(--muted);
-      font-weight: 700;
-    }
-
     .process-commentary {
       display: grid;
       gap: 6px;
@@ -7452,7 +7334,6 @@
       .task-timetable-row { grid-template-columns: 1fr; }
       .task-timetable-toolbar { align-items: flex-start; flex-direction: column; }
       .modal-columns { grid-template-columns: 1fr; }
-      .external-analysis-section { position: static; }
       .scale-readiness-strip { align-items: flex-start; flex-direction: column; }
       .scale-readiness-strip span { text-align: left; }
     }
@@ -7899,6 +7780,49 @@
       margin-top: 7px;
     }
 
+    .readiness-category > .label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .readiness-tally {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .readiness-all-clear {
+      padding: 4px 7px;
+    }
+
+    /* Confirmed rows are evidence, not something to read line by line; one line names how many and
+       folds them behind a click so the rows needing a decision are what the eye lands on. */
+    .readiness-done-fold {
+      margin-top: 2px;
+    }
+
+    .readiness-done-fold > summary {
+      cursor: pointer;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--muted);
+      list-style: none;
+      padding: 3px 2px;
+    }
+
+    .readiness-done-fold > summary::-webkit-details-marker { display: none; }
+    .readiness-done-fold > summary::before { content: "▸ "; }
+    .readiness-done-fold[open] > summary::before { content: "▾ "; }
+
+    .readiness-done-fold .readiness-row {
+      margin-top: 4px;
+    }
+
     .readiness-row {
       display: grid;
       grid-template-columns: 16px minmax(0, 1.1fr) 62px minmax(0, 1.6fr);
@@ -8101,6 +8025,15 @@
       white-space: nowrap;
     }
 
+    /* Flags a rule whose match relied on wording (a note, a description, the protocol text) rather
+       than a declared phenomenon, phase, fate, or condition - weaker evidence, shown, not hidden. */
+    .heuristic-wording-note {
+      display: block;
+      color: var(--orange);
+      border-left: 2px solid var(--orange);
+      padding-left: 6px;
+    }
+
     .danger-button {
       color: var(--red);
       background: var(--red-soft);
@@ -8163,6 +8096,12 @@
       justify-self: start;
     }
 
+    .substance-table-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 4px;
+    }
+
     .substance-table-wrap {
       overflow-x: auto;
       margin: 6px 0;
@@ -8175,6 +8114,17 @@
       font-size: 11px;
     }
 
+    /* Most panels hosting this table are a narrow sidebar (~350-400px), well under the table's
+       natural width - the compact default hides the rarely-filled columns (Pvap T, Sol. par.,
+       Molar vol., CID) so the common case fits with little or no horizontal scroll. */
+    .substance-table-compact .substance-table {
+      min-width: 0;
+    }
+
+    .substance-table-compact .substance-col-secondary {
+      display: none;
+    }
+
     .substance-table th,
     .substance-table td {
       padding: 4px 4px;
@@ -8182,6 +8132,13 @@
       text-align: left;
       vertical-align: top;
       white-space: nowrap;
+    }
+
+    .substance-col-sticky {
+      position: sticky;
+      left: 0;
+      background: var(--panel);
+      box-shadow: 1px 0 0 var(--line);
     }
 
     .substance-table th {
@@ -8499,3 +8456,700 @@
     }
 
     .mfa-count { font-size: 11px; color: var(--muted); }
+
+    /* -----------------------------------------------------------------------
+       Workbench hierarchy refresh
+
+       The process map is the primary working surface. Protocol and inspector
+       remain available as contextual rails, while chrome, borders, and status
+       decoration are deliberately quieter. No workflow behavior changes here.
+       ----------------------------------------------------------------------- */
+
+    :root {
+      --bg: #eef2f3;
+      --panel: #ffffff;
+      --ink: #172127;
+      --ink-2: #2d3a42;
+      --ink-3: #42525c;
+      --muted: #6b7982;
+      --line: #d9e1e4;
+      --accent: #087f73;
+      --accent-soft: #e4f3f0;
+      --blue: #315f9f;
+      --blue-soft: #edf3f9;
+      --green: #2f7548;
+      --green-soft: #e9f4ed;
+      --orange: #996200;
+      --orange-soft: #fff3dc;
+      --red: #ad3d3d;
+      --red-soft: #f9e7e7;
+      --info-blue-soft: #f5f8fa;
+      --info-warm-soft: #fffaf1;
+      --info-pink-soft: #fdf4f4;
+      --zone-protocol-soft: #f8faf9;
+      --zone-board-soft: #f7faf9;
+      --zone-inspector-soft: #f8f9fa;
+    }
+
+    body {
+      background: var(--bg);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      transition: border-color 120ms ease, background-color 120ms ease,
+        color 120ms ease, box-shadow 120ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: #afbec5;
+      background-color: #f8fafb;
+    }
+
+    button.primary:hover:not(:disabled),
+    button.flowsheet-view-button:hover:not(:disabled) {
+      border-color: var(--accent);
+      background-color: #076f65;
+      filter: none;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid rgba(49, 95, 159, 0.28);
+      outline-offset: 2px;
+    }
+
+    header {
+      min-height: 60px;
+      padding: 9px 14px;
+      gap: 16px;
+      border-bottom-color: #cfd9dd;
+      box-shadow: 0 1px 0 rgba(23, 33, 39, 0.03);
+    }
+
+    .brand {
+      gap: 10px;
+      min-width: 250px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 7px;
+      background: #0b6f68;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    }
+
+    header h1 {
+      font-size: 17px;
+      font-weight: 750;
+    }
+
+    header .subtitle {
+      margin-top: 2px;
+      color: #61717a;
+    }
+
+    header > .row {
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+    }
+
+    header > .row button {
+      min-height: 34px;
+      white-space: nowrap;
+    }
+
+    #openFlowsheet {
+      min-width: 126px;
+    }
+
+    .workflow-stepper {
+      min-height: 44px;
+      flex-wrap: nowrap;
+      gap: 0;
+      padding: 0 14px;
+      overflow-x: auto;
+      border-bottom-color: #cfd9dd;
+      scrollbar-width: thin;
+    }
+
+    .workflow-step {
+      flex: 0 0 auto;
+      min-height: 44px;
+      padding: 0 11px;
+      gap: 7px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .workflow-step:hover:not(:disabled) {
+      border-bottom-color: #b7c5cb;
+      background: #f7f9fa;
+      color: var(--ink);
+    }
+
+    .workflow-step-marker {
+      width: 19px;
+      height: 19px;
+      background: #edf1f3;
+      color: #667680;
+    }
+
+    .workflow-step.done {
+      border-color: transparent;
+      color: var(--ink-2);
+      background: transparent;
+    }
+
+    .workflow-step.done .workflow-step-marker {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .workflow-step.partial {
+      border-color: var(--orange);
+      color: var(--ink);
+      background: transparent;
+    }
+
+    .workflow-step.partial .workflow-step-marker {
+      background: var(--orange-soft);
+      color: var(--orange);
+      box-shadow: inset 0 0 0 1px rgba(153, 98, 0, 0.24);
+    }
+
+    .workflow-step-arrow {
+      display: none;
+    }
+
+    .workflow-stepper-hint {
+      margin-left: auto;
+      padding: 0 4px 0 18px;
+      white-space: nowrap;
+    }
+
+    .decision-strip {
+      align-self: stretch;
+      margin-left: auto;
+      gap: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    .decision-chip {
+      min-height: 43px;
+      max-width: 210px;
+      padding: 5px 12px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-left: 3px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+    }
+
+    .decision-chip:hover,
+    .decision-chip:focus-visible {
+      background: #f7f9fa;
+      box-shadow: none;
+    }
+
+    .decision-chip-label {
+      letter-spacing: 0.04em;
+    }
+
+    main {
+      grid-template-columns: minmax(220px, 242px) minmax(520px, 1fr) minmax(340px, 366px);
+      gap: 8px;
+      height: calc(100vh - 112px);
+      height: calc(100dvh - 112px);
+      min-height: 560px;
+      padding: 8px;
+    }
+
+    main.scale-focused {
+      grid-template-columns: minmax(190px, 220px) minmax(420px, 1fr) minmax(430px, 500px);
+    }
+
+    main.heuristic-focused {
+      grid-template-columns: minmax(200px, 225px) minmax(440px, 1fr) minmax(390px, 450px);
+    }
+
+    main.inspector-collapsed {
+      grid-template-columns: minmax(220px, 242px) minmax(0, 1fr) 42px;
+    }
+
+    main.protocol-collapsed {
+      grid-template-columns: 42px minmax(0, 1fr) minmax(340px, 366px);
+    }
+
+    main.protocol-collapsed.scale-focused {
+      grid-template-columns: 42px minmax(420px, 1fr) minmax(430px, 500px);
+    }
+
+    main.protocol-collapsed.heuristic-focused {
+      grid-template-columns: 42px minmax(440px, 1fr) minmax(390px, 450px);
+    }
+
+    main > .panel {
+      height: 100%;
+      min-height: 0;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      border-color: #d4dde1;
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(23, 33, 39, 0.025);
+    }
+
+    .panel-head {
+      flex: 0 0 auto;
+      border-bottom-color: #d8e0e3;
+    }
+
+    .panel-body {
+      min-height: 0;
+    }
+
+    #protocolPanel .panel-body,
+    #inspectorPanel .panel-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .source-panel-head {
+      min-height: 56px;
+      padding: 8px;
+      align-items: center;
+      background: var(--zone-protocol-soft);
+    }
+
+    .source-panel-head h2,
+    .workflow-panel .panel-head h2 {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .workflow-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-color: #cbd7db;
+    }
+
+    .workflow-panel .panel-head {
+      min-height: 52px;
+      padding: 7px 10px;
+      background: var(--zone-board-soft);
+    }
+
+    .workflow-panel .panel-body {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      gap: 7px;
+      min-height: 0;
+      padding: 8px;
+    }
+
+    .workflow-title-stack {
+      gap: 1px;
+    }
+
+    .panel-context {
+      color: var(--muted);
+      font-size: 10.5px;
+      line-height: 1.2;
+    }
+
+    .workflow-view-tools {
+      flex-wrap: nowrap;
+    }
+
+    .workflow-view-tools button,
+    .board-view-dropdown > summary {
+      min-height: 28px;
+    }
+
+    .workflow-view-tools .board-focus-button {
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+      color: var(--ink-3);
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .workflow-view-tools .board-focus-button.active,
+    .workflow-view-tools .board-focus-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .group-flow {
+      flex: 1 1 auto;
+      min-height: 360px;
+      max-height: none;
+      margin-bottom: 0;
+      border-color: #ccd9de;
+      border-radius: 5px;
+      background: #f4f8f9;
+      box-shadow: inset 0 1px 2px rgba(23, 33, 39, 0.025);
+    }
+
+    .board-canvas {
+      background-color: #f4f8f9;
+      background-image:
+        linear-gradient(90deg, rgba(66, 82, 92, 0.065) 1px, transparent 1px),
+        linear-gradient(rgba(66, 82, 92, 0.065) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(8, 127, 115, 0.09) 1px, transparent 1px),
+        linear-gradient(rgba(8, 127, 115, 0.09) 1px, transparent 1px);
+    }
+
+    .board-step-flag {
+      margin: 0;
+      box-shadow: none;
+    }
+
+    .step-flow-inspector {
+      flex: 0 0 auto;
+      margin-top: 0;
+      border-radius: 5px;
+    }
+
+    .step-flag {
+      border-color: #d3dde1;
+      background: #f8fafb;
+      box-shadow: none;
+    }
+
+    .step-flag.done {
+      border-color: #c6dfd6;
+      background: #f0f8f5;
+    }
+
+    .step-flag.partial {
+      border-color: #ead7ab;
+      background: #fff9ed;
+    }
+
+    .card {
+      border-color: #dbe3e6;
+      border-radius: 6px;
+      box-shadow: none;
+    }
+
+    .empty {
+      border-color: #ced9de;
+      border-radius: 6px;
+      background: #f8fafb;
+    }
+
+    .annotated-block {
+      padding: 11px 20px 5px 7px;
+      border: 1px solid #cbdedb;
+      border-left: 3px solid #69aaa3;
+      border-radius: 5px;
+      background: #f3faf8;
+    }
+
+    .annotated-block.selected {
+      border-color: #d5aa58;
+      border-left-color: var(--orange);
+      background: #fff8e9;
+      box-shadow: 0 0 0 2px rgba(153, 98, 0, 0.10);
+    }
+
+    .annotated-block.primary-selected {
+      border-color: #8eafd0;
+      border-left-color: var(--blue);
+      background: #f1f6fb;
+      box-shadow: 0 0 0 2px rgba(49, 95, 159, 0.10);
+    }
+
+    .group-box {
+      border-width: 1px;
+      border-color: #c8d4d9;
+      border-radius: 7px;
+      box-shadow: 0 3px 10px rgba(23, 33, 39, 0.07);
+    }
+
+    .group-box:hover {
+      border-color: #91a7b0;
+      box-shadow: 0 5px 14px rgba(23, 33, 39, 0.10);
+    }
+
+    .group-box.active {
+      border-color: var(--accent);
+      background: var(--panel);
+      box-shadow: 0 0 0 3px rgba(8, 127, 115, 0.16), 0 8px 20px rgba(23, 33, 39, 0.12);
+    }
+
+    .group-box.active::before {
+      left: -6px;
+      width: 3px;
+      background: var(--accent);
+    }
+
+    #inspectorPanel .panel-head {
+      min-height: 54px;
+      padding: 8px;
+      background: var(--zone-inspector-soft);
+    }
+
+    #inspectorPanel .panel-head .panel-tabs {
+      gap: 2px;
+      padding: 2px;
+      border-color: #d7e0e4;
+      border-radius: 6px;
+      background: #edf2f4;
+    }
+
+    #inspectorPanel .panel-head .panel-tab {
+      min-height: 30px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    #inspectorPanel .panel-tab.active {
+      color: var(--ink);
+      background: var(--panel);
+      box-shadow: 0 1px 3px rgba(23, 33, 39, 0.12);
+    }
+
+    #inspectorPanel .panel-tab[data-inspector-tab="heuristics"].active {
+      color: var(--orange);
+      background: var(--panel);
+    }
+
+    #inspectorPanel .panel-tab[data-inspector-tab="scale"].active {
+      color: var(--accent);
+      background: var(--panel);
+    }
+
+    .eye-button {
+      min-width: 30px;
+      width: 30px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .eye-button:hover:not(:disabled) {
+      border-color: #d0dce0;
+      background: var(--panel);
+      color: var(--ink);
+    }
+
+    .help-button {
+      margin-left: 4px;
+      border-color: #ccd8dd;
+      background: transparent;
+    }
+
+    @media (min-width: 1181px) and (max-width: 1240px) {
+      main {
+        grid-template-columns: minmax(205px, 222px) minmax(470px, 1fr) minmax(320px, 340px);
+      }
+
+      main.scale-focused {
+        grid-template-columns: minmax(180px, 205px) minmax(390px, 1fr) minmax(400px, 450px);
+      }
+
+      main.heuristic-focused {
+        grid-template-columns: minmax(185px, 210px) minmax(400px, 1fr) minmax(360px, 410px);
+      }
+
+      main.inspector-collapsed {
+        grid-template-columns: minmax(205px, 222px) minmax(0, 1fr) 42px;
+      }
+
+      main.protocol-collapsed {
+        grid-template-columns: 42px minmax(0, 1fr) minmax(320px, 340px);
+      }
+
+      main.protocol-collapsed.scale-focused {
+        grid-template-columns: 42px minmax(390px, 1fr) minmax(400px, 450px);
+      }
+
+      main.protocol-collapsed.heuristic-focused {
+        grid-template-columns: 42px minmax(400px, 1fr) minmax(360px, 410px);
+      }
+
+      main.protocol-collapsed.inspector-collapsed {
+        grid-template-columns: 42px minmax(0, 1fr) 42px;
+      }
+
+      main.protocol-collapsed #protocolPanel,
+      main.inspector-collapsed #inspectorPanel {
+        display: flex;
+      }
+
+      .group-flow {
+        min-height: 360px;
+        max-height: none;
+      }
+
+      .text-surface {
+        max-height: 48vh;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      main,
+      main.scale-focused,
+      main.heuristic-focused,
+      main.protocol-collapsed,
+      main.inspector-collapsed,
+      main.protocol-collapsed.scale-focused,
+      main.protocol-collapsed.heuristic-focused,
+      main.protocol-collapsed.inspector-collapsed {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+        min-height: calc(100vh - 110px);
+      }
+
+      main > .panel {
+        height: auto;
+      }
+
+      #protocolPanel .panel-body,
+      #inspectorPanel .panel-body {
+        overflow: visible;
+      }
+
+      .workflow-panel {
+        min-height: 650px;
+      }
+
+      .group-flow {
+        min-height: 470px;
+      }
+
+      .workflow-stepper {
+        flex-wrap: wrap;
+        overflow: visible;
+      }
+
+      .decision-strip {
+        flex-basis: 100%;
+        width: 100%;
+        margin-left: 0;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .decision-chip {
+        flex: 1 1 0;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      header {
+        padding: 8px;
+      }
+
+      header > .row {
+        flex-wrap: wrap;
+      }
+
+      .workflow-stepper {
+        position: sticky;
+        top: 0;
+        z-index: 220;
+        min-height: 42px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 0 8px;
+        box-shadow: 0 2px 7px rgba(23, 33, 39, 0.08);
+      }
+
+      .workflow-step {
+        min-height: 42px;
+        padding: 0 9px;
+      }
+
+      .decision-strip,
+      .workflow-stepper-hint {
+        display: none;
+      }
+
+      main {
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .panel {
+        border-radius: 5px;
+      }
+
+      .workflow-panel {
+        min-height: 72vh;
+      }
+
+      .workflow-panel .panel-head {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .workflow-view-tools {
+        width: auto;
+        margin-left: auto;
+      }
+
+      .group-flow {
+        min-height: 58vh;
+      }
+
+      #protocolPanel .panel-body {
+        max-height: 72vh;
+        overflow-y: auto;
+      }
+
+      #inspectorPanel .panel-head {
+        position: sticky;
+        top: 42px;
+        z-index: 30;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .brand {
+        min-width: 0;
+      }
+
+      header > .row {
+        flex-wrap: initial;
+      }
+
+      .workflow-panel .panel-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .workflow-view-tools {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .panel-context {
+        display: block;
+      }
+
+      #inspectorPanel .panel-head .panel-tab {
+        font-size: 10.5px;
+      }
+    }

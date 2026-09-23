@@ -116,20 +116,48 @@ const measureBoard = () => {
       assert(zoomed.zoom > board.zoom, "Zoom in should increase the board zoom");
       await page.evaluate(() => { const menu = document.querySelector(".board-view-dropdown"); if (menu) menu.open = false; });
 
+      // Focus mode must give the process map the workspace instead of merely changing a button.
+      const normalMapWidth = await page.$eval(".workflow-panel", el => el.getBoundingClientRect().width);
+      await page.click("#focusBoard");
+      await page.waitForTimeout(500);
+      const focused = await page.evaluate(() => ({
+        classes: document.getElementById("appMain").className,
+        pressed: document.getElementById("focusBoard").getAttribute("aria-pressed"),
+        mapWidth: document.querySelector(".workflow-panel").getBoundingClientRect().width
+      }));
+      assert(/protocol-collapsed/.test(focused.classes) && /inspector-collapsed/.test(focused.classes), `Focus mode should collapse both side panels, got: ${focused.classes}`);
+      assert.strictEqual(focused.pressed, "true", "Focus control should expose its pressed state");
+      assert(focused.mapWidth > normalMapWidth + 300, `Focus mode should materially widen the map, from ${normalMapWidth}px to ${focused.mapWidth}px`);
+      await page.click("#focusBoard");
+      await page.waitForTimeout(300);
+      const restoredClasses = await page.$eval("#appMain", el => el.className);
+      assert(!/protocol-collapsed|inspector-collapsed/.test(restoredClasses), `Exiting focus should restore both side panels, got: ${restoredClasses}`);
+
+      // Opening a task group is the primary editing action: its aggregate drawer must stay
+      // within the board panel, not spill over and cover the contextual right rail (a past
+      // "overhang" mechanism did exactly that, silently, with no treatment of the rail
+      // underneath - confusing rather than useful).
+      await page.click('[data-open-group-board]');
+      await page.waitForTimeout(300);
+      const groupDrawer = await page.evaluate(() => {
+        const drawer = document.getElementById("stepFlowInspector").getBoundingClientRect();
+        const inspector = document.getElementById("inspectorPanel").getBoundingClientRect();
+        return { drawerRight: drawer.right, inspectorLeft: inspector.left };
+      });
+      assert(groupDrawer.drawerRight <= groupDrawer.inspectorLeft + 1, `Group drawer should stay clear of the right rail; drawer ends at ${groupDrawer.drawerRight}px and rail starts at ${groupDrawer.inspectorLeft}px`);
+
       // Inventory readiness is on screen, not only in the export.
       const lci = await page.$eval("#lcaReadinessSummary", el => el.textContent.trim());
       assert(/input/.test(lci), `Inventory readiness summary should report inputs, got: ${lci}`);
 
-      // Step 5 opens a modal whose deterministic report is filled and whose external form is folded.
+      // Step 5 opens a modal with the deterministic process-check results only.
       await page.click('[data-inspector-tab="heuristics"]');
       await page.waitForTimeout(300);
-      await page.click("#refineProjectAi");
+      await page.click("#openProcessCheck");
       await page.waitForTimeout(1500);
-      const report = await page.$eval("#aiRefineLocalResult", el => el.innerText);
+      const report = await page.$eval("#processCheckLocalResult", el => el.innerText);
       assert(/before scale-up/.test(report), "The local rule report should summarise conflicts before scale-up");
-      const externalOpen = await page.$eval(".external-analysis-details", el => el.open);
-      assert.strictEqual(externalOpen, false, "The external review should be folded by default");
-      await page.click("#closeAiRefineModal");
+      await page.click("#closeProcessCheckModal");
       await page.waitForTimeout(300);
 
       // The flowsheet opens and draws units.

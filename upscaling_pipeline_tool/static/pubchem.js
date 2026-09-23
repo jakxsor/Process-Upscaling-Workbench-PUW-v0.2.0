@@ -2,7 +2,7 @@
     // simulator to auto-fill pure-component properties. Split out of app.js for navigability;
     // loaded as a plain <script> before app.js (see app.py) so these functions share the same
     // global scope as the rest of the app. Depends on: $, escapeHtml, escapeAttr, pushUndo,
-    // delay, alertModal, ensureGroup, invalidateAiRefine, renderSeparationSimulatorModal,
+    // delay, alertModal, ensureGroup, invalidateProcessCheck, renderSeparationSimulatorModal,
     // renderExport, pubchemResolveState — all defined in app.js. Pure lookup/property mapping
     // lives in pubchem_core.js.
 
@@ -50,7 +50,7 @@
           message: `${substance.name}: PubChem CID ${data.cid || "unknown"} applied. Thermal fields are annotations and need confirmation.`,
           lastUpdated: new Date().toISOString()
         };
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderSeparationSimulatorModal();
         renderExport();
         return true;
@@ -104,7 +104,7 @@
           : "No PubChem properties were applied.",
         lastUpdated: new Date().toISOString()
       };
-      invalidateAiRefine();
+      invalidateProcessCheck();
       renderSeparationSimulatorModal();
       renderExport();
       if (button) {
@@ -269,7 +269,7 @@
           lastUpdated: new Date().toISOString()
         };
         closePubChemResolveModal();
-        invalidateAiRefine();
+        invalidateProcessCheck();
         renderSeparationSimulatorModal();
         renderExport();
       } catch (error) {
