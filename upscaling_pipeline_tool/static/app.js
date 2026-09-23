@@ -451,12 +451,14 @@
     let boardDragFrame = null;
     let boardDragLinkPaintAt = 0;
     let boardReflowDepth = 0;
-    // Only resolveGroupVerticalOverlaps() when explicitly armed (sample load, Auto-Layout, the
-    // Compact/Detailed toggle) - NOT on every render. It was previously unconditional, which meant
-    // finishing an ordinary manual drag (also just a renderGroupFlow() call) could immediately
-    // shove the box the user just placed far away from where they dropped it, if that position
-    // happened to overlap a taller box above it. Manual placement should never be overridden.
-    let pendingBoardReflow = false;
+    // resolveGroupVerticalOverlaps() runs after every renderGroupFlow() by default, since any
+    // group box's content (unit picker expanding, alternatives, phenomena) can grow between
+    // renders and needs the row below pushed clear of it. The one exception is finishing an
+    // ordinary manual drag (also just a renderGroupFlow() call): dragEnd() arms this flag first so
+    // that render skips the reflow once, otherwise dropping a box somewhere that overlaps a taller
+    // box above it would immediately shove the box the user just placed away from where they
+    // dropped it. Manual placement should never be overridden.
+    let suppressBoardReflow = false;
     let connectDragFrame = null;
     let stepEditorResizeDrag = null;
     let pubchemResolveState = null;
@@ -3354,14 +3356,13 @@
       });
 
       measureNodeHeightsAndRedrawLinks(root, displayBoard);
-      if (pendingBoardReflow) {
-        pendingBoardReflow = false;
-        if (boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
-          boardReflowDepth += 1;
-          renderGroupFlow();
-          boardReflowDepth = 0;
-          return;
-        }
+      const skipReflow = suppressBoardReflow;
+      suppressBoardReflow = false;
+      if (!skipReflow && boardReflowDepth < 3 && resolveGroupVerticalOverlaps()) {
+        boardReflowDepth += 1;
+        renderGroupFlow();
+        boardReflowDepth = 0;
+        return;
       }
       revealFocusedEndpoint();
     }
@@ -3601,14 +3602,13 @@
       });
     }
 
-    // Detailed (non-compact) group boxes render their full content (block cards, phenomena,
-    // MFA/condition summaries, alternatives) and have no fixed height, unlike compact boxes -
-    // so a box can easily be taller than the fixed row gap used to place the row below it,
-    // making the two rows visually overlap ("attaccati"). Once real heights are known (from
+    // Group boxes (compact or detailed) render content whose height varies - block cards,
+    // phenomena, MFA/condition summaries, alternatives, or (in compact mode) an expanded unit
+    // picker - so a box can easily be taller than the fixed row gap used to place the row below
+    // it, making the two rows visually overlap ("attaccati"). Once real heights are known (from
     // measureNodeHeightsAndRedrawLinks, called just before this), push any box down that a
     // shorter fixed gap left overlapping a taller box directly above it in the same column.
     function resolveGroupVerticalOverlaps() {
-      if (state.boardCompact) return false;
       const ids = groupIdsInTextOrder();
       if (ids.length < 2) return false;
       const gap = 60;
@@ -16031,7 +16031,10 @@
       boardDragLinkPaintAt = 0;
       state.drag = null;
       $("groupFlow")?.classList.remove("board-dragging");
-      if (moved) renderGroupFlow();
+      if (moved) {
+        suppressBoardReflow = true;
+        renderGroupFlow();
+      }
     }
 
     function boardPanBlockedTarget(target) {
@@ -16381,7 +16384,6 @@
       });
       if (draftBlocks.length) state.draftPos = { x: 24, y: 90 };
       state.focusEndpoint = ids[0] || null;
-      pendingBoardReflow = true;
       renderAll();
       fitBoard();
     }
@@ -17032,7 +17034,6 @@
       state.boardCompact = !state.boardCompact;
       $("toggleCompact").textContent = state.boardCompact ? "Detailed" : "Compact";
       $("toggleCompact").classList.toggle("primary", state.boardCompact);
-      pendingBoardReflow = true;
       renderAll();
     });
     const closeBoardViewMenu = () => document.querySelector(".board-view-dropdown")?.removeAttribute("open");
