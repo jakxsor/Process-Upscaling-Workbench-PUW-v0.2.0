@@ -8501,6 +8501,8 @@
     function renderGroupProperties(group) {
       const root = $("groupProperties");
       if (!root) return;
+      const summary = $("groupPropertiesSummary");
+      if (summary) summary.textContent = group ? `For ${group.id} only - not the whole project` : "Select a group first";
       root.innerHTML = groupPropertiesPanelHtml(group);
       if (group) bindGroupPropertiesControls(root, group.id);
     }
@@ -8523,7 +8525,7 @@
             <div class="property-section-head">
               <div>
                 <strong>Operating Basis</strong>
-                <span>Bulk values for the task group. Pure-component and binary data stay in Substances or Lutze/Garg.</span>
+                <span>One mixture-level value per property, typed in by you - not averaged from Substances. Pure-component and binary data stay in Substances or Lutze/Garg.</span>
               </div>
               <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save</button>
             </div>

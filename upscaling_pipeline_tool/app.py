@@ -267,10 +267,10 @@ APP_HTML = r"""<!doctype html>
 
           <details class="card inspector-details">
             <summary>
-              <span><strong>Operating Basis</strong><small>Mixture-level data for sizing and energy</small></span>
+              <span><strong>Operating Basis</strong><small id="groupPropertiesSummary">Mixture-level data for sizing and energy</small></span>
             </summary>
             <div class="inspector-details-body">
-              <div class="muted small">Group-level values only. Use this for bulk density, heat capacity, viscosity, and thermal limits; pure-component and binary separation properties belong in Substances or Lutze/Garg.</div>
+              <div class="muted small">One value for the whole group's mixture - not an automatic average of the project's substances. Density, heat capacity, and viscosity depend on composition and temperature in ways this tool cannot infer from named substances alone, so enter your best estimate (the dominant component's value, a literature mixture value, or a measurement). Pure-component and binary separation properties belong in Substances or Lutze/Garg instead.</div>
               <div id="groupProperties"></div>
             </div>
           </details>
