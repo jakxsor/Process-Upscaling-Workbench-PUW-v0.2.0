@@ -2328,6 +2328,13 @@
       border-top: 1px solid var(--line);
     }
 
+    /* Grid items default to min-width:auto, so a wide child (the substances table, at 700px+
+       of columns) refuses to shrink to the sidebar's ~330px track and bleeds past its edge
+       instead of scrolling within .substance-table-wrap as intended. */
+    .inspector-details-body > * {
+      min-width: 0;
+    }
+
     .unit-suggest-gate {
       display: grid;
       gap: 5px;
@@ -6133,6 +6140,30 @@
       background: linear-gradient(rgba(15, 23, 32, 0.46), rgba(15, 23, 32, 0.54));
     }
 
+    #substancesModal {
+      /* Same reasoning as the other modal overrides above: the base .modal-backdrop z-index (80)
+         is lower than the block/group drawer (.step-flow-inspector.resizable, z-index 180). */
+      z-index: 980;
+      background: linear-gradient(rgba(15, 23, 32, 0.46), rgba(15, 23, 32, 0.54));
+    }
+
+    .substances-modal-panel {
+      width: min(720px, calc(100vw - 24px));
+      max-height: calc(100vh - 48px);
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 45px rgba(15, 23, 32, 0.22);
+      overflow: hidden;
+    }
+
+    .substances-modal-panel .modal-body {
+      overflow: auto;
+      padding: 14px 16px;
+    }
+
     .pubchem-resolve-grid {
       display: grid;
       gap: 10px;
@@ -8065,6 +8096,12 @@
       justify-self: start;
     }
 
+    .substance-table-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 4px;
+    }
+
     .substance-table-wrap {
       overflow-x: auto;
       margin: 6px 0;
@@ -8077,6 +8114,17 @@
       font-size: 11px;
     }
 
+    /* Most panels hosting this table are a narrow sidebar (~350-400px), well under the table's
+       natural width - the compact default hides the rarely-filled columns (Pvap T, Sol. par.,
+       Molar vol., CID) so the common case fits with little or no horizontal scroll. */
+    .substance-table-compact .substance-table {
+      min-width: 0;
+    }
+
+    .substance-table-compact .substance-col-secondary {
+      display: none;
+    }
+
     .substance-table th,
     .substance-table td {
       padding: 4px 4px;
@@ -8084,6 +8132,13 @@
       text-align: left;
       vertical-align: top;
       white-space: nowrap;
+    }
+
+    .substance-col-sticky {
+      position: sticky;
+      left: 0;
+      background: var(--panel);
+      box-shadow: 1px 0 0 var(--line);
     }
 
     .substance-table th {

@@ -395,6 +395,7 @@
       stepEditorHeight: 165,
       groupStepEditorHeight: 400,
       boardCompact: false,
+      substanceTableShowAll: false,
       pendingSplitGroupId: null,
       processRuleOptions: {
         sequence: true,
@@ -11084,11 +11085,11 @@
       { id: "tb", label: "Tb", unit: "K", lutze: true },
       { id: "tm", label: "Tm", unit: "K", lutze: true },
       { id: "pvap", label: "Pvap", unit: "Pa", lutze: true },
-      { id: "pvapTemperature", label: "Pvap T", unit: "K" },
       { id: "density", label: "Density", unit: "kg/m3" },
-      { id: "solubilityParameter", label: "Sol. par.", unit: "" },
-      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol" },
-      { id: "pubchemCid", label: "CID", unit: "" }
+      { id: "pvapTemperature", label: "Pvap T", unit: "K", secondary: true },
+      { id: "solubilityParameter", label: "Sol. par.", unit: "", secondary: true },
+      { id: "molarVolume", label: "Molar vol.", unit: "m3/kmol", secondary: true },
+      { id: "pubchemCid", label: "CID", unit: "", secondary: true }
     ];
 
     function projectSubstanceEntries() {
@@ -11159,32 +11160,37 @@
 
     function projectSubstancesTableHtml(rows) {
       if (!rows.length) return `<div class="mfa-empty">Declare streams with substance names first; every substance then gets one row here.</div>`;
+      const showAll = Boolean(state.substanceTableShowAll);
+      const secondaryCount = projectSubstanceFields.filter(def => def.secondary).length;
       const cell = (row, def) => {
         const field = row.fields[def.id];
         const title = field.conflict
           ? `${def.label}: differs between streams (${field.values.join(" | ")}). Pick one below or type a value; it is written to every stream of ${row.name}.`
           : `${def.label}${def.unit ? ` (${def.unit})` : ""} for every stream of ${row.name}`;
         return `
-          <td class="${field.conflict ? "conflict" : ""}">
+          <td class="${field.conflict ? "conflict" : ""}${def.secondary ? " substance-col-secondary" : ""}">
             <input data-substance-field="${escapeAttr(def.id)}" data-substance-key="${escapeAttr(row.key)}" value="${escapeAttr(field.value)}" placeholder="${escapeAttr(def.unit || "-")}" title="${escapeAttr(title)}" inputmode="decimal">
             ${field.conflict ? `<div class="substance-conflict">${field.values.map(value => `<button type="button" data-unify-substance="${escapeAttr(row.key)}" data-unify-field="${escapeAttr(def.id)}" data-unify-value="${escapeAttr(value)}" title="Use ${escapeAttr(value)} on every stream">${escapeHtml(value)}</button>`).join("")}</div>` : ""}
           </td>`;
       };
       return `
-        <div class="substance-table-wrap">
+        <div class="substance-table-toolbar">
+          <button type="button" class="mini-button" data-toggle-substance-columns>${showAll ? "Fewer columns" : `${secondaryCount} more columns`}</button>
+        </div>
+        <div class="substance-table-wrap${showAll ? "" : " substance-table-compact"}">
           <table class="substance-table">
             <thead>
               <tr>
-                <th>Substance</th>
+                <th class="substance-col-sticky">Substance</th>
                 <th title="Streams carrying this substance, and the blocks they belong to">Streams</th>
-                ${projectSubstanceFields.map(def => `<th title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
+                ${projectSubstanceFields.map(def => `<th class="${def.secondary ? "substance-col-secondary" : ""}" title="${escapeAttr(def.label)}${def.unit ? ` (${escapeAttr(def.unit)})` : ""}">${escapeHtml(def.label)}</th>`).join("")}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               ${rows.map(row => `
                 <tr class="${row.conflicts.length ? "has-conflict" : ""}">
-                  <td class="substance-name"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
+                  <td class="substance-name substance-col-sticky"><strong>${escapeHtml(row.name)}</strong><small>${row.lutzeComplete ? "screening data complete" : row.identified ? "properties incomplete" : "not identified"}</small></td>
                   <td class="num" title="${escapeAttr(row.blockIds.join(", "))}">${row.streamCount}<small>${escapeHtml(row.blockIds.slice(0, 4).join(" "))}${row.blockIds.length > 4 ? " …" : ""}</small></td>
                   ${projectSubstanceFields.map(def => cell(row, def)).join("")}
                   <td><button type="button" class="mini-button" data-fetch-substance-pubchem="${escapeAttr(row.key)}" title="Fetch MW, boiling and melting points, vapour pressure, density and CID from PubChem and write them to every stream of ${escapeAttr(row.name)}">PubChem</button></td>
@@ -11197,20 +11203,35 @@
       `;
     }
 
+    function openSubstancesModal() {
+      $("substancesModal").hidden = false;
+      renderProjectSubstances();
+    }
+
+    function closeSubstancesModal() {
+      $("substancesModal").hidden = true;
+    }
+
     function renderProjectSubstances() {
       const root = $("projectSubstances");
       const summary = $("projectSubstancesSummary");
       if (!root || !summary) return;
       const rows = projectSubstanceTableModel();
       summary.textContent = projectSubstancesSummaryText(rows);
-      const card = $("projectSubstancesCard");
-      // The table is drawn only while the card is open: one row per substance is cheap, but a
-      // closed card does not need it on every pass.
-      if (card && !card.open) {
+      const modal = $("substancesModal");
+      // The table is drawn only while the modal is open: one row per substance is cheap, but a
+      // closed modal does not need it on every pass.
+      if (modal && modal.hidden) {
         root.innerHTML = "";
         return;
       }
       root.innerHTML = projectSubstancesTableHtml(rows);
+      root.querySelectorAll("[data-toggle-substance-columns]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.substanceTableShowAll = !state.substanceTableShowAll;
+          renderProjectSubstances();
+        });
+      });
       root.querySelectorAll("[data-substance-field][data-substance-key]").forEach(input => {
         input.addEventListener("change", () => {
           pushUndo();
@@ -16797,7 +16818,6 @@
     $("loadTextSide").addEventListener("click", loadTextView);
     $("undoAction").addEventListener("click", undoLast);
     $("autoConnect").addEventListener("click", autoConnectGroups);
-    $("projectSubstancesCard")?.addEventListener("toggle", () => renderProjectSubstances());
     $("toggleReadiness").addEventListener("click", () => {
       state.showDataReadiness = !state.showDataReadiness;
       renderDataReadiness();
@@ -17187,9 +17207,17 @@
       const point = state.manualBlockPoint || {};
       createManualBlock(point);
     });
+    $("ctxOpenSubstances").addEventListener("click", () => {
+      hideTextSelectionMenu();
+      openSubstancesModal();
+    });
     $("closePubchemResolve").addEventListener("click", closePubChemResolveModal);
     $("pubchemResolveModal").addEventListener("click", event => {
       if (event.target === $("pubchemResolveModal")) closePubChemResolveModal();
+    });
+    $("closeSubstancesModal").addEventListener("click", closeSubstancesModal);
+    $("substancesModal").addEventListener("click", event => {
+      if (event.target === $("substancesModal")) closeSubstancesModal();
     });
 
     document.addEventListener("keydown", event => {
@@ -17197,6 +17225,10 @@
         event.preventDefault();
         if (!$("pubchemResolveModal").hidden) {
           closePubChemResolveModal();
+          return;
+        }
+        if (!$("substancesModal").hidden) {
+          closeSubstancesModal();
           return;
         }
         if (!$("processCheckModal").hidden) {

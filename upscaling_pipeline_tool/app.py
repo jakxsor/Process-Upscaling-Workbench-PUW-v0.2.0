@@ -270,18 +270,8 @@ APP_HTML = r"""<!doctype html>
               <span><strong>Operating Basis</strong><small id="groupPropertiesSummary">Mixture-level data for sizing and energy</small></span>
             </summary>
             <div class="inspector-details-body">
-              <div class="muted small">One value for the whole group's mixture - not an automatic average of the project's substances. Density, heat capacity, and viscosity depend on composition and temperature in ways this tool cannot infer from named substances alone, so enter your best estimate (the dominant component's value, a literature mixture value, or a measurement). Pure-component and binary separation properties belong in Substances or Lutze/Garg instead.</div>
+              <div class="muted small">One value for the whole group's mixture - not an automatic average of the project's substances. Density, heat capacity, and viscosity depend on composition and temperature in ways this tool cannot infer from named substances alone, so enter your best estimate (the dominant component's value, a literature mixture value, or a measurement). Pure-component and binary separation properties belong in Substances (right-click the board) or Lutze/Garg instead.</div>
               <div id="groupProperties"></div>
-            </div>
-          </details>
-
-          <details class="card inspector-details" id="projectSubstancesCard">
-            <summary>
-              <span><strong>Substances</strong><small id="projectSubstancesSummary">No substances declared yet.</small></span>
-            </summary>
-            <div class="inspector-details-body">
-              <div class="muted small">One row per substance across the whole project. Enter a property once here and every stream of that substance, and the Lutze screening, receive it.</div>
-              <div id="projectSubstances"></div>
             </div>
           </details>
 
@@ -414,6 +404,24 @@ APP_HTML = r"""<!doctype html>
     <div class="label">Block Creation</div>
     <button id="ctxCreateBlockFromText" class="primary">Create Block From Selection</button>
     <button id="ctxCreateManualBlock">New Empty Block</button>
+    <div class="label" style="margin-top:10px">Project Data</div>
+    <button id="ctxOpenSubstances">Substances&hellip;</button>
+  </div>
+
+  <div id="substancesModal" class="modal-backdrop" hidden>
+    <section class="modal-card substances-modal-panel" role="dialog" aria-modal="true" aria-labelledby="substancesModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="substancesModalTitle">Substances</h2>
+          <p id="projectSubstancesSummary">No substances declared yet.</p>
+        </div>
+        <button id="closeSubstancesModal" class="modal-icon-button" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted small">One row per substance across the whole project. Enter a property once here and every stream of that substance, and the Lutze screening, receive it.</div>
+        <div id="projectSubstances"></div>
+      </div>
+    </section>
   </div>
 
   <div id="hoverTip" class="hover-tip" hidden></div>
