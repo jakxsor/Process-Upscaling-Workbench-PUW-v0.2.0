@@ -267,10 +267,10 @@ APP_HTML = r"""<!doctype html>
 
           <details class="card inspector-details">
             <summary>
-              <span><strong>Group Properties</strong><small>Density, heat capacity and screening inputs</small></span>
+              <span><strong>Operating Basis</strong><small>Mixture-level data for sizing and energy</small></span>
             </summary>
             <div class="inspector-details-body">
-              <div class="muted small">Physical properties for the selected task group. Heat capacity feeds the energy bridge; density feeds automatic reactor sizing from mass-based MFA.</div>
+              <div class="muted small">Group-level values only. Use this for bulk density, heat capacity, viscosity, and thermal limits; pure-component and binary separation properties belong in Substances or Lutze/Garg.</div>
               <div id="groupProperties"></div>
             </div>
           </details>

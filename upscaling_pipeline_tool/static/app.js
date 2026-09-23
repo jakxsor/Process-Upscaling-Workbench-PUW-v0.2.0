@@ -258,14 +258,10 @@
     ];
 
     const propertyPromptCatalog = [
-      { id: "boiling_point", label: "Boiling point", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "°C", placeholder: "solvent/product bp", reason: "Ranks evaporation, condensation, distillation, and solvent recovery options." },
-      { id: "vapor_pressure", label: "Vapor pressure", phenomena: ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "mbar", placeholder: "at operating T", reason: "Clarifies vacuum operation, vent load, and volatile losses." },
-      { id: "azeotrope_risk", label: "Azeotrope / difficult VLE", phenomena: ["PT(VL)", "PS(VL)", "PC(VL)", "PCh(L->V)", "PCh(V->L)"], unit: "", placeholder: "no, yes, unknown, pressure-sensitive...", reason: "Flags when simple distillation or evaporation may need entrainer, pressure swing, membrane, or another intensified route." },
-      { id: "degradation_temperature", label: "Degradation temperature", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "thermal limit", reason: "Checks whether heating, evaporation, or distillation is plausible." },
-      { id: "miscibility", label: "Miscibility", phenomena: ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"], unit: "", placeholder: "miscible, immiscible, partial", reason: "Distinguishes wash/extraction/decanter choices from single-liquid mixing." },
       { id: "heat_capacity", label: "Heat capacity Cp", phenomena: ["ES(H)", "ES(C)"], unit: "kJ/kg/K", placeholder: "mixture Cp", reason: "Needed by the energy bridge for heating/cooling duty." },
-      { id: "density", label: "Density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Needed only when mixing, residence volume, settling, or equipment sizing depends on volume rather than just mass." },
-      { id: "viscosity", label: "Viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Needed only for scale-sensitive mixing, pumping, mass transfer, emulsion risk, or phase separation." }
+      { id: "density", label: "Bulk density", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)"], unit: "kg/m3", placeholder: "mixture density", reason: "Mixture-level value used when residence volume, settling, or equipment sizing depends on volume rather than just mass." },
+      { id: "viscosity", label: "Bulk viscosity", phenomena: ["M(L)", "2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)"], unit: "mPa s", placeholder: "at operating T", reason: "Mixture-level value for scale-sensitive mixing, pumping, mass transfer, emulsions, slurry handling, or phase disengagement." },
+      { id: "degradation_temperature", label: "Thermal limit", phenomena: ["ES(H)", "PT(VL)", "PCh(L->V)"], unit: "°C", placeholder: "lowest relevant limit", reason: "Group-level ceiling used to flag thermal exposure. Volatility still belongs to pure-component and binary Lutze/Garg evidence." }
     ];
 
     const separationCore = globalThis.ProcessUpscalingSeparationCore;
@@ -1573,7 +1569,7 @@
         G2: { id: "G2", task: "Knoevenagel reaction with in-situ water removal", selectedUnit: "Batch / semi-batch reactor", selectionBasis: "SI U2/T1: B2 heat-up, B3 liquid-phase reaction/Dean-Stark removal, and B4 cooling share one reactor", schedule: schedule({ durationH: "20", capacityAmount: "5", capacityUnit: "m3", scaleSensitivity: "kinetics-bound", notes: "The SI states an approximately 20 h U2 bottleneck and a 5 m3 reactor. Its separate 3000 kg batch claim is capacity-inconsistent with 2.5 L/kg cyclohexane: solvent alone is 7.5 m3 before reactants and freeboard." }), properties: {}, propertiesEditing: false, x: 1120, y: 90 },
         G3: { id: "G3", task: "ethyl acetate extraction, aqueous wash, and brine wash", selectedUnit: "Liquid-liquid extraction", selectionBasis: "SI protocol and U3: ethyl acetate extraction is named in the cyclohexane route; water/brine contacting is implemented as a mixer-settler train", schedule: schedule({ durationH: "2-3", scaleSensitivity: "increases with scale", notes: "SI range. Ethyl acetate and brine volumes are laboratory-practice estimates (one volume each), not reported." }), properties: {}, propertiesEditing: false, x: 1680, y: 90 },
         G4: { id: "G4", task: "organic phase drying", selectedUnit: "Drying", selectionBasis: "SI U4: regenerable fixed-bed 4A molecular sieves replace single-use laboratory drying salts", schedule: schedule({ durationH: "2", scaleSensitivity: "increases with scale", notes: "Estimated, not reported: fixed-bed contact time for about 10 m3 of organic phase per batch (2.9 m3 product + 7.5 m3 cyclohexane) through a 2-3 m3 sieve bed at a liquid hourly space velocity of 2 per hour. Inlet water loading and regeneration demand are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 2240, y: 90 },
-        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: { boiling_point: { value: "81", unit: "°C", status: "reported", note: "Cyclohexane boiling point stated in SI heuristic closure." } }, propertiesEditing: false, x: 2800, y: 90 },
+        G5: { id: "G5", task: "cyclohexane and residual ethyl acetate removal", selectedUnit: "Evaporation", selectionBasis: "SI U5: wiped/thin-film evaporation at 100-200 mbar and 40-50 °C", schedule: schedule({ durationH: "8", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane plus 2.7 t ethyl acetate per batch at a thin-film evaporator rate of about 1 t/h (6 h if the extraction is dropped at scale)." }), properties: {}, propertiesEditing: false, x: 2800, y: 90 },
         G6: { id: "G6", task: "final octocrylene purification", selectedUnit: "Distillation", selectionBasis: "SI U6: short-path molecular distillation for a high-boiling, thermally sensitive product", schedule: schedule({ durationH: "3-5", parallelUnits: "2", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "SI range and pre-emptive duplication; residence in the evaporator is separately stated as <1 min." }), properties: {}, propertiesEditing: false, x: 3360, y: 90 },
         G7: { id: "G7", task: "vent abatement", selectedUnit: "Partial condensation / vaporization", selectionBasis: "SI U7: cold-trap condenser plus activated-carbon polishing for U2/U5 VOC vents", schedule: schedule({ durationH: "20", canOverlap: "yes", dependencyMode: "manual", predecessorIds: ["G1"], scaleSensitivity: "roughly constant", notes: "Estimated, not reported: a continuous service that runs for as long as the reactor vents (20 h). Scheduled from the end of feed preparation so that it runs alongside the reaction rather than after the evaporator, which the automatic text-order dependency would assume; it does not add to the plant cycle. Vent flow and capture efficiency are estimates on the streams." }), properties: {}, propertiesEditing: false, x: 1680, y: 520 },
         G8: { id: "G8", task: "cyclohexane recovery column", selectedUnit: "Distillation", selectionBasis: "SI U8: recover cyclohexane from U2/U5 and return it to U1", schedule: schedule({ durationH: "6", canOverlap: "yes", scaleSensitivity: "equipment dependent", notes: "Estimated, not reported: 5.8 t cyclohexane per batch at a column throughput of about 1 t/h. Recovery target >=98%; column duty, stages and reflux are not reported." }), properties: {}, propertiesEditing: false, x: 2800, y: 520 },
@@ -1758,11 +1754,7 @@
           selectionBasis: "secondary example: salt-phase removal followed by staged recovery of residual reagents from benzyl acetate",
           schedule: { ...scheduleDefaults(), durationH: "2", scaleSensitivity: "equipment dependent", notes: "example dataset" },
           properties: {
-            boiling_point: { value: "89-213", unit: "°C", status: "database", note: "range spans volatile residual triethylamine through benzyl acetate/benzyl alcohol at atmospheric pressure" },
-            vapor_pressure: { value: "temperature dependent", unit: "mbar", status: "assumed", note: "use component vapor pressures at 298.15 K in LUTZE; recalculate at column pressure for design" },
-            azeotrope_risk: { value: "unknown", unit: "", status: "assumed", note: "binary VLE must be verified before selecting a final distillation sequence" },
             degradation_temperature: { value: "180", unit: "°C", status: "assumed", note: "conservative product-side thermal screening limit" },
-            miscibility: { value: "partial", unit: "", status: "assumed", note: "salt-rich/product-rich L-L split is a demo hypothesis requiring experimental LLE confirmation" },
             heat_capacity: { value: "2.0", unit: "kJ/kg/K", status: "assumed", note: "screening crude-mixture value" },
             density: { value: "960", unit: "kg/m3", status: "assumed", note: "screening crude-mixture density near separation temperature" },
             viscosity: { value: "5", unit: "mPa s", status: "assumed", note: "screening value for settling and pumping checks" }
@@ -6119,7 +6111,7 @@
           const missing = [];
           if (!conditions.settling_time) missing.push("settling time");
           if (!conditions.separation_efficiency) missing.push("separation efficiency");
-          if (!properties.has("miscibility")) missing.push("miscibility");
+          if (!groupHasBinaryInsightEvidence(group, ["miscibilityGap"])) missing.push("binary phase-split evidence in Lutze");
           cards.push(scaleRiskCard(group, "Liquid-liquid scale-up", missing.length ? "high" : "medium", missing, "Check phase disengagement, interface control, emulsion risk, wash/extraction volume, and decanter feasibility."));
         }
         if ([...phenomena].some(code => ["PS(LS)", "PT(LS)", "PC(LS)", "2phM(LS)"].includes(code))) {
@@ -6130,8 +6122,7 @@
         if ([...phenomena].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) {
           const missing = [];
           if (!conditions.target_pressure) missing.push("pressure/vacuum basis");
-          if (!properties.has("boiling_point")) missing.push("boiling point");
-          if (!properties.has("vapor_pressure")) missing.push("vapor pressure");
+          if (!groupHasComponentPropertyEvidence(group, ["tb", "pvap"]) && !groupHasBinaryInsightEvidence(group, ["relativeVolatility", "azeotrope", "pressureSensitive"])) missing.push("component volatility or VLE evidence in Lutze");
           if (!properties.has("degradation_temperature")) missing.push("degradation temperature");
           cards.push(scaleRiskCard(group, "Vapor-liquid / solvent-recovery scale-up", missing.length ? "medium" : "low", missing, "Check condenser/reboiler duty, vacuum feasibility, volatile losses, degradation, and solvent recovery route."));
         }
@@ -6244,85 +6235,142 @@
       const fates = new Set(blocks.flatMap(block => block.streams.map(stream => stream.fate)).filter(Boolean));
       const groupConditions = groups.flatMap(group => aggregateGroupConditions(group));
       const properties = new Set(groups.flatMap(group => exportGroupProperties(group).filter(item => item.value || item.note).map(item => item.id)));
+      // Every tag is added through addTag(name, declared, fromText) so a rule card can later say
+      // whether it fired from something the user actually declared (a phenomenon code, a phase or
+      // fate enum, a named condition, a property with a value) or only from a word that happened to
+      // appear in a block's text, a stream's note, or the source protocol - the two are not the same
+      // strength of evidence, and before this they were indistinguishable once merged into one Set.
+      const tags = new Set();
+      const tagProvenance = new Map();
+      const addTag = (tag, declared, fromText) => {
+        if (!declared && !fromText) return;
+        tags.add(tag);
+        const entry = tagProvenance.get(tag) || { declared: false, text: false };
+        entry.declared = entry.declared || Boolean(declared);
+        entry.text = entry.text || Boolean(fromText);
+        tagProvenance.set(tag, entry);
+      };
+
       const hasReaction = [...phenomena].some(code => code.startsWith("R("));
       const hasMixing = [...phenomena].some(code => code.startsWith("M(") || code.startsWith("2phM("));
       const hasLL = [...phenomena].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"].includes(code)) || phases.has("LL");
       const hasVL = [...phenomena].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "2phM(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)) || phases.has("VL");
       const hasLS = [...phenomena].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)"].includes(code)) || phases.has("LS");
       const hasVS = [...phenomena].some(code => ["PT(VS)", "PS(VS)", "PC(VS)", "2phM(VS)"].includes(code)) || phases.has("VS");
-      const hasVapor = hasVL || hasVS || phases.has("V") || /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
+      // Structured half (declared phenomena/phases) kept separate from the text fallback so a tag
+      // reached only via the fallback can be marked as such.
+      const hasVaporDeclared = hasVL || hasVS || phases.has("V");
+      const hasVaporText = /\bvapor|gas|vent|volatile|voc|conden|reflux|distill|evapor|vacuum\b/.test(allText);
+      const hasVapor = hasVaporDeclared || hasVaporText;
       const hasLiquid = phases.has("L") || hasLL || hasVL || hasLS;
-      const hasSolid = phases.has("S") || hasLS || hasVS || /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
-      const hasVacuum = /vacuum|reduced pressure|mbar|mmhg/.test(allText) || groupConditions.some(item => item.id === "target_pressure");
+      const hasSolidDeclared = phases.has("S") || hasLS || hasVS;
+      const hasSolidText = /\bsolid|crystal|filter|sieve|mgso4|na2so4|salt|cake|powder|slurry\b/.test(allText);
+      const hasSolid = hasSolidDeclared || hasSolidText;
+      const hasVacuumDeclared = groupConditions.some(item => item.id === "target_pressure");
+      const hasVacuumText = /vacuum|reduced pressure|mbar|mmhg/.test(allText);
+      const hasVacuum = hasVacuumDeclared || hasVacuumText;
       const hasRecycle = fates.has("recycled input") || fates.has("recovered solvent") || blocks.some(block => block.streams.some(stream => stream.loopId.trim()));
-      const hasPurge = fates.has("purge") || fates.has("loss") || fates.has("vent") || /purge|drag stream|vent|loss/.test(allText);
+      const hasPurgeDeclared = fates.has("purge") || fates.has("loss") || fates.has("vent");
+      const hasPurgeText = /purge|drag stream|vent|loss/.test(allText);
+      const hasPurge = hasPurgeDeclared || hasPurgeText;
+      // Hazard, exotherm/endotherm, reversibility, and a few others below have no declared field
+      // anywhere in the block/stream schema today - they exist only as prose, so every rule that
+      // depends on them is a wording match by construction. Flagging that (rather than adding a
+      // dozen new declarable fields nobody has asked for yet) is the point of this change.
       const hasHazard = /toxic|hazard|flammable|corrosive|voc|nh3|ammonia|carbon polish|activated carbon|abatement|explosive|air ingress/.test(allText);
-      const hasHeatSensitive = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText) || properties.has("degradation_temperature");
+      const hasHeatSensitiveDeclared = properties.has("degradation_temperature");
+      const hasHeatSensitiveText = /heat[- ]?sensitive|thermal degradation|degradation|short-path|thin-film|wiped-film/.test(allText);
+      const hasHeatSensitive = hasHeatSensitiveDeclared || hasHeatSensitiveText;
       const hasReversible = /reversible|equilibrium|dean-stark|water removal|azeotrope|drive.*right|in-situ removal/.test(allText);
       const hasExotherm = /exotherm|heat release|cooling jacket|quench|cold shot/.test(allText);
       const hasEndotherm = /endotherm/.test(allText);
-      const hasCrystallization = [...phenomena].some(code => ["PT(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code)) || /crystal|crystalliz|precipitat/.test(allText);
+      const hasCrystallizationDeclared = [...phenomena].some(code => ["PT(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code));
+      const hasCrystallizationText = /crystal|crystalliz|precipitat/.test(allText);
+      const hasCrystallization = hasCrystallizationDeclared || hasCrystallizationText;
       const hasDrying = /dry|drying|sieve|mgso4|na2so4|moisture|water <|karl/.test(allText);
       const hasAdsorption = /adsorb|activated carbon|carbon bed|molecular sieve|sieve/.test(allText);
-      const hasMembrane = /membrane|pervaporation|permeat|retentate/.test(allText) || [...phenomena].some(code => code.includes("(M"));
+      const hasMembraneDeclared = [...phenomena].some(code => code.includes("(M"));
+      const hasMembraneText = /membrane|pervaporation|permeat|retentate/.test(allText);
+      const hasMembrane = hasMembraneDeclared || hasMembraneText;
       // Fired or hot-oil heating is a wording cue; the temperature itself is read from the declared
       // conditions or from a stated "NNN °C", not from bare numbers that happened to be the case
-      // study's head temperature (and matched "2100 kg" just as well).
+      // study's head temperature (and matched "2100 kg" just as well). A number lifted out of prose
+      // by this regex is still a text match, even though it looks numeric.
       const statedTemperatures = Array.from(allText.matchAll(/(\d{2,3}(?:\.\d+)?)\s*(?:°|deg(?:rees)?)?\s*c\b/g)).map(match => Number(match[1]));
       const conditionTemperatures = groupConditions
         .filter(item => /temperature/.test(String(item.id || "")))
         .map(item => parseStreamQuantity(String(item.value ?? item.text ?? "")))
         .filter(Number.isFinite);
-      const hasHighTemperature = /furnace|fired heat|hot oil|thermal oil/.test(allText)
-        || [...statedTemperatures, ...conditionTemperatures].some(temperature => temperature >= 180);
-      const hasPressureChange = hasVacuum || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText) || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
-      const tags = new Set();
-      if (hasReaction) tags.add("reaction");
-      if (hasMixing) tags.add("mixing");
-      if (hasLL) tags.add("ll").add("liquid_separation");
-      if (hasVL) tags.add("vl").add("liquid_separation");
-      if (hasVapor) tags.add("vapor").add("gas_separation");
-      if (hasLiquid) tags.add("liquid");
-      if (hasSolid) tags.add("solid_particle").add("solids_handling");
-      if (hasLS) tags.add("solid_liquid").add("filtration");
-      if (hasVS) tags.add("vapor_solid");
-      if (hasVacuum) tags.add("vacuum");
-      if (hasRecycle) tags.add("recycle");
-      if (hasPurge) tags.add("purge");
-      if (hasHazard) tags.add("hazard").add("vent");
-      if (hasHeatSensitive) tags.add("heat_sensitive");
-      if (hasReversible) tags.add("reversible").add("separation");
-      if (hasExotherm) tags.add("exotherm").add("cooling");
-      if (hasEndotherm) tags.add("endotherm").add("heating");
-      if (hasCrystallization) tags.add("crystallization");
-      if (hasDrying) tags.add("drying");
-      if (hasAdsorption) tags.add("adsorption");
-      if (hasMembrane) tags.add("membrane");
-      if (hasHighTemperature) tags.add("high_temperature");
-      if (hasPressureChange) tags.add("pressure").add("pressure_reduction");
-      if (hasVapor && hasPressureChange) tags.add("gas_pressure");
-      if (hasLiquid && hasPressureChange) tags.add("liquid_pressure");
-      if (hasVL || /condens|reflux/.test(allText)) tags.add("condensation");
-      if (hasVL || /boil|evapor|reflux/.test(allText)) tags.add("boiling");
-      if ([...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))) tags.add("heat_exchange").add("utility");
-      if (/selectiv|yield|conversion|side reaction|byproduct/.test(allText)) tags.add("selectivity");
-      if (groupConditions.length) tags.add("condition");
-      if (/inert|nitrogen|n2|catalyst poison/.test(allText)) tags.add("inert");
-      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) tags.add("valuable");
-      if (/wash|brine|water wash|cake wash/.test(allText)) tags.add("washing");
-      if (/accumul|build[- ]?up/.test(allText)) tags.add("accumulation");
-      if (/classif|particle[- ]?size distribution/.test(allText)) tags.add("classification");
-      if (/size reduction|crush|grind|mill/.test(allText)) tags.add("size_reduction");
-      if (/agglomerat|granulat|pelleti/.test(allText)) tags.add("size_enlargement");
-      if ([...phenomena].some(code => code === "ES(H)")) tags.add("heating");
-      if ([...phenomena].some(code => code === "ES(C)")) tags.add("cooling");
-      return { tags, blocks, groups, phenomena, phases, fates, text: allText, scale };
+      const hasHighTemperatureDeclared = conditionTemperatures.some(temperature => temperature >= 180);
+      const hasHighTemperatureText = /furnace|fired heat|hot oil|thermal oil/.test(allText) || statedTemperatures.some(temperature => temperature >= 180);
+      const hasHighTemperature = hasHighTemperatureDeclared || hasHighTemperatureText;
+      const hasPressureChangeDeclared = hasVacuumDeclared || [...phenomena].some(code => ["ES(P)", "ES(E)"].includes(code));
+      const hasPressureChangeText = hasVacuumText || /compress|pump|pressure|bar|atm|mbar|mmhg/.test(allText);
+      const hasPressureChange = hasPressureChangeDeclared || hasPressureChangeText;
+
+      addTag("reaction", hasReaction, false);
+      addTag("mixing", hasMixing, false);
+      if (hasLL) { addTag("ll", true, false); addTag("liquid_separation", true, false); }
+      if (hasVL) { addTag("vl", true, false); addTag("liquid_separation", true, false); }
+      if (hasVapor) { addTag("vapor", hasVaporDeclared, hasVaporText); addTag("gas_separation", hasVaporDeclared, hasVaporText); }
+      addTag("liquid", hasLiquid, false);
+      if (hasSolid) { addTag("solid_particle", hasSolidDeclared, hasSolidText); addTag("solids_handling", hasSolidDeclared, hasSolidText); }
+      if (hasLS) { addTag("solid_liquid", true, false); addTag("filtration", true, false); }
+      addTag("vapor_solid", hasVS, false);
+      addTag("vacuum", hasVacuumDeclared, hasVacuumText);
+      addTag("recycle", hasRecycle, false);
+      addTag("purge", hasPurgeDeclared, hasPurgeText);
+      if (hasHazard) { addTag("hazard", false, true); addTag("vent", false, true); }
+      addTag("heat_sensitive", hasHeatSensitiveDeclared, hasHeatSensitiveText);
+      if (hasReversible) { addTag("reversible", false, true); addTag("separation", false, true); }
+      if (hasExotherm) { addTag("exotherm", false, true); addTag("cooling", false, true); }
+      if (hasEndotherm) { addTag("endotherm", false, true); addTag("heating", false, true); }
+      addTag("crystallization", hasCrystallizationDeclared, hasCrystallizationText);
+      addTag("drying", false, hasDrying);
+      addTag("adsorption", false, hasAdsorption);
+      addTag("membrane", hasMembraneDeclared, hasMembraneText);
+      addTag("high_temperature", hasHighTemperatureDeclared, hasHighTemperatureText);
+      if (hasPressureChange) { addTag("pressure", hasPressureChangeDeclared, hasPressureChangeText); addTag("pressure_reduction", hasPressureChangeDeclared, hasPressureChangeText); }
+      if (hasVapor && hasPressureChange) addTag("gas_pressure", hasVaporDeclared && hasPressureChangeDeclared, hasVaporText || hasPressureChangeText);
+      if (hasLiquid && hasPressureChange) addTag("liquid_pressure", hasPressureChangeDeclared, hasPressureChangeText);
+      const hasCondensationText = /condens|reflux/.test(allText);
+      if (hasVL || hasCondensationText) addTag("condensation", hasVL, hasCondensationText);
+      const hasBoilingText = /boil|evapor|reflux/.test(allText);
+      if (hasVL || hasBoilingText) addTag("boiling", hasVL, hasBoilingText);
+      addTag("heat_exchange", [...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)), false);
+      addTag("utility", [...phenomena].some(code => ["ES(H)", "ES(C)", "PT(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code)), false);
+      addTag("selectivity", false, /selectiv|yield|conversion|side reaction|byproduct/.test(allText));
+      addTag("condition", groupConditions.length > 0, false);
+      addTag("inert", false, /inert|nitrogen|n2|catalyst poison/.test(allText));
+      if (/valuable|product|solvent/.test(allText) || fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input")) {
+        addTag("valuable", fates.has("product") || fates.has("recovered solvent") || fates.has("recycled input"), /valuable|product|solvent/.test(allText));
+      }
+      addTag("washing", false, /wash|brine|water wash|cake wash/.test(allText));
+      addTag("accumulation", false, /accumul|build[- ]?up/.test(allText));
+      addTag("classification", false, /classif|particle[- ]?size distribution/.test(allText));
+      addTag("size_reduction", false, /size reduction|crush|grind|mill/.test(allText));
+      addTag("size_enlargement", false, /agglomerat|granulat|pelleti/.test(allText));
+      addTag("heating", [...phenomena].some(code => code === "ES(H)"), false);
+      addTag("cooling", [...phenomena].some(code => code === "ES(C)"), false);
+      return { tags, tagProvenance, blocks, groups, phenomena, phases, fates, text: allText, scale };
     }
 
     function heuristicRuleCard(rule, ctx) {
       const matchedTags = rule.tags.filter(tag => ctx.tags.has(tag));
-      if (!matchedTags.length || !heuristicRuleIsRelevant(rule, matchedTags, ctx)) return null;
+      if (!matchedTags.length) return null;
+      // usedWording records, for THIS rule's own relevance check, whether a mentions() call was
+      // actually evaluated and returned true - not just whether the rule's case body contains one.
+      // Logical short-circuiting means mentions() in "declaredCheck || mentions(pattern)" never runs
+      // at all once declaredCheck is already true, so this reflects exactly what this match needed.
+      const usedWording = { value: false };
+      if (!heuristicRuleIsRelevant(rule, matchedTags, ctx, usedWording)) return null;
       const evidence = heuristicEvidence(rule, matchedTags, ctx);
+      const textOnlyTags = matchedTags.filter(tag => {
+        const provenance = ctx.tagProvenance?.get(tag);
+        return provenance && provenance.text && !provenance.declared;
+      });
+      const declaredTags = matchedTags.filter(tag => ctx.tagProvenance?.get(tag)?.declared);
+      const wordingOnly = usedWording.value || textOnlyTags.length > 0;
       return {
         id: rule.id,
         area: rule.area,
@@ -6332,14 +6380,22 @@
         triggeredBy: matchedTags,
         evidence,
         recommendation: rule.recommendation,
-        source: rule.source
+        source: rule.source,
+        wordingOnly,
+        textOnlyTags,
+        declaredTags,
+        usedWordingForRelevance: usedWording.value
       };
     }
 
-    function heuristicRuleIsRelevant(rule, matchedTags, ctx) {
+    function heuristicRuleIsRelevant(rule, matchedTags, ctx, usedWording = { value: false }) {
       const has = (...tags) => tags.every(tag => ctx.tags.has(tag));
       const text = ctx.text || "";
-      const mentions = pattern => pattern.test(text);
+      const mentions = pattern => {
+        const hit = pattern.test(text);
+        if (hit) usedWording.value = true;
+        return hit;
+      };
       const hasPhenomenon = pattern => [...ctx.phenomena].some(code => pattern.test(code));
       switch (rule.id) {
         case "H01": return has("hazard", "reaction");
@@ -6506,11 +6562,28 @@
       const text = String(need).toLowerCase();
       if (text.includes("cp")) return values.has("heat_capacity");
       if (text.includes("viscosity")) return values.has("viscosity");
-      if (text.includes("density")) return values.has("density") || values.has("density_difference");
-      if (text.includes("boiling point")) return values.has("boiling_point");
-      if (text.includes("vapor pressure")) return values.has("vapor_pressure");
+      if (text.includes("density")) return values.has("density");
+      if (text.includes("component volatility") || text.includes("vle")) return groupHasComponentPropertyEvidence(group, ["tb", "pvap"]) || groupHasBinaryInsightEvidence(group, ["relativeVolatility", "azeotrope", "pressureSensitive"]);
+      if (text.includes("phase-split") || text.includes("miscibility")) return groupHasBinaryInsightEvidence(group, ["miscibilityGap"]);
       if (text.includes("thermal limit") || text.includes("degradation")) return values.has("degradation_temperature");
       return false;
+    }
+
+    function groupHasComponentPropertyEvidence(group, fields) {
+      const model = separationSimulatorModel(group);
+      if (!model.substances.length) return false;
+      const withEvidence = model.substances.filter(substance =>
+        fields.some(field => String(substance[field] || "").trim())
+      ).length;
+      return withEvidence >= Math.min(2, model.substances.length);
+    }
+
+    function groupHasBinaryInsightEvidence(group, fields) {
+      const model = separationSimulatorModel(group);
+      return model.pairs.some(pair => fields.some(field => {
+        const value = String(pair.insights?.[field] || "").trim().toLowerCase();
+        return value && value !== "unknown" && value !== "not applicable";
+      }));
     }
 
     function scaleSectionHtml(_key, title, gridInnerHtml) {
@@ -7596,12 +7669,18 @@
       const decisionButton = (value, label) => `
         <button class="mini-button heuristic-decision-button ${chosen === value ? "chosen" : ""}" data-heuristic-decision="${escapeAttr(value)}" data-heuristic-rule="${escapeAttr(item.id)}">${label}</button>
       `;
+      // A rule that matched only through wording (a note, a description, the protocol text) is not
+      // the same strength of finding as one matched through a declared phenomenon, phase, fate, or
+      // condition: the word could be incidental. Both still surface - the point is not hiding the
+      // weaker ones, it's not letting them look identical to the stronger ones.
+      const wordingBadge = item.wordingOnly ? `<span class="pill warn tip" data-tip="${escapeAttr(heuristicWordingTip(item))}">wording match</span>` : "";
       return `
         <div class="rule-card ${escapeAttr(item.severity)} ${chosen ? `decided-${escapeAttr(chosen)}` : ""} ${expanded ? "expanded" : "collapsed"}">
           <div class="rule-card-head" data-toggle-heuristic-card="${escapeAttr(item.id)}">
             <span class="severity-pill">${escapeHtml(item.severity)}</span>
             <strong>${escapeHtml(`${item.id} - ${item.title}`)}</strong>
             <span class="muted small rule-card-applies">${escapeHtml(appliesTo)}</span>
+            ${wordingBadge}
             ${chosen
               ? `<span class="pill ${chosen === "accepted" ? "green" : chosen === "rejected" ? "warn" : "blue"}">${escapeHtml(chosen)}</span>`
               : `<span class="pill warn">undecided</span>`}
@@ -7610,6 +7689,7 @@
           ${expanded ? `
             <span>${escapeHtml(item.recommendation)}</span>
             <span class="muted small">Evidence: ${escapeHtml(item.evidence)}. Confidence: ${escapeHtml(item.confidence)}.</span>
+            ${item.wordingOnly ? `<span class="muted small heuristic-wording-note">${escapeHtml(heuristicWordingTip(item))}</span>` : ""}
             <div class="heuristic-decision-row">
               ${decisionButton("accepted", "Accept")}
               ${decisionButton("rejected", "Reject")}
@@ -7621,6 +7701,13 @@
           ` : ""}
         </div>
       `;
+    }
+
+    function heuristicWordingTip(item) {
+      const parts = [];
+      if (item.textOnlyTags?.length) parts.push(`matched only by wording, not a declared phenomenon/phase/fate/condition: ${item.textOnlyTags.join(", ")}`);
+      if (item.usedWordingForRelevance) parts.push("its relevance check also needed a specific word in the block, stream, or protocol text");
+      return parts.length ? parts.join("; ") + "." : "Matched only through free text.";
     }
 
     function energyBridgeRowHtml(item) {
@@ -8426,7 +8513,7 @@
       const groupState = ensureGroup(group.id);
       const predictorHtml = propertyPredictorPanelHtml(group);
       if (!prompts.length && !predictorHtml) {
-        return `<span class="muted">No property refinement needed for the current phenomena at framework level.</span>`;
+        return `<span class="muted">No operating-basis refinement needed for the current phenomena.</span>`;
       }
       if (groupState.propertiesEditing) {
         const promptGroups = propertyPromptGroups(prompts);
@@ -8435,8 +8522,8 @@
           <section class="property-section">
             <div class="property-section-head">
               <div>
-                <strong>Property Inputs</strong>
-                <span>Fill only values that affect separation, scale-up, energy handoff, or safety.</span>
+                <strong>Operating Basis</strong>
+                <span>Bulk values for the task group. Pure-component and binary data stay in Substances or Lutze/Garg.</span>
               </div>
               <button class="primary" data-save-properties="${escapeAttr(group.id)}">Save</button>
             </div>
@@ -8452,13 +8539,13 @@
         <section class="property-section">
           <div class="property-section-head">
             <div>
-              <strong>Property Inputs</strong>
+              <strong>Operating Basis</strong>
               <span>${values.length}/${prompts.length} filled, ${neededCount} framework-relevant</span>
             </div>
             <button data-edit-properties="${escapeAttr(group.id)}">${values.length ? "Edit" : "Add"}</button>
           </div>
           ${propertyMissingStripHtml(group, prompts)}
-          ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No property data entered yet. The tool will still run, but separation decisions remain lower-confidence.</div>`}
+          ${values.length ? `<div class="property-label-grid">${values.map(propertyLabelHtml).join("")}</div>` : `<div class="mfa-empty">No bulk operating data entered yet. This does not block Lutze/Garg; separation evidence is handled per substance and per binary pair.</div>`}
         </section>
       `;
     }
@@ -8477,8 +8564,8 @@
         <section class="predictor-card">
           <div class="predictor-head">
             <div>
-              <div class="label">Optional Property-Based Separation Screen</div>
-              <div class="muted small">Screening only, not final equipment design. Use it when multiple separation alternatives remain plausible after the phenomena mapping.</div>
+              <div class="label">Legacy Group-Level Separation Screen</div>
+              <div class="muted small">Compatibility panel for old projects. Multi-component separation evidence should be entered per substance and per binary pair in Lutze/Garg.</div>
             </div>
             <span class="pill ${model.mode === "minimal" ? "blue" : model.mode === "binaryRatio" ? "warn" : ""}">${escapeHtml(stateLabel)}</span>
           </div>
@@ -13144,10 +13231,8 @@
       renderExport();
     }
 
-    function separationPredictorApplies(group) {
-      const phen = new Set(group.phenomena || []);
-      if ([...phen].some(code => code.startsWith("PS(") || code.startsWith("PT(") || code.startsWith("PC(") || code.startsWith("PCh("))) return true;
-      return matchesForGroup(group).some(candidate => candidate.task === "separation" || candidate.task.includes("separation"));
+    function separationPredictorApplies(_group) {
+      return false;
     }
 
     function groupHasReaction(group) {
@@ -13461,24 +13546,10 @@
       const phen = new Set(group.phenomena || []);
       const conditions = groupConditionMap(group);
       const text = `${group.task || ""} ${group.text || ""} ${group.selectedUnit || ""}`.toLowerCase();
-      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
+      if (prompt.id === "degradation_temperature") {
         return [...phen].some(code => ["PT(VL)", "PS(VL)", "PCh(L->V)", "PCh(V->L)"].includes(code))
           || Boolean(conditions.target_pressure)
           || /vacuum|evapor|distill|solvent|volatile|reflux|conden/.test(text);
-      }
-      if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
-        return [...phen].some(code => ["PT(LL)", "PS(LL)", "PC(LL)", "2phM(LL)"].includes(code));
-      }
-      if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
-        return [...phen].some(code => ["PT(LS)", "PS(LS)", "PC(LS)", "2phM(LS)", "PCh(L->S)", "PCh(S->L)"].includes(code));
-      }
-      if (prompt.id === "separation_selectivity") {
-        return [...phen].some(code => ["PT(MVL)", "PT(MVV)", "PT(MLL)", "PC(LS)", "PC(LL)", "PS(LS)", "PS(LL)"].includes(code))
-          || /membrane|adsorb|affinity|selectiv|extract|wash|drying agent|molecular sieve/.test(text);
-      }
-      if (prompt.id === "separating_agent") {
-        return [...phen].some(code => ["PT(MVL)", "PT(MLL)", "PC(LL)", "PT(LL)", "PS(LL)"].includes(code))
-          || /entrainer|extractant|separating agent|adsorbent|molecular sieve|membrane|extractive|azeotropic/.test(text);
       }
       if (prompt.id === "heat_capacity") {
         return phen.has("ES(H)") || phen.has("ES(C)");
@@ -13488,11 +13559,6 @@
       }
       if (prompt.id === "viscosity") {
         return mixingPhysicalPropertiesNeeded(group) || [...phen].some(code => ["2phM(LL)", "2phM(LS)", "PC(LL)", "PC(LS)", "PS(LL)", "PS(LS)"].includes(code));
-      }
-      if (prompt.id === "hazard_note") {
-        return Boolean(conditions.target_pressure)
-          || [...phen].some(code => ["PT(VL)", "PS(VL)", "PC(VL)", "PS(LL)", "PS(LS)", "PCh(L->V)"].includes(code))
-          || /hazard|flamm|toxic|corrosive|vacuum|vent|waste|purge/.test(text);
       }
       return true;
     }
@@ -13509,10 +13575,9 @@
     }
 
     function propertyNeedLevel(prompt, group) {
-      if (["heat_capacity", "boiling_point", "vapor_pressure", "azeotrope_risk", "miscibility", "density_difference", "particle_size", "cake_resistance", "separation_selectivity"].includes(prompt.id)) return "needed";
-      if (["separating_agent", "partition_coefficient"].includes(prompt.id)) return "risk";
+      if (prompt.id === "heat_capacity") return "needed";
       if (["density", "viscosity"].includes(prompt.id)) return mixingPhysicalPropertiesNeeded(group) ? "needed" : "optional";
-      if (["degradation_temperature", "emulsion_risk", "hazard_note"].includes(prompt.id)) return "risk";
+      if (prompt.id === "degradation_temperature") return "risk";
       return "optional";
     }
 
@@ -13530,36 +13595,24 @@
       const missing = prompts
         .filter(prompt => propertyNeedLevel(prompt, group) !== "optional" && !propertyHasValue(group, prompt.id))
         .map(prompt => prompt.label);
-      if (!missing.length) return `<div class="property-readiness ok"><strong>Ready</strong><span>Required separation properties are present or inherited from conditions.</span></div>`;
+      if (!missing.length) return `<div class="property-readiness ok"><strong>Ready</strong><span>Required operating-basis values are present or inherited from conditions.</span></div>`;
       return `
         <div class="property-readiness">
-          <strong>Missing for stronger decisions</strong>
+          <strong>Missing operating basis</strong>
           <span>${missing.slice(0, 6).map(item => `<span class="pill warn">${escapeHtml(item)}</span>`).join("")}${missing.length > 6 ? `<span class="pill">${missing.length - 6} more</span>` : ""}</span>
         </div>
       `;
     }
 
     function propertyFamilyForPrompt(prompt) {
-      if (["boiling_point", "vapor_pressure", "azeotrope_risk", "degradation_temperature"].includes(prompt.id)) {
-        return { id: "vl", title: "Vapor-Liquid / Volatility" };
-      }
-      if (["miscibility", "density_difference", "partition_coefficient", "emulsion_risk"].includes(prompt.id)) {
-        return { id: "ll", title: "Liquid-Liquid" };
-      }
-      if (["solubility", "particle_size", "cake_resistance"].includes(prompt.id)) {
-        return { id: "ls", title: "Solid-Liquid / Solids" };
-      }
-      if (["separation_selectivity", "separating_agent"].includes(prompt.id)) {
-        return { id: "affinity", title: "Affinity / Separating Agent" };
-      }
       if (["heat_capacity", "density", "viscosity"].includes(prompt.id)) {
-        return { id: "physical", title: "Physical / Energy" };
+        return { id: "physical", title: "Bulk Physical / Energy" };
       }
-      return { id: "risk", title: "Risk / Compatibility" };
+      return { id: "risk", title: "Thermal / Compatibility" };
     }
 
     function propertyPromptGroups(prompts) {
-      const order = ["vl", "ll", "ls", "affinity", "physical", "risk"];
+      const order = ["physical", "risk"];
       const byFamily = new Map();
       prompts.forEach(prompt => {
         const family = propertyFamilyForPrompt(prompt);
@@ -14102,7 +14155,7 @@
           </details>
           <details class="group-drawer-details">
             <summary>
-              <span><strong>Properties & Screening</strong><small>Open when needed for equipment, energy, or safety</small></span>
+              <span><strong>Operating Basis</strong><small>Bulk data for sizing, energy, and safety</small></span>
             </summary>
             <div class="group-drawer-details-body">${propertiesHtml}</div>
           </details>

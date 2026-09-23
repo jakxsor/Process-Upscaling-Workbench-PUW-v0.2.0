@@ -7994,6 +7994,15 @@
       white-space: nowrap;
     }
 
+    /* Flags a rule whose match relied on wording (a note, a description, the protocol text) rather
+       than a declared phenomenon, phase, fate, or condition - weaker evidence, shown, not hidden. */
+    .heuristic-wording-note {
+      display: block;
+      color: var(--orange);
+      border-left: 2px solid var(--orange);
+      padding-left: 6px;
+    }
+
     .danger-button {
       color: var(--red);
       background: var(--red-soft);
