@@ -133,6 +133,19 @@ const measureBoard = () => {
       const restoredClasses = await page.$eval("#appMain", el => el.className);
       assert(!/protocol-collapsed|inspector-collapsed/.test(restoredClasses), `Exiting focus should restore both side panels, got: ${restoredClasses}`);
 
+      // Opening a task group is the primary editing action: its aggregate drawer must stay
+      // within the board panel, not spill over and cover the contextual right rail (a past
+      // "overhang" mechanism did exactly that, silently, with no treatment of the rail
+      // underneath - confusing rather than useful).
+      await page.click('[data-open-group-board]');
+      await page.waitForTimeout(300);
+      const groupDrawer = await page.evaluate(() => {
+        const drawer = document.getElementById("stepFlowInspector").getBoundingClientRect();
+        const inspector = document.getElementById("inspectorPanel").getBoundingClientRect();
+        return { drawerRight: drawer.right, inspectorLeft: inspector.left };
+      });
+      assert(groupDrawer.drawerRight <= groupDrawer.inspectorLeft + 1, `Group drawer should stay clear of the right rail; drawer ends at ${groupDrawer.drawerRight}px and rail starts at ${groupDrawer.inspectorLeft}px`);
+
       // Inventory readiness is on screen, not only in the export.
       const lci = await page.$eval("#lcaReadinessSummary", el => el.textContent.trim());
       assert(/input/.test(lci), `Inventory readiness summary should report inputs, got: ${lci}`);
