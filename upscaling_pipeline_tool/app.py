@@ -352,6 +352,11 @@ APP_HTML = r"""<!doctype html>
     </section>
   </main>
 
+  <footer class="dev-notice" aria-label="Development notice">
+    This tool is under development. If you encounter any issues, contact
+    <a href="mailto:jacopo.sorani@empa.ch">jacopo.sorani@empa.ch</a>.
+  </footer>
+
   <div id="blockMenu" class="context-menu" hidden>
     <div class="label">Arrows</div>
     <button id="ctxStartBlockConnection" class="primary">Start Arrow From This Block</button>
