@@ -3,6 +3,16 @@
 Dates are the release date. This project follows semantic versioning loosely:
 while the version stays below 1.0 the saved-project format may still change.
 
+## 0.3.1 - 2026-09-25
+
+### First-use guidance
+
+- On the first browser visit, the workbench offers to start the quick tutorial;
+  declining keeps the tutorial available from the header menu and the prompt is
+  not shown again.
+- A compact development notice at the bottom of the workbench directs users to
+  jacopo.sorani@empa.ch when they encounter a problem.
+
 ## 0.3.0 - 2026-09-25
 
 ### Board and inspector fixes
