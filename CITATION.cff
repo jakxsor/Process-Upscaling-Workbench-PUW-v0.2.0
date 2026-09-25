@@ -2,17 +2,21 @@ cff-version: 1.2.0
 message: "If you use this software, please cite the repository and the associated methodology paper."
 title: "Process Upscaling Workbench"
 type: software
-repository-code: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0"
+repository-code: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.3.1"
+repository-artifact: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.3.1/releases/tag/v0.3.1"
 license: MIT
-version: "0.3.0"
+version: "0.3.1"
+date-released: 2026-09-25
 # Zenodo mints a DOI when a GitHub release is published; add it here as
-# identifiers > doi, and add the same DOI to the README badge.
+# identifiers > doi after publishing, and add the concept DOI to the README badge.
 keywords:
   - process scale-up
   - prospective life cycle assessment
   - life cycle inventory
+  - material flow analysis
   - chemical process design
   - separation screening
+  - process flowsheet
 authors:
   - family-names: "Sorani"
     given-names: "Jacopo"

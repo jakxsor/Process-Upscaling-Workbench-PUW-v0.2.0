@@ -104,6 +104,19 @@ const measureBoard = () => {
       await page.goto(baseUrl, { waitUntil: "networkidle" });
       await page.waitForTimeout(1500);
 
+      // A fresh browser profile receives the first-visit tutorial offer. Confirm that the
+      // onboarding prompt rendered, then dismiss it so the rest of the smoke test can interact
+      // with the workbench controls behind the modal.
+      const firstVisitPrompt = await page.$eval("#confirmModal", modal => ({
+        hidden: modal.hidden,
+        message: document.getElementById("confirmModalMessage").textContent.trim(),
+        cancelLabel: document.getElementById("confirmModalCancel").textContent.trim()
+      }));
+      assert.strictEqual(firstVisitPrompt.hidden, false, "A fresh browser should receive the first-visit tutorial prompt");
+      assert(/first time/i.test(firstVisitPrompt.message), `Unexpected first-visit prompt: ${firstVisitPrompt.message}`);
+      assert.strictEqual(firstVisitPrompt.cancelLabel, "Not now", "The tutorial offer should have a non-destructive dismissal");
+      await page.click("#confirmModalCancel");
+
       const board = await page.evaluate(measureBoard);
       assert.strictEqual(board.groups, 9, `The built-in example should load nine task groups, got ${board.groups}`);
       assert(board.zoom > 0.2, `Board zoom should be a sane value on load; got ${Math.round(board.zoom * 100)}%`);
