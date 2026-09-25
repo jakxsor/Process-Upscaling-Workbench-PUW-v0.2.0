@@ -4,7 +4,7 @@ title: "Process Upscaling Workbench"
 type: software
 repository-code: "https://github.com/jakxsor/Process-Upscaling-Workbench-PUW-v0.2.0"
 license: MIT
-version: "0.2.0"
+version: "0.3.0"
 # Zenodo mints a DOI when a GitHub release is published; add it here as
 # identifiers > doi, and add the same DOI to the README badge.
 keywords:

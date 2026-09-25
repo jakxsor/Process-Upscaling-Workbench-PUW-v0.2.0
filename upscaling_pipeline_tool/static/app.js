@@ -13782,7 +13782,7 @@
 
     function stepEditorConfig(mode) {
       if (mode === "group") {
-        return { key: "groupStepEditorHeight", min: 320, fallback: 400 };
+        return { key: "groupStepEditorHeight", min: 115, fallback: 400 };
       }
       return { key: "stepEditorHeight", min: 115, fallback: 165 };
     }
