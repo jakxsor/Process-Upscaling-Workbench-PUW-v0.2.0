@@ -17303,6 +17303,24 @@
     document.addEventListener("mousemove", connectDragMove);
     document.addEventListener("mouseup", connectDragEnd);
 
+    async function offerFirstVisitTutorial(hasRestoredProject) {
+      const storageKey = "upscalingPipelineFirstVisitPromptSeen";
+      try {
+        if (localStorage.getItem(storageKey)) return;
+        localStorage.setItem(storageKey, "1");
+      } catch (_error) {
+        // Storage can be unavailable in private or embedded browser sessions.
+      }
+
+      const startTutorial = await confirmModal(
+        "Is this your first time using the Process Upscaling Workbench? Start the quick tutorial now, or open it later from the Tutorial menu at the top of the page.",
+        { okLabel: "Start tutorial", cancelLabel: "Not now" }
+      );
+      if (!startTutorial) return;
+      state.tutorialFull = false;
+      await openTutorial(0, { skipProjectConfirmation: !hasRestoredProject });
+    }
+
     (async function bootProject() {
       const restored = typeof maybeRestoreAutosavedProject === "function"
         ? await maybeRestoreAutosavedProject()
@@ -17311,5 +17329,7 @@
       renderSavedWorkMenu();
       if (window.location.hash === "#flowsheet") {
         requestAnimationFrame(openFlowsheetModal);
+      } else {
+        await offerFirstVisitTutorial(restored);
       }
     })();

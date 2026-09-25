@@ -837,7 +837,7 @@ function tutorialPositionText(current) {
   return `${position >= 0 ? position + 1 : Math.min(route.length, route.filter(index => index <= current).length)} / ${route.length}`;
 }
 
-async function openTutorial(index = 0) {
+async function openTutorial(index = 0, options = {}) {
   try {
     let startIndex = Math.max(0, Math.min(index, tutorialSteps.length - 1));
     const explicitIndex = arguments.length > 0;
@@ -856,7 +856,7 @@ async function openTutorial(index = 0) {
       }
     }
     const canReuseCurrentTutorialProject = startIndex > 0 && tutorialProjectIsLoaded();
-    if (state.blocks.length && !canReuseCurrentTutorialProject) {
+    if (state.blocks.length && !canReuseCurrentTutorialProject && !options.skipProjectConfirmation) {
       // The old dialog only said the project would be replaced, which read as destructive and
       // kept anyone with real work from ever opening the tutorial. The work was always kept in
       // Undo; now it is also saved as a named snapshot in the File menu, and the dialog says so.
