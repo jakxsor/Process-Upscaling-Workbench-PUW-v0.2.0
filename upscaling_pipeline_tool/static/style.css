@@ -296,7 +296,6 @@
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
-      overflow: hidden;
     }
 
     main > .panel:first-child,
@@ -325,6 +324,12 @@
       gap: 10px;
       border-bottom: 1px solid var(--line);
       background: var(--zone-protocol-soft);
+      /* .panel used to rely on overflow:hidden to clip this background to the card's rounded
+         top corners, but that also clipped header dropdown menus (View, Connections) that need
+         to float outside the panel. Round the head directly instead, now that .panel allows
+         overflow. Matches .panel's actual cascaded radius (6px, see the .panel override further
+         down and its narrow-viewport 5px variant, each paired with a matching override here). */
+      border-radius: 6px 6px 0 0;
     }
 
     #inspectorPanel .panel-head {
@@ -461,6 +466,35 @@
 
     .muted { color: var(--muted); font-size: 12px; }
     .small { font-size: 11px; }
+
+    .dev-notice {
+      display: grid;
+      gap: 4px;
+      padding: 8px 9px;
+      border: 1px solid #d7e2e5;
+      border-left: 3px solid #8aaeb6;
+      border-radius: 6px;
+      background: #f8fafb;
+      color: var(--ink-2);
+      font-size: 11.5px;
+      line-height: 1.35;
+    }
+
+    .dev-notice strong {
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .dev-notice a {
+      color: var(--blue);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      text-decoration: none;
+    }
+
+    .dev-notice a:hover {
+      text-decoration: underline;
+    }
 
     .card {
       padding: 9px;
@@ -2044,7 +2078,7 @@
 
     .step-flow-inspector.group-aggregate-drawer {
       bottom: 0;
-      min-height: 320px;
+      min-height: 115px;
       max-height: min(900px, calc(100vh - 70px));
       box-shadow: 0 -10px 28px rgba(23, 32, 39, 0.13);
     }
@@ -8744,7 +8778,6 @@
     .workflow-panel {
       display: flex;
       flex-direction: column;
-      overflow: hidden;
       border-color: #cbd7db;
     }
 
@@ -9094,6 +9127,10 @@
 
       .panel {
         border-radius: 5px;
+      }
+
+      .panel-head {
+        border-radius: 5px 5px 0 0;
       }
 
       .workflow-panel {

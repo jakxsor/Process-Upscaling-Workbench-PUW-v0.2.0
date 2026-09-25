@@ -586,8 +586,8 @@ const tutorialSteps = [
   {
     target: "[data-add-group-task-stream=\"input\"]",
     title: "Part 2 · 1. Add Substances",
-    body: "Open the task drawer and add material rows. Inputs are reactants, solvent, catalyst, or auxiliary feeds; outlets are product, recovery, waste, purge, or intermediate streams.",
-    details: ["You can add rows one by one with + Task input and + Task outlet.", "For the tutorial, the next button fills a complete small reaction set so you can see the downstream logic."],
+    body: "Open the task view and add material rows. While it is open, this primary workspace expands across the process map and the right-hand panel.",
+    details: ["Inputs are reactants, solvent, catalyst, or auxiliary feeds; outlets are product, recovery, waste, purge, or intermediate streams.", "You can add rows one by one with + Task input and + Task outlet.", "For the tutorial, the next button fills a complete small reaction set so you can see the downstream logic."],
     action: tutorialOpenGroupDrawer,
     cta: "Add example substances",
     ctaAction: tutorialShowMaterialRows

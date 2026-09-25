@@ -20,6 +20,7 @@ assert(tutorialSource.includes("right click"), "Tutorial should explain the righ
 assert(tutorialSource.includes("automatic"), "Tutorial should warn that automatic extraction may be wrong");
 assert(tutorialSource.includes("Convert To Task"), "Tutorial should include the block-to-task step");
 assert(tutorialSource.includes("Part 2"), "Tutorial should include the post-task material/Lutze section");
+assert(tutorialSource.includes("expands across the process map and the right-hand panel"), "Tutorial should explain the task view's primary overlay hierarchy");
 assert(tutorialSource.includes("Part 3"), "Tutorial should include the Lutze pathway section");
 assert(tutorialSource.includes("Part 4"), "Tutorial should include the heuristic/scale-up section");
 assert(tutorialSource.includes("Flowsheet View"), "Tutorial should end with the flowsheet step");
