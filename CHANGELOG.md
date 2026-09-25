@@ -3,7 +3,31 @@
 Dates are the release date. This project follows semantic versioning loosely:
 while the version stays below 1.0 the saved-project format may still change.
 
-## 0.2.0 - unreleased
+## 0.3.0 - 2026-09-25
+
+### Board and inspector fixes
+
+- The group drawer (Network & MFA) no longer opens partly below the visible
+  window on ordinary screen heights; it stays within the viewport and scrolls
+  through its full content.
+- A group box that grows once opened (its unit picker expanding, for
+  instance) now pushes the boxes below it out of the way instead of drawing
+  on top of them.
+- Operating Basis names the group it belongs to and states plainly that it is
+  a manually entered mixture value, not an average computed from the
+  substances in Substances - composition and temperature dependence the tool
+  cannot infer from a name alone.
+- Substances moved out of the sidebar, where its nine columns overflowed the
+  narrow panel, into a popup opened by right-clicking the board. Its four
+  rarely filled columns (Pvap T, solubility parameter, molar volume, CID)
+  collapse behind a toggle, and the substance name stays visible while
+  scrolling through the rest.
+- Header dropdown menus (View, Connections) no longer get clipped by the
+  panel's rounded top corners.
+- The group drawer's minimum height is reduced, so it no longer reserves more
+  room than short content needs.
+
+## 0.2.0 - 2026-09-21
 
 First tagged and archived release, prepared to accompany the methodology paper.
 Everything below is relative to the untagged 0.1.0 working state.
@@ -84,24 +108,6 @@ Changes from a UI study of every main screen, measured on the live app.
   declares, like every other scaled figure, instead of to five digits.
 - Clearing a project now also clears its provenance bar and inventory
   readiness, which stayed painted from the previous project.
-
-### Board and inspector fixes
-
-- The group drawer (Network & MFA) no longer opens partly below the visible
-  window on ordinary screen heights; it stays within the viewport and scrolls
-  through its full content.
-- A group box that grows once opened (its unit picker expanding, for
-  instance) now pushes the boxes below it out of the way instead of drawing
-  on top of them.
-- Operating Basis names the group it belongs to and states plainly that it is
-  a manually entered mixture value, not an average computed from the
-  substances in Substances - composition and temperature dependence the tool
-  cannot infer from a name alone.
-- Substances moved out of the sidebar, where its nine columns overflowed the
-  narrow panel, into a popup opened by right-clicking the board. Its four
-  rarely filled columns (Pvap T, solubility parameter, molar volume, CID)
-  collapse behind a toggle, and the substance name stays visible while
-  scrolling through the rest.
 
 ### Known gaps
 
