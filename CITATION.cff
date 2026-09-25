@@ -31,10 +31,10 @@ preferred-citation:
   type: article
   title: "Generalized Scale-Up Methodology for Chemicals and Materials in Prospective LCA"
   authors:
-    - family-names: "Majo"
-      given-names: "M."
     - family-names: "Sorani"
       given-names: "J."
+    - family-names: "Majo"
+      given-names: "M."
     - family-names: "Nowack"
       given-names: "B."
     - family-names: "Hischier"
